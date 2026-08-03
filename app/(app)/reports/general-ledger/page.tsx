@@ -11,6 +11,7 @@ import {
 import { CsvExportButton } from "@/components/reports/csv-export-button";
 import { GeneralLedgerFilters } from "@/components/reports/general-ledger-filters";
 import { PrintButton } from "@/components/vouchers/print-button";
+import { computeRunningBalances } from "@/lib/reports/ledger-balance";
 import { createClient } from "@/lib/supabase/server";
 import type { AccountType } from "@/types/database.types";
 
@@ -92,11 +93,7 @@ export default async function GeneralLedgerPage({
   }
 
   const isDebitNormal = selectedAccount ? DEBIT_NORMAL.includes(selectedAccount.account_type) : true;
-  const rowsWithBalance = rows.reduce<(typeof rows[number] & { balance: number })[]>((acc, r) => {
-    const previousBalance = acc.length > 0 ? acc[acc.length - 1].balance : openingBalance;
-    const balance = previousBalance + (isDebitNormal ? r.debit_amount - r.credit_amount : r.credit_amount - r.debit_amount);
-    return [...acc, { ...r, balance }];
-  }, []);
+  const rowsWithBalance = computeRunningBalances(openingBalance, isDebitNormal, rows);
 
   return (
     <div className="space-y-4">

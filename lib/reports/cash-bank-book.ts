@@ -1,5 +1,6 @@
 import "server-only";
 
+import { computeRunningBalances } from "@/lib/reports/ledger-balance";
 import { createClient } from "@/lib/supabase/server";
 
 export interface CashBankBookLine {
@@ -79,20 +80,7 @@ export async function getCashOrBankBookSections(params: {
 
   return (accounts ?? []).map((a) => {
     const openingBalance = openingByAccount.get(a.id) ?? 0;
-    let running = openingBalance;
-    const rows: CashBankBookLine[] = (linesByAccount.get(a.id) ?? []).map((l) => {
-      running += l.debit_amount - l.credit_amount;
-      return {
-        journal_entry_id: l.journal_entry_id,
-        entry_date: l.entry_date,
-        voucher_no: l.voucher_no,
-        debit_amount: l.debit_amount,
-        credit_amount: l.credit_amount,
-        description: l.description,
-        narration: l.narration,
-        balance: running,
-      };
-    });
+    const rows = computeRunningBalances(openingBalance, true, linesByAccount.get(a.id) ?? []);
 
     return {
       account_id: a.id,
@@ -100,7 +88,7 @@ export async function getCashOrBankBookSections(params: {
       account_name: a.account_name,
       openingBalance,
       rows,
-      closingBalance: running,
+      closingBalance: rows.length > 0 ? rows[rows.length - 1].balance : openingBalance,
     };
   });
 }

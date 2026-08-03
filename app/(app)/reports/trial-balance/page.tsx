@@ -11,6 +11,7 @@ import {
 import { AsOfDateFilter } from "@/components/reports/as-of-date-filter";
 import { CsvExportButton } from "@/components/reports/csv-export-button";
 import { PrintButton } from "@/components/vouchers/print-button";
+import { aggregateByAccount } from "@/lib/reports/account-aggregation";
 import { createClient } from "@/lib/supabase/server";
 
 function today() {
@@ -35,22 +36,7 @@ export default async function TrialBalancePage({
     .eq("company_id", companyId)
     .lte("entry_date", asOf);
 
-  const byAccount = new Map<
-    string,
-    { account_code: string; account_name: string; account_type: string; debit: number; credit: number }
-  >();
-  for (const l of lines ?? []) {
-    const existing = byAccount.get(l.account_id) ?? {
-      account_code: l.account_code,
-      account_name: l.account_name,
-      account_type: l.account_type,
-      debit: 0,
-      credit: 0,
-    };
-    existing.debit += l.debit_amount;
-    existing.credit += l.credit_amount;
-    byAccount.set(l.account_id, existing);
-  }
+  const byAccount = aggregateByAccount(lines ?? []);
 
   const rows = Array.from(byAccount.values())
     .map((a) => {

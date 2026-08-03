@@ -105,10 +105,9 @@ audit, storage, and numbering existing and being correct.
 
 ---
 
-**Status:** Phases 1–13 are implemented — see
-`supabase/migrations/0001_foundation.sql` through `0012_reporting.sql`
-(Phase 13 shipped no migration — it's read-only aggregation over existing
-data), and the Next.js app under `app/`, `features/`, `lib/`, `components/`.
+**Status:** All 14 phases are implemented — see
+`supabase/migrations/0001_foundation.sql` through `0013_hardening.sql`,
+and the Next.js app under `app/`, `features/`, `lib/`, `components/`.
 Phase 9
 adds tenants, UAE leases with auto-generated monthly/yearly payment
 schedules, on-demand rent invoice generation (Dr Tenant Receivable / Cr UAE
@@ -161,5 +160,22 @@ for every voucher type, which 404s for purchase_voucher, uae_rent_invoice,
 pk_rent_invoice, and asset_sales — those got their own dedicated routes in
 Phases 7/9/10/11 and were never wired back into that link. Fixed via a new
 `voucherHref()` helper in `lib/vouchers/meta.ts` that both the Voucher
-Register and the new Dashboard widget now share. Next up: Phase 14
-(Hardening), pending review.
+Register and the new Dashboard widget now share.
+
+Phase 14 (Hardening) closes out the build: `0013_hardening.sql` fixes four
+`SECURITY DEFINER` functions that trusted a caller-supplied `p_company_id`
+without checking the caller actually belonged to it (exploitable via a
+direct PostgREST RPC call, bypassing the app entirely — see
+`docs/05-security-review.md` for the full audit), closes an RLS gap where
+`core.attachments` checked company scope but no permission at all, fixes
+an RLS gap that made `postChequeReturnVoucher` silently no-op instead of
+updating the original PDC's status, and adds indexes the Phase 12
+reporting views needed. `features/attachments/actions.ts` gained a
+matching permission check plus a 10 MB / JPEG-PNG-WebP-PDF upload
+allowlist (previously unrestricted). Vitest was added for unit tests
+(report math, CSV export, voucher routing, a sample of Zod schemas) and
+Playwright for a login/redirect smoke test — full e2e needs a provisioned
+Supabase project this sandbox doesn't have, documented in
+`docs/06-deployment.md` along with the Supabase/Vercel production setup
+and the new GitHub Actions CI workflow. The build is complete — no phase
+is pending.

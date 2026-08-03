@@ -109,12 +109,15 @@ export async function postChequeReturnVoucher(id: string, journalEntryId: string
   if (fetchError || !voucher) return { error: fetchError?.message ?? "Failed to update voucher" };
 
   const table = voucher.original_pdc_type === "pdc_payment_voucher" ? "pdc_payment_vouchers" : "pdc_receipt_vouchers";
-  const { error: statusError } = await supabase
+  const { data: statusRow, error: statusError } = await supabase
     .schema("accounting")
     .from(table)
     .update({ pdc_status: "returned" })
-    .eq("id", voucher.original_pdc_id);
+    .eq("id", voucher.original_pdc_id)
+    .select("id")
+    .maybeSingle();
   if (statusError) return { error: statusError.message };
+  if (!statusRow) return { error: "Not permitted to update the original cheque's status" };
 
   revalidatePath("/accounting/vouchers/cheque_return_voucher");
   revalidatePath("/accounting/vouchers/pdc_payment_voucher");

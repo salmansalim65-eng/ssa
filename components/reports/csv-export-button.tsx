@@ -3,16 +3,9 @@
 import { DownloadIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { toCsv, type CsvColumn } from "@/lib/reports/csv";
 
-export interface CsvColumn<T> {
-  header: string;
-  accessor: (row: T) => string | number | null | undefined;
-}
-
-function escapeCsvValue(value: unknown) {
-  const str = value === null || value === undefined ? "" : String(value);
-  return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
-}
+export type { CsvColumn };
 
 export function CsvExportButton<T>({
   rows,
@@ -24,11 +17,7 @@ export function CsvExportButton<T>({
   filename: string;
 }) {
   function exportCsv() {
-    const lines = [
-      columns.map((c) => escapeCsvValue(c.header)).join(","),
-      ...rows.map((row) => columns.map((c) => escapeCsvValue(c.accessor(row))).join(",")),
-    ];
-    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob([toCsv(rows, columns)], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;

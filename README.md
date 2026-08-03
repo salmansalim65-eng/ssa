@@ -30,6 +30,10 @@ designed, reviewed, and only then implemented. Start here:
    and application folder layout.
 4. [`docs/04-roadmap.md`](docs/04-roadmap.md) — phased, module-by-module
    development roadmap with the status tracker below.
+5. [`docs/05-security-review.md`](docs/05-security-review.md) — Phase 14's
+   RLS/authorization audit: findings, fixes, and accepted trade-offs.
+6. [`docs/06-deployment.md`](docs/06-deployment.md) — Supabase + Vercel
+   production setup, environment variables, and the CI pipeline.
 
 ## Module Status
 
@@ -49,7 +53,7 @@ designed, reviewed, and only then implemented. Start here:
 | 11 | Asset Sale | ✅ Done |
 | 12 | Reports Engine | ✅ Done |
 | 13 | Dashboard | ✅ Done |
-| 14 | Hardening: testing, security review, performance, deployment | ⬜ Not started |
+| 14 | Hardening: testing, security review, performance, deployment | ✅ Done |
 
 Each phase is only started after the previous one is reviewed and approved.
 
@@ -65,3 +69,16 @@ Each phase is only started after the previous one is reviewed and approved.
 4. `npm install && npm run dev`, then sign up a user, sign in, and create
    your first company from the onboarding screen — you'll be its
    Administrator with every permission granted.
+
+For a production rollout, see [`docs/06-deployment.md`](docs/06-deployment.md).
+
+## Testing
+
+- `npm test` — unit tests (Vitest) for pure business logic: report
+  aggregation/running-balance math, CSV export, voucher routing, and a
+  sample of Zod schema validation.
+- `npm run test:e2e` — Playwright smoke test covering the unauthenticated
+  redirect and the login page (the only things testable without a
+  provisioned Supabase project — see `docs/06-deployment.md` for extending
+  this against a real backend).
+- `npx tsc --noEmit` / `npm run lint` — type check / lint, both run in CI.

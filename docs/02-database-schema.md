@@ -46,7 +46,7 @@ posted_at        timestamptz
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `companies` | code, name, country, base_currency_id, address, logo_path, is_active | one row per tenant |
+| `companies` | code, name, country, address, logo_path, is_active | one row per tenant; base currency lives on `company_currencies.is_base_currency`, not here |
 | `user_profiles` | id (=auth.users.id), full_name, phone, avatar_path, is_active, default_company_id | 1:1 with `auth.users` |
 | `user_companies` | user_id, company_id, is_default | user↔company membership |
 | `roles` | company_id, name, description, is_system_role, is_active | unlimited, company-scoped |

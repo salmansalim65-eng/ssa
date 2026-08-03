@@ -51,7 +51,7 @@ create table core.companies (
 );
 
 comment on table core.companies is
-  'One row per tenant. base_currency_id is added by the Phase 2 migration once core.currencies exists.';
+  'One row per tenant. Base currency is tracked on core.company_currencies.is_base_currency (Phase 2), not on this table.';
 
 create trigger trg_companies_touch
   before update on core.companies

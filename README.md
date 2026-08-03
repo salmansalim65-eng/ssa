@@ -37,7 +37,7 @@ designed, reviewed, and only then implemented. Start here:
 |---|-------|--------|
 | 0 | Architecture, schema design, folder structure, roadmap (this doc set) | ✅ Done |
 | 1 | Foundation: companies, auth, users, roles/permissions, audit trail, storage, sequences | ✅ Done |
-| 2 | Currency Master & Daily Exchange Rates | ⬜ Not started |
+| 2 | Currency Master & Daily Exchange Rates | ✅ Done |
 | 3 | Chart of Accounts & Cost Centers | ⬜ Not started |
 | 4 | Accounting Engine Core (journal engine, voucher framework, approval workflow) | ⬜ Not started |
 | 5 | Core Accounting Vouchers (Receipt, Payment, JV, JV Maintenance, Opening Balance, PDC, Cheque Return) | ⬜ Not started |

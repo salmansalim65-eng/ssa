@@ -1,5 +1,12 @@
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboardIcon, Building2Icon, UsersIcon, ShieldIcon } from "lucide-react";
+import {
+  LayoutDashboardIcon,
+  Building2Icon,
+  UsersIcon,
+  ShieldIcon,
+  CoinsIcon,
+  TrendingUpIcon,
+} from "lucide-react";
 
 export interface NavItem {
   label: string;
@@ -25,6 +32,13 @@ export const navSections: NavSection[] = [
       { label: "Company", href: "/admin/companies", icon: Building2Icon },
       { label: "Users", href: "/admin/users", icon: UsersIcon },
       { label: "Roles & Permissions", href: "/admin/roles", icon: ShieldIcon },
+    ],
+  },
+  {
+    label: "Currency",
+    items: [
+      { label: "Currencies", href: "/admin/currencies", icon: CoinsIcon },
+      { label: "Exchange Rates", href: "/admin/exchange-rates", icon: TrendingUpIcon },
     ],
   },
 ];

@@ -196,6 +196,64 @@ export interface Database {
         };
         Update: Partial<Database["core"]["Tables"]["system_settings"]["Row"]>;
       };
+      currencies: {
+        Row: {
+          id: string;
+          code: string;
+          name: string;
+          symbol: string;
+          decimal_places: number;
+          is_active: boolean;
+          created_at: string;
+          updated_by: string | null;
+          updated_at: string | null;
+        };
+        Insert: Partial<Database["core"]["Tables"]["currencies"]["Row"]> & {
+          code: string;
+          name: string;
+          symbol: string;
+        };
+        Update: Partial<Database["core"]["Tables"]["currencies"]["Row"]>;
+      };
+      company_currencies: {
+        Row: {
+          id: string;
+          company_id: string;
+          currency_id: string;
+          is_base_currency: boolean;
+          is_active: boolean;
+          created_at: string;
+          updated_by: string | null;
+          updated_at: string | null;
+        };
+        Insert: Partial<Database["core"]["Tables"]["company_currencies"]["Row"]> & {
+          company_id: string;
+          currency_id: string;
+        };
+        Update: Partial<Database["core"]["Tables"]["company_currencies"]["Row"]>;
+      };
+      exchange_rates: {
+        Row: {
+          id: string;
+          company_id: string;
+          currency_id: string;
+          rate_date: string;
+          rate_to_base: number;
+          source: "manual" | "api";
+          created_by: string;
+          created_at: string;
+          updated_by: string | null;
+          updated_at: string | null;
+        };
+        Insert: Partial<Database["core"]["Tables"]["exchange_rates"]["Row"]> & {
+          company_id: string;
+          currency_id: string;
+          rate_date: string;
+          rate_to_base: number;
+          created_by: string;
+        };
+        Update: Partial<Database["core"]["Tables"]["exchange_rates"]["Row"]>;
+      };
     };
     Functions: {
       current_company_id: {
@@ -209,6 +267,32 @@ export interface Database {
       fn_bootstrap_company: {
         Args: { p_company_name: string; p_company_code: string; p_country: string };
         Returns: Database["core"]["Tables"]["companies"]["Row"];
+      };
+      fn_set_base_currency: {
+        Args: { p_company_id: string; p_currency_id: string };
+        Returns: undefined;
+      };
+      fn_exchange_rate_to_base: {
+        Args: { p_company_id: string; p_currency_id: string; p_as_of_date?: string };
+        Returns: number;
+      };
+      fn_convert_to_base: {
+        Args: {
+          p_company_id: string;
+          p_currency_id: string;
+          p_amount: number;
+          p_as_of_date?: string;
+        };
+        Returns: number;
+      };
+      fn_upsert_exchange_rate: {
+        Args: {
+          p_company_id: string;
+          p_currency_id: string;
+          p_rate_date: string;
+          p_rate_to_base: number;
+        };
+        Returns: Database["core"]["Tables"]["exchange_rates"]["Row"];
       };
     };
   };

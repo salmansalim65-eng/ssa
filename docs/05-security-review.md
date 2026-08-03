@@ -107,6 +107,32 @@ Fixed in `supabase/migrations/0017_grant_auth_admin_hook_access.sql`:
 with `has_schema_privilege`/`has_table_privilege('supabase_auth_admin', ...)`,
 both now `true`.
 
+## Addendum: RLS policies pull in their own table dependencies for privilege checks
+
+Even after 0017, login still failed — same 500, now
+`permission denied for table user_companies`. `supabase_auth_admin` doesn't
+bypass RLS (`rolbypassrls = false`), so its `SELECT` against
+`core.user_profiles` inside the hook gets planned against **every**
+applicable policy on that table, not just whichever one would end up
+matching. `user_profiles_select_company`'s `USING` clause subqueries
+`core.user_companies`:
+
+```sql
+id in (select user_id from core.user_companies where company_id = core.current_company_id())
+```
+
+Postgres requires privilege on every table an OR'd permissive policy
+references in order to plan the query at all — even though
+`user_profiles_select_self` (`id = auth.uid()`) would independently permit
+the row, its sibling policy's subquery still gets compiled in and checked.
+Fixed in `supabase/migrations/0018_grant_auth_admin_user_companies.sql`:
+`GRANT SELECT ON core.user_companies` to `supabase_auth_admin`. Confirmed
+`core.user_companies`'s own policies don't reference any further tables (only
+`auth.uid()` and the already-executable `core.current_company_id()`), so
+this closes the dependency chain — re-verified with
+`has_table_privilege('supabase_auth_admin', 'core.user_companies', 'SELECT')`
+→ `true`.
+
 ## Fixed
 
 ### 1. Four `SECURITY DEFINER` functions trusted a caller-supplied `p_company_id`

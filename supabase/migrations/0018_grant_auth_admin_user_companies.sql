@@ -1,0 +1,21 @@
+-- =============================================================================
+-- Closes the last gap in the supabase_auth_admin permission chain that
+-- 0017_grant_auth_admin_hook_access.sql left open: `supabase_auth_admin`
+-- doesn't bypass RLS (rolbypassrls = false), so its SELECT against
+-- core.user_profiles inside the Custom Access Token Hook gets planned
+-- against every applicable RLS policy on that table, not just the one
+-- that happens to match. `user_profiles_select_company`'s USING clause
+-- subqueries core.user_companies, and Postgres requires privilege on
+-- every table referenced by an OR'd policy for the query to be planned
+-- at all -- regardless of whether that particular branch would end up
+-- matching the row. Without this grant, every password-grant login
+-- failed with:
+--   ERROR: permission denied for table user_companies (SQLSTATE 42501)
+-- even after 0017 fixed the equivalent user_profiles grant.
+--
+-- core.user_companies' own RLS policies don't reference any further
+-- tables (only auth.uid() and the already-executable
+-- core.current_company_id()), so this closes the chain.
+-- =============================================================================
+
+grant select on core.user_companies to supabase_auth_admin;

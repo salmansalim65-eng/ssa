@@ -1,0 +1,155 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+
+import { requirePermission } from "@/lib/auth/permissions";
+import { createClient } from "@/lib/supabase/server";
+import { createJournalEntry, getCurrentCompanyId, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
+import { generatePkInvoiceSchema, type GeneratePkInvoiceInput } from "./schemas";
+
+async function getPostingAccount(companyId: string, accountRole: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase.schema("accounting").rpc("fn_get_posting_account", {
+    p_company_id: companyId,
+    p_voucher_type: "pk_rent_invoice",
+    p_account_role: accountRole,
+  });
+  if (error) throw new Error(error.message);
+  return data as string | null;
+}
+
+export async function generatePkRentInvoice(scheduleId: string, input: GeneratePkInvoiceInput) {
+  const parsed = generatePkInvoiceSchema.safeParse({ ...input, scheduleId });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+
+  await requirePermission("pk_rent_invoice", "create");
+  const companyId = await getCurrentCompanyId();
+  const supabase = await createClient();
+  const { data: user } = await supabase.auth.getUser();
+  const createdBy = user.user!.id;
+
+  const { data: schedule, error: scheduleError } = await supabase
+    .schema("rental")
+    .from("pk_payment_schedules")
+    .select("id, lease_id, due_date, amount, status")
+    .eq("id", parsed.data.scheduleId)
+    .single();
+  if (scheduleError || !schedule) return { error: "Schedule entry not found" };
+  if (schedule.status !== "pending") return { error: `This period is already ${schedule.status}` };
+
+  const { data: lease, error: leaseError } = await supabase
+    .schema("rental")
+    .from("pk_leases")
+    .select("currency_id")
+    .eq("id", schedule.lease_id)
+    .single();
+  if (leaseError || !lease) return { error: "Lease not found" };
+
+  const utilityTotal = parsed.data.utilityCharges.reduce((sum, u) => sum + u.amount, 0);
+  const advanceAdjusted = parsed.data.advanceAdjusted;
+  if (advanceAdjusted > schedule.amount + utilityTotal) {
+    return { error: "Advance adjustment cannot exceed the invoice total" };
+  }
+
+  const [tenantReceivableId, rentalIncomeId, utilityIncomeId, advanceLiabilityId] = await Promise.all([
+    getPostingAccount(companyId, "tenant_receivable"),
+    getPostingAccount(companyId, "pk_rental_income"),
+    getPostingAccount(companyId, "pk_utility_income"),
+    getPostingAccount(companyId, "advance_rent_liability"),
+  ]);
+  if (!tenantReceivableId || !rentalIncomeId) {
+    return {
+      error: "Configure Posting Templates for Pakistan Rent Invoice first (Tenant Receivable + Rental Income accounts).",
+    };
+  }
+  if (utilityTotal > 0 && !utilityIncomeId) {
+    return { error: "Configure the Utility Recovery Income account in Posting Templates first." };
+  }
+  if (advanceAdjusted > 0 && !advanceLiabilityId) {
+    return { error: "Configure the Advance Rent Liability account in Posting Templates first." };
+  }
+
+  const invoiceId = crypto.randomUUID();
+  const today = new Date().toISOString().slice(0, 10);
+  const netReceivable = schedule.amount + utilityTotal - advanceAdjusted;
+
+  const lines: EntryLineInput[] = [];
+  if (netReceivable > 0) {
+    lines.push({ accountId: tenantReceivableId, debit: netReceivable, credit: 0, description: "Pakistan rent invoice" });
+  }
+  if (advanceAdjusted > 0) {
+    lines.push({ accountId: advanceLiabilityId!, debit: advanceAdjusted, credit: 0, description: "Advance rent adjusted" });
+  }
+  lines.push({ accountId: rentalIncomeId, debit: 0, credit: schedule.amount, description: "Pakistan rent invoice" });
+  if (utilityTotal > 0) {
+    lines.push({ accountId: utilityIncomeId!, debit: 0, credit: utilityTotal, description: "Utility recovery" });
+  }
+
+  const je = await createJournalEntry({
+    companyId,
+    voucherType: "pk_rent_invoice",
+    voucherId: invoiceId,
+    entryDate: today,
+    currencyId: lease.currency_id,
+    narration: "Pakistan rent invoice",
+    createdBy,
+    lines,
+  });
+  if ("error" in je) return { error: je.error };
+
+  const { error } = await supabase.schema("rental").from("pk_rent_invoices").insert({
+    id: invoiceId,
+    company_id: companyId,
+    journal_entry_id: je.journalEntryId,
+    lease_id: schedule.lease_id,
+    schedule_id: schedule.id,
+    invoice_date: today,
+    due_date: schedule.due_date,
+    rent_amount: schedule.amount,
+    utility_charges: utilityTotal,
+    advance_adjusted: advanceAdjusted,
+    currency_id: lease.currency_id,
+    exchange_rate: je.exchangeRate,
+    outstanding_amount: netReceivable,
+    created_by: createdBy,
+  });
+  if (error) return { error: error.message };
+
+  if (parsed.data.utilityCharges.length > 0) {
+    const { error: utilityError } = await supabase
+      .schema("rental")
+      .from("pk_utility_charges")
+      .insert(
+        parsed.data.utilityCharges.map((u) => ({
+          invoice_id: invoiceId,
+          utility_type: u.utilityType,
+          amount: u.amount,
+          description: u.description || null,
+        })),
+      );
+    if (utilityError) return { error: utilityError.message };
+  }
+
+  revalidatePath(`/rental/pk/leases/${schedule.lease_id}`);
+  return { success: true, id: invoiceId };
+}
+
+export async function postPkRentInvoice(id: string, journalEntryId: string) {
+  await requirePermission("pk_rent_invoice", "post");
+  const companyId = await getCurrentCompanyId();
+
+  const result = await postVoucher({ companyId, voucherType: "pk_rent_invoice", journalEntryId });
+  if ("error" in result) return result;
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .schema("rental")
+    .from("pk_rent_invoices")
+    .update({ voucher_no: result.voucherNo })
+    .eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidatePath("/rental/pk/invoices");
+  revalidatePath(`/rental/pk/invoices/${id}`);
+  return { success: true, voucherNo: result.voucherNo };
+}

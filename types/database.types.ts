@@ -1068,6 +1068,122 @@ export interface Database {
         };
         Update: Partial<Database["rental"]["Tables"]["uae_rent_payments"]["Row"]>;
       };
+      pk_leases: {
+        Row: {
+          id: string;
+          company_id: string;
+          asset_id: string;
+          tenant_id: string;
+          lease_start: string;
+          lease_end: string;
+          monthly_rent: number;
+          advance_rent: number;
+          security_deposit: number;
+          currency_id: string;
+          status: "active" | "expired" | "terminated";
+          created_by: string;
+          created_at: string;
+          updated_by: string | null;
+          updated_at: string | null;
+          deleted_by: string | null;
+          deleted_at: string | null;
+        };
+        Insert: Partial<Database["rental"]["Tables"]["pk_leases"]["Row"]> & {
+          company_id: string;
+          asset_id: string;
+          tenant_id: string;
+          lease_start: string;
+          lease_end: string;
+          monthly_rent: number;
+          currency_id: string;
+          created_by: string;
+        };
+        Update: Partial<Database["rental"]["Tables"]["pk_leases"]["Row"]>;
+      };
+      pk_payment_schedules: {
+        Row: {
+          id: string;
+          lease_id: string;
+          due_date: string;
+          amount: number;
+          status: "pending" | "invoiced" | "paid" | "overdue";
+          created_at: string;
+        };
+        Insert: never;
+        Update: Partial<Database["rental"]["Tables"]["pk_payment_schedules"]["Row"]>;
+      };
+      pk_rent_invoices: {
+        Row: {
+          id: string;
+          company_id: string;
+          journal_entry_id: string;
+          voucher_no: string | null;
+          lease_id: string;
+          schedule_id: string | null;
+          invoice_date: string;
+          due_date: string;
+          rent_amount: number;
+          utility_charges: number;
+          advance_adjusted: number;
+          total_amount: number;
+          currency_id: string;
+          exchange_rate: number;
+          outstanding_amount: number;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: Partial<Database["rental"]["Tables"]["pk_rent_invoices"]["Row"]> & {
+          company_id: string;
+          journal_entry_id: string;
+          lease_id: string;
+          invoice_date: string;
+          due_date: string;
+          rent_amount: number;
+          currency_id: string;
+          outstanding_amount: number;
+          created_by: string;
+        };
+        Update: Partial<Database["rental"]["Tables"]["pk_rent_invoices"]["Row"]>;
+      };
+      pk_utility_charges: {
+        Row: {
+          id: string;
+          invoice_id: string;
+          utility_type: "electricity" | "gas" | "water" | "other";
+          amount: number;
+          description: string | null;
+          created_at: string;
+        };
+        Insert: Partial<Database["rental"]["Tables"]["pk_utility_charges"]["Row"]> & {
+          invoice_id: string;
+          utility_type: "electricity" | "gas" | "water" | "other";
+          amount: number;
+        };
+        Update: Partial<Database["rental"]["Tables"]["pk_utility_charges"]["Row"]>;
+      };
+      pk_rent_payments: {
+        Row: {
+          id: string;
+          company_id: string;
+          invoice_id: string;
+          journal_entry_id: string;
+          payment_date: string;
+          amount: number;
+          cash_bank_account_id: string;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: Partial<Database["rental"]["Tables"]["pk_rent_payments"]["Row"]> & {
+          company_id: string;
+          invoice_id: string;
+          journal_entry_id: string;
+          payment_date: string;
+          amount: number;
+          cash_bank_account_id: string;
+          created_by: string;
+        };
+        Update: Partial<Database["rental"]["Tables"]["pk_rent_payments"]["Row"]>;
+      };
     };
     Functions: Record<string, never>;
   };

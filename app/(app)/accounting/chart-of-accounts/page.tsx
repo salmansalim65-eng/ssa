@@ -13,7 +13,7 @@ export default async function ChartOfAccountsPage() {
       supabase
         .schema("accounting")
         .from("chart_of_accounts")
-        .select("id, account_code, account_name, parent_id, account_type, currency_id, opening_balance, is_group, is_active, currencies:currency_id(code)")
+        .select("id, account_code, account_name, parent_id, account_type, currency_id, opening_balance, is_group, is_active, is_cash, is_bank, currencies:currency_id(code)")
         .eq("company_id", companyId)
         .is("deleted_at", null),
       supabase
@@ -37,6 +37,8 @@ export default async function ChartOfAccountsPage() {
     opening_balance: number;
     is_group: boolean;
     is_active: boolean;
+    is_cash: boolean;
+    is_bank: boolean;
     currencies: { code: string } | null;
   };
 
@@ -51,6 +53,8 @@ export default async function ChartOfAccountsPage() {
     opening_balance: a.opening_balance,
     is_group: a.is_group,
     is_active: a.is_active,
+    is_cash: a.is_cash,
+    is_bank: a.is_bank,
   }));
 
   type RawCompanyCurrency = { is_base_currency: boolean; currencies: { id: string; code: string } | null };

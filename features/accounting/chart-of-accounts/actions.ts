@@ -51,6 +51,8 @@ export async function createAccount(input: AccountInput) {
     opening_balance_currency_id: await resolveOpeningBalanceCurrencyId(companyId, currencyId),
     opening_balance: parsed.data.openingBalance,
     is_group: parsed.data.isGroup,
+    is_cash: parsed.data.isCash,
+    is_bank: parsed.data.isBank,
     created_by: user.user!.id,
   });
 
@@ -83,6 +85,8 @@ export async function updateAccount(accountId: string, input: AccountInput) {
       opening_balance_currency_id: await resolveOpeningBalanceCurrencyId(companyId, currencyId),
       opening_balance: parsed.data.openingBalance,
       is_group: parsed.data.isGroup,
+      is_cash: parsed.data.isCash,
+      is_bank: parsed.data.isBank,
     })
     .eq("id", accountId);
 

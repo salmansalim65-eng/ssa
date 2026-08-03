@@ -245,6 +245,36 @@ export function AccountForm({
             </FormItem>
           )}
         />
+        <FormField
+          control={form.control}
+          name="isCash"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-start gap-2 sm:col-span-2">
+              <FormControl>
+                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+              </FormControl>
+              <div className="space-y-1 leading-none">
+                <FormLabel>Cash account</FormLabel>
+                <FormDescription>Included in the Cash Book report.</FormDescription>
+              </div>
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="isBank"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-start gap-2 sm:col-span-2">
+              <FormControl>
+                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+              </FormControl>
+              <div className="space-y-1 leading-none">
+                <FormLabel>Bank account</FormLabel>
+                <FormDescription>Included in the Bank Book report.</FormDescription>
+              </div>
+            </FormItem>
+          )}
+        />
         {formError && <p className="text-sm text-destructive sm:col-span-2">{formError}</p>}
         <Button type="submit" disabled={isPending} className="sm:col-span-2 sm:w-fit">
           {isPending ? "Saving…" : submitLabel}

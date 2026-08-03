@@ -39,6 +39,8 @@ export interface AccountRow {
   opening_balance: number;
   is_group: boolean;
   is_active: boolean;
+  is_cash: boolean;
+  is_bank: boolean;
 }
 
 type DialogState =
@@ -53,6 +55,8 @@ const emptyValues: AccountInput = {
   currencyId: "",
   isGroup: false,
   openingBalance: 0,
+  isCash: false,
+  isBank: false,
 };
 
 function descendantIds(accounts: AccountRow[], rootId: string): Set<string> {
@@ -165,6 +169,8 @@ export function AccountTree({
           </Badge>
           {account.currency_code && <Badge variant="secondary">{account.currency_code}</Badge>}
           {account.is_group && <Badge>Group</Badge>}
+          {account.is_cash && <Badge variant="outline">Cash</Badge>}
+          {account.is_bank && <Badge variant="outline">Bank</Badge>}
           {!account.is_active && <Badge variant="secondary">Inactive</Badge>}
 
           {!account.is_group && (
@@ -267,6 +273,8 @@ export function AccountTree({
                       currencyId: dialog.account.currency_id ?? "",
                       isGroup: dialog.account.is_group,
                       openingBalance: dialog.account.opening_balance,
+                      isCash: dialog.account.is_cash,
+                      isBank: dialog.account.is_bank,
                     }
                   : {
                       ...emptyValues,

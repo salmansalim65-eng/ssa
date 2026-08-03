@@ -105,8 +105,8 @@ audit, storage, and numbering existing and being correct.
 
 ---
 
-**Status:** Phases 1–11 are implemented — see
-`supabase/migrations/0001_foundation.sql` through `0011_asset_sale.sql`,
+**Status:** Phases 1–12 are implemented — see
+`supabase/migrations/0001_foundation.sql` through `0012_reporting.sql`,
 and the Next.js app under `app/`, `features/`, `lib/`, `components/`. Phase 9
 adds tenants, UAE leases with auto-generated monthly/yearly payment
 schedules, on-demand rent invoice generation (Dr Tenant Receivable / Cr UAE
@@ -130,5 +130,17 @@ Dr Loss on Sale / Cr Fixed Asset + Cr Gain on Sale, again only including
 the gain/loss line that applies) tagged to the asset's cost center.
 `assets.status` flips to `'sold'` only when the sale voucher actually
 posts, so a rejected sale doesn't block re-selling the same asset — no
-unique(asset_id) constraint, matching purchase_vouchers' precedent. Next
-up: Phase 12 (Reports Engine), pending review.
+unique(asset_id) constraint, matching purchase_vouchers' precedent.
+Phase 12 introduces the `reporting` schema (the sixth top-level schema from
+the original blueprint) with `v_ledger_entries` — a single security_invoker
+view over posted journal lines that backs the General Ledger, Trial
+Balance, Balance Sheet, P&L, Cash Book, and Bank Book reports via different
+app-level filters/aggregations rather than one view per report — plus
+`v_asset_register`, `v_purchase_report`, `v_sale_report`, `v_rental_income`
+(UAE+PK union, posted only), `v_outstanding_rent`, and
+`v_currency_exchange_history`. Added `is_cash`/`is_bank` flags to
+`chart_of_accounts` so Cash Book/Bank Book know which accounts to include.
+Every report ships CSV export (client-side, no new dependency) and a Print
+button (browser print-to-PDF); date-range/as-of-date filters live in the
+URL via searchParams so a filtered view is a shareable link. Next up:
+Phase 13 (Dashboard), pending review.

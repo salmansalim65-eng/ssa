@@ -113,6 +113,20 @@ export const navSections: NavSection[] = [
   },
   {
     label: "Reports",
-    items: [{ label: "Asset Valuation", href: "/reports/asset-valuation", icon: LineChartIcon }],
+    items: [
+      { label: "General Ledger", href: "/reports/general-ledger", icon: BookOpenIcon },
+      { label: "Trial Balance", href: "/reports/trial-balance", icon: ScaleIcon },
+      { label: "Balance Sheet", href: "/reports/balance-sheet", icon: LandmarkIcon },
+      { label: "Profit & Loss", href: "/reports/profit-and-loss", icon: LineChartIcon },
+      { label: "Cash Book", href: "/reports/cash-book", icon: CoinsIcon },
+      { label: "Bank Book", href: "/reports/bank-book", icon: Building2Icon },
+      { label: "Asset Register", href: "/reports/asset-register", icon: HomeIcon },
+      { label: "Asset Valuation", href: "/reports/asset-valuation", icon: TrendingUpIcon },
+      { label: "Purchase Report", href: "/reports/purchase-report", icon: ShoppingCartIcon },
+      { label: "Sale Report", href: "/reports/sale-report", icon: BadgeDollarSignIcon },
+      { label: "Rental Income", href: "/reports/rental-income", icon: ReceiptIcon },
+      { label: "Outstanding Rent", href: "/reports/outstanding-rent", icon: ClockIcon },
+      { label: "Currency Exchange", href: "/reports/currency-exchange", icon: ArrowUpFromLineIcon },
+    ],
   },
 ];

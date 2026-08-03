@@ -337,6 +337,8 @@ export interface Database {
           opening_balance_currency_id: string | null;
           is_group: boolean;
           is_active: boolean;
+          is_cash: boolean;
+          is_bank: boolean;
           created_by: string;
           created_at: string;
           updated_by: string | null;
@@ -1236,6 +1238,135 @@ export interface Database {
         };
         Insert: never;
         Update: never;
+      };
+    };
+    Functions: Record<string, never>;
+  };
+  reporting: {
+    Tables: Record<string, never>;
+    Views: {
+      v_ledger_entries: {
+        Row: {
+          company_id: string;
+          journal_entry_id: string;
+          line_no: number;
+          entry_date: string;
+          account_id: string;
+          account_code: string;
+          account_name: string;
+          account_type: AccountType;
+          is_cash: boolean;
+          is_bank: boolean;
+          cost_center_id: string | null;
+          voucher_type: VoucherType;
+          voucher_id: string;
+          voucher_no: string | null;
+          debit_amount: number;
+          credit_amount: number;
+          description: string | null;
+          narration: string | null;
+          status: JournalEntryStatus;
+        };
+      };
+      v_asset_register: {
+        Row: {
+          asset_id: string;
+          company_id: string;
+          asset_code: string;
+          asset_name: string;
+          property_type: string;
+          country: "PK" | "AE";
+          city: string | null;
+          area: string | null;
+          owner: string | null;
+          status: "active" | "sold" | "inactive";
+          purchase_date: string | null;
+          purchase_value: number | null;
+          current_value: number | null;
+        };
+      };
+      v_purchase_report: {
+        Row: {
+          company_id: string;
+          purchase_voucher_id: string;
+          voucher_no: string | null;
+          purchase_date: string;
+          asset_code: string;
+          asset_name: string;
+          supplier_name: string;
+          purchase_price: number;
+          taxes: number;
+          registration_charges: number;
+          additional_expenses: number;
+          total_amount: number;
+          currency_code: string;
+          status: JournalEntryStatus;
+        };
+      };
+      v_sale_report: {
+        Row: {
+          company_id: string;
+          sale_id: string;
+          voucher_no: string | null;
+          sale_date: string;
+          buyer: string;
+          asset_code: string;
+          asset_name: string;
+          sale_price: number;
+          book_value_at_sale: number;
+          profit_loss_amount: number;
+          purchase_value_at_sale: number;
+          capital_gain_amount: number;
+          currency_code: string;
+          status: JournalEntryStatus;
+        };
+      };
+      v_rental_income: {
+        Row: {
+          company_id: string;
+          country: "UAE" | "PK";
+          invoice_id: string;
+          voucher_no: string | null;
+          asset_code: string;
+          asset_name: string;
+          tenant_name: string;
+          invoice_date: string;
+          due_date: string;
+          amount: number;
+          outstanding_balance: number;
+          currency_code: string;
+          status: JournalEntryStatus;
+        };
+      };
+      v_outstanding_rent: {
+        Row: {
+          company_id: string;
+          country: "UAE" | "PK";
+          invoice_id: string;
+          voucher_no: string | null;
+          asset_code: string;
+          asset_name: string;
+          tenant_name: string;
+          invoice_date: string;
+          due_date: string;
+          amount: number;
+          outstanding_balance: number;
+          currency_code: string;
+          status: JournalEntryStatus;
+          days_overdue: number;
+        };
+      };
+      v_currency_exchange_history: {
+        Row: {
+          company_id: string;
+          currency_code: string;
+          currency_name: string;
+          rate_date: string;
+          rate_to_base: number;
+          source: "manual" | "api";
+          created_by: string;
+          created_at: string;
+        };
       };
     };
     Functions: Record<string, never>;

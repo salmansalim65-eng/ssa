@@ -10,6 +10,8 @@ export const accountSchema = z.object({
   currencyId: z.string().uuid().optional().or(z.literal("")),
   isGroup: z.boolean(),
   openingBalance: z.coerce.number(),
+  isCash: z.boolean(),
+  isBank: z.boolean(),
 });
 
 export type AccountInput = z.output<typeof accountSchema>;

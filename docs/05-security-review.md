@@ -85,6 +85,28 @@ repeated. Re-verified with the same role-simulation query above — now
 resolves correctly — and with `has_schema_privilege`/`has_table_privilege`
 checks across all six schemas, both roles: all `true`.
 
+## Addendum: Custom Access Token Hook also needed its own grant
+
+After the fix above, the username lookup RPC started succeeding (confirmed
+in the API logs: `POST /rest/v1/rpc/fn_username_to_email` → `200`), but the
+actual password grant still failed with a `500`. The Auth logs pinpointed
+why:
+
+```
+error: "ERROR: permission denied for table user_profiles (SQLSTATE 42501)"
+hook: "pg-functions://postgres/core/fn_custom_access_token_hook"
+```
+
+The Custom Access Token Hook isn't called through PostgREST at all — GoTrue
+invokes it directly against Postgres as the `supabase_auth_admin` role,
+which `0016_grant_schema_privileges.sql` never granted anything to (it only
+covered `anon`/`authenticated`/`service_role`, the PostgREST-facing roles).
+Fixed in `supabase/migrations/0017_grant_auth_admin_hook_access.sql`:
+`GRANT USAGE ON SCHEMA core` and `GRANT SELECT ON core.user_profiles` to
+`supabase_auth_admin` — the only table the hook actually reads. Re-verified
+with `has_schema_privilege`/`has_table_privilege('supabase_auth_admin', ...)`,
+both now `true`.
+
 ## Fixed
 
 ### 1. Four `SECURITY DEFINER` functions trusted a caller-supplied `p_company_id`

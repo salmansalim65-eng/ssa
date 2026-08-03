@@ -1,0 +1,25 @@
+project_id = "ssa-erp"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "core", "audit", "storage"]
+extra_search_path = ["public"]
+
+[db]
+port = 54322
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+
+[auth.hook.custom_access_token]
+enabled = true
+uri = "pg-functions://postgres/core/fn_custom_access_token_hook"
+
+[storage]
+enabled = true

@@ -105,5 +105,7 @@ audit, storage, and numbering existing and being correct.
 
 ---
 
-**Next step:** Phase 1 (Foundation) — awaiting review of this architecture
-before its schema/migrations/RLS/UI are generated.
+**Status:** Phase 1 (Foundation) is implemented — see
+`supabase/migrations/0001_foundation.sql` and the Next.js app under `app/`,
+`features/admin`, `features/auth`, `lib/`, `components/`. Next up: Phase 2
+(Currency Master & Daily Exchange Rates), pending review of Phase 1.

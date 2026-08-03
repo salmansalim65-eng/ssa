@@ -3,6 +3,8 @@
 //   supabase gen types typescript --project-id <id> --schema core,audit > types/database.types.ts
 // and reconcile any drift against the migrations, which remain the source of truth.
 
+export type AccountType = "asset" | "liability" | "income" | "expense" | "equity";
+
 export type PermissionAction =
   | "view"
   | "create"
@@ -295,6 +297,70 @@ export interface Database {
         Returns: Database["core"]["Tables"]["exchange_rates"]["Row"];
       };
     };
+  };
+  accounting: {
+    Tables: {
+      chart_of_accounts: {
+        Row: {
+          id: string;
+          company_id: string;
+          account_code: string;
+          account_name: string;
+          parent_id: string | null;
+          account_type: AccountType;
+          currency_id: string | null;
+          opening_balance: number;
+          opening_balance_currency_id: string | null;
+          is_group: boolean;
+          is_active: boolean;
+          created_by: string;
+          created_at: string;
+          updated_by: string | null;
+          updated_at: string | null;
+          deleted_by: string | null;
+          deleted_at: string | null;
+        };
+        Insert: Partial<Database["accounting"]["Tables"]["chart_of_accounts"]["Row"]> & {
+          company_id: string;
+          account_code: string;
+          account_name: string;
+          account_type: AccountType;
+          created_by: string;
+        };
+        Update: Partial<Database["accounting"]["Tables"]["chart_of_accounts"]["Row"]>;
+      };
+      cost_centers: {
+        Row: {
+          id: string;
+          company_id: string;
+          code: string;
+          name: string;
+          asset_id: string | null;
+          country: string | null;
+          city: string | null;
+          property_type: string | null;
+          building: string | null;
+          plot_number: string | null;
+          owner: string | null;
+          rental_status: "vacant" | "occupied" | "under_maintenance" | "not_applicable";
+          is_active: boolean;
+          created_by: string;
+          created_at: string;
+          updated_by: string | null;
+          updated_at: string | null;
+          deleted_by: string | null;
+          deleted_at: string | null;
+        };
+        Insert: Partial<Database["accounting"]["Tables"]["cost_centers"]["Row"]> & {
+          company_id: string;
+          code: string;
+          name: string;
+          created_by: string;
+        };
+        Update: Partial<Database["accounting"]["Tables"]["cost_centers"]["Row"]>;
+      };
+    };
+    Functions: Record<string, never>;
   };
   audit: {
     Tables: {

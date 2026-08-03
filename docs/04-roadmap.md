@@ -105,8 +105,9 @@ audit, storage, and numbering existing and being correct.
 
 ---
 
-**Status:** Phase 1 (Foundation) and Phase 2 (Currency Master & Daily
-Exchange Rates) are implemented — see `supabase/migrations/0001_foundation.sql`,
-`supabase/migrations/0002_currency.sql`, and the Next.js app under `app/`,
-`features/admin`, `features/auth`, `lib/`, `components/`. Next up: Phase 3
-(Chart of Accounts & Cost Centers), pending review.
+**Status:** Phases 1–3 are implemented — see
+`supabase/migrations/0001_foundation.sql`, `0002_currency.sql`,
+`0003_chart_of_accounts.sql`, and the Next.js app under `app/`,
+`features/`, `lib/`, `components/`. Next up: Phase 4 (Accounting Engine
+Core — journal engine, posting templates, approval workflow, document
+numbering), pending review.

@@ -1,0 +1,200 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  costCenterSchema,
+  RENTAL_STATUSES,
+  type CostCenterInput,
+} from "@/features/accounting/cost-centers/schemas";
+
+const statusLabels: Record<(typeof RENTAL_STATUSES)[number], string> = {
+  vacant: "Vacant",
+  occupied: "Occupied",
+  under_maintenance: "Under maintenance",
+  not_applicable: "Not applicable",
+};
+
+export function CostCenterForm({
+  defaultValues,
+  onSubmit,
+  submitLabel,
+}: {
+  defaultValues: CostCenterInput;
+  onSubmit: (values: CostCenterInput) => Promise<{ error?: string } | undefined>;
+  submitLabel: string;
+}) {
+  const [isPending, startTransition] = useTransition();
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const form = useForm<CostCenterInput>({
+    resolver: zodResolver(costCenterSchema),
+    defaultValues,
+  });
+
+  function handleSubmit(values: CostCenterInput) {
+    setFormError(null);
+    startTransition(async () => {
+      const result = await onSubmit(values);
+      if (result?.error) setFormError(result.error);
+    });
+  }
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="grid gap-4 sm:grid-cols-2">
+        <FormField
+          control={form.control}
+          name="code"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Code</FormLabel>
+              <FormControl>
+                <Input {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="name"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Name</FormLabel>
+              <FormControl>
+                <Input {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="country"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Country</FormLabel>
+              <FormControl>
+                <Input {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="city"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>City</FormLabel>
+              <FormControl>
+                <Input {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="propertyType"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Property type</FormLabel>
+              <FormControl>
+                <Input {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="building"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Building</FormLabel>
+              <FormControl>
+                <Input {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="plotNumber"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Plot number</FormLabel>
+              <FormControl>
+                <Input {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="owner"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Owner</FormLabel>
+              <FormControl>
+                <Input {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="rentalStatus"
+          render={({ field }) => (
+            <FormItem className="sm:col-span-2">
+              <FormLabel>Rental status</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {RENTAL_STATUSES.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {statusLabels[status]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        {formError && <p className="text-sm text-destructive sm:col-span-2">{formError}</p>}
+        <Button type="submit" disabled={isPending} className="sm:col-span-2 sm:w-fit">
+          {isPending ? "Saving…" : submitLabel}
+        </Button>
+      </form>
+    </Form>
+  );
+}

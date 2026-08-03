@@ -6,6 +6,8 @@ import {
   ShieldIcon,
   CoinsIcon,
   TrendingUpIcon,
+  ListTreeIcon,
+  LandmarkIcon,
 } from "lucide-react";
 
 export interface NavItem {
@@ -39,6 +41,13 @@ export const navSections: NavSection[] = [
     items: [
       { label: "Currencies", href: "/admin/currencies", icon: CoinsIcon },
       { label: "Exchange Rates", href: "/admin/exchange-rates", icon: TrendingUpIcon },
+    ],
+  },
+  {
+    label: "Accounting",
+    items: [
+      { label: "Chart of Accounts", href: "/accounting/chart-of-accounts", icon: ListTreeIcon },
+      { label: "Cost Centers", href: "/accounting/cost-centers", icon: LandmarkIcon },
     ],
   },
 ];

@@ -34,6 +34,56 @@ every finding below and surfaced one new one:
   action taken on these — confirmed matches, not new findings.
 - `public.rls_auto_enable()` is a Supabase-platform function, not part of
   this app's schema — out of scope.
+- **`auth_leaked_password_protection` disabled** — an Auth dashboard toggle
+  (checks new passwords against HaveIBeenPwned), not a schema/migration
+  concern. Noted for awareness; not yet enabled.
+
+## Addendum: missing schema grants (found post-deployment, all 15 prior migrations)
+
+After the live project was up and the username-login feature
+(`0014_username_login.sql`) was exercised for the first time, logging in as
+the first real user failed with a generic "Invalid username or password"
+even though the account, its password hash, and `fn_username_to_email`'s own
+logic were all individually confirmed correct. Simulating the exact
+PostgREST call the login flow makes exposed the real cause:
+
+```sql
+set role anon;
+select core.fn_username_to_email('ss'); -- ERROR: 42501: permission denied for schema core
+reset role;
+```
+
+None of the 15 prior migrations had ever granted baseline `USAGE` on any
+custom schema (`core`, `accounting`, `assets`, `rental`, `reporting`,
+`audit`), or `SELECT`/`INSERT`/etc. on their tables, sequences, or routines,
+to the `anon`/`authenticated` Postgres roles that PostgREST authenticates
+requests as. Every table had correct RLS policies from Phase 1 onward, but
+**RLS is a secondary, row-level filter — Postgres refuses the request at the
+schema/table-privilege check before RLS is ever evaluated.** Confirmed
+project-wide with:
+
+```sql
+select n.nspname, has_schema_privilege('anon', n.nspname, 'USAGE')
+from pg_namespace n
+where n.nspname in ('core','accounting','assets','rental','reporting','audit');
+-- every row: false, for both anon and authenticated
+```
+
+This meant the entire API surface — every schema, every table, every RPC —
+had been unreachable for any client using the anon or authenticated key
+since Phase 1; it only surfaced now because this was the first time a
+brand-new project had been stood up and exercised end-to-end rather than
+tested against a pre-existing, manually-configured one.
+
+**Fix:** `supabase/migrations/0016_grant_schema_privileges.sql` grants
+`USAGE` on all six schemas, `ALL`/`SELECT` on their tables (`reporting` is
+read-only), `ALL` on sequences and routines, all to
+`anon`/`authenticated`/`service_role`, plus matching
+`ALTER DEFAULT PRIVILEGES` so every future migration's new tables/functions
+inherit the same grants automatically without this step needing to be
+repeated. Re-verified with the same role-simulation query above — now
+resolves correctly — and with `has_schema_privilege`/`has_table_privilege`
+checks across all six schemas, both roles: all `true`.
 
 ## Fixed
 

@@ -10,9 +10,17 @@
    supabase db push
    ```
    This applies `supabase/migrations/0001_foundation.sql` through
-   `0015_pin_function_search_paths.sql` in filename order. There is no seed data — the
-   first signed-up user creates their own company via the onboarding
-   screen (`core.fn_bootstrap_company`).
+   `0016_grant_schema_privileges.sql` in filename order. There is no seed
+   data — the first signed-up user creates their own company via the
+   onboarding screen (`core.fn_bootstrap_company`).
+
+   **`0016_grant_schema_privileges.sql` is not optional.** If you set up a
+   project by pasting migrations into the SQL Editor rather than running
+   `supabase db push`, double-check it actually ran — every custom schema
+   is unreachable via the API without it (RLS policies alone are not
+   sufficient; see `docs/05-security-review.md`'s schema-grants addendum).
+   The dashboard's "Exposed schemas" setting in step 5 below does **not**
+   apply these grants by itself.
 3. **Custom Access Token Hook** (required — without it, `company_id` never
    lands in the JWT and every RLS policy falls back to the user's
    `default_company_id`, which breaks multi-company switching):

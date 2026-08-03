@@ -18,6 +18,7 @@ import {
   WrenchIcon,
   ScaleIcon,
   ListOrderedIcon,
+  HomeIcon,
 } from "lucide-react";
 
 export interface NavItem {
@@ -37,6 +38,10 @@ export const navSections: NavSection[] = [
   {
     label: "",
     items: [{ label: "Dashboard", href: "/dashboard", icon: LayoutDashboardIcon }],
+  },
+  {
+    label: "Assets",
+    items: [{ label: "Assets", href: "/assets", icon: HomeIcon }],
   },
   {
     label: "Administration",

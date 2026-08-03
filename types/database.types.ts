@@ -788,6 +788,60 @@ export interface Database {
       };
     };
   };
+  assets: {
+    Tables: {
+      assets: {
+        Row: {
+          id: string;
+          company_id: string;
+          asset_code: string;
+          asset_name: string;
+          property_type: string;
+          country: "PK" | "AE";
+          city: string | null;
+          area: string | null;
+          address: string | null;
+          purchase_date: string | null;
+          purchase_value: number | null;
+          current_value: number | null;
+          status: "active" | "sold" | "inactive";
+          owner: string | null;
+          title_deed_attachment_id: string | null;
+          notes: string | null;
+          created_by: string;
+          created_at: string;
+          updated_by: string | null;
+          updated_at: string | null;
+          deleted_by: string | null;
+          deleted_at: string | null;
+        };
+        Insert: Partial<Database["assets"]["Tables"]["assets"]["Row"]> & {
+          company_id: string;
+          asset_code: string;
+          asset_name: string;
+          property_type: string;
+          country: "PK" | "AE";
+          created_by: string;
+        };
+        Update: Partial<Database["assets"]["Tables"]["assets"]["Row"]>;
+      };
+      asset_images: {
+        Row: {
+          id: string;
+          asset_id: string;
+          attachment_id: string;
+          is_primary: boolean;
+          created_at: string;
+        };
+        Insert: Partial<Database["assets"]["Tables"]["asset_images"]["Row"]> & {
+          asset_id: string;
+          attachment_id: string;
+        };
+        Update: Partial<Database["assets"]["Tables"]["asset_images"]["Row"]>;
+      };
+    };
+    Functions: Record<string, never>;
+  };
   audit: {
     Tables: {
       audit_logs: {

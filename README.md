@@ -43,7 +43,7 @@ designed, reviewed, and only then implemented. Start here:
 | 5 | Core Accounting Vouchers (Receipt, Payment, JV, JV Maintenance, Opening Balance, PDC, Cheque Return) | ✅ Done |
 | 6 | Asset Registration | ✅ Done |
 | 7 | Purchase Property | ✅ Done |
-| 8 | Asset Current Value | ⬜ Not started |
+| 8 | Asset Current Value | ✅ Done |
 | 9 | UAE Rental Management | ⬜ Not started |
 | 10 | Pakistan Rental Management | ⬜ Not started |
 | 11 | Asset Sale | ⬜ Not started |

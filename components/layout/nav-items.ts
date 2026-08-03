@@ -22,6 +22,7 @@ import {
   Users2Icon,
   ShoppingCartIcon,
   SlidersHorizontalIcon,
+  LineChartIcon,
 } from "lucide-react";
 
 export interface NavItem {
@@ -91,5 +92,9 @@ export const navSections: NavSection[] = [
       { label: "Opening Balances", href: "/accounting/vouchers/opening_balance_voucher", icon: ScaleIcon },
       { label: "Voucher Register", href: "/accounting/voucher-register", icon: ListOrderedIcon },
     ],
+  },
+  {
+    label: "Reports",
+    items: [{ label: "Asset Valuation", href: "/reports/asset-valuation", icon: LineChartIcon }],
   },
 ];

@@ -894,6 +894,49 @@ export interface Database {
         };
         Update: Partial<Database["assets"]["Tables"]["suppliers"]["Row"]>;
       };
+      asset_valuations: {
+        Row: {
+          id: string;
+          company_id: string;
+          asset_id: string;
+          valuation_date: string;
+          market_value: number;
+          valuer: string | null;
+          notes: string | null;
+          created_by: string;
+          created_at: string;
+          updated_by: string | null;
+          updated_at: string | null;
+          deleted_by: string | null;
+          deleted_at: string | null;
+        };
+        Insert: Partial<Database["assets"]["Tables"]["asset_valuations"]["Row"]> & {
+          company_id: string;
+          asset_id: string;
+          valuation_date: string;
+          market_value: number;
+          created_by: string;
+        };
+        Update: Partial<Database["assets"]["Tables"]["asset_valuations"]["Row"]>;
+      };
+    };
+    Views: {
+      v_asset_valuation: {
+        Row: {
+          asset_id: string;
+          company_id: string;
+          asset_code: string;
+          asset_name: string;
+          property_type: string;
+          country: "PK" | "AE";
+          city: string | null;
+          purchase_value: number | null;
+          current_value: number | null;
+          variance: number | null;
+          latest_valuation_date: string | null;
+          latest_valuer: string | null;
+        };
+      };
     };
     Functions: Record<string, never>;
   };

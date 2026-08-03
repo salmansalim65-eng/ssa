@@ -105,7 +105,7 @@ audit, storage, and numbering existing and being correct.
 
 ---
 
-**Status:** Phases 1–7 are implemented — see
-`supabase/migrations/0001_foundation.sql` through `0007_purchase_property.sql`,
+**Status:** Phases 1–8 are implemented — see
+`supabase/migrations/0001_foundation.sql` through `0008_asset_valuations.sql`,
 and the Next.js app under `app/`, `features/`, `lib/`, `components/`. Next
-up: Phase 8 (Asset Current Value), pending review.
+up: Phase 9 (UAE Rental Management), pending review.

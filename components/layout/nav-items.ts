@@ -8,6 +8,8 @@ import {
   TrendingUpIcon,
   ListTreeIcon,
   LandmarkIcon,
+  HashIcon,
+  GitBranchIcon,
 } from "lucide-react";
 
 export interface NavItem {
@@ -48,6 +50,8 @@ export const navSections: NavSection[] = [
     items: [
       { label: "Chart of Accounts", href: "/accounting/chart-of-accounts", icon: ListTreeIcon },
       { label: "Cost Centers", href: "/accounting/cost-centers", icon: LandmarkIcon },
+      { label: "Document Sequences", href: "/admin/document-sequences", icon: HashIcon },
+      { label: "Approval Workflows", href: "/admin/approval-workflows", icon: GitBranchIcon },
     ],
   },
 ];

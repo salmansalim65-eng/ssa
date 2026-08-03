@@ -105,9 +105,8 @@ audit, storage, and numbering existing and being correct.
 
 ---
 
-**Status:** Phases 1–3 are implemented — see
-`supabase/migrations/0001_foundation.sql`, `0002_currency.sql`,
-`0003_chart_of_accounts.sql`, and the Next.js app under `app/`,
-`features/`, `lib/`, `components/`. Next up: Phase 4 (Accounting Engine
-Core — journal engine, posting templates, approval workflow, document
-numbering), pending review.
+**Status:** Phases 1–4 are implemented — see
+`supabase/migrations/0001_foundation.sql` through `0004_accounting_engine.sql`,
+and the Next.js app under `app/`, `features/`, `lib/`, `components/`. Next
+up: Phase 5 (Core Accounting Vouchers — Receipt, Payment, PDC, Cheque
+Return, Journal Voucher, JV Maintenance, Opening Balance), pending review.

@@ -39,7 +39,7 @@ designed, reviewed, and only then implemented. Start here:
 | 1 | Foundation: companies, auth, users, roles/permissions, audit trail, storage, sequences | ✅ Done |
 | 2 | Currency Master & Daily Exchange Rates | ✅ Done |
 | 3 | Chart of Accounts & Cost Centers | ✅ Done |
-| 4 | Accounting Engine Core (journal engine, voucher framework, approval workflow) | ⬜ Not started |
+| 4 | Accounting Engine Core (journal engine, voucher framework, approval workflow) | ✅ Done |
 | 5 | Core Accounting Vouchers (Receipt, Payment, JV, JV Maintenance, Opening Balance, PDC, Cheque Return) | ⬜ Not started |
 | 6 | Asset Registration | ⬜ Not started |
 | 7 | Purchase Property | ⬜ Not started |

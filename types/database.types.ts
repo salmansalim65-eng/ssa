@@ -5,6 +5,26 @@
 
 export type AccountType = "asset" | "liability" | "income" | "expense" | "equity";
 
+export const VOUCHER_TYPES = [
+  "purchase_voucher",
+  "receipt_voucher",
+  "payment_voucher",
+  "pdc_payment_voucher",
+  "pdc_receipt_voucher",
+  "cheque_return_voucher",
+  "journal_voucher",
+  "jv_maintenance_voucher",
+  "opening_balance_voucher",
+  "uae_rent_invoice",
+  "pk_rent_invoice",
+  "asset_sales",
+] as const;
+export type VoucherType = (typeof VOUCHER_TYPES)[number];
+
+export type JournalEntryStatus = "draft" | "pending" | "approved" | "posted" | "rejected" | "sent_back";
+export type ApprovalStatus = "pending" | "approved" | "rejected" | "sent_back";
+export type ApprovalAction = "submit" | "approve" | "reject" | "send_back";
+
 export type PermissionAction =
   | "view"
   | "create"
@@ -287,6 +307,10 @@ export interface Database {
         };
         Returns: number;
       };
+      fn_next_document_number: {
+        Args: { p_company_id: string; p_voucher_type: VoucherType };
+        Returns: string;
+      };
       fn_upsert_exchange_rate: {
         Args: {
           p_company_id: string;
@@ -359,8 +383,169 @@ export interface Database {
         };
         Update: Partial<Database["accounting"]["Tables"]["cost_centers"]["Row"]>;
       };
+      journal_entries: {
+        Row: {
+          id: string;
+          company_id: string;
+          entry_date: string;
+          voucher_type: VoucherType;
+          voucher_id: string;
+          currency_id: string;
+          exchange_rate: number;
+          narration: string | null;
+          status: JournalEntryStatus;
+          created_by: string;
+          created_at: string;
+          updated_by: string | null;
+          updated_at: string | null;
+          approved_by: string | null;
+          approved_at: string | null;
+          posted_by: string | null;
+          posted_at: string | null;
+        };
+        Insert: Partial<Database["accounting"]["Tables"]["journal_entries"]["Row"]> & {
+          company_id: string;
+          entry_date: string;
+          voucher_type: VoucherType;
+          voucher_id: string;
+          currency_id: string;
+          created_by: string;
+        };
+        Update: Partial<Database["accounting"]["Tables"]["journal_entries"]["Row"]>;
+      };
+      journal_entry_lines: {
+        Row: {
+          id: string;
+          journal_entry_id: string;
+          line_no: number;
+          account_id: string;
+          cost_center_id: string | null;
+          debit_amount: number;
+          credit_amount: number;
+          currency_id: string;
+          exchange_rate: number;
+          base_debit_amount: number;
+          base_credit_amount: number;
+          description: string | null;
+        };
+        Insert: Partial<Database["accounting"]["Tables"]["journal_entry_lines"]["Row"]> & {
+          journal_entry_id: string;
+          line_no: number;
+          account_id: string;
+          currency_id: string;
+        };
+        Update: Partial<Database["accounting"]["Tables"]["journal_entry_lines"]["Row"]>;
+      };
+      posting_templates: {
+        Row: {
+          id: string;
+          company_id: string;
+          voucher_type: VoucherType;
+          account_role: string;
+          debit_or_credit: "debit" | "credit";
+          account_id: string;
+          created_by: string;
+          created_at: string;
+          updated_by: string | null;
+          updated_at: string | null;
+        };
+        Insert: Partial<Database["accounting"]["Tables"]["posting_templates"]["Row"]> & {
+          company_id: string;
+          voucher_type: VoucherType;
+          account_role: string;
+          debit_or_credit: "debit" | "credit";
+          account_id: string;
+          created_by: string;
+        };
+        Update: Partial<Database["accounting"]["Tables"]["posting_templates"]["Row"]>;
+      };
+      approval_workflows: {
+        Row: {
+          id: string;
+          company_id: string;
+          voucher_type: VoucherType;
+          is_active: boolean;
+          created_by: string;
+          created_at: string;
+          updated_by: string | null;
+          updated_at: string | null;
+        };
+        Insert: Partial<Database["accounting"]["Tables"]["approval_workflows"]["Row"]> & {
+          company_id: string;
+          voucher_type: VoucherType;
+          created_by: string;
+        };
+        Update: Partial<Database["accounting"]["Tables"]["approval_workflows"]["Row"]>;
+      };
+      approval_workflow_steps: {
+        Row: {
+          id: string;
+          workflow_id: string;
+          step_order: number;
+          approver_role_id: string;
+          min_amount: number | null;
+          max_amount: number | null;
+        };
+        Insert: Partial<Database["accounting"]["Tables"]["approval_workflow_steps"]["Row"]> & {
+          workflow_id: string;
+          step_order: number;
+          approver_role_id: string;
+        };
+        Update: Partial<Database["accounting"]["Tables"]["approval_workflow_steps"]["Row"]>;
+      };
+      voucher_approvals: {
+        Row: {
+          id: string;
+          company_id: string;
+          voucher_type: string;
+          voucher_id: string;
+          workflow_id: string | null;
+          amount: number;
+          current_step: number | null;
+          status: ApprovalStatus;
+          created_at: string;
+          updated_at: string | null;
+        };
+        Insert: never;
+        Update: never;
+      };
+      voucher_approval_actions: {
+        Row: {
+          id: string;
+          voucher_approval_id: string;
+          step_order: number | null;
+          action: ApprovalAction;
+          actor_id: string;
+          comment: string | null;
+          acted_at: string;
+        };
+        Insert: never;
+        Update: never;
+      };
     };
-    Functions: Record<string, never>;
+    Functions: {
+      fn_get_posting_account: {
+        Args: { p_company_id: string; p_voucher_type: VoucherType; p_account_role: string };
+        Returns: string | null;
+      };
+      fn_start_approval: {
+        Args: {
+          p_company_id: string;
+          p_voucher_type: VoucherType;
+          p_voucher_id: string;
+          p_amount: number;
+        };
+        Returns: Database["accounting"]["Tables"]["voucher_approvals"]["Row"];
+      };
+      fn_approval_action: {
+        Args: {
+          p_voucher_approval_id: string;
+          p_action: "approve" | "reject" | "send_back";
+          p_comment?: string;
+        };
+        Returns: Database["accounting"]["Tables"]["voucher_approvals"]["Row"];
+      };
+    };
   };
   audit: {
     Tables: {

@@ -105,9 +105,11 @@ audit, storage, and numbering existing and being correct.
 
 ---
 
-**Status:** Phases 1–12 are implemented — see
-`supabase/migrations/0001_foundation.sql` through `0012_reporting.sql`,
-and the Next.js app under `app/`, `features/`, `lib/`, `components/`. Phase 9
+**Status:** Phases 1–13 are implemented — see
+`supabase/migrations/0001_foundation.sql` through `0012_reporting.sql`
+(Phase 13 shipped no migration — it's read-only aggregation over existing
+data), and the Next.js app under `app/`, `features/`, `lib/`, `components/`.
+Phase 9
 adds tenants, UAE leases with auto-generated monthly/yearly payment
 schedules, on-demand rent invoice generation (Dr Tenant Receivable / Cr UAE
 Rental Income via the Phase 4 posting engine), and rent payment collection
@@ -142,5 +144,22 @@ app-level filters/aggregations rather than one view per report — plus
 `chart_of_accounts` so Cash Book/Bank Book know which accounts to include.
 Every report ships CSV export (client-side, no new dependency) and a Print
 button (browser print-to-PDF); date-range/as-of-date filters live in the
-URL via searchParams so a filtered view is a shareable link. Next up:
-Phase 13 (Dashboard), pending review.
+URL via searchParams so a filtered view is a shareable link.
+
+Phase 13 replaces the placeholder Dashboard with KPI cards (total assets,
+total property value, monthly/yearly rental income via
+`reporting.v_rental_income`, outstanding rent via
+`reporting.v_outstanding_rent`, pending approvals via
+`accounting.voucher_approvals`), two dependency-free bar charts (assets by
+country, assets by property type — plain divs with proportional widths
+rather than pulling in a charting library for two bars), a currency
+summary card (latest rate to base per active company currency), and a
+recent-transactions table off `accounting.v_voucher_register`. While
+wiring that last one, found and fixed a real bug in the Voucher Register
+page (Phase 5): its links hardcoded `/accounting/vouchers/{type}/{id}`
+for every voucher type, which 404s for purchase_voucher, uae_rent_invoice,
+pk_rent_invoice, and asset_sales — those got their own dedicated routes in
+Phases 7/9/10/11 and were never wired back into that link. Fixed via a new
+`voucherHref()` helper in `lib/vouchers/meta.ts` that both the Voucher
+Register and the new Dashboard widget now share. Next up: Phase 14
+(Hardening), pending review.

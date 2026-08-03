@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/table";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { createClient } from "@/lib/supabase/server";
-import { VOUCHER_TYPE_LABELS } from "@/lib/vouchers/meta";
+import { VOUCHER_TYPE_LABELS, voucherHref } from "@/lib/vouchers/meta";
 import type { VoucherType } from "@/types/database.types";
 
 export default async function VoucherRegisterPage() {
@@ -51,7 +51,7 @@ export default async function VoucherRegisterPage() {
             <TableRow key={`${row.voucher_type}-${row.voucher_id}`}>
               <TableCell>
                 <Link
-                  href={`/accounting/vouchers/${row.voucher_type}/${row.voucher_id}`}
+                  href={voucherHref(row.voucher_type as VoucherType, row.voucher_id)}
                   className="font-mono font-medium hover:underline"
                 >
                   {row.voucher_no ?? "Draft"}

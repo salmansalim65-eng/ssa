@@ -48,7 +48,7 @@ designed, reviewed, and only then implemented. Start here:
 | 10 | Pakistan Rental Management | ✅ Done |
 | 11 | Asset Sale | ✅ Done |
 | 12 | Reports Engine | ✅ Done |
-| 13 | Dashboard | ⬜ Not started |
+| 13 | Dashboard | ✅ Done |
 | 14 | Hardening: testing, security review, performance, deployment | ⬜ Not started |
 
 Each phase is only started after the previous one is reviewed and approved.

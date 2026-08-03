@@ -39,6 +39,25 @@ export function isPhase5VoucherType(value: string): value is Phase5VoucherType {
   return (PHASE5_VOUCHER_TYPES as readonly string[]).includes(value);
 }
 
+// Phase 5 types share one generic route; Phases 7/9/10/11 each ship their
+// own dedicated screens outside /accounting/vouchers — centralized here so
+// every list that links to a voucher (Voucher Register, Dashboard "recent
+// transactions", ...) resolves the same way instead of re-deriving it.
+export function voucherHref(voucherType: VoucherType, voucherId: string): string {
+  switch (voucherType) {
+    case "purchase_voucher":
+      return `/purchases/${voucherId}`;
+    case "uae_rent_invoice":
+      return `/rental/uae/invoices/${voucherId}`;
+    case "pk_rent_invoice":
+      return `/rental/pk/invoices/${voucherId}`;
+    case "asset_sales":
+      return `/sales/${voucherId}`;
+    default:
+      return `/accounting/vouchers/${voucherType}/${voucherId}`;
+  }
+}
+
 export const VOUCHER_TYPE_DEFAULT_PREFIX: Record<VoucherType, string> = {
   purchase_voucher: "PV",
   receipt_voucher: "RV",

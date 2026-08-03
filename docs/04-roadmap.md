@@ -105,7 +105,13 @@ audit, storage, and numbering existing and being correct.
 
 ---
 
-**Status:** Phases 1–8 are implemented — see
-`supabase/migrations/0001_foundation.sql` through `0008_asset_valuations.sql`,
-and the Next.js app under `app/`, `features/`, `lib/`, `components/`. Next
-up: Phase 9 (UAE Rental Management), pending review.
+**Status:** Phases 1–9 are implemented — see
+`supabase/migrations/0001_foundation.sql` through `0009_uae_rental.sql`,
+and the Next.js app under `app/`, `features/`, `lib/`, `components/`. Phase 9
+adds tenants, UAE leases with auto-generated monthly/yearly payment
+schedules, on-demand rent invoice generation (Dr Tenant Receivable / Cr UAE
+Rental Income via the Phase 4 posting engine), and rent payment collection
+against outstanding invoice balances (posted immediately, bypassing the
+draft→approval pipeline since it's an ancillary collection action rather
+than a primary voucher type). Next up: Phase 10 (Pakistan Rental
+Management), pending review.

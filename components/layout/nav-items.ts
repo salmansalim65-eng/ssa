@@ -23,6 +23,9 @@ import {
   ShoppingCartIcon,
   SlidersHorizontalIcon,
   LineChartIcon,
+  KeyRoundIcon,
+  ReceiptIcon,
+  ContactIcon,
 } from "lucide-react";
 
 export interface NavItem {
@@ -53,6 +56,14 @@ export const navSections: NavSection[] = [
   {
     label: "Purchases",
     items: [{ label: "Purchase Vouchers", href: "/purchases", icon: ShoppingCartIcon }],
+  },
+  {
+    label: "Rental",
+    items: [
+      { label: "Tenants", href: "/rental/tenants", icon: ContactIcon },
+      { label: "UAE Leases", href: "/rental/uae/leases", icon: KeyRoundIcon },
+      { label: "UAE Rent Invoices", href: "/rental/uae/invoices", icon: ReceiptIcon },
+    ],
   },
   {
     label: "Administration",

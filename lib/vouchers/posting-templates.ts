@@ -18,4 +18,8 @@ export const POSTING_TEMPLATE_ROLES: Partial<Record<VoucherType, PostingTemplate
     { role: "fixed_asset_property", label: "Fixed Asset (Property)", side: "debit" },
     { role: "supplier_payable", label: "Supplier Payable", side: "credit" },
   ],
+  uae_rent_invoice: [
+    { role: "tenant_receivable", label: "Tenant Receivable", side: "debit" },
+    { role: "uae_rental_income", label: "UAE Rental Income", side: "credit" },
+  ],
 };

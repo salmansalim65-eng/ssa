@@ -940,6 +940,137 @@ export interface Database {
     };
     Functions: Record<string, never>;
   };
+  rental: {
+    Tables: {
+      tenants: {
+        Row: {
+          id: string;
+          company_id: string;
+          name: string;
+          id_number: string | null;
+          phone: string | null;
+          email: string | null;
+          address: string | null;
+          is_active: boolean;
+          created_by: string;
+          created_at: string;
+          updated_by: string | null;
+          updated_at: string | null;
+          deleted_by: string | null;
+          deleted_at: string | null;
+        };
+        Insert: Partial<Database["rental"]["Tables"]["tenants"]["Row"]> & {
+          company_id: string;
+          name: string;
+          created_by: string;
+        };
+        Update: Partial<Database["rental"]["Tables"]["tenants"]["Row"]>;
+      };
+      uae_leases: {
+        Row: {
+          id: string;
+          company_id: string;
+          asset_id: string;
+          tenant_id: string;
+          lease_start: string;
+          lease_end: string;
+          rental_amount: number;
+          rent_cycle: "monthly" | "yearly";
+          security_deposit: number;
+          currency_id: string;
+          status: "active" | "expired" | "terminated";
+          created_by: string;
+          created_at: string;
+          updated_by: string | null;
+          updated_at: string | null;
+          deleted_by: string | null;
+          deleted_at: string | null;
+        };
+        Insert: Partial<Database["rental"]["Tables"]["uae_leases"]["Row"]> & {
+          company_id: string;
+          asset_id: string;
+          tenant_id: string;
+          lease_start: string;
+          lease_end: string;
+          rental_amount: number;
+          rent_cycle: "monthly" | "yearly";
+          currency_id: string;
+          created_by: string;
+        };
+        Update: Partial<Database["rental"]["Tables"]["uae_leases"]["Row"]>;
+      };
+      uae_payment_schedules: {
+        Row: {
+          id: string;
+          lease_id: string;
+          due_date: string;
+          amount: number;
+          status: "pending" | "invoiced" | "paid" | "overdue";
+          created_at: string;
+        };
+        Insert: never;
+        Update: Partial<Database["rental"]["Tables"]["uae_payment_schedules"]["Row"]>;
+      };
+      uae_rent_invoices: {
+        Row: {
+          id: string;
+          company_id: string;
+          journal_entry_id: string;
+          voucher_no: string | null;
+          lease_id: string;
+          schedule_id: string | null;
+          invoice_date: string;
+          due_date: string;
+          period_start: string;
+          period_end: string;
+          amount: number;
+          currency_id: string;
+          exchange_rate: number;
+          outstanding_balance: number;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: Partial<Database["rental"]["Tables"]["uae_rent_invoices"]["Row"]> & {
+          company_id: string;
+          journal_entry_id: string;
+          lease_id: string;
+          invoice_date: string;
+          due_date: string;
+          period_start: string;
+          period_end: string;
+          amount: number;
+          currency_id: string;
+          outstanding_balance: number;
+          created_by: string;
+        };
+        Update: Partial<Database["rental"]["Tables"]["uae_rent_invoices"]["Row"]>;
+      };
+      uae_rent_payments: {
+        Row: {
+          id: string;
+          company_id: string;
+          invoice_id: string;
+          journal_entry_id: string;
+          payment_date: string;
+          amount: number;
+          cash_bank_account_id: string;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: Partial<Database["rental"]["Tables"]["uae_rent_payments"]["Row"]> & {
+          company_id: string;
+          invoice_id: string;
+          journal_entry_id: string;
+          payment_date: string;
+          amount: number;
+          cash_bank_account_id: string;
+          created_by: string;
+        };
+        Update: Partial<Database["rental"]["Tables"]["uae_rent_payments"]["Row"]>;
+      };
+    };
+    Functions: Record<string, never>;
+  };
   audit: {
     Tables: {
       audit_logs: {

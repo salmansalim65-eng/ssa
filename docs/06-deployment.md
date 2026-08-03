@@ -10,7 +10,7 @@
    supabase db push
    ```
    This applies `supabase/migrations/0001_foundation.sql` through
-   `0013_hardening.sql` in filename order. There is no seed data — the
+   `0014_username_login.sql` in filename order. There is no seed data — the
    first signed-up user creates their own company via the onboarding
    screen (`core.fn_bootstrap_company`).
 3. **Custom Access Token Hook** (required — without it, `company_id` never
@@ -31,6 +31,24 @@
    exposed — nothing queries it directly, only the generic trigger writes
    to it).
 6. Copy the project's URL, anon key, and service role key for step 3 below.
+7. **First user, and the username/email split:** the app's login screen
+   only asks for a **username**, but Supabase Auth itself is still
+   email/password underneath — `core.fn_username_to_email` resolves a
+   username to its account's email pre-login (see
+   `0014_username_login.sql`). There's no self-serve signup screen, so
+   create the first user directly:
+   - **Authentication → Users → Add user** — a real email, a password,
+     "Auto Confirm User" checked.
+   - That user has no username yet, so the login screen can't resolve them
+     to an account. In the SQL Editor, run:
+     ```sql
+     update core.user_profiles set username = 'admin' where email = '<that email>';
+     ```
+   - Log in at `/login` with `admin` / the password you set. You'll land on
+     onboarding to create the first company, which makes you its
+     Administrator automatically.
+   - Every user after that should go through **Admin → Users → Invite
+     user**, which has a username field built in — no manual SQL needed.
 
 ## 2. Vercel project setup
 

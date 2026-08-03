@@ -20,8 +20,19 @@ export async function signIn(input: LoginInput) {
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword(parsed.data);
-  if (error) return { error: error.message };
+
+  // Supabase Auth itself is still email/password; this resolves the
+  // username to its account's email first. A missing username and a wrong
+  // password both surface the same generic message — deliberately not
+  // distinguishing "no such username" from "wrong password".
+  const { data: email } = await supabase
+    .schema("core")
+    .rpc("fn_username_to_email", { p_username: parsed.data.username });
+
+  if (!email) return { error: "Invalid username or password" };
+
+  const { error } = await supabase.auth.signInWithPassword({ email, password: parsed.data.password });
+  if (error) return { error: "Invalid username or password" };
 
   redirect("/dashboard");
 }

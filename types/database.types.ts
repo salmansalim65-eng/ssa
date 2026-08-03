@@ -67,6 +67,7 @@ export interface Database {
           id: string;
           full_name: string;
           email: string;
+          username: string | null;
           phone: string | null;
           avatar_path: string | null;
           is_active: boolean;
@@ -285,6 +286,10 @@ export interface Database {
       user_has_permission: {
         Args: { p_module_key: string; p_action: PermissionAction };
         Returns: boolean;
+      };
+      fn_username_to_email: {
+        Args: { p_username: string };
+        Returns: string | null;
       };
       fn_bootstrap_company: {
         Args: { p_company_name: string; p_company_code: string; p_country: string };

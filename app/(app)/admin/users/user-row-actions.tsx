@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { MoreHorizontalIcon } from "lucide-react";
 import { toast } from "sonner";
 
@@ -26,16 +28,30 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import {
   assignRole,
   removeUserFromCompany,
   sendPasswordReset,
   setUserActive,
+  updateUser,
 } from "@/features/admin/users/actions";
+import { updateUserSchema, type UpdateUserInput } from "@/features/admin/users/schemas";
 
 export function UserRowActions({
   userId,
   email,
+  fullName,
+  username,
+  phone,
   isActive,
   currentRoleId,
   roles,
@@ -44,6 +60,9 @@ export function UserRowActions({
 }: {
   userId: string;
   email: string;
+  fullName: string;
+  username: string | null;
+  phone: string | null;
   isActive: boolean;
   currentRoleId: string | null;
   roles: { id: string; name: string }[];
@@ -53,12 +72,30 @@ export function UserRowActions({
   const [isPending, startTransition] = useTransition();
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [pendingRoleId, setPendingRoleId] = useState(currentRoleId ?? "");
+  const [editOpen, setEditOpen] = useState(false);
+
+  const editForm = useForm<UpdateUserInput>({
+    resolver: zodResolver(updateUserSchema),
+    defaultValues: { fullName, username: username ?? "", phone: phone ?? "" },
+  });
 
   function run(action: () => Promise<{ error?: string } | undefined>, successMessage: string) {
     startTransition(async () => {
       const result = await action();
       if (result?.error) toast.error(result.error);
       else toast.success(successMessage);
+    });
+  }
+
+  function onEditSubmit(values: UpdateUserInput) {
+    startTransition(async () => {
+      const result = await updateUser(userId, values);
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Profile updated");
+      setEditOpen(false);
     });
   }
 
@@ -73,6 +110,16 @@ export function UserRowActions({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          {canEdit && (
+            <DropdownMenuItem
+              onSelect={() => {
+                editForm.reset({ fullName, username: username ?? "", phone: phone ?? "" });
+                setEditOpen(true);
+              }}
+            >
+              Edit profile
+            </DropdownMenuItem>
+          )}
           {canEdit && (
             <DropdownMenuItem onSelect={() => setRoleDialogOpen(true)}>
               Change role
@@ -105,6 +152,62 @@ export function UserRowActions({
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit profile</DialogTitle>
+          </DialogHeader>
+          <Form {...editForm}>
+            <form onSubmit={editForm.handleSubmit(onEditSubmit)} className="space-y-4">
+              <FormField
+                control={editForm.control}
+                name="fullName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Full name</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="username"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Username</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Phone</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button type="submit" disabled={isPending}>
+                  Save
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={roleDialogOpen} onOpenChange={setRoleDialogOpen}>
         <DialogContent>

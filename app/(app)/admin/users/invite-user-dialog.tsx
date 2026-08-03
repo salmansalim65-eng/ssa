@@ -41,7 +41,7 @@ export function InviteUserDialog({ roles }: { roles: { id: string; name: string 
 
   const form = useForm<InviteUserInput>({
     resolver: zodResolver(inviteUserSchema),
-    defaultValues: { email: "", fullName: "", roleId: "" },
+    defaultValues: { email: "", fullName: "", username: "", roleId: "" },
   });
 
   function onSubmit(values: InviteUserInput) {
@@ -92,6 +92,19 @@ export function InviteUserDialog({ roles }: { roles: { id: string; name: string 
                   <FormLabel>Email</FormLabel>
                   <FormControl>
                     <Input type="email" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="username"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Username (optional)</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

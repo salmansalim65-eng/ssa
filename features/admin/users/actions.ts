@@ -37,6 +37,19 @@ export async function inviteUser(input: InviteUserInput) {
     return { error: inviteError?.message ?? "Failed to invite user" };
   }
 
+  if (parsed.data.username) {
+    // Membership (user_companies) isn't inserted until further down, and
+    // user_profiles_update_admin's RLS policy requires it to already exist
+    // — so this has to go through the same service-role client the invite
+    // itself already required, not the regular RLS-scoped one.
+    const { error: usernameError } = await admin
+      .schema("core")
+      .from("user_profiles")
+      .update({ username: parsed.data.username })
+      .eq("id", invited.user.id);
+    if (usernameError) return { error: `Invited, but username couldn't be set: ${usernameError.message}` };
+  }
+
   const supabase = await createClient();
 
   const { error: membershipError } = await supabase
@@ -67,7 +80,11 @@ export async function updateUser(userId: string, input: UpdateUserInput) {
   const { error } = await supabase
     .schema("core")
     .from("user_profiles")
-    .update({ full_name: parsed.data.fullName, phone: parsed.data.phone || null })
+    .update({
+      full_name: parsed.data.fullName,
+      username: parsed.data.username || null,
+      phone: parsed.data.phone || null,
+    })
     .eq("id", userId);
 
   if (error) return { error: error.message };

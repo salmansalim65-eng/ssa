@@ -23,7 +23,7 @@ export default async function UsersPage() {
       supabase
         .schema("core")
         .from("user_companies")
-        .select("user_id, user_profiles:user_id(id, full_name, email, is_active)")
+        .select("user_id, user_profiles:user_id(id, full_name, email, username, phone, is_active)")
         .eq("company_id", companyId),
       supabase.schema("core").from("roles").select("id, name").eq("company_id", companyId),
       hasPermission("users", "create"),
@@ -42,7 +42,14 @@ export default async function UsersPage() {
 
   type MembershipRow = {
     user_id: string;
-    user_profiles: { id: string; full_name: string; email: string; is_active: boolean } | null;
+    user_profiles: {
+      id: string;
+      full_name: string;
+      email: string;
+      username: string | null;
+      phone: string | null;
+      is_active: boolean;
+    } | null;
   };
 
   return (
@@ -61,6 +68,7 @@ export default async function UsersPage() {
         <TableHeader>
           <TableRow>
             <TableHead>Name</TableHead>
+            <TableHead>Username</TableHead>
             <TableHead>Email</TableHead>
             <TableHead>Role</TableHead>
             <TableHead>Status</TableHead>
@@ -75,6 +83,7 @@ export default async function UsersPage() {
             return (
               <TableRow key={profile.id}>
                 <TableCell className="font-medium">{profile.full_name}</TableCell>
+                <TableCell className="font-mono text-sm">{profile.username ?? "—"}</TableCell>
                 <TableCell>{profile.email}</TableCell>
                 <TableCell>{roleId ? roleNameById.get(roleId) : "—"}</TableCell>
                 <TableCell>
@@ -86,6 +95,9 @@ export default async function UsersPage() {
                   <UserRowActions
                     userId={profile.id}
                     email={profile.email}
+                    fullName={profile.full_name}
+                    username={profile.username}
+                    phone={profile.phone}
                     isActive={profile.is_active}
                     currentRoleId={roleId}
                     roles={roles ?? []}

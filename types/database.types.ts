@@ -522,6 +522,247 @@ export interface Database {
         Insert: never;
         Update: never;
       };
+      receipt_vouchers: {
+        Row: {
+          id: string;
+          company_id: string;
+          journal_entry_id: string;
+          voucher_no: string | null;
+          receipt_date: string;
+          received_from: string;
+          debit_account_id: string;
+          credit_account_id: string;
+          currency_id: string;
+          exchange_rate: number;
+          amount: number;
+          narration: string | null;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: Partial<Database["accounting"]["Tables"]["receipt_vouchers"]["Row"]> & {
+          company_id: string;
+          journal_entry_id: string;
+          receipt_date: string;
+          received_from: string;
+          debit_account_id: string;
+          credit_account_id: string;
+          currency_id: string;
+          amount: number;
+          created_by: string;
+        };
+        Update: Partial<Database["accounting"]["Tables"]["receipt_vouchers"]["Row"]>;
+      };
+      payment_vouchers: {
+        Row: {
+          id: string;
+          company_id: string;
+          journal_entry_id: string;
+          voucher_no: string | null;
+          payment_date: string;
+          paid_to: string;
+          debit_account_id: string;
+          credit_account_id: string;
+          currency_id: string;
+          exchange_rate: number;
+          amount: number;
+          narration: string | null;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: Partial<Database["accounting"]["Tables"]["payment_vouchers"]["Row"]> & {
+          company_id: string;
+          journal_entry_id: string;
+          payment_date: string;
+          paid_to: string;
+          debit_account_id: string;
+          credit_account_id: string;
+          currency_id: string;
+          amount: number;
+          created_by: string;
+        };
+        Update: Partial<Database["accounting"]["Tables"]["payment_vouchers"]["Row"]>;
+      };
+      pdc_payment_vouchers: {
+        Row: {
+          id: string;
+          company_id: string;
+          journal_entry_id: string;
+          voucher_no: string | null;
+          cheque_no: string;
+          cheque_date: string;
+          payee: string;
+          debit_account_id: string;
+          credit_account_id: string;
+          currency_id: string;
+          exchange_rate: number;
+          amount: number;
+          pdc_status: "pending" | "cleared" | "returned" | "cancelled";
+          narration: string | null;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: Partial<Database["accounting"]["Tables"]["pdc_payment_vouchers"]["Row"]> & {
+          company_id: string;
+          journal_entry_id: string;
+          cheque_no: string;
+          cheque_date: string;
+          payee: string;
+          debit_account_id: string;
+          credit_account_id: string;
+          currency_id: string;
+          amount: number;
+          created_by: string;
+        };
+        Update: Partial<Database["accounting"]["Tables"]["pdc_payment_vouchers"]["Row"]>;
+      };
+      pdc_receipt_vouchers: {
+        Row: {
+          id: string;
+          company_id: string;
+          journal_entry_id: string;
+          voucher_no: string | null;
+          cheque_no: string;
+          cheque_date: string;
+          payer: string;
+          debit_account_id: string;
+          credit_account_id: string;
+          currency_id: string;
+          exchange_rate: number;
+          amount: number;
+          pdc_status: "pending" | "cleared" | "returned" | "cancelled";
+          narration: string | null;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: Partial<Database["accounting"]["Tables"]["pdc_receipt_vouchers"]["Row"]> & {
+          company_id: string;
+          journal_entry_id: string;
+          cheque_no: string;
+          cheque_date: string;
+          payer: string;
+          debit_account_id: string;
+          credit_account_id: string;
+          currency_id: string;
+          amount: number;
+          created_by: string;
+        };
+        Update: Partial<Database["accounting"]["Tables"]["pdc_receipt_vouchers"]["Row"]>;
+      };
+      cheque_return_vouchers: {
+        Row: {
+          id: string;
+          company_id: string;
+          journal_entry_id: string;
+          voucher_no: string | null;
+          original_pdc_type: "pdc_payment_voucher" | "pdc_receipt_voucher";
+          original_pdc_id: string;
+          return_date: string;
+          return_reason: string;
+          penalty_amount: number;
+          penalty_account_id: string | null;
+          currency_id: string;
+          exchange_rate: number;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: Partial<Database["accounting"]["Tables"]["cheque_return_vouchers"]["Row"]> & {
+          company_id: string;
+          journal_entry_id: string;
+          original_pdc_type: "pdc_payment_voucher" | "pdc_receipt_voucher";
+          original_pdc_id: string;
+          return_date: string;
+          return_reason: string;
+          currency_id: string;
+          created_by: string;
+        };
+        Update: Partial<Database["accounting"]["Tables"]["cheque_return_vouchers"]["Row"]>;
+      };
+      journal_vouchers: {
+        Row: {
+          id: string;
+          company_id: string;
+          journal_entry_id: string;
+          voucher_no: string | null;
+          entry_date: string;
+          narration: string;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: Partial<Database["accounting"]["Tables"]["journal_vouchers"]["Row"]> & {
+          company_id: string;
+          journal_entry_id: string;
+          entry_date: string;
+          narration: string;
+          created_by: string;
+        };
+        Update: Partial<Database["accounting"]["Tables"]["journal_vouchers"]["Row"]>;
+      };
+      jv_maintenance_vouchers: {
+        Row: {
+          id: string;
+          company_id: string;
+          journal_entry_id: string;
+          voucher_no: string | null;
+          original_jv_id: string;
+          adjustment_reason: string;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: Partial<Database["accounting"]["Tables"]["jv_maintenance_vouchers"]["Row"]> & {
+          company_id: string;
+          journal_entry_id: string;
+          original_jv_id: string;
+          adjustment_reason: string;
+          created_by: string;
+        };
+        Update: Partial<Database["accounting"]["Tables"]["jv_maintenance_vouchers"]["Row"]>;
+      };
+      opening_balance_vouchers: {
+        Row: {
+          id: string;
+          company_id: string;
+          journal_entry_id: string;
+          voucher_no: string | null;
+          as_of_date: string;
+          account_id: string;
+          contra_account_id: string;
+          currency_id: string;
+          exchange_rate: number;
+          debit_amount: number;
+          credit_amount: number;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: Partial<Database["accounting"]["Tables"]["opening_balance_vouchers"]["Row"]> & {
+          company_id: string;
+          journal_entry_id: string;
+          as_of_date: string;
+          account_id: string;
+          contra_account_id: string;
+          currency_id: string;
+          created_by: string;
+        };
+        Update: Partial<Database["accounting"]["Tables"]["opening_balance_vouchers"]["Row"]>;
+      };
+    };
+    Views: {
+      v_voucher_register: {
+        Row: {
+          company_id: string;
+          voucher_type: VoucherType;
+          voucher_id: string;
+          entry_date: string;
+          voucher_no: string | null;
+          currency_id: string;
+          status: JournalEntryStatus;
+          narration: string | null;
+          created_by: string;
+          created_at: string;
+          posted_by: string | null;
+          posted_at: string | null;
+          amount: number;
+        };
+      };
     };
     Functions: {
       fn_get_posting_account: {

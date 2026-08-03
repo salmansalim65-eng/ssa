@@ -40,7 +40,7 @@ designed, reviewed, and only then implemented. Start here:
 | 2 | Currency Master & Daily Exchange Rates | ✅ Done |
 | 3 | Chart of Accounts & Cost Centers | ✅ Done |
 | 4 | Accounting Engine Core (journal engine, voucher framework, approval workflow) | ✅ Done |
-| 5 | Core Accounting Vouchers (Receipt, Payment, JV, JV Maintenance, Opening Balance, PDC, Cheque Return) | ⬜ Not started |
+| 5 | Core Accounting Vouchers (Receipt, Payment, JV, JV Maintenance, Opening Balance, PDC, Cheque Return) | ✅ Done |
 | 6 | Asset Registration | ⬜ Not started |
 | 7 | Purchase Property | ⬜ Not started |
 | 8 | Asset Current Value | ⬜ Not started |

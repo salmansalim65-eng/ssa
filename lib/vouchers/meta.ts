@@ -18,6 +18,27 @@ export const VOUCHER_TYPE_LABELS: Record<VoucherType, string> = {
   asset_sales: "Asset Sale Voucher",
 };
 
+// The 8 voucher types Phase 5 ships end-user screens for. The remaining
+// VOUCHER_TYPES (purchase_voucher, uae_rent_invoice, pk_rent_invoice,
+// asset_sales) get their own dedicated screens in Phases 7/9/10/11 —
+// they share the same engine but have business-document-specific fields
+// that don't fit this phase's generic voucher pages.
+export const PHASE5_VOUCHER_TYPES = [
+  "receipt_voucher",
+  "payment_voucher",
+  "pdc_payment_voucher",
+  "pdc_receipt_voucher",
+  "cheque_return_voucher",
+  "journal_voucher",
+  "jv_maintenance_voucher",
+  "opening_balance_voucher",
+] as const;
+export type Phase5VoucherType = (typeof PHASE5_VOUCHER_TYPES)[number];
+
+export function isPhase5VoucherType(value: string): value is Phase5VoucherType {
+  return (PHASE5_VOUCHER_TYPES as readonly string[]).includes(value);
+}
+
 export const VOUCHER_TYPE_DEFAULT_PREFIX: Record<VoucherType, string> = {
   purchase_voucher: "PV",
   receipt_voucher: "RV",

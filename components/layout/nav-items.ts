@@ -10,6 +10,14 @@ import {
   LandmarkIcon,
   HashIcon,
   GitBranchIcon,
+  ArrowDownToLineIcon,
+  ArrowUpFromLineIcon,
+  ClockIcon,
+  RotateCcwIcon,
+  BookOpenIcon,
+  WrenchIcon,
+  ScaleIcon,
+  ListOrderedIcon,
 } from "lucide-react";
 
 export interface NavItem {
@@ -52,6 +60,20 @@ export const navSections: NavSection[] = [
       { label: "Cost Centers", href: "/accounting/cost-centers", icon: LandmarkIcon },
       { label: "Document Sequences", href: "/admin/document-sequences", icon: HashIcon },
       { label: "Approval Workflows", href: "/admin/approval-workflows", icon: GitBranchIcon },
+    ],
+  },
+  {
+    label: "Vouchers",
+    items: [
+      { label: "Receipt Vouchers", href: "/accounting/vouchers/receipt_voucher", icon: ArrowDownToLineIcon },
+      { label: "Payment Vouchers", href: "/accounting/vouchers/payment_voucher", icon: ArrowUpFromLineIcon },
+      { label: "PDC Payments", href: "/accounting/vouchers/pdc_payment_voucher", icon: ClockIcon },
+      { label: "PDC Receipts", href: "/accounting/vouchers/pdc_receipt_voucher", icon: ClockIcon },
+      { label: "Cheque Returns", href: "/accounting/vouchers/cheque_return_voucher", icon: RotateCcwIcon },
+      { label: "Journal Vouchers", href: "/accounting/vouchers/journal_voucher", icon: BookOpenIcon },
+      { label: "JV Maintenance", href: "/accounting/vouchers/jv_maintenance_voucher", icon: WrenchIcon },
+      { label: "Opening Balances", href: "/accounting/vouchers/opening_balance_voucher", icon: ScaleIcon },
+      { label: "Voucher Register", href: "/accounting/voucher-register", icon: ListOrderedIcon },
     ],
   },
 ];

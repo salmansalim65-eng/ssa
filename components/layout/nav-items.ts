@@ -19,6 +19,9 @@ import {
   ScaleIcon,
   ListOrderedIcon,
   HomeIcon,
+  Users2Icon,
+  ShoppingCartIcon,
+  SlidersHorizontalIcon,
 } from "lucide-react";
 
 export interface NavItem {
@@ -41,7 +44,14 @@ export const navSections: NavSection[] = [
   },
   {
     label: "Assets",
-    items: [{ label: "Assets", href: "/assets", icon: HomeIcon }],
+    items: [
+      { label: "Assets", href: "/assets", icon: HomeIcon },
+      { label: "Suppliers", href: "/assets/suppliers", icon: Users2Icon },
+    ],
+  },
+  {
+    label: "Purchases",
+    items: [{ label: "Purchase Vouchers", href: "/purchases", icon: ShoppingCartIcon }],
   },
   {
     label: "Administration",
@@ -65,6 +75,7 @@ export const navSections: NavSection[] = [
       { label: "Cost Centers", href: "/accounting/cost-centers", icon: LandmarkIcon },
       { label: "Document Sequences", href: "/admin/document-sequences", icon: HashIcon },
       { label: "Approval Workflows", href: "/admin/approval-workflows", icon: GitBranchIcon },
+      { label: "Posting Templates", href: "/admin/posting-templates", icon: SlidersHorizontalIcon },
     ],
   },
   {

@@ -42,7 +42,7 @@ designed, reviewed, and only then implemented. Start here:
 | 4 | Accounting Engine Core (journal engine, voucher framework, approval workflow) | ✅ Done |
 | 5 | Core Accounting Vouchers (Receipt, Payment, JV, JV Maintenance, Opening Balance, PDC, Cheque Return) | ✅ Done |
 | 6 | Asset Registration | ✅ Done |
-| 7 | Purchase Property | ⬜ Not started |
+| 7 | Purchase Property | ✅ Done |
 | 8 | Asset Current Value | ⬜ Not started |
 | 9 | UAE Rental Management | ⬜ Not started |
 | 10 | Pakistan Rental Management | ⬜ Not started |

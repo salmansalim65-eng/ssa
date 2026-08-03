@@ -744,6 +744,37 @@ export interface Database {
         };
         Update: Partial<Database["accounting"]["Tables"]["opening_balance_vouchers"]["Row"]>;
       };
+      purchase_vouchers: {
+        Row: {
+          id: string;
+          company_id: string;
+          journal_entry_id: string;
+          voucher_no: string | null;
+          asset_id: string;
+          supplier_id: string;
+          purchase_date: string;
+          currency_id: string;
+          exchange_rate: number;
+          purchase_price: number;
+          taxes: number;
+          registration_charges: number;
+          additional_expenses: number;
+          total_amount: number;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: Partial<Database["accounting"]["Tables"]["purchase_vouchers"]["Row"]> & {
+          company_id: string;
+          journal_entry_id: string;
+          asset_id: string;
+          supplier_id: string;
+          purchase_date: string;
+          currency_id: string;
+          purchase_price: number;
+          created_by: string;
+        };
+        Update: Partial<Database["accounting"]["Tables"]["purchase_vouchers"]["Row"]>;
+      };
     };
     Views: {
       v_voucher_register: {
@@ -838,6 +869,30 @@ export interface Database {
           attachment_id: string;
         };
         Update: Partial<Database["assets"]["Tables"]["asset_images"]["Row"]>;
+      };
+      suppliers: {
+        Row: {
+          id: string;
+          company_id: string;
+          name: string;
+          contact_person: string | null;
+          phone: string | null;
+          email: string | null;
+          address: string | null;
+          is_active: boolean;
+          created_by: string;
+          created_at: string;
+          updated_by: string | null;
+          updated_at: string | null;
+          deleted_by: string | null;
+          deleted_at: string | null;
+        };
+        Insert: Partial<Database["assets"]["Tables"]["suppliers"]["Row"]> & {
+          company_id: string;
+          name: string;
+          created_by: string;
+        };
+        Update: Partial<Database["assets"]["Tables"]["suppliers"]["Row"]>;
       };
     };
     Functions: Record<string, never>;

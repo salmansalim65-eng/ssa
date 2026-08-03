@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -14,8 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { actOnVoucher, submitVoucher } from "@/features/accounting/vouchers/shared-actions";
-import type { Phase5VoucherType } from "@/lib/vouchers/meta";
-import type { JournalEntryStatus } from "@/types/database.types";
+import type { JournalEntryStatus, VoucherType } from "@/types/database.types";
 
 export function VoucherActions({
   status,
@@ -31,7 +31,7 @@ export function VoucherActions({
   onPost,
 }: {
   status: JournalEntryStatus;
-  voucherType: Phase5VoucherType;
+  voucherType: VoucherType;
   voucherId: string;
   journalEntryId: string;
   amount: number;
@@ -42,6 +42,7 @@ export function VoucherActions({
   canPost: boolean;
   onPost: (id: string, journalEntryId: string) => Promise<{ error?: string; voucherNo?: string } | undefined>;
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [commentDialog, setCommentDialog] = useState<"reject" | "send_back" | null>(null);
   const [comment, setComment] = useState("");
@@ -53,7 +54,10 @@ export function VoucherActions({
     startTransition(async () => {
       const result = await action();
       if (result?.error) toast.error(result.error);
-      else toast.success(successMessage);
+      else {
+        toast.success(successMessage);
+        router.refresh();
+      }
     });
   }
 
@@ -101,7 +105,10 @@ export function VoucherActions({
             startTransition(async () => {
               const result = await onPost(voucherId, journalEntryId);
               if (result?.error) toast.error(result.error);
-              else toast.success(`Posted as ${result?.voucherNo}`);
+              else {
+                toast.success(`Posted as ${result?.voucherNo}`);
+                router.refresh();
+              }
             })
           }
         >

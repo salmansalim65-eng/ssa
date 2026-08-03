@@ -66,7 +66,7 @@ export async function createJournalEntry(params: {
   narration?: string | null;
   createdBy: string;
   lines: EntryLineInput[];
-}): Promise<{ journalEntryId: string } | { error: string }> {
+}): Promise<{ journalEntryId: string; exchangeRate: number } | { error: string }> {
   const supabase = await createClient();
   const exchangeRate = await resolveExchangeRate(params.companyId, params.currencyId, params.entryDate);
 
@@ -109,7 +109,7 @@ export async function createJournalEntry(params: {
 
   if (linesError) return { error: linesError.message };
 
-  return { journalEntryId: je.id as string };
+  return { journalEntryId: je.id as string, exchangeRate };
 }
 
 async function syncJournalEntryStatus(journalEntryId: string, status: ApprovalStatus) {

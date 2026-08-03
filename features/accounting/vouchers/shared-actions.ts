@@ -1,13 +1,11 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-
 import { requirePermission } from "@/lib/auth/permissions";
 import { actOnApproval, getCurrentCompanyId, submitForApproval } from "@/lib/vouchers/engine";
-import type { Phase5VoucherType } from "@/lib/vouchers/meta";
+import type { VoucherType } from "@/types/database.types";
 
 export async function submitVoucher(
-  voucherType: Phase5VoucherType,
+  voucherType: VoucherType,
   voucherId: string,
   journalEntryId: string,
   amount: number,
@@ -18,12 +16,11 @@ export async function submitVoucher(
   const result = await submitForApproval({ companyId, voucherType, voucherId, journalEntryId, amount });
   if ("error" in result) return { error: result.error };
 
-  revalidatePath(`/accounting/vouchers/${voucherType}`);
   return { success: true };
 }
 
 export async function actOnVoucher(
-  voucherType: Phase5VoucherType,
+  voucherType: VoucherType,
   voucherApprovalId: string,
   journalEntryId: string,
   action: "approve" | "reject" | "send_back",
@@ -34,6 +31,5 @@ export async function actOnVoucher(
   const result = await actOnApproval({ voucherApprovalId, journalEntryId, action, comment });
   if ("error" in result) return { error: result.error };
 
-  revalidatePath(`/accounting/vouchers/${voucherType}`);
   return { success: true };
 }

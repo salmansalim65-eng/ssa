@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AssetImagesManager, type AssetImageItem } from "@/components/assets/asset-images-manager";
 import { TitleDeedManager } from "@/components/assets/title-deed-manager";
@@ -18,7 +20,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
   const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
   const companyId = companyIdData as string;
 
-  const [{ data: asset }, canEdit, canCreateValuation, canDeleteValuation] = await Promise.all([
+  const [{ data: asset }, canEdit, canCreateValuation, canDeleteValuation, canSell] = await Promise.all([
     supabase
       .schema("assets")
       .from("assets")
@@ -29,6 +31,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
     hasPermission("assets", "edit"),
     hasPermission("asset_valuations", "create"),
     hasPermission("asset_valuations", "delete"),
+    hasPermission("asset_sales", "create"),
   ]);
 
   if (!asset) notFound();
@@ -105,7 +108,14 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
           <h1 className="text-2xl font-semibold tracking-tight">{asset.asset_name}</h1>
           <p className="font-mono text-sm text-muted-foreground">{asset.asset_code}</p>
         </div>
-        <Badge>{asset.status}</Badge>
+        <div className="flex items-center gap-2">
+          <Badge>{asset.status}</Badge>
+          {canSell && asset.status === "active" && (
+            <Button asChild size="sm" variant="outline">
+              <Link href={`/sales/new?assetId=${asset.id}`}>Sell asset</Link>
+            </Button>
+          )}
+        </div>
       </div>
 
       {costCenter && (

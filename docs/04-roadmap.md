@@ -105,8 +105,8 @@ audit, storage, and numbering existing and being correct.
 
 ---
 
-**Status:** Phases 1–10 are implemented — see
-`supabase/migrations/0001_foundation.sql` through `0010_pk_rental.sql`,
+**Status:** Phases 1–11 are implemented — see
+`supabase/migrations/0001_foundation.sql` through `0011_asset_sale.sql`,
 and the Next.js app under `app/`, `features/`, `lib/`, `components/`. Phase 9
 adds tenants, UAE leases with auto-generated monthly/yearly payment
 schedules, on-demand rent invoice generation (Dr Tenant Receivable / Cr UAE
@@ -121,4 +121,14 @@ remaining advance balance by a dedicated trigger — with a dynamic JE (Dr
 Tenant Receivable + Dr Advance Rent Liability / Cr Rental Income + Cr
 Utility Recovery Income, lines included only when their amount is
 non-zero), and the same immediate-post payment collection pattern as UAE.
-Next up: Phase 11 (Asset Sale), pending review.
+Phase 11 adds asset disposal: `assets.asset_sales` snapshots book value and
+original purchase cost at sale time (both remain user-editable on the asset
+afterward, so the sale record can't rely on a live join), derives
+profit/loss (against book value) and capital gain (against original cost)
+as generated columns, and posts a dynamic JE (Dr Sale Proceeds Receivable +
+Dr Loss on Sale / Cr Fixed Asset + Cr Gain on Sale, again only including
+the gain/loss line that applies) tagged to the asset's cost center.
+`assets.status` flips to `'sold'` only when the sale voucher actually
+posts, so a rejected sale doesn't block re-selling the same asset — no
+unique(asset_id) constraint, matching purchase_vouchers' precedent. Next
+up: Phase 12 (Reports Engine), pending review.

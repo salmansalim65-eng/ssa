@@ -46,7 +46,7 @@ designed, reviewed, and only then implemented. Start here:
 | 8 | Asset Current Value | ✅ Done |
 | 9 | UAE Rental Management | ✅ Done |
 | 10 | Pakistan Rental Management | ✅ Done |
-| 11 | Asset Sale | ⬜ Not started |
+| 11 | Asset Sale | ✅ Done |
 | 12 | Reports Engine | ⬜ Not started |
 | 13 | Dashboard | ⬜ Not started |
 | 14 | Hardening: testing, security review, performance, deployment | ⬜ Not started |

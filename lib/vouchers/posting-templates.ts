@@ -28,4 +28,10 @@ export const POSTING_TEMPLATE_ROLES: Partial<Record<VoucherType, PostingTemplate
     { role: "pk_rental_income", label: "Rental Income", side: "credit" },
     { role: "pk_utility_income", label: "Utility Recovery Income", side: "credit" },
   ],
+  asset_sales: [
+    { role: "sale_proceeds_receivable", label: "Sale Proceeds Receivable", side: "debit" },
+    { role: "loss_on_sale", label: "Loss on Sale of Asset", side: "debit" },
+    { role: "fixed_asset_property", label: "Fixed Asset (Property)", side: "credit" },
+    { role: "gain_on_sale", label: "Gain on Sale of Asset", side: "credit" },
+  ],
 };

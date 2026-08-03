@@ -26,6 +26,7 @@ import {
   KeyRoundIcon,
   ReceiptIcon,
   ContactIcon,
+  BadgeDollarSignIcon,
 } from "lucide-react";
 
 export interface NavItem {
@@ -56,6 +57,10 @@ export const navSections: NavSection[] = [
   {
     label: "Purchases",
     items: [{ label: "Purchase Vouchers", href: "/purchases", icon: ShoppingCartIcon }],
+  },
+  {
+    label: "Sales",
+    items: [{ label: "Asset Sales", href: "/sales", icon: BadgeDollarSignIcon }],
   },
   {
     label: "Rental",

@@ -919,6 +919,39 @@ export interface Database {
         };
         Update: Partial<Database["assets"]["Tables"]["asset_valuations"]["Row"]>;
       };
+      asset_sales: {
+        Row: {
+          id: string;
+          company_id: string;
+          journal_entry_id: string;
+          voucher_no: string | null;
+          asset_id: string;
+          buyer: string;
+          sale_date: string;
+          sale_price: number;
+          book_value_at_sale: number;
+          purchase_value_at_sale: number;
+          profit_loss_amount: number;
+          capital_gain_amount: number;
+          currency_id: string;
+          exchange_rate: number;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: Partial<Database["assets"]["Tables"]["asset_sales"]["Row"]> & {
+          company_id: string;
+          journal_entry_id: string;
+          asset_id: string;
+          buyer: string;
+          sale_date: string;
+          sale_price: number;
+          book_value_at_sale: number;
+          purchase_value_at_sale: number;
+          currency_id: string;
+          created_by: string;
+        };
+        Update: Partial<Database["assets"]["Tables"]["asset_sales"]["Row"]>;
+      };
     };
     Views: {
       v_asset_valuation: {

@@ -10,7 +10,7 @@
    supabase db push
    ```
    This applies `supabase/migrations/0001_foundation.sql` through
-   `0014_username_login.sql` in filename order. There is no seed data — the
+   `0015_pin_function_search_paths.sql` in filename order. There is no seed data — the
    first signed-up user creates their own company via the onboarding
    screen (`core.fn_bootstrap_company`).
 3. **Custom Access Token Hook** (required — without it, `company_id` never

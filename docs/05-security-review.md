@@ -9,6 +9,32 @@ auth middleware. Findings are listed most severe first. Everything marked
 the application code in this same phase; everything marked **Accepted** is
 a deliberate, documented trade-off.
 
+## Addendum: live advisor pass (post-deployment)
+
+Once a real Supabase project existed and the Supabase MCP connector was
+attached, `get_advisors(type: "security")` was run directly against it —
+the automated equivalent of this document's manual review. It confirmed
+every finding below and surfaced one new one:
+
+- **12 functions had no `search_path` pinned** (`function_search_path_mutable`):
+  `core.fn_touch_updated_at`, `core.fn_custom_access_token_hook`,
+  `core.fn_convert_to_base`, `core.fn_upsert_exchange_rate`, and 8 more in
+  `accounting` — mostly trigger functions plus a couple of freestanding
+  ones. An unpinned `search_path` leaves a function more susceptible to
+  search-path-based object shadowing. Fixed in
+  `supabase/migrations/0015_pin_function_search_paths.sql` (each function
+  re-declared identically, just with `set search_path = public` added).
+- The remaining 42 warnings (`anon`/`authenticated`-can-execute
+  `SECURITY DEFINER` function, ×21 functions ×2 roles) are exactly the set
+  already covered below: either intentionally public
+  (`fn_username_to_email`, `current_company_id`, `user_has_permission`),
+  trigger-only functions (`returns trigger`, not meaningfully callable
+  outside trigger context despite being technically RPC-reachable), or the
+  four already hardened with internal authorization checks. No further
+  action taken on these — confirmed matches, not new findings.
+- `public.rls_auto_enable()` is a Supabase-platform function, not part of
+  this app's schema — out of scope.
+
 ## Fixed
 
 ### 1. Four `SECURITY DEFINER` functions trusted a caller-supplied `p_company_id`

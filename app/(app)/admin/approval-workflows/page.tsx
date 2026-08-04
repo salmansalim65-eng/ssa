@@ -1,5 +1,6 @@
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { fetchRefs } from "@/lib/supabase/hydrate";
 import { VOUCHER_TYPES } from "@/lib/vouchers/meta";
 import { ApprovalWorkflowsManager, type WorkflowInfo } from "./approval-workflows-manager";
 
@@ -25,7 +26,7 @@ export default async function ApprovalWorkflowsPage() {
     ? await supabase
         .schema("accounting")
         .from("approval_workflow_steps")
-        .select("id, workflow_id, step_order, min_amount, max_amount, roles:approver_role_id(name)")
+        .select("id, workflow_id, step_order, min_amount, max_amount, approver_role_id")
         .in("workflow_id", workflowIds)
         .order("step_order")
     : { data: [] };
@@ -36,19 +37,25 @@ export default async function ApprovalWorkflowsPage() {
     step_order: number;
     min_amount: number | null;
     max_amount: number | null;
-    roles: { name: string } | null;
+    approver_role_id: string | null;
   };
+
+  const stepRows = (steps as unknown as RawStep[]) ?? [];
+  // roles live in the `core` schema (cross-schema from accounting).
+  const rolesById = await fetchRefs<{ id: string; name: string }>(
+    supabase, "core", "roles", "name", stepRows.map((s) => s.approver_role_id),
+  );
 
   const workflowByVoucherType: Record<string, WorkflowInfo> = {};
   for (const w of workflows ?? []) {
     workflowByVoucherType[w.voucher_type] = {
       isActive: w.is_active,
-      steps: ((steps as unknown as RawStep[]) ?? [])
+      steps: stepRows
         .filter((s) => s.workflow_id === w.id)
         .map((s) => ({
           id: s.id,
           stepOrder: s.step_order,
-          roleName: s.roles?.name ?? "—",
+          roleName: rolesById.get(s.approver_role_id ?? "")?.name ?? "—",
           minAmount: s.min_amount,
           maxAmount: s.max_amount,
         })),

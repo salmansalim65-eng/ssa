@@ -15,6 +15,7 @@ import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { postPurchaseVoucher } from "@/features/accounting/purchase-voucher/actions";
 import { getSignedUrl } from "@/features/attachments/actions";
 import { hasPermission } from "@/lib/auth/permissions";
+import { fetchRefs } from "@/lib/supabase/hydrate";
 import { createClient } from "@/lib/supabase/server";
 import { getVoucherApproval } from "@/lib/vouchers/engine";
 import type { JournalEntryStatus } from "@/types/database.types";
@@ -31,7 +32,7 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
       .schema("accounting")
       .from("purchase_vouchers")
       .select(
-        "*, assets:asset_id(asset_code, asset_name), suppliers:supplier_id(name), currencies:currency_id(code), journal_entries:journal_entry_id(status)",
+        "*, journal_entries:journal_entry_id(status)",
       )
       .eq("company_id", companyId)
       .eq("id", id)
@@ -44,13 +45,30 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
 
   if (!voucher) notFound();
 
-  type Refs = {
-    assets: { asset_code: string; asset_name: string } | null;
-    suppliers: { name: string } | null;
-    currencies: { code: string } | null;
-    journal_entries: { status: JournalEntryStatus } | null;
+  const [assetsById, suppliersById, currenciesById] = await Promise.all([
+    fetchRefs<{ id: string; asset_code: string; asset_name: string }>(
+      supabase,
+      "assets",
+      "assets",
+      "asset_code, asset_name",
+      [voucher.asset_id],
+    ),
+    fetchRefs<{ id: string; name: string }>(supabase, "assets", "suppliers", "name", [
+      voucher.supplier_id,
+    ]),
+    fetchRefs<{ id: string; code: string }>(supabase, "core", "currencies", "code", [
+      voucher.currency_id,
+    ]),
+  ]);
+
+  const refs = {
+    assets: assetsById.get(voucher.asset_id) ?? null,
+    suppliers: suppliersById.get(voucher.supplier_id) ?? null,
+    currencies: currenciesById.get(voucher.currency_id) ?? null,
+    journal_entries: (voucher as unknown as {
+      journal_entries: { status: JournalEntryStatus } | null;
+    }).journal_entries,
   };
-  const refs = voucher as unknown as Refs;
 
   const approval = await getVoucherApproval("purchase_voucher", id);
 

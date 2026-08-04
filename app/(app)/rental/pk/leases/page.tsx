@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { fetchRefs } from "@/lib/supabase/hydrate";
 
 const statusVariant = { active: "success", expired: "secondary", terminated: "destructive" } as const;
 
@@ -25,7 +26,7 @@ export default async function PkLeasesPage() {
     supabase
       .schema("rental")
       .from("pk_leases")
-      .select("id, lease_start, lease_end, monthly_rent, status, assets:asset_id(asset_code, asset_name), tenants:tenant_id(name)")
+      .select("id, asset_id, lease_start, lease_end, monthly_rent, status, tenants:tenant_id(name)")
       .eq("company_id", companyId)
       .is("deleted_at", null)
       .order("created_at", { ascending: false }),
@@ -34,13 +35,22 @@ export default async function PkLeasesPage() {
 
   type RawRow = {
     id: string;
+    asset_id: string;
     lease_start: string;
     lease_end: string;
     monthly_rent: number;
     status: keyof typeof statusVariant;
-    assets: { asset_code: string; asset_name: string } | null;
     tenants: { name: string } | null;
   };
+
+  const rows = (leases as unknown as RawRow[]) ?? [];
+  const assetsById = await fetchRefs<{ id: string; asset_code: string; asset_name: string }>(
+    supabase,
+    "assets",
+    "assets",
+    "asset_code, asset_name",
+    rows.map((r) => r.asset_id),
+  );
 
   return (
     <div className="space-y-4">
@@ -67,24 +77,27 @@ export default async function PkLeasesPage() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {((leases as unknown as RawRow[]) ?? []).map((lease) => (
-            <TableRow key={lease.id}>
-              <TableCell>
-                <Link href={`/rental/pk/leases/${lease.id}`} className="font-medium hover:underline">
-                  {lease.assets ? `${lease.assets.asset_code} — ${lease.assets.asset_name}` : "—"}
-                </Link>
-              </TableCell>
-              <TableCell>{lease.tenants?.name ?? "—"}</TableCell>
-              <TableCell>
-                {lease.lease_start} – {lease.lease_end}
-              </TableCell>
-              <TableCell>{lease.monthly_rent.toLocaleString()}</TableCell>
-              <TableCell>
-                <Badge variant={statusVariant[lease.status]}>{lease.status}</Badge>
-              </TableCell>
-            </TableRow>
-          ))}
-          {((leases as unknown as RawRow[]) ?? []).length === 0 && (
+          {rows.map((lease) => {
+            const asset = assetsById.get(lease.asset_id) ?? null;
+            return (
+              <TableRow key={lease.id}>
+                <TableCell>
+                  <Link href={`/rental/pk/leases/${lease.id}`} className="font-medium hover:underline">
+                    {asset ? `${asset.asset_code} — ${asset.asset_name}` : "—"}
+                  </Link>
+                </TableCell>
+                <TableCell>{lease.tenants?.name ?? "—"}</TableCell>
+                <TableCell>
+                  {lease.lease_start} – {lease.lease_end}
+                </TableCell>
+                <TableCell>{lease.monthly_rent.toLocaleString()}</TableCell>
+                <TableCell>
+                  <Badge variant={statusVariant[lease.status]}>{lease.status}</Badge>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+          {rows.length === 0 && (
             <TableRow>
               <TableCell colSpan={5} className="text-center text-muted-foreground">
                 No leases yet.

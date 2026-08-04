@@ -13,6 +13,7 @@ import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { postAssetSale } from "@/features/assets/sale/actions";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { fetchRefs } from "@/lib/supabase/hydrate";
 import { getVoucherApproval } from "@/lib/vouchers/engine";
 import type { JournalEntryStatus } from "@/types/database.types";
 
@@ -27,7 +28,7 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
     supabase
       .schema("assets")
       .from("asset_sales")
-      .select("*, assets:asset_id(asset_code, asset_name), currencies:currency_id(code), journal_entries:journal_entry_id(status)")
+      .select("*, assets:asset_id(asset_code, asset_name)")
       .eq("company_id", companyId)
       .eq("id", id)
       .maybeSingle(),
@@ -44,7 +45,32 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
     currencies: { code: string } | null;
     journal_entries: { status: JournalEntryStatus } | null;
   };
-  const refs = sale as unknown as Refs;
+  const saleAssets = (sale as unknown as {
+    assets: { asset_code: string; asset_name: string } | null;
+  }).assets;
+
+  const [currenciesById, journalEntriesById] = await Promise.all([
+    fetchRefs<{ id: string; code: string }>(
+      supabase,
+      "core",
+      "currencies",
+      "code",
+      [sale.currency_id],
+    ),
+    fetchRefs<{ id: string; status: JournalEntryStatus }>(
+      supabase,
+      "accounting",
+      "journal_entries",
+      "status",
+      [sale.journal_entry_id],
+    ),
+  ]);
+
+  const refs: Refs = {
+    assets: saleAssets,
+    currencies: currenciesById.get(sale.currency_id) ?? null,
+    journal_entries: journalEntriesById.get(sale.journal_entry_id) ?? null,
+  };
 
   const approval = await getVoucherApproval("asset_sales", id);
 

@@ -15,6 +15,7 @@ import { LeaseStatusMenu } from "@/components/rental/lease-status-menu";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { fetchRefs } from "@/lib/supabase/hydrate";
 import type { JournalEntryStatus } from "@/types/database.types";
 
 const leaseStatusVariant = { active: "success", expired: "secondary", terminated: "destructive" } as const;
@@ -36,9 +37,7 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
     supabase
       .schema("rental")
       .from("uae_leases")
-      .select(
-        "*, assets:asset_id(asset_code, asset_name), tenants:tenant_id(name, phone, email), currencies:currency_id(code)",
-      )
+      .select("*, tenants:tenant_id(name, phone, email)")
       .eq("company_id", companyId)
       .eq("id", id)
       .maybeSingle(),
@@ -47,12 +46,27 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
 
   if (!lease) notFound();
 
+  const [assetsById, currenciesById] = await Promise.all([
+    fetchRefs<{ id: string; asset_code: string; asset_name: string }>(
+      supabase,
+      "assets",
+      "assets",
+      "asset_code, asset_name",
+      [lease.asset_id],
+    ),
+    fetchRefs<{ id: string; code: string }>(supabase, "core", "currencies", "code", [lease.currency_id]),
+  ]);
+
   type Refs = {
     assets: { asset_code: string; asset_name: string } | null;
     tenants: { name: string; phone: string | null; email: string | null } | null;
     currencies: { code: string } | null;
   };
-  const refs = lease as unknown as Refs;
+  const refs: Refs = {
+    assets: assetsById.get(lease.asset_id) ?? null,
+    tenants: (lease as unknown as { tenants: Refs["tenants"] }).tenants,
+    currencies: currenciesById.get(lease.currency_id) ?? null,
+  };
 
   const [{ data: schedules }, { data: invoices }] = await Promise.all([
     supabase
@@ -64,7 +78,7 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
     supabase
       .schema("rental")
       .from("uae_rent_invoices")
-      .select("id, voucher_no, invoice_date, amount, outstanding_balance, journal_entries:journal_entry_id(status)")
+      .select("id, voucher_no, invoice_date, amount, outstanding_balance, journal_entry_id")
       .eq("lease_id", id)
       .order("invoice_date", { ascending: false }),
   ]);
@@ -75,8 +89,13 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
     invoice_date: string;
     amount: number;
     outstanding_balance: number;
-    journal_entries: { status: JournalEntryStatus } | null;
+    journal_entry_id: string | null;
   };
+  const invoiceRows = (invoices as unknown as InvoiceRow[]) ?? [];
+  // journal_entries live in the `accounting` schema (cross-schema from rental).
+  const invoiceStatusById = await fetchRefs<{ id: string; status: JournalEntryStatus }>(
+    supabase, "accounting", "journal_entries", "status", invoiceRows.map((r) => r.journal_entry_id),
+  );
 
   return (
     <div className="space-y-6">
@@ -174,7 +193,7 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
             </TableRow>
           </TableHeader>
           <TableBody>
-            {((invoices as unknown as InvoiceRow[]) ?? []).map((inv) => (
+            {invoiceRows.map((inv) => (
               <TableRow key={inv.id}>
                 <TableCell>
                   <Link href={`/rental/uae/invoices/${inv.id}`} className="font-medium hover:underline">
@@ -185,11 +204,11 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
                 <TableCell className="text-right">{inv.amount.toLocaleString()}</TableCell>
                 <TableCell className="text-right">{inv.outstanding_balance.toLocaleString()}</TableCell>
                 <TableCell>
-                  <VoucherStatusBadge status={inv.journal_entries?.status ?? "draft"} />
+                  <VoucherStatusBadge status={invoiceStatusById.get(inv.journal_entry_id ?? "")?.status ?? "draft"} />
                 </TableCell>
               </TableRow>
             ))}
-            {((invoices as unknown as InvoiceRow[]) ?? []).length === 0 && (
+            {invoiceRows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-muted-foreground">
                   No invoices generated yet.

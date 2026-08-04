@@ -1,5 +1,6 @@
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { fetchRefs } from "@/lib/supabase/hydrate";
 import { AccountTree, type AccountRow } from "./account-tree";
 
 export default async function ChartOfAccountsPage() {
@@ -13,7 +14,7 @@ export default async function ChartOfAccountsPage() {
       supabase
         .schema("accounting")
         .from("chart_of_accounts")
-        .select("id, account_code, account_name, parent_id, account_type, currency_id, opening_balance, is_group, is_active, is_cash, is_bank, currencies:currency_id(code)")
+        .select("id, account_code, account_name, parent_id, account_type, currency_id, opening_balance, is_group, is_active, is_cash, is_bank")
         .eq("company_id", companyId)
         .is("deleted_at", null),
       supabase
@@ -39,17 +40,25 @@ export default async function ChartOfAccountsPage() {
     is_active: boolean;
     is_cash: boolean;
     is_bank: boolean;
-    currencies: { code: string } | null;
   };
 
-  const accountRows: AccountRow[] = ((accounts as unknown as RawAccount[]) ?? []).map((a) => ({
+  const rows = (accounts as unknown as RawAccount[]) ?? [];
+  const currenciesById = await fetchRefs<{ id: string; code: string }>(
+    supabase,
+    "core",
+    "currencies",
+    "code",
+    rows.map((r) => r.currency_id),
+  );
+
+  const accountRows: AccountRow[] = rows.map((a) => ({
     id: a.id,
     account_code: a.account_code,
     account_name: a.account_name,
     parent_id: a.parent_id,
     account_type: a.account_type,
     currency_id: a.currency_id,
-    currency_code: a.currencies?.code ?? null,
+    currency_code: a.currency_id ? currenciesById.get(a.currency_id)?.code ?? null : null,
     opening_balance: a.opening_balance,
     is_group: a.is_group,
     is_active: a.is_active,

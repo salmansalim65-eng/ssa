@@ -12,6 +12,7 @@ import {
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { fetchRefs } from "@/lib/supabase/hydrate";
 import type { JournalEntryStatus } from "@/types/database.types";
 
 export default async function AssetSalesPage() {
@@ -25,23 +26,42 @@ export default async function AssetSalesPage() {
       .schema("assets")
       .from("asset_sales")
       .select(
-        "id, voucher_no, buyer, sale_date, sale_price, profit_loss_amount, assets:asset_id(asset_code, asset_name), journal_entries:journal_entry_id(status)",
+        "id, voucher_no, buyer, sale_date, sale_price, profit_loss_amount, journal_entry_id, assets:asset_id(asset_code, asset_name)",
       )
       .eq("company_id", companyId)
       .order("sale_date", { ascending: false }),
     hasPermission("asset_sales", "create"),
   ]);
 
-  type Row = {
+  type SaleRow = {
     id: string;
     voucher_no: string | null;
     buyer: string;
     sale_date: string;
     sale_price: number;
     profit_loss_amount: number;
+    journal_entry_id: string | null;
     assets: { asset_code: string; asset_name: string } | null;
+  };
+
+  const saleRows = (sales as unknown as SaleRow[]) ?? [];
+
+  const journalEntriesById = await fetchRefs<{ id: string; status: JournalEntryStatus }>(
+    supabase,
+    "accounting",
+    "journal_entries",
+    "status",
+    saleRows.map((r) => r.journal_entry_id),
+  );
+
+  type Row = SaleRow & {
     journal_entries: { status: JournalEntryStatus } | null;
   };
+
+  const rows: Row[] = saleRows.map((r) => ({
+    ...r,
+    journal_entries: r.journal_entry_id ? journalEntriesById.get(r.journal_entry_id) ?? null : null,
+  }));
 
   return (
     <div className="space-y-4">
@@ -70,7 +90,7 @@ export default async function AssetSalesPage() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {((sales as unknown as Row[]) ?? []).map((sale) => (
+          {rows.map((sale) => (
             <TableRow key={sale.id}>
               <TableCell>
                 <Link href={`/sales/${sale.id}`} className="font-medium hover:underline">
@@ -89,7 +109,7 @@ export default async function AssetSalesPage() {
               </TableCell>
             </TableRow>
           ))}
-          {((sales as unknown as Row[]) ?? []).length === 0 && (
+          {rows.length === 0 && (
             <TableRow>
               <TableCell colSpan={7} className="text-center text-muted-foreground">
                 No asset sales yet.

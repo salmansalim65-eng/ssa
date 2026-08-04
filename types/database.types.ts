@@ -1252,6 +1252,14 @@ export interface Database {
         Args: { p_company_id: string };
         Returns: string;
       };
+      fn_delete_uae_lease: {
+        Args: { p_lease_id: string };
+        Returns: undefined;
+      };
+      fn_delete_pk_lease: {
+        Args: { p_lease_id: string };
+        Returns: undefined;
+      };
     };
   };
   audit: {

@@ -61,15 +61,12 @@ export async function setPkLeaseStatus(leaseId: string, status: "active" | "expi
 export async function deletePkLease(leaseId: string) {
   await requirePermission("pk_rent_invoice", "delete");
   const supabase = await createClient();
-  const { data: user } = await supabase.auth.getUser();
 
-  // Soft delete — business data is never hard-deleted (see docs/01-architecture).
-  const { error } = await supabase
-    .schema("rental")
-    .from("pk_leases")
-    .update({ deleted_at: new Date().toISOString(), deleted_by: user.user!.id })
-    .eq("id", leaseId)
-    .is("deleted_at", null);
+  // Soft delete runs through a SECURITY DEFINER function: a direct UPDATE that
+  // sets deleted_at is rejected by the `deleted_at IS NULL` SELECT policy,
+  // which Postgres also enforces against the new row version. Business data is
+  // never hard-deleted (see docs/01-architecture).
+  const { error } = await supabase.schema("rental").rpc("fn_delete_pk_lease", { p_lease_id: leaseId });
   if (error) return { error: error.message };
 
   revalidatePath("/rental/pk/leases");

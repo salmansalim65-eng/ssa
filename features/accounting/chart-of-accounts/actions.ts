@@ -41,9 +41,17 @@ export async function createAccount(input: AccountInput) {
   const supabase = await createClient();
   const { data: user } = await supabase.auth.getUser();
 
+  const { data: accountCode, error: codeError } = await supabase.schema("core").rpc("fn_next_master_code", {
+    p_company_id: companyId,
+    p_module_key: "chart_of_accounts",
+    p_default_prefix: "AC",
+    p_default_padding: 6,
+  });
+  if (codeError || !accountCode) return { error: codeError?.message ?? "Failed to generate account code" };
+
   const { error } = await supabase.schema("accounting").from("chart_of_accounts").insert({
     company_id: companyId,
-    account_code: parsed.data.accountCode,
+    account_code: accountCode,
     account_name: parsed.data.accountName,
     parent_id: parsed.data.parentId || null,
     account_type: parsed.data.accountType,
@@ -77,7 +85,7 @@ export async function updateAccount(accountId: string, input: AccountInput) {
     .schema("accounting")
     .from("chart_of_accounts")
     .update({
-      account_code: parsed.data.accountCode,
+      // account_code is immutable once generated; not updated here.
       account_name: parsed.data.accountName,
       parent_id: parsed.data.parentId || null,
       account_type: parsed.data.accountType,

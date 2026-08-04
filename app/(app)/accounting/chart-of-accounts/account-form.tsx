@@ -96,19 +96,6 @@ export function AccountForm({
       <form onSubmit={form.handleSubmit(handleSubmit)} className="grid gap-4 sm:grid-cols-2">
         <FormField
           control={form.control}
-          name="accountCode"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Account code</FormLabel>
-              <FormControl>
-                <Input {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
           name="accountName"
           render={({ field }) => (
             <FormItem>

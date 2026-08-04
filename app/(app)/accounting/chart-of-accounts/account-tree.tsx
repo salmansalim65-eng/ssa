@@ -48,7 +48,6 @@ type DialogState =
   | { mode: "edit"; account: AccountRow };
 
 const emptyValues: AccountInput = {
-  accountCode: "",
   accountName: "",
   parentId: "",
   accountType: "asset",
@@ -266,7 +265,6 @@ export function AccountTree({
               defaultValues={
                 dialog.mode === "edit"
                   ? {
-                      accountCode: dialog.account.account_code,
                       accountName: dialog.account.account_name,
                       parentId: dialog.account.parent_id ?? "",
                       accountType: dialog.account.account_type,

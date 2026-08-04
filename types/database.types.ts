@@ -861,6 +861,7 @@ export interface Database {
           group_cost_center_id: string | null;
           title_deed_attachment_id: string | null;
           notes: string | null;
+          account_id: string | null;
           created_by: string;
           created_at: string;
           updated_by: string | null;
@@ -902,6 +903,7 @@ export interface Database {
           email: string | null;
           address: string | null;
           is_active: boolean;
+          account_id: string | null;
           created_by: string;
           created_at: string;
           updated_by: string | null;
@@ -1007,6 +1009,7 @@ export interface Database {
           email: string | null;
           address: string | null;
           is_active: boolean;
+          account_id: string | null;
           created_by: string;
           created_at: string;
           updated_by: string | null;

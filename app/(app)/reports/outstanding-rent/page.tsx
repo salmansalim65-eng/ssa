@@ -36,17 +36,17 @@ export default async function OutstandingRentPage() {
         <div className="flex gap-2">
           <CsvExportButton
             filename="outstanding-rent.csv"
-            rows={rows ?? []}
-            columns={[
-              { header: "Country", accessor: (r) => r.country },
-              { header: "Voucher No", accessor: (r) => r.voucher_no ?? "" },
-              { header: "Due Date", accessor: (r) => r.due_date },
-              { header: "Asset", accessor: (r) => `${r.asset_code} - ${r.asset_name}` },
-              { header: "Tenant", accessor: (r) => r.tenant_name },
-              { header: "Outstanding", accessor: (r) => r.outstanding_balance },
-              { header: "Currency", accessor: (r) => r.currency_code },
-              { header: "Days Overdue", accessor: (r) => r.days_overdue },
-            ]}
+            headers={["Country", "Voucher No", "Due Date", "Asset", "Tenant", "Outstanding", "Currency", "Days Overdue"]}
+            rows={(rows ?? []).map((r) => [
+              r.country,
+              r.voucher_no ?? "",
+              r.due_date,
+              `${r.asset_code} - ${r.asset_name}`,
+              r.tenant_name,
+              r.outstanding_balance,
+              r.currency_code,
+              r.days_overdue,
+            ])}
           />
           <PrintButton />
         </div>

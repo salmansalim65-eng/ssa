@@ -100,13 +100,8 @@ export default async function ProfitAndLossPage({
         <div className="flex gap-2">
           <CsvExportButton
             filename={`profit-and-loss-${from}-to-${to}.csv`}
-            rows={exportRows}
-            columns={[
-              { header: "Section", accessor: (r) => r.section },
-              { header: "Code", accessor: (r) => r.account_code },
-              { header: "Name", accessor: (r) => r.account_name },
-              { header: "Amount", accessor: (r) => r.balance },
-            ]}
+            headers={["Section", "Code", "Name", "Amount"]}
+            rows={exportRows.map((r) => [r.section, r.account_code, r.account_name, r.balance])}
           />
           <PrintButton />
         </div>

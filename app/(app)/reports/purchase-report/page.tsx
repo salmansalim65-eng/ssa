@@ -55,20 +55,32 @@ export default async function PurchaseReportPage({
         <div className="flex gap-2">
           <CsvExportButton
             filename={`purchase-report-${from}-to-${to}.csv`}
-            rows={rows ?? []}
-            columns={[
-              { header: "Voucher No", accessor: (r) => r.voucher_no ?? "" },
-              { header: "Date", accessor: (r) => r.purchase_date },
-              { header: "Asset", accessor: (r) => `${r.asset_code} - ${r.asset_name}` },
-              { header: "Supplier", accessor: (r) => r.supplier_name },
-              { header: "Purchase Price", accessor: (r) => r.purchase_price },
-              { header: "Taxes", accessor: (r) => r.taxes },
-              { header: "Registration Charges", accessor: (r) => r.registration_charges },
-              { header: "Additional Expenses", accessor: (r) => r.additional_expenses },
-              { header: "Total", accessor: (r) => r.total_amount },
-              { header: "Currency", accessor: (r) => r.currency_code },
-              { header: "Status", accessor: (r) => r.status },
+            headers={[
+              "Voucher No",
+              "Date",
+              "Asset",
+              "Supplier",
+              "Purchase Price",
+              "Taxes",
+              "Registration Charges",
+              "Additional Expenses",
+              "Total",
+              "Currency",
+              "Status",
             ]}
+            rows={(rows ?? []).map((r) => [
+              r.voucher_no ?? "",
+              r.purchase_date,
+              `${r.asset_code} - ${r.asset_name}`,
+              r.supplier_name,
+              r.purchase_price,
+              r.taxes,
+              r.registration_charges,
+              r.additional_expenses,
+              r.total_amount,
+              r.currency_code,
+              r.status,
+            ])}
           />
           <PrintButton />
         </div>

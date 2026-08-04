@@ -65,14 +65,8 @@ export default async function TrialBalancePage({
         <div className="flex gap-2">
           <CsvExportButton
             filename={`trial-balance-${asOf}.csv`}
-            rows={rows}
-            columns={[
-              { header: "Code", accessor: (r) => r.account_code },
-              { header: "Name", accessor: (r) => r.account_name },
-              { header: "Type", accessor: (r) => r.account_type },
-              { header: "Debit", accessor: (r) => r.debit },
-              { header: "Credit", accessor: (r) => r.credit },
-            ]}
+            headers={["Code", "Name", "Type", "Debit", "Credit"]}
+            rows={rows.map((r) => [r.account_code, r.account_name, r.account_type, r.debit, r.credit])}
           />
           <PrintButton />
         </div>

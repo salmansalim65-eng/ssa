@@ -110,13 +110,8 @@ export default async function BalanceSheetPage({
         <div className="flex gap-2">
           <CsvExportButton
             filename={`balance-sheet-${asOf}.csv`}
-            rows={exportRows}
-            columns={[
-              { header: "Section", accessor: (r) => r.section },
-              { header: "Code", accessor: (r) => r.account_code },
-              { header: "Name", accessor: (r) => r.account_name },
-              { header: "Balance", accessor: (r) => r.balance },
-            ]}
+            headers={["Section", "Code", "Name", "Balance"]}
+            rows={exportRows.map((r) => [r.section, r.account_code, r.account_name, r.balance])}
           />
           <PrintButton />
         </div>

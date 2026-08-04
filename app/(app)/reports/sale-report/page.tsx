@@ -56,19 +56,30 @@ export default async function SaleReportPage({
         <div className="flex gap-2">
           <CsvExportButton
             filename={`sale-report-${from}-to-${to}.csv`}
-            rows={rows ?? []}
-            columns={[
-              { header: "Voucher No", accessor: (r) => r.voucher_no ?? "" },
-              { header: "Date", accessor: (r) => r.sale_date },
-              { header: "Asset", accessor: (r) => `${r.asset_code} - ${r.asset_name}` },
-              { header: "Buyer", accessor: (r) => r.buyer },
-              { header: "Sale Price", accessor: (r) => r.sale_price },
-              { header: "Book Value", accessor: (r) => r.book_value_at_sale },
-              { header: "Profit/Loss", accessor: (r) => r.profit_loss_amount },
-              { header: "Capital Gain", accessor: (r) => r.capital_gain_amount },
-              { header: "Currency", accessor: (r) => r.currency_code },
-              { header: "Status", accessor: (r) => r.status },
+            headers={[
+              "Voucher No",
+              "Date",
+              "Asset",
+              "Buyer",
+              "Sale Price",
+              "Book Value",
+              "Profit/Loss",
+              "Capital Gain",
+              "Currency",
+              "Status",
             ]}
+            rows={(rows ?? []).map((r) => [
+              r.voucher_no ?? "",
+              r.sale_date,
+              `${r.asset_code} - ${r.asset_name}`,
+              r.buyer,
+              r.sale_price,
+              r.book_value_at_sale,
+              r.profit_loss_amount,
+              r.capital_gain_amount,
+              r.currency_code,
+              r.status,
+            ])}
           />
           <PrintButton />
         </div>

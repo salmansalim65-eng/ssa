@@ -36,19 +36,30 @@ export default async function AssetRegisterPage() {
         <div className="flex gap-2">
           <CsvExportButton
             filename="asset-register.csv"
-            rows={rows ?? []}
-            columns={[
-              { header: "Code", accessor: (r) => r.asset_code },
-              { header: "Name", accessor: (r) => r.asset_name },
-              { header: "Type", accessor: (r) => r.property_type },
-              { header: "Country", accessor: (r) => r.country },
-              { header: "City", accessor: (r) => r.city ?? "" },
-              { header: "Owner", accessor: (r) => r.owner ?? "" },
-              { header: "Purchase Date", accessor: (r) => r.purchase_date ?? "" },
-              { header: "Purchase Value", accessor: (r) => r.purchase_value ?? 0 },
-              { header: "Current Value", accessor: (r) => r.current_value ?? 0 },
-              { header: "Status", accessor: (r) => r.status },
+            headers={[
+              "Code",
+              "Name",
+              "Type",
+              "Country",
+              "City",
+              "Owner",
+              "Purchase Date",
+              "Purchase Value",
+              "Current Value",
+              "Status",
             ]}
+            rows={(rows ?? []).map((r) => [
+              r.asset_code,
+              r.asset_name,
+              r.property_type,
+              r.country,
+              r.city ?? "",
+              r.owner ?? "",
+              r.purchase_date ?? "",
+              r.purchase_value ?? 0,
+              r.current_value ?? 0,
+              r.status,
+            ])}
           />
           <PrintButton />
         </div>

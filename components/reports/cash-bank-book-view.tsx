@@ -29,7 +29,15 @@ export function CashBankBookView({
   filenamePrefix: string;
 }) {
   const exportRows = sections.flatMap((s) =>
-    s.rows.map((r) => ({ ...r, account_code: s.account_code, account_name: s.account_name })),
+    s.rows.map((r) => [
+      `${s.account_code} - ${s.account_name}`,
+      r.entry_date,
+      r.voucher_no ?? "",
+      r.description || r.narration || "",
+      r.debit_amount,
+      r.credit_amount,
+      r.balance,
+    ]),
   );
 
   return (
@@ -42,16 +50,8 @@ export function CashBankBookView({
         <div className="flex gap-2">
           <CsvExportButton
             filename={`${filenamePrefix}-${from}-to-${to}.csv`}
+            headers={["Account", "Date", "Voucher No", "Narration", "Debit", "Credit", "Balance"]}
             rows={exportRows}
-            columns={[
-              { header: "Account", accessor: (r) => `${r.account_code} - ${r.account_name}` },
-              { header: "Date", accessor: (r) => r.entry_date },
-              { header: "Voucher No", accessor: (r) => r.voucher_no ?? "" },
-              { header: "Narration", accessor: (r) => r.description || r.narration || "" },
-              { header: "Debit", accessor: (r) => r.debit_amount },
-              { header: "Credit", accessor: (r) => r.credit_amount },
-              { header: "Balance", accessor: (r) => r.balance },
-            ]}
           />
           <PrintButton />
         </div>

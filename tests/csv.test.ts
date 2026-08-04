@@ -21,15 +21,12 @@ describe("escapeCsvValue", () => {
 });
 
 describe("toCsv", () => {
-  it("builds a header row plus one row per input, using each column's accessor", () => {
+  it("builds a header row plus one row per input", () => {
     const csv = toCsv(
+      ["Voucher No", "Amount"],
       [
-        { code: "PV-1", amount: 100 },
-        { code: "PV-2", amount: 200 },
-      ],
-      [
-        { header: "Voucher No", accessor: (r) => r.code },
-        { header: "Amount", accessor: (r) => r.amount },
+        ["PV-1", 100],
+        ["PV-2", 200],
       ],
     );
 
@@ -37,7 +34,7 @@ describe("toCsv", () => {
   });
 
   it("escapes values that need it inline with the rest of the row", () => {
-    const csv = toCsv([{ name: "Doe, Jane" }], [{ header: "Name", accessor: (r) => r.name }]);
+    const csv = toCsv(["Name"], [["Doe, Jane"]]);
     expect(csv).toBe('Name\n"Doe, Jane"');
   });
 });

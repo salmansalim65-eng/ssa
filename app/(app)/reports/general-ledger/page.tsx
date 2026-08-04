@@ -105,15 +105,15 @@ export default async function GeneralLedgerPage({
         <div className="flex gap-2">
           <CsvExportButton
             filename={`general-ledger-${accountId || "account"}.csv`}
-            rows={rowsWithBalance}
-            columns={[
-              { header: "Date", accessor: (r) => r.entry_date },
-              { header: "Voucher No", accessor: (r) => r.voucher_no ?? "" },
-              { header: "Narration", accessor: (r) => r.description || r.narration || "" },
-              { header: "Debit", accessor: (r) => r.debit_amount },
-              { header: "Credit", accessor: (r) => r.credit_amount },
-              { header: "Balance", accessor: (r) => r.balance },
-            ]}
+            headers={["Date", "Voucher No", "Narration", "Debit", "Credit", "Balance"]}
+            rows={rowsWithBalance.map((r) => [
+              r.entry_date,
+              r.voucher_no ?? "",
+              r.description || r.narration || "",
+              r.debit_amount,
+              r.credit_amount,
+              r.balance,
+            ])}
           />
           <PrintButton />
         </div>

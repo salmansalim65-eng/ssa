@@ -57,17 +57,17 @@ export default async function RentalIncomePage({
         <div className="flex gap-2">
           <CsvExportButton
             filename={`rental-income-${from}-to-${to}.csv`}
-            rows={rows ?? []}
-            columns={[
-              { header: "Country", accessor: (r) => r.country },
-              { header: "Voucher No", accessor: (r) => r.voucher_no ?? "" },
-              { header: "Date", accessor: (r) => r.invoice_date },
-              { header: "Asset", accessor: (r) => `${r.asset_code} - ${r.asset_name}` },
-              { header: "Tenant", accessor: (r) => r.tenant_name },
-              { header: "Amount", accessor: (r) => r.amount },
-              { header: "Outstanding", accessor: (r) => r.outstanding_balance },
-              { header: "Currency", accessor: (r) => r.currency_code },
-            ]}
+            headers={["Country", "Voucher No", "Date", "Asset", "Tenant", "Amount", "Outstanding", "Currency"]}
+            rows={(rows ?? []).map((r) => [
+              r.country,
+              r.voucher_no ?? "",
+              r.invoice_date,
+              `${r.asset_code} - ${r.asset_name}`,
+              r.tenant_name,
+              r.amount,
+              r.outstanding_balance,
+              r.currency_code,
+            ])}
           />
           <PrintButton />
         </div>

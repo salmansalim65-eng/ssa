@@ -3,15 +3,12 @@ export function escapeCsvValue(value: unknown): string {
   return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
 }
 
-export interface CsvColumn<T> {
-  header: string;
-  accessor: (row: T) => string | number | null | undefined;
-}
+export type CsvCell = string | number | null | undefined;
 
-export function toCsv<T>(rows: T[], columns: CsvColumn<T>[]): string {
+export function toCsv(headers: string[], rows: CsvCell[][]): string {
   const lines = [
-    columns.map((c) => escapeCsvValue(c.header)).join(","),
-    ...rows.map((row) => columns.map((c) => escapeCsvValue(c.accessor(row))).join(",")),
+    headers.map(escapeCsvValue).join(","),
+    ...rows.map((row) => row.map(escapeCsvValue).join(",")),
   ];
   return lines.join("\n");
 }

@@ -52,13 +52,8 @@ export default async function CurrencyExchangePage({
         <div className="flex gap-2">
           <CsvExportButton
             filename={`currency-exchange-${from}-to-${to}.csv`}
-            rows={rows ?? []}
-            columns={[
-              { header: "Currency", accessor: (r) => r.currency_code },
-              { header: "Date", accessor: (r) => r.rate_date },
-              { header: "Rate to base", accessor: (r) => r.rate_to_base },
-              { header: "Source", accessor: (r) => r.source },
-            ]}
+            headers={["Currency", "Date", "Rate to base", "Source"]}
+            rows={(rows ?? []).map((r) => [r.currency_code, r.rate_date, r.rate_to_base, r.source])}
           />
           <PrintButton />
         </div>

@@ -35,6 +35,8 @@ export async function createUaeLease(input: UaeLeaseInput) {
       rent_cycle: parsed.data.rentCycle,
       security_deposit: parsed.data.securityDeposit,
       currency_id: parsed.data.currencyId,
+      due_date: parsed.data.dueDate || null,
+      rent_month: parsed.data.rentMonth || null,
       created_by: user.user!.id,
     })
     .select("id")
@@ -53,5 +55,23 @@ export async function setUaeLeaseStatus(leaseId: string, status: "active" | "exp
   if (error) return { error: error.message };
 
   revalidatePath(`/rental/uae/leases/${leaseId}`);
+  return { success: true };
+}
+
+export async function deleteUaeLease(leaseId: string) {
+  await requirePermission("uae_rent_invoice", "delete");
+  const supabase = await createClient();
+  const { data: user } = await supabase.auth.getUser();
+
+  // Soft delete — business data is never hard-deleted (see docs/01-architecture).
+  const { error } = await supabase
+    .schema("rental")
+    .from("uae_leases")
+    .update({ deleted_at: new Date().toISOString(), deleted_by: user.user!.id })
+    .eq("id", leaseId)
+    .is("deleted_at", null);
+  if (error) return { error: error.message };
+
+  revalidatePath("/rental/uae/leases");
   return { success: true };
 }

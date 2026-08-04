@@ -11,6 +11,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { GenerateInvoiceButton } from "@/components/rental/generate-invoice-button";
+import { GenerateAllInvoicesButton } from "@/components/rental/generate-all-invoices-button";
+import { LeaseDeleteButton } from "@/components/rental/lease-delete-button";
 import { LeaseStatusMenu } from "@/components/rental/lease-status-menu";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { hasPermission } from "@/lib/auth/permissions";
@@ -45,6 +47,8 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
   ]);
 
   if (!lease) notFound();
+
+  const canDelete = await hasPermission("uae_rent_invoice", "delete");
 
   const [assetsById, currenciesById] = await Promise.all([
     fetchRefs<{ id: string; asset_code: string; asset_name: string }>(
@@ -92,6 +96,7 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
     journal_entry_id: string | null;
   };
   const invoiceRows = (invoices as unknown as InvoiceRow[]) ?? [];
+  const pendingScheduleCount = (schedules ?? []).filter((s) => s.status === "pending").length;
   // journal_entries live in the `accounting` schema (cross-schema from rental).
   const invoiceStatusById = await fetchRefs<{ id: string; status: JournalEntryStatus }>(
     supabase, "accounting", "journal_entries", "status", invoiceRows.map((r) => r.journal_entry_id),
@@ -109,6 +114,7 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
         <div className="flex items-center gap-2">
           <Badge variant={leaseStatusVariant[lease.status as keyof typeof leaseStatusVariant]}>{lease.status}</Badge>
           {canCreate && <LeaseStatusMenu leaseId={lease.id} status={lease.status} />}
+          {canDelete && <LeaseDeleteButton leaseId={lease.id} country="uae" />}
         </div>
       </div>
 
@@ -143,10 +149,38 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
             {lease.security_deposit.toLocaleString()} {refs.currencies?.code}
           </p>
         </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Due date</p>
+          <p>{lease.due_date ?? "—"}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Rent month</p>
+          <p>{lease.rent_month ?? "—"}</p>
+        </div>
+        {lease.document_no && (
+          <div>
+            <p className="text-xs text-muted-foreground">HH Lease voucher</p>
+            <p>
+              {lease.document_no}
+              {lease.document_date ? ` · ${lease.document_date}` : ""}
+            </p>
+          </div>
+        )}
+        {lease.remarks && (
+          <div className="sm:col-span-2">
+            <p className="text-xs text-muted-foreground">Remarks</p>
+            <p>{lease.remarks}</p>
+          </div>
+        )}
       </div>
 
       <div className="space-y-2">
-        <h2 className="text-lg font-medium">Payment schedule</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-medium">Payment schedule</h2>
+          {canCreate && pendingScheduleCount > 0 && (
+            <GenerateAllInvoicesButton leaseId={lease.id} country="uae" pendingCount={pendingScheduleCount} />
+          )}
+        </div>
         <Table>
           <TableHeader>
             <TableRow>

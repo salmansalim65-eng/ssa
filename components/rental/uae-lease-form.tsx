@@ -70,6 +70,8 @@ export function UaeLeaseForm({
       rentCycle: "monthly",
       securityDeposit: 0,
       currencyId: currencies[0]?.id ?? "",
+      dueDate: "",
+      rentMonth: "",
     },
   });
 
@@ -216,6 +218,32 @@ export function UaeLeaseForm({
               <FormLabel>Security deposit</FormLabel>
               <FormControl>
                 <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="dueDate"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Due date (optional)</FormLabel>
+              <FormControl>
+                <Input type="date" {...field} value={(field.value as string) ?? ""} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="rentMonth"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Rent month (optional)</FormLabel>
+              <FormControl>
+                <Input placeholder="e.g. Aug-2026" {...field} value={(field.value as string) ?? ""} />
               </FormControl>
               <FormMessage />
             </FormItem>

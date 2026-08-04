@@ -3,32 +3,45 @@
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-import { AssetForm } from "@/components/assets/asset-form";
+import { AssetForm, type CostCenterOption, type CurrencyOption } from "@/components/assets/asset-form";
 import { createAsset } from "@/features/assets/actions";
 import type { AssetInput } from "@/features/assets/schemas";
 
 const emptyValues: AssetInput = {
-  assetCode: "",
   assetName: "",
   propertyType: "",
   country: "PK",
   city: "",
   area: "",
+  areaSqft: 0,
   address: "",
   purchaseDate: "",
   purchaseValue: 0,
   currentValue: 0,
+  currencyId: "",
+  serviceChargesRate: 0,
+  titleDeedValue: 0,
+  estimatedRent: 0,
   status: "active",
   owner: "",
+  groupCostCenterId: "",
   notes: "",
 };
 
-export function NewAssetForm() {
+export function NewAssetForm({
+  currencies,
+  costCenters,
+}: {
+  currencies: CurrencyOption[];
+  costCenters: CostCenterOption[];
+}) {
   const router = useRouter();
 
   return (
     <AssetForm
       defaultValues={emptyValues}
+      currencies={currencies}
+      costCenters={costCenters}
       submitLabel="Create asset"
       onSubmit={async (values) => {
         const result = await createAsset(values);

@@ -17,7 +17,6 @@ import type { CostCenterInput } from "@/features/accounting/cost-centers/schemas
 import { CostCenterForm } from "./cost-center-form";
 
 const emptyValues: CostCenterInput = {
-  code: "",
   name: "",
   country: "",
   city: "",

@@ -16,18 +16,23 @@ async function getCurrentCompanyId() {
 
 function toRow(input: AssetInput) {
   return {
-    asset_code: input.assetCode,
     asset_name: input.assetName,
     property_type: input.propertyType,
     country: input.country,
     city: input.city || null,
     area: input.area || null,
+    area_sqft: input.areaSqft,
     address: input.address || null,
     purchase_date: input.purchaseDate || null,
     purchase_value: input.purchaseValue,
     current_value: input.currentValue,
+    currency_id: input.currencyId || null,
+    service_charges_rate: input.serviceChargesRate,
+    title_deed_value: input.titleDeedValue,
+    estimated_rent: input.estimatedRent,
     status: input.status,
     owner: input.owner || null,
+    group_cost_center_id: input.groupCostCenterId || null,
     notes: input.notes || null,
   };
 }
@@ -41,10 +46,18 @@ export async function createAsset(input: AssetInput) {
   const supabase = await createClient();
   const { data: user } = await supabase.auth.getUser();
 
+  const { data: assetCode, error: codeError } = await supabase.schema("core").rpc("fn_next_master_code", {
+    p_company_id: companyId,
+    p_module_key: "assets",
+    p_default_prefix: "AST",
+    p_default_padding: 6,
+  });
+  if (codeError || !assetCode) return { error: codeError?.message ?? "Failed to generate asset code" };
+
   const { data: asset, error } = await supabase
     .schema("assets")
     .from("assets")
-    .insert({ ...toRow(parsed.data), company_id: companyId, created_by: user.user!.id })
+    .insert({ ...toRow(parsed.data), asset_code: assetCode, company_id: companyId, created_by: user.user!.id })
     .select("id")
     .single();
 

@@ -87,7 +87,6 @@ export default async function CostCentersPage() {
                   canEdit={canEdit}
                   canDelete={canDelete}
                   defaultValues={{
-                    code: cc.code,
                     name: cc.name,
                     country: cc.country ?? "",
                     city: cc.city ?? "",

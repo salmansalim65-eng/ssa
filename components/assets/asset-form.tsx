@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -23,12 +24,27 @@ import {
 } from "@/components/ui/select";
 import { assetSchema, type AssetFormValues, type AssetInput } from "@/features/assets/schemas";
 
+export interface CurrencyOption {
+  id: string;
+  code: string;
+}
+
+export interface CostCenterOption {
+  id: string;
+  code: string;
+  name: string;
+}
+
 export function AssetForm({
   defaultValues,
+  currencies,
+  costCenters,
   onSubmit,
   submitLabel,
 }: {
   defaultValues: AssetInput;
+  currencies: CurrencyOption[];
+  costCenters: CostCenterOption[];
   onSubmit: (values: AssetInput) => Promise<{ error?: string } | undefined>;
   submitLabel: string;
 }) {
@@ -51,19 +67,6 @@ export function AssetForm({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)} className="grid max-w-3xl gap-4 sm:grid-cols-2">
-        <FormField
-          control={form.control}
-          name="assetCode"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Asset code</FormLabel>
-              <FormControl>
-                <Input {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
         <FormField
           control={form.control}
           name="assetName"
@@ -132,6 +135,19 @@ export function AssetForm({
               <FormLabel>Area</FormLabel>
               <FormControl>
                 <Input {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="areaSqft"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Area (Sq. Ft)</FormLabel>
+              <FormControl>
+                <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -220,6 +236,105 @@ export function AssetForm({
               <FormControl>
                 <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
               </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="currencyId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Currency</FormLabel>
+              <Select
+                onValueChange={(value) => field.onChange(value === "none" ? "" : value)}
+                defaultValue={field.value || "none"}
+              >
+                <FormControl>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="none">Not set</SelectItem>
+                  {currencies.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.code}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="titleDeedValue"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Title deed value</FormLabel>
+              <FormControl>
+                <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="serviceChargesRate"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Service charges rate</FormLabel>
+              <FormControl>
+                <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="estimatedRent"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Estimated rent</FormLabel>
+              <FormControl>
+                <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="groupCostCenterId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Cost center</FormLabel>
+              <Select
+                onValueChange={(value) => field.onChange(value === "none" ? "" : value)}
+                defaultValue={field.value || "none"}
+              >
+                <FormControl>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {costCenters.map((cc) => (
+                    <SelectItem key={cc.id} value={cc.id}>
+                      {cc.code} — {cc.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormDescription>
+                Optional link to another cost center (e.g. a shared building or overhead center) for
+                grouping/allocation — separate from this asset&apos;s own dedicated cost center.
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}

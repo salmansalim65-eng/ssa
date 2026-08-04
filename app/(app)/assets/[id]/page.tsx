@@ -43,6 +43,33 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
     .eq("asset_id", id)
     .maybeSingle();
 
+  const [{ data: companyCurrencies }, { data: allCostCenters }] = await Promise.all([
+    supabase
+      .schema("core")
+      .from("company_currencies")
+      .select("currencies:currency_id(id, code)")
+      .eq("company_id", companyId)
+      .eq("is_active", true),
+    supabase
+      .schema("accounting")
+      .from("cost_centers")
+      .select("id, code, name, asset_id")
+      .eq("company_id", companyId)
+      .is("deleted_at", null)
+      .order("code"),
+  ]);
+
+  type RawCompanyCurrency = { currencies: { id: string; code: string } | null };
+  const currencyOptions = ((companyCurrencies as unknown as RawCompanyCurrency[]) ?? [])
+    .filter((cc) => cc.currencies)
+    .map((cc) => ({ id: cc.currencies!.id, code: cc.currencies!.code }));
+
+  // Exclude this asset's own auto-created 1:1 cost center from the
+  // group-cost-center picker — linking it to itself would be meaningless.
+  const costCenterOptions = (allCostCenters ?? [])
+    .filter((cc) => cc.asset_id !== id)
+    .map((cc) => ({ id: cc.id, code: cc.code, name: cc.name }));
+
   const { data: images } = await supabase
     .schema("assets")
     .from("asset_images")
@@ -86,18 +113,23 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
   }));
 
   const defaultValues: AssetInput = {
-    assetCode: asset.asset_code,
     assetName: asset.asset_name,
     propertyType: asset.property_type,
     country: asset.country,
     city: asset.city ?? "",
     area: asset.area ?? "",
+    areaSqft: asset.area_sqft ?? 0,
     address: asset.address ?? "",
     purchaseDate: asset.purchase_date ?? "",
     purchaseValue: asset.purchase_value ?? 0,
     currentValue: asset.current_value ?? 0,
+    currencyId: asset.currency_id ?? "",
+    serviceChargesRate: asset.service_charges_rate ?? 0,
+    titleDeedValue: asset.title_deed_value ?? 0,
+    estimatedRent: asset.estimated_rent ?? 0,
     status: asset.status,
     owner: asset.owner ?? "",
+    groupCostCenterId: asset.group_cost_center_id ?? "",
     notes: asset.notes ?? "",
   };
 
@@ -129,7 +161,12 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
           <CardTitle>Details</CardTitle>
         </CardHeader>
         <CardContent>
-          <EditAssetForm assetId={asset.id} defaultValues={defaultValues} />
+          <EditAssetForm
+            assetId={asset.id}
+            defaultValues={defaultValues}
+            currencies={currencyOptions}
+            costCenters={costCenterOptions}
+          />
         </CardContent>
       </Card>
 

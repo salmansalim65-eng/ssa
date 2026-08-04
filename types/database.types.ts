@@ -316,6 +316,15 @@ export interface Database {
         Args: { p_company_id: string; p_voucher_type: VoucherType };
         Returns: string;
       };
+      fn_next_master_code: {
+        Args: {
+          p_company_id: string;
+          p_module_key: string;
+          p_default_prefix: string;
+          p_default_padding?: number;
+        };
+        Returns: string;
+      };
       fn_upsert_exchange_rate: {
         Args: {
           p_company_id: string;
@@ -838,12 +847,18 @@ export interface Database {
           country: "PK" | "AE";
           city: string | null;
           area: string | null;
+          area_sqft: number | null;
           address: string | null;
           purchase_date: string | null;
           purchase_value: number | null;
           current_value: number | null;
+          currency_id: string | null;
+          service_charges_rate: number | null;
+          title_deed_value: number | null;
+          estimated_rent: number | null;
           status: "active" | "sold" | "inactive";
           owner: string | null;
+          group_cost_center_id: string | null;
           title_deed_attachment_id: string | null;
           notes: string | null;
           created_by: string;

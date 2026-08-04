@@ -10,8 +10,8 @@
    supabase db push
    ```
    This applies `supabase/migrations/0001_foundation.sql` through
-   `0018_grant_auth_admin_user_companies.sql` in filename order. There is no
-   seed data — the first signed-up user creates their own company via the
+   `0020_master_auto_codes_and_asset_fields.sql` in filename order. There is
+   no seed data — the first signed-up user creates their own company via the
    onboarding screen (`core.fn_bootstrap_company`).
 
    **`0016`–`0018` (the schema/auth-hook grant migrations) are not

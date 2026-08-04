@@ -133,6 +133,22 @@ this closes the dependency chain — re-verified with
 `has_table_privilege('supabase_auth_admin', 'core.user_companies', 'SELECT')`
 → `true`.
 
+## Addendum: `core.fn_next_master_code` (auto-generated master codes)
+
+Added when Asset and Cost Center codes moved from manual entry to
+server-assigned auto-numbering. Mirrors `core.fn_next_document_number`'s
+existing threat model exactly: it's `SECURITY DEFINER` (so it can write to
+`core.document_sequences` regardless of the caller's own table grants) and
+reachable directly via `POST /rest/v1/rpc/fn_next_master_code`, bypassing
+the app layer's own `requirePermission()` call entirely. Re-asserts both
+checks the app layer already made before calling it:
+`core.current_company_id() = p_company_id` and
+`core.user_has_permission(p_module_key, 'create')` — the latter works
+because `p_module_key` is deliberately the same string as the permission
+module_key (`'assets'`, `'cost_centers'`), so a direct RPC call still can't
+consume a company's sequence number, or another module's, without holding
+that module's `create` permission.
+
 ## Fixed
 
 ### 1. Four `SECURITY DEFINER` functions trusted a caller-supplied `p_company_id`

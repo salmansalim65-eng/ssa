@@ -15,7 +15,6 @@ async function getCurrentCompanyId() {
 
 function toRow(input: CostCenterInput) {
   return {
-    code: input.code,
     name: input.name,
     country: input.country || null,
     city: input.city || null,
@@ -39,10 +38,18 @@ export async function createCostCenter(input: CostCenterInput) {
   const supabase = await createClient();
   const { data: user } = await supabase.auth.getUser();
 
+  const { data: code, error: codeError } = await supabase.schema("core").rpc("fn_next_master_code", {
+    p_company_id: companyId,
+    p_module_key: "cost_centers",
+    p_default_prefix: "CC",
+    p_default_padding: 6,
+  });
+  if (codeError || !code) return { error: codeError?.message ?? "Failed to generate cost center code" };
+
   const { error } = await supabase
     .schema("accounting")
     .from("cost_centers")
-    .insert({ ...toRow(parsed.data), company_id: companyId, created_by: user.user!.id });
+    .insert({ ...toRow(parsed.data), code, company_id: companyId, created_by: user.user!.id });
 
   if (error) return { error: error.message };
 

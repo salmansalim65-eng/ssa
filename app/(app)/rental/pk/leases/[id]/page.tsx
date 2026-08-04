@@ -11,6 +11,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { GeneratePkInvoiceDialog } from "@/components/rental/generate-pk-invoice-dialog";
+import { GenerateAllInvoicesButton } from "@/components/rental/generate-all-invoices-button";
+import { LeaseDeleteButton } from "@/components/rental/lease-delete-button";
 import { PkLeaseStatusMenu } from "@/components/rental/pk-lease-status-menu";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { hasPermission } from "@/lib/auth/permissions";
@@ -45,6 +47,8 @@ export default async function PkLeaseDetailPage({ params }: { params: Promise<{ 
   ]);
 
   if (!lease) notFound();
+
+  const canDelete = await hasPermission("pk_rent_invoice", "delete");
 
   const [assetsById, currenciesById] = await Promise.all([
     fetchRefs<{ id: string; asset_code: string; asset_name: string }>(
@@ -102,6 +106,7 @@ export default async function PkLeaseDetailPage({ params }: { params: Promise<{ 
   );
   const advanceAlreadyAdjusted = invoiceRows.reduce((sum, inv) => sum + inv.advance_adjusted, 0);
   const remainingAdvance = Math.max(lease.advance_rent - advanceAlreadyAdjusted, 0);
+  const pendingScheduleCount = (schedules ?? []).filter((s) => s.status === "pending").length;
 
   return (
     <div className="space-y-6">
@@ -115,6 +120,7 @@ export default async function PkLeaseDetailPage({ params }: { params: Promise<{ 
         <div className="flex items-center gap-2">
           <Badge variant={leaseStatusVariant[lease.status as keyof typeof leaseStatusVariant]}>{lease.status}</Badge>
           {canCreate && <PkLeaseStatusMenu leaseId={lease.id} status={lease.status} />}
+          {canDelete && <LeaseDeleteButton leaseId={lease.id} country="pk" />}
         </div>
       </div>
 
@@ -151,10 +157,23 @@ export default async function PkLeaseDetailPage({ params }: { params: Promise<{ 
             {lease.security_deposit.toLocaleString()} {refs.currencies?.code}
           </p>
         </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Due date</p>
+          <p>{lease.due_date ?? "—"}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Rent month</p>
+          <p>{lease.rent_month ?? "—"}</p>
+        </div>
       </div>
 
       <div className="space-y-2">
-        <h2 className="text-lg font-medium">Payment schedule</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-medium">Payment schedule</h2>
+          {canCreate && pendingScheduleCount > 0 && (
+            <GenerateAllInvoicesButton leaseId={lease.id} country="pk" pendingCount={pendingScheduleCount} />
+          )}
+        </div>
         <Table>
           <TableHeader>
             <TableRow>

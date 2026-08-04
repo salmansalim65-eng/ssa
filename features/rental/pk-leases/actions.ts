@@ -35,6 +35,8 @@ export async function createPkLease(input: PkLeaseInput) {
       advance_rent: parsed.data.advanceRent,
       security_deposit: parsed.data.securityDeposit,
       currency_id: parsed.data.currencyId,
+      due_date: parsed.data.dueDate || null,
+      rent_month: parsed.data.rentMonth || null,
       created_by: user.user!.id,
     })
     .select("id")
@@ -53,5 +55,23 @@ export async function setPkLeaseStatus(leaseId: string, status: "active" | "expi
   if (error) return { error: error.message };
 
   revalidatePath(`/rental/pk/leases/${leaseId}`);
+  return { success: true };
+}
+
+export async function deletePkLease(leaseId: string) {
+  await requirePermission("pk_rent_invoice", "delete");
+  const supabase = await createClient();
+  const { data: user } = await supabase.auth.getUser();
+
+  // Soft delete — business data is never hard-deleted (see docs/01-architecture).
+  const { error } = await supabase
+    .schema("rental")
+    .from("pk_leases")
+    .update({ deleted_at: new Date().toISOString(), deleted_by: user.user!.id })
+    .eq("id", leaseId)
+    .is("deleted_at", null);
+  if (error) return { error: error.message };
+
+  revalidatePath("/rental/pk/leases");
   return { success: true };
 }

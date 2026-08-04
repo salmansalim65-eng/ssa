@@ -98,6 +98,40 @@ export async function generateUaeRentInvoice(scheduleId: string) {
   return { success: true, id: invoiceId };
 }
 
+export async function generateAllUaeRentInvoices(leaseId: string) {
+  await requirePermission("uae_rent_invoice", "create");
+  const supabase = await createClient();
+
+  const { data: schedules, error } = await supabase
+    .schema("rental")
+    .from("uae_payment_schedules")
+    .select("id")
+    .eq("lease_id", leaseId)
+    .eq("status", "pending")
+    .order("due_date");
+  if (error) return { error: error.message };
+
+  const pending = schedules ?? [];
+  if (pending.length === 0) return { error: "No pending periods left to invoice." };
+
+  let generated = 0;
+  let firstError: string | undefined;
+  for (const s of pending) {
+    const result = await generateUaeRentInvoice(s.id);
+    if ("error" in result) {
+      // A failure here (e.g. missing posting template) applies to every
+      // remaining period too, so stop rather than repeat the same error.
+      firstError = result.error;
+      break;
+    }
+    generated += 1;
+  }
+
+  revalidatePath(`/rental/uae/leases/${leaseId}`);
+  if (generated === 0 && firstError) return { error: firstError };
+  return { success: true, generated, error: firstError };
+}
+
 export async function postUaeRentInvoice(id: string, journalEntryId: string) {
   await requirePermission("uae_rent_invoice", "post");
   const companyId = await getCurrentCompanyId();

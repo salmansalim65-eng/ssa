@@ -134,6 +134,40 @@ export async function generatePkRentInvoice(scheduleId: string, input: GenerateP
   return { success: true, id: invoiceId };
 }
 
+export async function generateAllPkRentInvoices(leaseId: string) {
+  await requirePermission("pk_rent_invoice", "create");
+  const supabase = await createClient();
+
+  const { data: schedules, error } = await supabase
+    .schema("rental")
+    .from("pk_payment_schedules")
+    .select("id")
+    .eq("lease_id", leaseId)
+    .eq("status", "pending")
+    .order("due_date");
+  if (error) return { error: error.message };
+
+  const pending = schedules ?? [];
+  if (pending.length === 0) return { error: "No pending periods left to invoice." };
+
+  let generated = 0;
+  let firstError: string | undefined;
+  for (const s of pending) {
+    // Plain rent invoices — no utility charges or advance adjustment; those
+    // stay available one-by-one via the per-period dialog.
+    const result = await generatePkRentInvoice(s.id, { utilityCharges: [], advanceAdjusted: 0, scheduleId: s.id });
+    if ("error" in result) {
+      firstError = result.error;
+      break;
+    }
+    generated += 1;
+  }
+
+  revalidatePath(`/rental/pk/leases/${leaseId}`);
+  if (generated === 0 && firstError) return { error: firstError };
+  return { success: true, generated, error: firstError };
+}
+
 export async function postPkRentInvoice(id: string, journalEntryId: string) {
   await requirePermission("pk_rent_invoice", "post");
   const companyId = await getCurrentCompanyId();

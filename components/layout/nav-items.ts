@@ -67,6 +67,7 @@ export const navSections: NavSection[] = [
     items: [
       { label: "Tenants", href: "/rental/tenants", icon: ContactIcon },
       { label: "UAE Leases", href: "/rental/uae/leases", icon: KeyRoundIcon },
+      { label: "HH Lease", href: "/rental/uae/hh-lease", icon: KeyRoundIcon },
       { label: "UAE Rent Invoices", href: "/rental/uae/invoices", icon: ReceiptIcon },
       { label: "Pakistan Leases", href: "/rental/pk/leases", icon: KeyRoundIcon },
       { label: "Pakistan Rent Invoices", href: "/rental/pk/invoices", icon: ReceiptIcon },

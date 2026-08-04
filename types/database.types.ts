@@ -1034,6 +1034,11 @@ export interface Database {
           security_deposit: number;
           currency_id: string;
           status: "active" | "expired" | "terminated";
+          due_date: string | null;
+          rent_month: string | null;
+          remarks: string | null;
+          document_no: string | null;
+          document_date: string | null;
           created_by: string;
           created_at: string;
           updated_by: string | null;
@@ -1136,6 +1141,8 @@ export interface Database {
           security_deposit: number;
           currency_id: string;
           status: "active" | "expired" | "terminated";
+          due_date: string | null;
+          rent_month: string | null;
           created_by: string;
           created_at: string;
           updated_by: string | null;
@@ -1240,7 +1247,12 @@ export interface Database {
         Update: Partial<Database["rental"]["Tables"]["pk_rent_payments"]["Row"]>;
       };
     };
-    Functions: Record<string, never>;
+    Functions: {
+      fn_next_hh_lease_no: {
+        Args: { p_company_id: string };
+        Returns: string;
+      };
+    };
   };
   audit: {
     Tables: {

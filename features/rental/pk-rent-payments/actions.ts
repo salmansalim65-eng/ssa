@@ -38,12 +38,23 @@ export async function recordPkRentPayment(invoiceId: string, input: RecordPkPaym
   const { data: invoice, error: invoiceError } = await supabase
     .schema("rental")
     .from("pk_rent_invoices")
-    .select("currency_id, outstanding_amount, journal_entries:journal_entry_id(status)")
+    .select("currency_id, outstanding_amount, journal_entry_id")
     .eq("id", invoiceId)
     .single();
   if (invoiceError || !invoice) return { error: "Invoice not found" };
 
-  const status = (invoice.journal_entries as unknown as { status: string } | null)?.status;
+  // journal_entries live in the `accounting` schema, which PostgREST cannot
+  // embed across from `rental`; look the status up directly instead.
+  let status: string | undefined;
+  if (invoice.journal_entry_id) {
+    const { data: je } = await supabase
+      .schema("accounting")
+      .from("journal_entries")
+      .select("status")
+      .eq("id", invoice.journal_entry_id)
+      .maybeSingle();
+    status = (je as { status: string } | null)?.status;
+  }
   if (status !== "posted") return { error: "Invoice must be posted before recording a payment" };
   if (parsed.data.amount > invoice.outstanding_amount) {
     return { error: `Payment exceeds outstanding amount of ${invoice.outstanding_amount}` };

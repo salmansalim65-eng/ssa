@@ -14,6 +14,7 @@ import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { postUaeRentInvoice } from "@/features/rental/uae-rent-invoices/actions";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { fetchRefs } from "@/lib/supabase/hydrate";
 import { getVoucherApproval } from "@/lib/vouchers/engine";
 import type { JournalEntryStatus } from "@/types/database.types";
 
@@ -28,9 +29,10 @@ export default async function UaeRentInvoiceDetailPage({ params }: { params: Pro
     supabase
       .schema("rental")
       .from("uae_rent_invoices")
-      .select(
-        "*, uae_leases:lease_id(assets:asset_id(asset_code, asset_name), tenants:tenant_id(name)), currencies:currency_id(code), journal_entries:journal_entry_id(status)",
-      )
+      // `uae_leases:lease_id` and its nested `tenants:tenant_id` are same-schema
+      // (rental) embeds; the asset (assets), currency (core) and journal entry
+      // (accounting) are cross-schema and are hydrated separately below.
+      .select("*, uae_leases:lease_id(asset_id, tenants:tenant_id(name))")
       .eq("company_id", companyId)
       .eq("id", id)
       .maybeSingle(),
@@ -51,7 +53,30 @@ export default async function UaeRentInvoiceDetailPage({ params }: { params: Pro
     currencies: { code: string } | null;
     journal_entries: { status: JournalEntryStatus } | null;
   };
-  const refs = invoice as unknown as Refs;
+  const lease = (invoice as unknown as {
+    uae_leases: { asset_id: string | null; tenants: { name: string } | null } | null;
+  }).uae_leases;
+
+  const [assetsById, currenciesById, journalEntriesById] = await Promise.all([
+    fetchRefs<{ id: string; asset_code: string; asset_name: string }>(
+      supabase, "assets", "assets", "asset_code, asset_name", [lease?.asset_id],
+    ),
+    fetchRefs<{ id: string; code: string }>(supabase, "core", "currencies", "code", [invoice.currency_id]),
+    fetchRefs<{ id: string; status: JournalEntryStatus }>(
+      supabase, "accounting", "journal_entries", "status", [invoice.journal_entry_id],
+    ),
+  ]);
+
+  const refs: Refs = {
+    uae_leases: lease
+      ? {
+          assets: lease.asset_id ? assetsById.get(lease.asset_id) ?? null : null,
+          tenants: lease.tenants,
+        }
+      : null,
+    currencies: currenciesById.get(invoice.currency_id) ?? null,
+    journal_entries: invoice.journal_entry_id ? journalEntriesById.get(invoice.journal_entry_id) ?? null : null,
+  };
   const status = refs.journal_entries?.status ?? "draft";
 
   const approval = await getVoucherApproval("uae_rent_invoice", id);
@@ -60,7 +85,7 @@ export default async function UaeRentInvoiceDetailPage({ params }: { params: Pro
     supabase
       .schema("rental")
       .from("uae_rent_payments")
-      .select("id, payment_date, amount, chart_of_accounts:cash_bank_account_id(account_code, account_name)")
+      .select("id, payment_date, amount, cash_bank_account_id")
       .eq("invoice_id", id)
       .order("payment_date", { ascending: false }),
     supabase
@@ -74,12 +99,12 @@ export default async function UaeRentInvoiceDetailPage({ params }: { params: Pro
       .order("account_code"),
   ]);
 
-  type PaymentRow = {
-    id: string;
-    payment_date: string;
-    amount: number;
-    chart_of_accounts: { account_code: string; account_name: string } | null;
-  };
+  type PaymentRaw = { id: string; payment_date: string; amount: number; cash_bank_account_id: string | null };
+  const paymentRows = (payments as unknown as PaymentRaw[]) ?? [];
+  const paymentAccountsById = await fetchRefs<{ id: string; account_code: string; account_name: string }>(
+    supabase, "accounting", "chart_of_accounts", "account_code, account_name",
+    paymentRows.map((p) => p.cash_bank_account_id),
+  );
 
   return (
     <div className="space-y-6">
@@ -153,16 +178,17 @@ export default async function UaeRentInvoiceDetailPage({ params }: { params: Pro
             </TableRow>
           </TableHeader>
           <TableBody>
-            {((payments as unknown as PaymentRow[]) ?? []).map((p) => (
-              <TableRow key={p.id}>
-                <TableCell>{p.payment_date}</TableCell>
-                <TableCell>
-                  {p.chart_of_accounts ? `${p.chart_of_accounts.account_code} — ${p.chart_of_accounts.account_name}` : "—"}
-                </TableCell>
-                <TableCell className="text-right">{p.amount.toLocaleString()}</TableCell>
-              </TableRow>
-            ))}
-            {((payments as unknown as PaymentRow[]) ?? []).length === 0 && (
+            {paymentRows.map((p) => {
+              const acct = p.cash_bank_account_id ? paymentAccountsById.get(p.cash_bank_account_id) ?? null : null;
+              return (
+                <TableRow key={p.id}>
+                  <TableCell>{p.payment_date}</TableCell>
+                  <TableCell>{acct ? `${acct.account_code} — ${acct.account_name}` : "—"}</TableCell>
+                  <TableCell className="text-right">{p.amount.toLocaleString()}</TableCell>
+                </TableRow>
+              );
+            })}
+            {paymentRows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={3} className="text-center text-muted-foreground">
                   No payments recorded yet.

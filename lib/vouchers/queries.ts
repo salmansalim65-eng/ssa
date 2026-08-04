@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { fetchRefs } from "@/lib/supabase/hydrate";
 import type { JournalEntryStatus } from "@/types/database.types";
 import type { Phase5VoucherType } from "./meta";
 
@@ -195,9 +196,17 @@ async function getJournalEntryWithLines(journalEntryId: string) {
   const { data: je } = await supabase
     .schema("accounting")
     .from("journal_entries")
-    .select("id, status, narration, currencies:currency_id(code)")
+    .select("id, status, narration, currency_id")
     .eq("id", journalEntryId)
     .single();
+
+  const currenciesById = await fetchRefs<{ id: string; code: string }>(
+    supabase,
+    "core",
+    "currencies",
+    "code",
+    [je?.currency_id],
+  );
 
   const { data: lines } = await supabase
     .schema("accounting")
@@ -211,7 +220,7 @@ async function getJournalEntryWithLines(journalEntryId: string) {
   return {
     status: (je?.status ?? "draft") as JournalEntryStatus,
     narration: je?.narration ?? null,
-    currencyCode: (je?.currencies as unknown as { code: string } | null)?.code ?? "",
+    currencyCode: (je?.currency_id ? currenciesById.get(je.currency_id)?.code : undefined) ?? "",
     lines: (lines ?? []).map((l) => {
       const account = l.chart_of_accounts as unknown as { account_code: string; account_name: string } | null;
       const costCenter = l.cost_centers as unknown as { name: string } | null;

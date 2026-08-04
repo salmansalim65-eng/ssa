@@ -10,6 +10,7 @@ import { ValuationHistory, type ValuationRow } from "@/components/assets/valuati
 import { getSignedUrl } from "@/features/attachments/actions";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { fetchRefs } from "@/lib/supabase/hydrate";
 import type { AssetInput } from "@/features/assets/schemas";
 import { EditAssetForm } from "./edit-asset-form";
 
@@ -24,7 +25,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
     supabase
       .schema("assets")
       .from("assets")
-      .select("*, title_deed:title_deed_attachment_id(id, file_name, path, bucket)")
+      .select("*")
       .eq("company_id", companyId)
       .eq("id", id)
       .maybeSingle(),
@@ -73,28 +74,41 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
   const { data: images } = await supabase
     .schema("assets")
     .from("asset_images")
-    .select("id, is_primary, attachments:attachment_id(id, file_name, path, bucket)")
+    .select("id, is_primary, attachment_id")
     .eq("asset_id", id);
 
-  type RawImage = {
-    id: string;
-    is_primary: boolean;
-    attachments: { id: string; file_name: string; path: string; bucket: string } | null;
-  };
+  type RawImage = { id: string; is_primary: boolean; attachment_id: string | null };
+  const imageRows = (images as unknown as RawImage[]) ?? [];
 
-  const imageItems: AssetImageItem[] = await Promise.all(
-    ((images as unknown as RawImage[]) ?? [])
-      .filter((img) => img.attachments)
-      .map(async (img) => ({
-        id: img.id,
-        attachmentId: img.attachments!.id,
-        fileName: img.attachments!.file_name,
-        isPrimary: img.is_primary,
-        url: await getSignedUrl(img.attachments!.bucket, img.attachments!.path),
-      })),
+  // attachments live in the `core` schema (cross-schema from assets); hydrate
+  // the title deed and every image attachment in one batched lookup.
+  const attachmentsById = await fetchRefs<{ id: string; file_name: string; path: string; bucket: string }>(
+    supabase,
+    "core",
+    "attachments",
+    "file_name, path, bucket",
+    [asset.title_deed_attachment_id, ...imageRows.map((img) => img.attachment_id)],
   );
 
-  const titleDeed = asset.title_deed as unknown as { id: string; file_name: string; path: string; bucket: string } | null;
+  const imageItems: AssetImageItem[] = (
+    await Promise.all(
+      imageRows.map(async (img) => {
+        const att = img.attachment_id ? attachmentsById.get(img.attachment_id) ?? null : null;
+        if (!att) return null;
+        return {
+          id: img.id,
+          attachmentId: att.id,
+          fileName: att.file_name,
+          isPrimary: img.is_primary,
+          url: await getSignedUrl(att.bucket, att.path),
+        };
+      }),
+    )
+  ).filter((x): x is AssetImageItem => x !== null);
+
+  const titleDeed = asset.title_deed_attachment_id
+    ? attachmentsById.get(asset.title_deed_attachment_id) ?? null
+    : null;
   const titleDeedUrl = titleDeed ? await getSignedUrl(titleDeed.bucket, titleDeed.path) : null;
 
   const { data: valuations } = await supabase

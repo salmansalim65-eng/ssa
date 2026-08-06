@@ -34,7 +34,13 @@ import { copyAccountingVoucher, deleteAccountingVoucher } from "@/features/accou
 import { PdcStatusActions } from "./pdc-status-actions";
 
 // Voucher types whose draft can be re-opened in its form (see the /edit route).
-const EDITABLE_VOUCHER_TYPES = ["receipt_voucher", "payment_voucher"] as const;
+const EDITABLE_VOUCHER_TYPES = [
+  "receipt_voucher",
+  "payment_voucher",
+  "pdc_payment_voucher",
+  "pdc_receipt_voucher",
+  "opening_balance_voucher",
+] as const;
 
 const POST_ACTIONS = {
   receipt_voucher: postReceiptVoucher,

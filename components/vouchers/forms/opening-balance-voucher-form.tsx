@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/form";
 import { AccountSelect, type AccountOption } from "@/components/vouchers/account-select";
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
-import { createOpeningBalanceVoucher } from "@/features/accounting/vouchers/opening-balance/actions";
+import { createOpeningBalanceVoucher, updateOpeningBalanceVoucher } from "@/features/accounting/vouchers/opening-balance/actions";
 import {
   openingBalanceVoucherSchema,
   type OpeningBalanceVoucherFormValues,
@@ -32,17 +32,22 @@ function today() {
 export function OpeningBalanceVoucherForm({
   accounts,
   currencies,
+  voucherId,
+  initialValues,
 }: {
   accounts: AccountOption[];
   currencies: CurrencyOption[];
+  voucherId?: string;
+  initialValues?: OpeningBalanceVoucherFormValues;
 }) {
   const router = useRouter();
+  const isEdit = !!voucherId;
   const [isPending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
 
   const form = useForm<OpeningBalanceVoucherFormValues, unknown, OpeningBalanceVoucherInput>({
     resolver: zodResolver(openingBalanceVoucherSchema),
-    defaultValues: {
+    defaultValues: initialValues ?? {
       asOfDate: today(),
       accountId: "",
       contraAccountId: "",
@@ -55,13 +60,15 @@ export function OpeningBalanceVoucherForm({
   function onSubmit(values: OpeningBalanceVoucherInput) {
     setFormError(null);
     startTransition(async () => {
-      const result = await createOpeningBalanceVoucher(values);
+      const result = isEdit
+        ? await updateOpeningBalanceVoucher(voucherId!, values)
+        : await createOpeningBalanceVoucher(values);
       if (result?.error) {
         setFormError(result.error);
         return;
       }
-      toast.success("Opening balance voucher created");
-      router.push(`/accounting/vouchers/opening_balance_voucher/${result.id}`);
+      toast.success(isEdit ? "Opening balance voucher updated" : "Opening balance voucher created");
+      router.push(`/accounting/vouchers/opening_balance_voucher/${isEdit ? voucherId : result.id}`);
     });
   }
 
@@ -142,7 +149,7 @@ export function OpeningBalanceVoucherForm({
         />
         {formError && <p className="text-sm text-destructive sm:col-span-2">{formError}</p>}
         <Button type="submit" disabled={isPending} className="sm:col-span-2 sm:w-fit">
-          {isPending ? "Creating…" : "Create opening balance voucher"}
+          {isPending ? (isEdit ? "Saving…" : "Creating…") : isEdit ? "Save changes" : "Create opening balance voucher"}
         </Button>
       </form>
     </Form>

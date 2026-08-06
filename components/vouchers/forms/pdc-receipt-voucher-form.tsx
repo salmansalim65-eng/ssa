@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/form";
 import { AccountSelect, type AccountOption } from "@/components/vouchers/account-select";
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
-import { createPdcReceiptVoucher } from "@/features/accounting/vouchers/pdc-receipt/actions";
+import { createPdcReceiptVoucher, updatePdcReceiptVoucher } from "@/features/accounting/vouchers/pdc-receipt/actions";
 import {
   pdcReceiptVoucherSchema,
   type PdcReceiptVoucherFormValues,
@@ -32,17 +32,22 @@ function today() {
 export function PdcReceiptVoucherForm({
   accounts,
   currencies,
+  voucherId,
+  initialValues,
 }: {
   accounts: AccountOption[];
   currencies: CurrencyOption[];
+  voucherId?: string;
+  initialValues?: PdcReceiptVoucherFormValues;
 }) {
   const router = useRouter();
+  const isEdit = !!voucherId;
   const [isPending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
 
   const form = useForm<PdcReceiptVoucherFormValues, unknown, PdcReceiptVoucherInput>({
     resolver: zodResolver(pdcReceiptVoucherSchema),
-    defaultValues: {
+    defaultValues: initialValues ?? {
       chequeDate: today(),
       chequeNo: "",
       payer: "",
@@ -57,13 +62,15 @@ export function PdcReceiptVoucherForm({
   function onSubmit(values: PdcReceiptVoucherInput) {
     setFormError(null);
     startTransition(async () => {
-      const result = await createPdcReceiptVoucher(values);
+      const result = isEdit
+        ? await updatePdcReceiptVoucher(voucherId!, values)
+        : await createPdcReceiptVoucher(values);
       if (result?.error) {
         setFormError(result.error);
         return;
       }
-      toast.success("Post-dated receipt voucher created");
-      router.push(`/accounting/vouchers/pdc_receipt_voucher/${result.id}`);
+      toast.success(isEdit ? "Post-dated receipt voucher updated" : "Post-dated receipt voucher created");
+      router.push(`/accounting/vouchers/pdc_receipt_voucher/${isEdit ? voucherId : result.id}`);
     });
   }
 
@@ -170,7 +177,7 @@ export function PdcReceiptVoucherForm({
         />
         {formError && <p className="text-sm text-destructive sm:col-span-2">{formError}</p>}
         <Button type="submit" disabled={isPending} className="sm:col-span-2 sm:w-fit">
-          {isPending ? "Creating…" : "Create PDC receipt voucher"}
+          {isPending ? (isEdit ? "Saving…" : "Creating…") : isEdit ? "Save changes" : "Create PDC receipt voucher"}
         </Button>
       </form>
     </Form>

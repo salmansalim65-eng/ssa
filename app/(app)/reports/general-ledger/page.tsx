@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Fragment, Suspense } from "react";
 
 import {
   Table,
@@ -33,6 +33,7 @@ const DEBIT_NORMAL: AccountType[] = ["asset", "expense"];
 interface LedgerRow {
   journal_entry_id: string;
   entry_date: string;
+  due_date: string | null;
   voucher_type: string;
   voucher_no: string | null;
   debit_amount: number;
@@ -145,7 +146,7 @@ export default async function GeneralLedgerPage({
       .schema("reporting")
       .from("v_ledger_entries")
       .select(
-        "journal_entry_id, entry_date, voucher_type, voucher_no, debit_amount, credit_amount, description, narration",
+        "journal_entry_id, entry_date, due_date, voucher_type, voucher_no, debit_amount, credit_amount, description, narration",
       )
       .eq("company_id", companyId)
       .eq("account_id", acc.id)
@@ -183,10 +184,11 @@ export default async function GeneralLedgerPage({
 
   const csvRows = sections.flatMap((s) =>
     s.rows.map((r) => [
+      r.entry_date,
+      r.due_date ?? "",
+      r.voucher_no ?? "",
       `${s.account.account_code} - ${s.account.account_name}`,
       s.currencyCode,
-      r.entry_date,
-      r.voucher_no ?? "",
       r.description || r.narration || "",
       r.debit_amount,
       r.credit_amount,
@@ -207,7 +209,7 @@ export default async function GeneralLedgerPage({
         <div className="flex gap-2">
           <CsvExportButton
             filename={`general-ledger-${from}-to-${to}.csv`}
-            headers={["Account", "Currency", "Date", "Voucher No", "Narration", "Debit", "Credit", "Balance"]}
+            headers={["Date", "Due Date", "Voucher No", "Account", "Currency", "Narration", "Debit", "Credit", "Balance"]}
             rows={csvRows}
           />
           <PrintButton />
@@ -226,33 +228,36 @@ export default async function GeneralLedgerPage({
           defaultQuery={sp.q ?? ""}
           defaultMin={sp.min ?? ""}
           defaultMax={sp.max ?? ""}
+          collapsedByDefault={selectedAccounts.length > 0}
         />
       </Suspense>
 
       {selectedAccounts.length === 0 ? (
         <p className="text-sm text-muted-foreground">Select one or more accounts to view their ledger.</p>
       ) : (
-        <div className="space-y-8">
-          {sections.map((s) => (
-            <div key={s.account.id} className="space-y-2">
-              <h2 className="text-lg font-medium">
-                {s.account.account_code} — {s.account.account_name}{" "}
-                <span className="text-sm font-normal text-muted-foreground">({s.currencyCode})</span>
-              </h2>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Voucher No</TableHead>
-                    <TableHead>Narration</TableHead>
-                    <TableHead className="text-right">Debit</TableHead>
-                    <TableHead className="text-right">Credit</TableHead>
-                    <TableHead className="text-right">Balance</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableCell colSpan={5} className="font-medium">
+        <div className="overflow-x-auto rounded-md border">
+          <Table className="min-w-[1000px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Due Date</TableHead>
+                <TableHead>Voucher No</TableHead>
+                <TableHead>Account</TableHead>
+                <TableHead>Narration</TableHead>
+                <TableHead className="text-right">Debit</TableHead>
+                <TableHead className="text-right">Credit</TableHead>
+                <TableHead className="text-right">Balance</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sections.map((s) => (
+                <Fragment key={s.account.id}>
+                  <TableRow className="bg-muted/50">
+                    <TableCell colSpan={3} className="font-medium">
+                      {s.account.account_code} — {s.account.account_name}{" "}
+                      <span className="font-normal text-muted-foreground">({s.currencyCode})</span>
+                    </TableCell>
+                    <TableCell colSpan={4} className="text-right font-medium text-muted-foreground">
                       Opening balance
                     </TableCell>
                     <TableCell className="text-right font-medium">{s.opening.toLocaleString()}</TableCell>
@@ -260,7 +265,9 @@ export default async function GeneralLedgerPage({
                   {s.rows.map((r) => (
                     <TableRow key={`${r.journal_entry_id}-${r.entry_date}-${r.voucher_no ?? ""}`}>
                       <TableCell>{r.entry_date}</TableCell>
+                      <TableCell>{r.due_date ?? "—"}</TableCell>
                       <TableCell>{r.voucher_no ?? "Draft"}</TableCell>
+                      <TableCell>{s.account.account_name}</TableCell>
                       <TableCell>{r.description || r.narration || "—"}</TableCell>
                       <TableCell className="text-right">
                         {r.debit_amount ? r.debit_amount.toLocaleString() : ""}
@@ -273,15 +280,15 @@ export default async function GeneralLedgerPage({
                   ))}
                   {s.rows.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center text-muted-foreground">
                         No transactions match the filters in this period.
                       </TableCell>
                     </TableRow>
                   )}
-                </TableBody>
-              </Table>
-            </div>
-          ))}
+                </Fragment>
+              ))}
+            </TableBody>
+          </Table>
         </div>
       )}
     </div>

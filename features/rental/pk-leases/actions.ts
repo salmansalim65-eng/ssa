@@ -48,6 +48,67 @@ export async function createPkLease(input: PkLeaseInput) {
   return { success: true, id: lease.id };
 }
 
+export async function updatePkLease(id: string, input: PkLeaseInput) {
+  const parsed = pkLeaseSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+
+  await requirePermission("pk_rent_invoice", "edit");
+  const supabase = await createClient();
+
+  // Definer applies the new terms, wipes + regenerates the payment schedule, and
+  // removes any unposted invoices; it refuses the edit if any invoice is posted.
+  const { error } = await supabase.schema("rental").rpc("fn_update_pk_lease", {
+    p_lease_id: id,
+    p_asset_id: parsed.data.assetId,
+    p_tenant_id: parsed.data.tenantId,
+    p_lease_start: parsed.data.leaseStart,
+    p_lease_end: parsed.data.leaseEnd,
+    p_monthly_rent: parsed.data.monthlyRent,
+    p_advance_rent: parsed.data.advanceRent,
+    p_security_deposit: parsed.data.securityDeposit,
+    p_currency_id: parsed.data.currencyId,
+    p_due_date: parsed.data.dueDate || null,
+    p_rent_month: parsed.data.rentMonth || null,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath("/rental/pk/leases");
+  revalidatePath(`/rental/pk/leases/${id}`);
+  return { success: true, id };
+}
+
+export async function copyPkLease(id: string) {
+  await requirePermission("pk_rent_invoice", "create");
+  const companyId = await getCurrentCompanyId();
+  const supabase = await createClient();
+
+  const { data: src } = await supabase
+    .schema("rental")
+    .from("pk_leases")
+    .select(
+      "asset_id, tenant_id, lease_start, lease_end, monthly_rent, advance_rent, security_deposit, currency_id, due_date, rent_month",
+    )
+    .eq("company_id", companyId)
+    .eq("id", id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (!src) return { error: "Lease not found" };
+
+  // A fresh lease with the same terms; its own schedule is generated on insert.
+  return createPkLease({
+    assetId: src.asset_id,
+    tenantId: src.tenant_id,
+    leaseStart: src.lease_start,
+    leaseEnd: src.lease_end,
+    monthlyRent: src.monthly_rent,
+    advanceRent: src.advance_rent,
+    securityDeposit: src.security_deposit,
+    currencyId: src.currency_id,
+    dueDate: src.due_date ?? "",
+    rentMonth: src.rent_month ?? "",
+  });
+}
+
 export async function setPkLeaseStatus(leaseId: string, status: "active" | "expired" | "terminated") {
   await requirePermission("pk_rent_invoice", "edit");
   const supabase = await createClient();

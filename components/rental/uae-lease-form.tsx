@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
-import { createUaeLease } from "@/features/rental/uae-leases/actions";
+import { createUaeLease, updateUaeLease } from "@/features/rental/uae-leases/actions";
 import {
   uaeLeaseSchema,
   type UaeLeaseFormValues,
@@ -50,18 +50,23 @@ export function UaeLeaseForm({
   assets,
   tenants,
   currencies,
+  leaseId,
+  initialValues,
 }: {
   assets: AssetOption[];
   tenants: TenantOption[];
   currencies: CurrencyOption[];
+  leaseId?: string;
+  initialValues?: UaeLeaseFormValues;
 }) {
   const router = useRouter();
+  const isEdit = !!leaseId;
   const [isPending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
 
   const form = useForm<UaeLeaseFormValues, unknown, UaeLeaseInput>({
     resolver: zodResolver(uaeLeaseSchema),
-    defaultValues: {
+    defaultValues: initialValues ?? {
       assetId: "",
       tenantId: "",
       leaseStart: today(),
@@ -78,19 +83,25 @@ export function UaeLeaseForm({
   function onSubmit(values: UaeLeaseInput) {
     setFormError(null);
     startTransition(async () => {
-      const result = await createUaeLease(values);
+      const result = isEdit ? await updateUaeLease(leaseId!, values) : await createUaeLease(values);
       if (result?.error) {
         setFormError(result.error);
         return;
       }
-      toast.success("Lease created");
-      router.push(`/rental/uae/leases/${result.id}`);
+      toast.success(isEdit ? "Lease updated" : "Lease created");
+      router.push(`/rental/uae/leases/${isEdit ? leaseId : result.id}`);
     });
   }
 
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="grid max-w-2xl gap-4 sm:grid-cols-2">
+        {isEdit && (
+          <p className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm sm:col-span-2">
+            Saving regenerates this lease&apos;s payment schedule from the new terms and removes any
+            <strong> unposted</strong> invoices. Leases with a posted invoice can&apos;t be edited.
+          </p>
+        )}
         <FormField
           control={form.control}
           name="assetId"
@@ -252,7 +263,7 @@ export function UaeLeaseForm({
 
         {formError && <p className="text-sm text-destructive sm:col-span-2">{formError}</p>}
         <Button type="submit" disabled={isPending} className="sm:col-span-2 sm:w-fit">
-          {isPending ? "Creating…" : "Create lease"}
+          {isPending ? (isEdit ? "Saving…" : "Creating…") : isEdit ? "Save changes" : "Create lease"}
         </Button>
       </form>
     </Form>

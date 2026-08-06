@@ -48,6 +48,67 @@ export async function createUaeLease(input: UaeLeaseInput) {
   return { success: true, id: lease.id };
 }
 
+export async function updateUaeLease(id: string, input: UaeLeaseInput) {
+  const parsed = uaeLeaseSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+
+  await requirePermission("uae_rent_invoice", "edit");
+  const supabase = await createClient();
+
+  // Definer applies the new terms, wipes + regenerates the payment schedule, and
+  // removes any unposted invoices; it refuses the edit if any invoice is posted.
+  const { error } = await supabase.schema("rental").rpc("fn_update_uae_lease", {
+    p_lease_id: id,
+    p_asset_id: parsed.data.assetId,
+    p_tenant_id: parsed.data.tenantId,
+    p_lease_start: parsed.data.leaseStart,
+    p_lease_end: parsed.data.leaseEnd,
+    p_rental_amount: parsed.data.rentalAmount,
+    p_rent_cycle: parsed.data.rentCycle,
+    p_security_deposit: parsed.data.securityDeposit,
+    p_currency_id: parsed.data.currencyId,
+    p_due_date: parsed.data.dueDate || null,
+    p_rent_month: parsed.data.rentMonth || null,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath("/rental/uae/leases");
+  revalidatePath(`/rental/uae/leases/${id}`);
+  return { success: true, id };
+}
+
+export async function copyUaeLease(id: string) {
+  await requirePermission("uae_rent_invoice", "create");
+  const companyId = await getCurrentCompanyId();
+  const supabase = await createClient();
+
+  const { data: src } = await supabase
+    .schema("rental")
+    .from("uae_leases")
+    .select(
+      "asset_id, tenant_id, lease_start, lease_end, rental_amount, rent_cycle, security_deposit, currency_id, due_date, rent_month",
+    )
+    .eq("company_id", companyId)
+    .eq("id", id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (!src) return { error: "Lease not found" };
+
+  // A fresh lease with the same terms; its own schedule is generated on insert.
+  return createUaeLease({
+    assetId: src.asset_id,
+    tenantId: src.tenant_id,
+    leaseStart: src.lease_start,
+    leaseEnd: src.lease_end,
+    rentalAmount: src.rental_amount,
+    rentCycle: src.rent_cycle as "monthly" | "yearly",
+    securityDeposit: src.security_deposit,
+    currencyId: src.currency_id,
+    dueDate: src.due_date ?? "",
+    rentMonth: src.rent_month ?? "",
+  });
+}
+
 export async function setUaeLeaseStatus(leaseId: string, status: "active" | "expired" | "terminated") {
   await requirePermission("uae_rent_invoice", "edit");
   const supabase = await createClient();

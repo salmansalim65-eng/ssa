@@ -766,30 +766,49 @@ export interface Database {
           company_id: string;
           journal_entry_id: string;
           voucher_no: string | null;
-          asset_id: string;
           supplier_id: string;
+          vendor_account_id: string | null;
           purchase_date: string;
           currency_id: string;
           exchange_rate: number;
-          purchase_price: number;
-          taxes: number;
-          registration_charges: number;
-          additional_expenses: number;
-          total_amount: number;
+          narration: string | null;
+          payment_terms: string | null;
+          share_percentage: number;
+          total_value: number;
           created_by: string;
           created_at: string;
         };
         Insert: Partial<Database["accounting"]["Tables"]["purchase_vouchers"]["Row"]> & {
           company_id: string;
           journal_entry_id: string;
-          asset_id: string;
           supplier_id: string;
           purchase_date: string;
           currency_id: string;
-          purchase_price: number;
           created_by: string;
         };
         Update: Partial<Database["accounting"]["Tables"]["purchase_vouchers"]["Row"]>;
+      };
+      purchase_voucher_lines: {
+        Row: {
+          id: string;
+          voucher_id: string;
+          line_no: number;
+          asset_id: string;
+          fixed_asset_account_id: string;
+          gross: number;
+          due_date: string | null;
+          installment_month: string | null;
+          remarks: string | null;
+          created_at: string;
+        };
+        Insert: Partial<Database["accounting"]["Tables"]["purchase_voucher_lines"]["Row"]> & {
+          voucher_id: string;
+          line_no: number;
+          asset_id: string;
+          fixed_asset_account_id: string;
+          gross: number;
+        };
+        Update: Partial<Database["accounting"]["Tables"]["purchase_voucher_lines"]["Row"]>;
       };
     };
     Views: {
@@ -1337,11 +1356,7 @@ export interface Database {
           asset_code: string;
           asset_name: string;
           supplier_name: string;
-          purchase_price: number;
-          taxes: number;
-          registration_charges: number;
-          additional_expenses: number;
-          total_amount: number;
+          gross: number;
           currency_code: string;
           status: JournalEntryStatus;
         };

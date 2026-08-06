@@ -31,9 +31,7 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
     supabase
       .schema("accounting")
       .from("purchase_vouchers")
-      .select(
-        "*, journal_entries:journal_entry_id(status)",
-      )
+      .select("*, journal_entries:journal_entry_id(status)")
       .eq("company_id", companyId)
       .eq("id", id)
       .maybeSingle(),
@@ -45,30 +43,52 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
 
   if (!voucher) notFound();
 
-  const [assetsById, suppliersById, currenciesById] = await Promise.all([
+  const { data: lines } = await supabase
+    .schema("accounting")
+    .from("purchase_voucher_lines")
+    .select("id, line_no, asset_id, fixed_asset_account_id, gross, due_date, installment_month, remarks")
+    .eq("voucher_id", id)
+    .order("line_no");
+
+  type LineRow = {
+    id: string;
+    line_no: number;
+    asset_id: string;
+    fixed_asset_account_id: string;
+    gross: number;
+    due_date: string | null;
+    installment_month: string | null;
+    remarks: string | null;
+  };
+  const lineRows = (lines as unknown as LineRow[]) ?? [];
+
+  const [suppliersById, currenciesById, accountsById, assetsById] = await Promise.all([
+    fetchRefs<{ id: string; name: string }>(supabase, "assets", "suppliers", "name", [voucher.supplier_id]),
+    fetchRefs<{ id: string; code: string }>(supabase, "core", "currencies", "code", [voucher.currency_id]),
+    fetchRefs<{ id: string; account_name: string }>(
+      supabase,
+      "accounting",
+      "chart_of_accounts",
+      "account_name",
+      [voucher.vendor_account_id, ...lineRows.map((l) => l.fixed_asset_account_id)],
+    ),
     fetchRefs<{ id: string; asset_code: string; asset_name: string }>(
       supabase,
       "assets",
       "assets",
       "asset_code, asset_name",
-      [voucher.asset_id],
+      lineRows.map((l) => l.asset_id),
     ),
-    fetchRefs<{ id: string; name: string }>(supabase, "assets", "suppliers", "name", [
-      voucher.supplier_id,
-    ]),
-    fetchRefs<{ id: string; code: string }>(supabase, "core", "currencies", "code", [
-      voucher.currency_id,
-    ]),
   ]);
 
-  const refs = {
-    assets: assetsById.get(voucher.asset_id) ?? null,
-    suppliers: suppliersById.get(voucher.supplier_id) ?? null,
-    currencies: currenciesById.get(voucher.currency_id) ?? null,
-    journal_entries: (voucher as unknown as {
-      journal_entries: { status: JournalEntryStatus } | null;
-    }).journal_entries,
-  };
+  const status =
+    (voucher as unknown as { journal_entries: { status: JournalEntryStatus } | null }).journal_entries?.status ??
+    "draft";
+  const supplierName = suppliersById.get(voucher.supplier_id)?.name ?? "—";
+  const currencyCode = currenciesById.get(voucher.currency_id)?.code ?? "";
+  const vendorAccount = voucher.vendor_account_id
+    ? accountsById.get(voucher.vendor_account_id)?.account_name ?? "—"
+    : "—";
 
   const approval = await getVoucherApproval("purchase_voucher", id);
 
@@ -95,65 +115,89 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
           <h1 className="text-2xl font-semibold tracking-tight">Purchase Voucher</h1>
           <p className="font-mono text-sm text-muted-foreground">{voucher.voucher_no ?? "Draft"}</p>
         </div>
-        <VoucherStatusBadge status={refs.journal_entries?.status ?? "draft"} />
+        <VoucherStatusBadge status={status} />
       </div>
 
-      <div className="grid gap-x-8 gap-y-2 rounded-md border p-4 sm:grid-cols-2">
+      <div className="grid gap-x-8 gap-y-2 rounded-md border p-4 sm:grid-cols-2 lg:grid-cols-3">
         <div>
-          <p className="text-xs text-muted-foreground">Asset</p>
-          <p>{refs.assets ? `${refs.assets.asset_code} — ${refs.assets.asset_name}` : "—"}</p>
+          <p className="text-xs text-muted-foreground">Vendor (Cr)</p>
+          <p>{vendorAccount}</p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Supplier</p>
-          <p>{refs.suppliers?.name ?? "—"}</p>
+          <p>{supplierName}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Purchase date</p>
+          <p className="text-xs text-muted-foreground">Date</p>
           <p>{voucher.purchase_date}</p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Currency</p>
-          <p>{refs.currencies?.code ?? "—"}</p>
+          <p>{currencyCode}</p>
         </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Payment terms</p>
+          <p>{voucher.payment_terms ?? "—"}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Share %</p>
+          <p>{voucher.share_percentage.toLocaleString()}</p>
+        </div>
+        {voucher.narration && (
+          <div className="sm:col-span-2 lg:col-span-3">
+            <p className="text-xs text-muted-foreground">Narration</p>
+            <p>{voucher.narration}</p>
+          </div>
+        )}
       </div>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Component</TableHead>
-            <TableHead className="text-right">Amount</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          <TableRow>
-            <TableCell>Purchase price</TableCell>
-            <TableCell className="text-right">{voucher.purchase_price.toLocaleString()}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell>Taxes</TableCell>
-            <TableCell className="text-right">{voucher.taxes.toLocaleString()}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell>Registration charges</TableCell>
-            <TableCell className="text-right">{voucher.registration_charges.toLocaleString()}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell>Additional expenses</TableCell>
-            <TableCell className="text-right">{voucher.additional_expenses.toLocaleString()}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell className="font-medium">Total</TableCell>
-            <TableCell className="text-right font-medium">{voucher.total_amount.toLocaleString()}</TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
+      <div className="overflow-x-auto rounded-md border">
+        <Table className="min-w-[900px]">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-10">Sno</TableHead>
+              <TableHead>Asset</TableHead>
+              <TableHead>Fixed Asset Account (Dr)</TableHead>
+              <TableHead className="text-right">Gross</TableHead>
+              <TableHead>Due Date</TableHead>
+              <TableHead>Installment Month</TableHead>
+              <TableHead>Remarks</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {lineRows.map((l) => {
+              const asset = assetsById.get(l.asset_id) ?? null;
+              return (
+                <TableRow key={l.id}>
+                  <TableCell className="text-muted-foreground">{l.line_no}</TableCell>
+                  <TableCell>{asset ? `${asset.asset_code} — ${asset.asset_name}` : "—"}</TableCell>
+                  <TableCell>{accountsById.get(l.fixed_asset_account_id)?.account_name ?? "—"}</TableCell>
+                  <TableCell className="text-right">{l.gross.toLocaleString()}</TableCell>
+                  <TableCell>{l.due_date ?? "—"}</TableCell>
+                  <TableCell>{l.installment_month ?? "—"}</TableCell>
+                  <TableCell>{l.remarks ?? "—"}</TableCell>
+                </TableRow>
+              );
+            })}
+            <TableRow>
+              <TableCell colSpan={3} className="text-right font-medium">
+                Total Value
+              </TableCell>
+              <TableCell className="text-right font-medium">
+                {voucher.total_value.toLocaleString()} {currencyCode}
+              </TableCell>
+              <TableCell colSpan={3} />
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
 
       <VoucherActions
-        status={refs.journal_entries?.status ?? "draft"}
+        status={status}
         voucherType="purchase_voucher"
         voucherId={voucher.id}
         journalEntryId={voucher.journal_entry_id}
-        amount={voucher.total_amount}
+        amount={voucher.total_value}
         approvalId={approval?.id ?? null}
         canSubmit={canSubmit}
         canApprove={canApprove}

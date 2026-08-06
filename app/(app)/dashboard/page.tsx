@@ -142,19 +142,31 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <KpiCard label="Total assets" value={totalAssets.toLocaleString()} icon={HomeIcon} />
-        <KpiCard label="Total property value" value={totalPropertyValue.toLocaleString()} icon={BuildingIcon} />
-        <KpiCard label="Rental income (month)" value={monthlyRentalIncome.toLocaleString()} icon={TrendingUpIcon} />
+        <KpiCard label="Total assets" value={totalAssets.toLocaleString()} icon={HomeIcon} href="/assets" />
+        <KpiCard
+          label="Total property value"
+          value={totalPropertyValue.toLocaleString()}
+          icon={BuildingIcon}
+          href="/reports/asset-register"
+        />
+        <KpiCard
+          label="Rental income (month)"
+          value={monthlyRentalIncome.toLocaleString()}
+          icon={TrendingUpIcon}
+          href="/reports/rental-income"
+        />
         <KpiCard
           label="Rental income (year)"
           value={yearlyRentalIncome.toLocaleString()}
           icon={TrendingUpIcon}
+          href="/reports/rental-income"
         />
         <KpiCard
           label="Outstanding rent"
           value={totalOutstandingRent.toLocaleString()}
           icon={WalletIcon}
           tone={totalOutstandingRent > 0 ? "warning" : undefined}
+          href="/reports/outstanding-rent"
         />
       </div>
 
@@ -165,50 +177,59 @@ export default async function DashboardPage() {
           subtext="Vouchers awaiting an approval decision"
           icon={AlertCircleIcon}
           tone={(pendingApprovals ?? 0) > 0 ? "warning" : undefined}
+          href="/accounting/voucher-register"
         />
-        <Card>
-          <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Currency summary</CardTitle>
-            <ClockIcon className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="space-y-1">
-            {currencySummary.length === 0 && <p className="text-sm text-muted-foreground">No currencies configured.</p>}
-            {currencySummary.map((c) => (
-              <div key={c.code} className="flex items-center justify-between text-sm">
-                <span className="flex items-center gap-2">
-                  {c.code}
-                  {c.isBase && (
-                    <Badge variant="outline" className="text-xs">
-                      Base
-                    </Badge>
-                  )}
-                </span>
-                <span className="text-muted-foreground">
-                  {c.isBase ? "1.000000" : c.rate ? `${c.rate.rate_to_base} (${c.rate.rate_date})` : "No rate yet"}
-                </span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+        <Link href="/admin/exchange-rates" className="block rounded-xl">
+          <Card className="h-full transition-colors hover:border-ring hover:bg-accent/40">
+            <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Currency summary</CardTitle>
+              <ClockIcon className="size-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent className="space-y-1">
+              {currencySummary.length === 0 && (
+                <p className="text-sm text-muted-foreground">No currencies configured.</p>
+              )}
+              {currencySummary.map((c) => (
+                <div key={c.code} className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2">
+                    {c.code}
+                    {c.isBase && (
+                      <Badge variant="outline" className="text-xs">
+                        Base
+                      </Badge>
+                    )}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {c.isBase ? "1.000000" : c.rate ? `${c.rate.rate_to_base} (${c.rate.rate_date})` : "No rate yet"}
+                  </span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Assets by country</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <SimpleBarChart rows={assetsByCountry} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Assets by property type</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <SimpleBarChart rows={assetsByPropertyType} />
-          </CardContent>
-        </Card>
+        <Link href="/reports/asset-register" className="block rounded-xl">
+          <Card className="h-full transition-colors hover:border-ring hover:bg-accent/40">
+            <CardHeader>
+              <CardTitle>Assets by country</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <SimpleBarChart rows={assetsByCountry} />
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/reports/asset-register" className="block rounded-xl">
+          <Card className="h-full transition-colors hover:border-ring hover:bg-accent/40">
+            <CardHeader>
+              <CardTitle>Assets by property type</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <SimpleBarChart rows={assetsByPropertyType} />
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       <Card>

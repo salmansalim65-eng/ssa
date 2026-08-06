@@ -108,6 +108,18 @@ export async function createAssetSale(input: AssetSaleInput) {
   return { success: true, id: saleId };
 }
 
+export async function deleteAssetSale(id: string) {
+  await requirePermission("asset_sales", "delete");
+  const supabase = await createClient();
+  // Definer function removes the draft voucher, its lines and its journal
+  // entry; it refuses anything already posted.
+  const { error } = await supabase.schema("assets").rpc("fn_delete_draft_asset_sale", { p_id: id });
+  if (error) return { error: error.message };
+
+  revalidatePath("/sales");
+  return { success: true };
+}
+
 export async function postAssetSale(id: string, journalEntryId: string) {
   await requirePermission("asset_sales", "post");
   const companyId = await getCurrentCompanyId();

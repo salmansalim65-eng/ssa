@@ -9,8 +9,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { VoucherActions } from "@/components/vouchers/voucher-actions";
+import { VoucherDeleteButton } from "@/components/vouchers/voucher-delete-button";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
-import { postAssetSale } from "@/features/assets/sale/actions";
+import { deleteAssetSale, postAssetSale } from "@/features/assets/sale/actions";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
@@ -39,6 +40,8 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
   ]);
 
   if (!sale) notFound();
+
+  const canDelete = await hasPermission("asset_sales", "delete");
 
   const { data: lines } = await supabase
     .schema("assets")
@@ -85,7 +88,17 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
           <h1 className="text-2xl font-semibold tracking-tight">Sale Asset Voucher</h1>
           <p className="font-mono text-sm text-muted-foreground">{sale.voucher_no ?? "Draft"}</p>
         </div>
-        <VoucherStatusBadge status={status} />
+        <div className="flex items-center gap-2">
+          <VoucherStatusBadge status={status} />
+          {status === "draft" && canDelete && (
+            <VoucherDeleteButton
+              id={sale.id}
+              onDelete={deleteAssetSale}
+              listHref="/sales"
+              label="sale asset voucher"
+            />
+          )}
+        </div>
       </div>
 
       <div className="grid gap-x-8 gap-y-2 rounded-md border p-4 sm:grid-cols-2 lg:grid-cols-3">

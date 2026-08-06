@@ -98,6 +98,18 @@ export async function createPurchaseVoucher(input: PurchaseVoucherInput) {
   return { success: true, id: voucherId };
 }
 
+export async function deletePurchaseVoucher(id: string) {
+  await requirePermission("purchase_voucher", "delete");
+  const supabase = await createClient();
+  // Definer function removes the draft voucher, its lines and its journal
+  // entry; it refuses anything already posted.
+  const { error } = await supabase.schema("accounting").rpc("fn_delete_draft_purchase_voucher", { p_id: id });
+  if (error) return { error: error.message };
+
+  revalidatePath("/purchases");
+  return { success: true };
+}
+
 export async function postPurchaseVoucher(id: string, journalEntryId: string) {
   await requirePermission("purchase_voucher", "post");
   const companyId = await getCurrentCompanyId();

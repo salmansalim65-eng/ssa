@@ -3,7 +3,9 @@ import { z } from "zod";
 export const assetSchema = z.object({
   assetName: z.string().min(2, "Asset name is required").max(200),
   propertyType: z.string().min(1, "Property type is required"),
-  country: z.enum(["PK", "AE"], { message: "Select a country" }),
+  // Empty is allowed as the initial form value but rejected on submit, so the
+  // country field can default to blank and force an explicit choice.
+  country: z.string().min(1, "Select a country").pipe(z.enum(["PK", "AE"])),
   city: z.string().optional().or(z.literal("")),
   area: z.string().optional().or(z.literal("")),
   areaSqft: z.coerce.number().nonnegative(),

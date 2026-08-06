@@ -66,9 +66,18 @@ export async function createJournalEntry(params: {
   narration?: string | null;
   createdBy: string;
   lines: EntryLineInput[];
+  /**
+   * Explicit conversion rate to base. When provided (and positive) it is used
+   * as-is — the caller collected it on the form (seeded from the exchange-rate
+   * table, then possibly adjusted). Omitted, the rate is resolved server-side.
+   */
+  exchangeRate?: number;
 }): Promise<{ journalEntryId: string; exchangeRate: number } | { error: string }> {
   const supabase = await createClient();
-  const exchangeRate = await resolveExchangeRate(params.companyId, params.currencyId, params.entryDate);
+  const exchangeRate =
+    params.exchangeRate && params.exchangeRate > 0
+      ? params.exchangeRate
+      : await resolveExchangeRate(params.companyId, params.currencyId, params.entryDate);
 
   const { data: je, error: jeError } = await supabase
     .schema("accounting")

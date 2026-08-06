@@ -11,6 +11,8 @@ import {
 export interface CurrencyOption {
   id: string;
   code: string;
+  /** Conversion rate to the company's base currency (used to seed Currency Conv.). */
+  rate?: number;
 }
 
 export function CurrencySelect({

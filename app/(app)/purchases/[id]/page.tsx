@@ -133,7 +133,9 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Currency</p>
-          <p>{currencyCode}</p>
+          <p>
+            {currencyCode} @ {voucher.exchange_rate.toLocaleString()}
+          </p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Payment terms</p>

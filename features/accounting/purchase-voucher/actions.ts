@@ -57,6 +57,7 @@ export async function createPurchaseVoucher(input: PurchaseVoucherInput) {
     narration: parsed.data.narration || "Property purchase",
     createdBy,
     lines: jeLines,
+    exchangeRate: parsed.data.exchangeRate,
   });
   if ("error" in je) return { error: je.error };
 

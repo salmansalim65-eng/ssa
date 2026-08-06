@@ -47,9 +47,20 @@ export default async function NewPurchaseVoucherPage() {
   ]);
 
   type RawCurrency = { currencies: { id: string; code: string } | null };
-  const currencyOptions = ((companyCurrencies as unknown as RawCurrency[]) ?? [])
-    .filter((cc) => cc.currencies)
-    .map((cc) => ({ id: cc.currencies!.id, code: cc.currencies!.code }));
+  const today = new Date().toISOString().slice(0, 10);
+  const currencyOptions = await Promise.all(
+    ((companyCurrencies as unknown as RawCurrency[]) ?? [])
+      .filter((cc) => cc.currencies)
+      .map(async (cc) => {
+        // Seed Currency Conv. from the exchange-rate table (base currency = 1).
+        const { data: rate } = await supabase.schema("core").rpc("fn_exchange_rate_to_base", {
+          p_company_id: companyId,
+          p_currency_id: cc.currencies!.id,
+          p_as_of_date: today,
+        });
+        return { id: cc.currencies!.id, code: cc.currencies!.code, rate: (rate as number | null) ?? 1 };
+      }),
+  );
 
   return (
     <div className="space-y-4">

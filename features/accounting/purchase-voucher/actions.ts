@@ -7,17 +7,6 @@ import { createClient } from "@/lib/supabase/server";
 import { createJournalEntry, getCurrentCompanyId, postVoucher } from "@/lib/vouchers/engine";
 import { purchaseVoucherSchema, type PurchaseVoucherInput } from "./schemas";
 
-async function getPostingAccount(companyId: string, accountRole: string) {
-  const supabase = await createClient();
-  const { data, error } = await supabase.schema("accounting").rpc("fn_get_posting_account", {
-    p_company_id: companyId,
-    p_voucher_type: "purchase_voucher",
-    p_account_role: accountRole,
-  });
-  if (error) throw new Error(error.message);
-  return data as string | null;
-}
-
 export async function createPurchaseVoucher(input: PurchaseVoucherInput) {
   const parsed = purchaseVoucherSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -28,13 +17,10 @@ export async function createPurchaseVoucher(input: PurchaseVoucherInput) {
   const { data: user } = await supabase.auth.getUser();
   const createdBy = user.user!.id;
 
-  const [fixedAssetAccountId, supplierPayableAccountId] = await Promise.all([
-    getPostingAccount(companyId, "fixed_asset_property"),
-    getPostingAccount(companyId, "supplier_payable"),
-  ]);
-  if (!fixedAssetAccountId || !supplierPayableAccountId) {
-    return { error: "Configure Posting Templates for Purchase Voucher first (Fixed Asset + Supplier Payable accounts)." };
-  }
+  // Debit the user-picked Fixed Asset account, credit the user-picked Vendor
+  // (payable) account — chosen on the form rather than derived from templates.
+  const fixedAssetAccountId = parsed.data.fixedAssetAccountId;
+  const supplierPayableAccountId = parsed.data.vendorAccountId;
 
   const { data: costCenter } = await supabase
     .schema("accounting")

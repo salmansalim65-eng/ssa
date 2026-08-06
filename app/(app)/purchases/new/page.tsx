@@ -12,7 +12,7 @@ export default async function NewPurchaseVoucherPage() {
   const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
   const companyId = companyIdData as string;
 
-  const [{ data: assets }, { data: suppliers }, { data: companyCurrencies }] = await Promise.all([
+  const [{ data: assets }, { data: suppliers }, { data: accounts }, { data: companyCurrencies }] = await Promise.all([
     supabase
       .schema("assets")
       .from("assets")
@@ -28,6 +28,16 @@ export default async function NewPurchaseVoucherPage() {
       .eq("is_active", true)
       .is("deleted_at", null)
       .order("name"),
+    // Postable (non-group) accounts, offered as searchable pickers by name.
+    supabase
+      .schema("accounting")
+      .from("chart_of_accounts")
+      .select("id, account_name")
+      .eq("company_id", companyId)
+      .eq("is_group", false)
+      .eq("is_active", true)
+      .is("deleted_at", null)
+      .order("account_name"),
     supabase
       .schema("core")
       .from("company_currencies")
@@ -44,7 +54,12 @@ export default async function NewPurchaseVoucherPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold tracking-tight">New purchase voucher</h1>
-      <PurchaseVoucherForm assets={assets ?? []} suppliers={suppliers ?? []} currencies={currencyOptions} />
+      <PurchaseVoucherForm
+        assets={assets ?? []}
+        suppliers={suppliers ?? []}
+        accounts={accounts ?? []}
+        currencies={currencyOptions}
+      />
     </div>
   );
 }

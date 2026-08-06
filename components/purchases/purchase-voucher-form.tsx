@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
+import { AccountCombobox, type AccountOption } from "@/components/vouchers/account-combobox";
 import { createPurchaseVoucher } from "@/features/accounting/purchase-voucher/actions";
 import {
   purchaseVoucherSchema,
@@ -49,10 +50,12 @@ function today() {
 export function PurchaseVoucherForm({
   assets,
   suppliers,
+  accounts,
   currencies,
 }: {
   assets: AssetOption[];
   suppliers: SupplierOption[];
+  accounts: AccountOption[];
   currencies: CurrencyOption[];
 }) {
   const router = useRouter();
@@ -64,6 +67,8 @@ export function PurchaseVoucherForm({
     defaultValues: {
       assetId: "",
       supplierId: "",
+      fixedAssetAccountId: "",
+      vendorAccountId: "",
       purchaseDate: today(),
       currencyId: currencies[0]?.id ?? "",
       purchasePrice: 0,
@@ -140,6 +145,38 @@ export function PurchaseVoucherForm({
                   ))}
                 </SelectContent>
               </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="fixedAssetAccountId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Fixed Asset Account (Dr)</FormLabel>
+              <AccountCombobox
+                accounts={accounts}
+                value={field.value}
+                onValueChange={field.onChange}
+                placeholder="Search account by name"
+              />
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="vendorAccountId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Vendor (Cr)</FormLabel>
+              <AccountCombobox
+                accounts={accounts}
+                value={field.value}
+                onValueChange={field.onChange}
+                placeholder="Search account by name"
+              />
               <FormMessage />
             </FormItem>
           )}

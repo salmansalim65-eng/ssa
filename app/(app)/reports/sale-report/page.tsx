@@ -43,8 +43,7 @@ export default async function SaleReportPage({
     .lte("sale_date", to)
     .order("sale_date", { ascending: false });
 
-  const totalSalePrice = (rows ?? []).reduce((sum, r) => sum + r.sale_price, 0);
-  const totalProfitLoss = (rows ?? []).reduce((sum, r) => sum + r.profit_loss_amount, 0);
+  const totalGross = (rows ?? []).reduce((sum, r) => sum + r.gross, 0);
 
   return (
     <div className="space-y-4">
@@ -56,27 +55,12 @@ export default async function SaleReportPage({
         <div className="flex gap-2">
           <CsvExportButton
             filename={`sale-report-${from}-to-${to}.csv`}
-            headers={[
-              "Voucher No",
-              "Date",
-              "Asset",
-              "Buyer",
-              "Sale Price",
-              "Book Value",
-              "Profit/Loss",
-              "Capital Gain",
-              "Currency",
-              "Status",
-            ]}
+            headers={["Voucher No", "Date", "Property", "Gross", "Currency", "Status"]}
             rows={(rows ?? []).map((r) => [
               r.voucher_no ?? "",
               r.sale_date,
               `${r.asset_code} - ${r.asset_name}`,
-              r.buyer,
-              r.sale_price,
-              r.book_value_at_sale,
-              r.profit_loss_amount,
-              r.capital_gain_amount,
+              r.gross,
               r.currency_code,
               r.status,
             ])}
@@ -94,11 +78,8 @@ export default async function SaleReportPage({
           <TableRow>
             <TableHead>Voucher No</TableHead>
             <TableHead>Date</TableHead>
-            <TableHead>Asset</TableHead>
-            <TableHead>Buyer</TableHead>
-            <TableHead className="text-right">Sale price</TableHead>
-            <TableHead className="text-right">Profit/Loss</TableHead>
-            <TableHead className="text-right">Capital gain</TableHead>
+            <TableHead>Property</TableHead>
+            <TableHead className="text-right">Gross</TableHead>
             <TableHead>Status</TableHead>
           </TableRow>
         </TableHeader>
@@ -108,17 +89,11 @@ export default async function SaleReportPage({
               <TableCell>{r.voucher_no ?? "Draft"}</TableCell>
               <TableCell>{r.sale_date}</TableCell>
               <TableCell>
-                {r.asset_code} — {r.asset_name}
+                {r.asset_code ? `${r.asset_code} — ` : ""}
+                {r.asset_name}
               </TableCell>
-              <TableCell>{r.buyer}</TableCell>
               <TableCell className="text-right">
-                {r.sale_price.toLocaleString()} {r.currency_code}
-              </TableCell>
-              <TableCell className={`text-right ${r.profit_loss_amount >= 0 ? "text-success" : "text-destructive"}`}>
-                {r.profit_loss_amount.toLocaleString()}
-              </TableCell>
-              <TableCell className={`text-right ${r.capital_gain_amount >= 0 ? "text-success" : "text-destructive"}`}>
-                {r.capital_gain_amount.toLocaleString()}
+                {r.gross.toLocaleString()} {r.currency_code}
               </TableCell>
               <TableCell>
                 <VoucherStatusBadge status={r.status} />
@@ -127,7 +102,7 @@ export default async function SaleReportPage({
           ))}
           {(rows ?? []).length === 0 && (
             <TableRow>
-              <TableCell colSpan={8} className="text-center text-muted-foreground">
+              <TableCell colSpan={5} className="text-center text-muted-foreground">
                 No sales in this period.
               </TableCell>
             </TableRow>
@@ -136,14 +111,11 @@ export default async function SaleReportPage({
         {(rows ?? []).length > 0 && (
           <tfoot>
             <TableRow>
-              <TableCell colSpan={4} className="font-medium">
+              <TableCell colSpan={3} className="font-medium">
                 Total
               </TableCell>
-              <TableCell className="text-right font-medium">{totalSalePrice.toLocaleString()}</TableCell>
-              <TableCell className={`text-right font-medium ${totalProfitLoss >= 0 ? "text-success" : "text-destructive"}`}>
-                {totalProfitLoss.toLocaleString()}
-              </TableCell>
-              <TableCell colSpan={2} />
+              <TableCell className="text-right font-medium">{totalGross.toLocaleString()}</TableCell>
+              <TableCell />
             </TableRow>
           </tfoot>
         )}

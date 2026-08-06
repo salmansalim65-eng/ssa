@@ -20,7 +20,7 @@ import {
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
 import { AccountCombobox, type AccountOption } from "@/components/vouchers/account-combobox";
 import { DateInput } from "@/components/vouchers/date-input";
-import { createAssetSale } from "@/features/assets/sale/actions";
+import { createAssetSale, updateAssetSale } from "@/features/assets/sale/actions";
 import { assetSaleSchema, type AssetSaleFormValues, type AssetSaleInput } from "@/features/assets/sale/schemas";
 
 function today() {
@@ -34,11 +34,16 @@ function emptyLine() {
 export function AssetSaleForm({
   accounts,
   currencies,
+  voucherId,
+  initialValues,
 }: {
   accounts: AccountOption[];
   currencies: CurrencyOption[];
+  voucherId?: string;
+  initialValues?: AssetSaleFormValues;
 }) {
   const router = useRouter();
+  const isEdit = !!voucherId;
   const [isPending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -46,7 +51,7 @@ export function AssetSaleForm({
 
   const form = useForm<AssetSaleFormValues, unknown, AssetSaleInput>({
     resolver: zodResolver(assetSaleSchema),
-    defaultValues: {
+    defaultValues: initialValues ?? {
       customerAccountId: "",
       saleDate: today(),
       currencyId: currencies[0]?.id ?? "",
@@ -64,13 +69,15 @@ export function AssetSaleForm({
   function onSubmit(values: AssetSaleInput) {
     setFormError(null);
     startTransition(async () => {
-      const result = await createAssetSale(values);
+      const result = isEdit
+        ? await updateAssetSale(voucherId!, values)
+        : await createAssetSale(values);
       if (result?.error) {
         setFormError(result.error);
         return;
       }
-      toast.success("Sale asset voucher created");
-      router.push(`/sales/${result.id}`);
+      toast.success(isEdit ? "Sale asset voucher updated" : "Sale asset voucher created");
+      router.push(`/sales/${isEdit ? voucherId : result.id}`);
     });
   }
 
@@ -253,7 +260,7 @@ export function AssetSaleForm({
 
         {formError && <p className="text-sm text-destructive">{formError}</p>}
         <Button type="submit" disabled={isPending} className="sm:w-fit">
-          {isPending ? "Creating…" : "Create sale asset voucher"}
+          {isPending ? (isEdit ? "Saving…" : "Creating…") : isEdit ? "Save changes" : "Create sale asset voucher"}
         </Button>
       </form>
     </Form>

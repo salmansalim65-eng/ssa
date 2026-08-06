@@ -4,8 +4,12 @@ import { revalidatePath } from "next/cache";
 
 import { requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
-import { createJournalEntry, getCurrentCompanyId, postVoucher } from "@/lib/vouchers/engine";
+import { createJournalEntry, getCurrentCompanyId, postVoucher, resolveExchangeRate } from "@/lib/vouchers/engine";
 import { jvMaintenanceVoucherSchema, type JvMaintenanceVoucherInput } from "./schemas";
+
+function round2(n: number) {
+  return Math.round(n * 100) / 100;
+}
 
 export async function createJvMaintenanceVoucher(input: JvMaintenanceVoucherInput) {
   const parsed = jvMaintenanceVoucherSchema.safeParse(input);
@@ -48,6 +52,86 @@ export async function createJvMaintenanceVoucher(input: JvMaintenanceVoucherInpu
 
   revalidatePath("/accounting/vouchers/jv_maintenance_voucher");
   return { success: true, id: voucherId };
+}
+
+export async function updateJvMaintenanceVoucher(id: string, input: JvMaintenanceVoucherInput) {
+  const parsed = jvMaintenanceVoucherSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+
+  await requirePermission("jv_maintenance_voucher", "edit");
+  const companyId = await getCurrentCompanyId();
+  const supabase = await createClient();
+
+  const { data: v } = await supabase
+    .schema("accounting")
+    .from("jv_maintenance_vouchers")
+    .select("journal_entry_id")
+    .eq("company_id", companyId)
+    .eq("id", id)
+    .maybeSingle();
+  if (!v) return { error: "Voucher not found" };
+
+  const jeId = v.journal_entry_id;
+  const { data: je } = await supabase
+    .schema("accounting")
+    .from("journal_entries")
+    .select("status")
+    .eq("id", jeId)
+    .single();
+  if (!je) return { error: "Voucher not found" };
+  if (je.status !== "draft") return { error: "Only draft vouchers can be edited" };
+
+  const exchangeRate = await resolveExchangeRate(companyId, parsed.data.currencyId, parsed.data.entryDate);
+
+  const { error: jeErr } = await supabase
+    .schema("accounting")
+    .from("journal_entries")
+    .update({
+      entry_date: parsed.data.entryDate,
+      currency_id: parsed.data.currencyId,
+      exchange_rate: exchangeRate,
+      narration: parsed.data.adjustmentReason,
+    })
+    .eq("id", jeId);
+  if (jeErr) return { error: jeErr.message };
+
+  // Variable line count — replace the whole set (see updateJournalVoucher).
+  const { error: delErr } = await supabase
+    .schema("accounting")
+    .from("journal_entry_lines")
+    .delete()
+    .eq("journal_entry_id", jeId);
+  if (delErr) return { error: delErr.message };
+
+  const lineRows = parsed.data.lines.map((l, index) => ({
+    journal_entry_id: jeId,
+    line_no: index + 1,
+    account_id: l.accountId,
+    cost_center_id: l.costCenterId || null,
+    debit_amount: l.debit,
+    credit_amount: l.credit,
+    currency_id: parsed.data.currencyId,
+    exchange_rate: exchangeRate,
+    base_debit_amount: round2(l.debit * exchangeRate),
+    base_credit_amount: round2(l.credit * exchangeRate),
+    description: l.description || null,
+  }));
+  const { error: insErr } = await supabase
+    .schema("accounting")
+    .from("journal_entry_lines")
+    .insert(lineRows);
+  if (insErr) return { error: insErr.message };
+
+  const { error: vErr } = await supabase
+    .schema("accounting")
+    .from("jv_maintenance_vouchers")
+    .update({ original_jv_id: parsed.data.originalJvId, adjustment_reason: parsed.data.adjustmentReason })
+    .eq("id", id);
+  if (vErr) return { error: vErr.message };
+
+  revalidatePath("/accounting/vouchers/jv_maintenance_voucher");
+  revalidatePath(`/accounting/vouchers/jv_maintenance_voucher/${id}`);
+  return { success: true, id };
 }
 
 export async function postJvMaintenanceVoucher(id: string, journalEntryId: string) {

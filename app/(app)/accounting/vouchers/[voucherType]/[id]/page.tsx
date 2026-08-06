@@ -9,6 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { CopyVoucherButton } from "@/components/vouchers/copy-voucher-button";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { VoucherActions } from "@/components/vouchers/voucher-actions";
 import { VoucherDeleteButton } from "@/components/vouchers/voucher-delete-button";
@@ -26,7 +27,7 @@ import { postPaymentVoucher } from "@/features/accounting/vouchers/payment/actio
 import { postPdcPaymentVoucher, setPdcPaymentStatus } from "@/features/accounting/vouchers/pdc-payment/actions";
 import { postPdcReceiptVoucher, setPdcReceiptStatus } from "@/features/accounting/vouchers/pdc-receipt/actions";
 import { postReceiptVoucher } from "@/features/accounting/vouchers/receipt/actions";
-import { deleteAccountingVoucher } from "@/features/accounting/vouchers/shared-actions";
+import { copyAccountingVoucher, deleteAccountingVoucher } from "@/features/accounting/vouchers/shared-actions";
 import { PdcStatusActions } from "./pdc-status-actions";
 
 const POST_ACTIONS = {
@@ -52,13 +53,14 @@ export default async function VoucherDetailPage({
   const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
   const companyId = companyIdData as string;
 
-  const [detail, canSubmit, canApprove, canReject, canPost, canDelete] = await Promise.all([
+  const [detail, canSubmit, canApprove, canReject, canPost, canDelete, canCreate] = await Promise.all([
     getVoucherDetail(companyId, voucherType, id),
     hasPermission(voucherType, "edit"),
     hasPermission(voucherType, "approve"),
     hasPermission(voucherType, "reject"),
     hasPermission(voucherType, "post"),
     hasPermission(voucherType, "delete"),
+    hasPermission(voucherType, "create"),
   ]);
 
   if (!detail) notFound();
@@ -76,6 +78,14 @@ export default async function VoucherDetailPage({
         <div className="flex items-center gap-2">
           <VoucherStatusBadge status={detail.status} />
           <PrintButton />
+          {canCreate && voucherType !== "cheque_return_voucher" && (
+            <CopyVoucherButton
+              id={detail.id}
+              onCopy={copyAccountingVoucher.bind(null, voucherType)}
+              hrefBase={`/accounting/vouchers/${voucherType}`}
+              label="Voucher"
+            />
+          )}
           {detail.status === "draft" && canDelete && (
             <VoucherDeleteButton
               id={detail.id}

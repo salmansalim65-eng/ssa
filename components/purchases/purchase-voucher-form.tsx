@@ -20,7 +20,7 @@ import {
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
 import { AccountCombobox, type AccountOption } from "@/components/vouchers/account-combobox";
 import { DateInput } from "@/components/vouchers/date-input";
-import { createPurchaseVoucher } from "@/features/accounting/purchase-voucher/actions";
+import { createPurchaseVoucher, updatePurchaseVoucher } from "@/features/accounting/purchase-voucher/actions";
 import {
   purchaseVoucherSchema,
   type PurchaseVoucherFormValues,
@@ -38,17 +38,22 @@ function emptyLine() {
 export function PurchaseVoucherForm({
   accounts,
   currencies,
+  voucherId,
+  initialValues,
 }: {
   accounts: AccountOption[];
   currencies: CurrencyOption[];
+  voucherId?: string;
+  initialValues?: PurchaseVoucherFormValues;
 }) {
   const router = useRouter();
+  const isEdit = !!voucherId;
   const [isPending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
 
   const form = useForm<PurchaseVoucherFormValues, unknown, PurchaseVoucherInput>({
     resolver: zodResolver(purchaseVoucherSchema),
-    defaultValues: {
+    defaultValues: initialValues ?? {
       vendorAccountId: "",
       purchaseDate: today(),
       currencyId: currencies[0]?.id ?? "",
@@ -69,13 +74,15 @@ export function PurchaseVoucherForm({
   function onSubmit(values: PurchaseVoucherInput) {
     setFormError(null);
     startTransition(async () => {
-      const result = await createPurchaseVoucher(values);
+      const result = isEdit
+        ? await updatePurchaseVoucher(voucherId!, values)
+        : await createPurchaseVoucher(values);
       if (result?.error) {
         setFormError(result.error);
         return;
       }
-      toast.success("Purchase voucher created");
-      router.push(`/purchases/${result.id}`);
+      toast.success(isEdit ? "Purchase voucher updated" : "Purchase voucher created");
+      router.push(`/purchases/${isEdit ? voucherId : result.id}`);
     });
   }
 
@@ -301,7 +308,7 @@ export function PurchaseVoucherForm({
 
         {formError && <p className="text-sm text-destructive">{formError}</p>}
         <Button type="submit" disabled={isPending} className="sm:w-fit">
-          {isPending ? "Creating…" : "Create purchase voucher"}
+          {isPending ? (isEdit ? "Saving…" : "Creating…") : isEdit ? "Save changes" : "Create purchase voucher"}
         </Button>
       </form>
     </Form>

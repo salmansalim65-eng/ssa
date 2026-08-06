@@ -1,5 +1,8 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { PencilIcon } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -96,6 +99,13 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
         <div className="flex items-center gap-2">
           <VoucherStatusBadge status={status} />
           <PrintButton />
+          {status === "draft" && canSubmit && (
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/sales/${sale.id}/edit`}>
+                <PencilIcon /> Edit
+              </Link>
+            </Button>
+          )}
           {canCreate && (
             <CopyVoucherButton
               id={sale.id}

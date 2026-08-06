@@ -1,5 +1,8 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { PencilIcon } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -120,6 +123,13 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
         <div className="flex items-center gap-2">
           <VoucherStatusBadge status={status} />
           <PrintButton />
+          {status === "draft" && canSubmit && (
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/purchases/${voucher.id}/edit`}>
+                <PencilIcon /> Edit
+              </Link>
+            </Button>
+          )}
           {canCreate && (
             <CopyVoucherButton
               id={voucher.id}

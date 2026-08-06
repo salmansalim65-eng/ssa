@@ -45,7 +45,7 @@ export function AssetForm({
   onSubmit,
   submitLabel,
 }: {
-  defaultValues: AssetInput;
+  defaultValues: AssetFormValues;
   currencies: CurrencyOption[];
   costCenters: CostCenterOption[];
   onSubmit: (values: AssetInput) => Promise<{ error?: string } | undefined>;
@@ -112,7 +112,7 @@ export function AssetForm({
               >
                 <FormControl>
                   <SelectTrigger className="w-full">
-                    <SelectValue />
+                    <SelectValue placeholder="Select a country" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>

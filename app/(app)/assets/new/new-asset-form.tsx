@@ -5,12 +5,12 @@ import { toast } from "sonner";
 
 import { AssetForm, type CostCenterOption, type CurrencyOption } from "@/components/assets/asset-form";
 import { createAsset } from "@/features/assets/actions";
-import type { AssetInput } from "@/features/assets/schemas";
+import type { AssetFormValues } from "@/features/assets/schemas";
 
-const emptyValues: AssetInput = {
+const emptyValues: AssetFormValues = {
   assetName: "",
   propertyType: "",
-  country: "PK",
+  country: "",
   city: "",
   area: "",
   areaSqft: 0,

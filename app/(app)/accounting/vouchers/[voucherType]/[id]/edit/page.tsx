@@ -1,14 +1,25 @@
 import { notFound, redirect } from "next/navigation";
 
+import { OpeningBalanceVoucherForm } from "@/components/vouchers/forms/opening-balance-voucher-form";
 import { PaymentVoucherForm } from "@/components/vouchers/forms/payment-voucher-form";
+import { PdcPaymentVoucherForm } from "@/components/vouchers/forms/pdc-payment-voucher-form";
+import { PdcReceiptVoucherForm } from "@/components/vouchers/forms/pdc-receipt-voucher-form";
 import { ReceiptVoucherForm } from "@/components/vouchers/forms/receipt-voucher-form";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { isPhase5VoucherType, VOUCHER_TYPE_LABELS } from "@/lib/vouchers/meta";
 import type { JournalEntryStatus } from "@/types/database.types";
 
-// Voucher types whose draft can currently be re-opened in its form.
-const EDITABLE_VOUCHER_TYPES = ["receipt_voucher", "payment_voucher"] as const;
+// Voucher types whose draft can currently be re-opened in its form, mapped to
+// their header table. These are the single-journal-entry (two-line) vouchers.
+const EDITABLE_TABLE = {
+  receipt_voucher: "receipt_vouchers",
+  payment_voucher: "payment_vouchers",
+  pdc_payment_voucher: "pdc_payment_vouchers",
+  pdc_receipt_voucher: "pdc_receipt_vouchers",
+  opening_balance_voucher: "opening_balance_vouchers",
+} as const;
+type EditableVoucherType = keyof typeof EDITABLE_TABLE;
 
 export default async function EditVoucherPage({
   params,
@@ -19,8 +30,9 @@ export default async function EditVoucherPage({
   if (!isPhase5VoucherType(voucherType)) notFound();
 
   const detailHref = `/accounting/vouchers/${voucherType}/${id}`;
-  // Only the single-line vouchers support edit for now; others fall back to detail.
-  if (!(EDITABLE_VOUCHER_TYPES as readonly string[]).includes(voucherType)) redirect(detailHref);
+  // Only the single-entry vouchers support edit for now; others fall back to detail.
+  if (!(voucherType in EDITABLE_TABLE)) redirect(detailHref);
+  const editableType = voucherType as EditableVoucherType;
 
   const canEdit = await hasPermission(voucherType, "edit");
   if (!canEdit) redirect(detailHref);
@@ -53,7 +65,7 @@ export default async function EditVoucherPage({
     .filter((cc) => cc.currencies)
     .map((cc) => ({ id: cc.currencies!.id, code: cc.currencies!.code }));
 
-  const table = voucherType === "receipt_voucher" ? "receipt_vouchers" : "payment_vouchers";
+  const table = EDITABLE_TABLE[editableType];
   const { data: voucher } = await supabase
     .schema("accounting")
     .from(table)
@@ -104,6 +116,55 @@ export default async function EditVoucherPage({
             currencyId: v.currency_id as string,
             amount: v.amount as number,
             narration: (v.narration as string | null) ?? "",
+          }}
+        />
+      )}
+      {voucherType === "pdc_payment_voucher" && (
+        <PdcPaymentVoucherForm
+          accounts={accountOptions}
+          currencies={currencyOptions}
+          voucherId={id}
+          initialValues={{
+            chequeDate: v.cheque_date as string,
+            chequeNo: v.cheque_no as string,
+            payee: v.payee as string,
+            debitAccountId: v.debit_account_id as string,
+            creditAccountId: v.credit_account_id as string,
+            currencyId: v.currency_id as string,
+            amount: v.amount as number,
+            narration: (v.narration as string | null) ?? "",
+          }}
+        />
+      )}
+      {voucherType === "pdc_receipt_voucher" && (
+        <PdcReceiptVoucherForm
+          accounts={accountOptions}
+          currencies={currencyOptions}
+          voucherId={id}
+          initialValues={{
+            chequeDate: v.cheque_date as string,
+            chequeNo: v.cheque_no as string,
+            payer: v.payer as string,
+            debitAccountId: v.debit_account_id as string,
+            creditAccountId: v.credit_account_id as string,
+            currencyId: v.currency_id as string,
+            amount: v.amount as number,
+            narration: (v.narration as string | null) ?? "",
+          }}
+        />
+      )}
+      {voucherType === "opening_balance_voucher" && (
+        <OpeningBalanceVoucherForm
+          accounts={accountOptions}
+          currencies={currencyOptions}
+          voucherId={id}
+          initialValues={{
+            asOfDate: v.as_of_date as string,
+            accountId: v.account_id as string,
+            contraAccountId: v.contra_account_id as string,
+            currencyId: v.currency_id as string,
+            debitAmount: v.debit_amount as number,
+            creditAmount: v.credit_amount as number,
           }}
         />
       )}

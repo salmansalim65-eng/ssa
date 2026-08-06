@@ -34,7 +34,10 @@ import {
 } from "@/components/ui/table";
 import { AccountSelect, type AccountOption } from "@/components/vouchers/account-select";
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
-import { createJvMaintenanceVoucher } from "@/features/accounting/vouchers/jv-maintenance/actions";
+import {
+  createJvMaintenanceVoucher,
+  updateJvMaintenanceVoucher,
+} from "@/features/accounting/vouchers/jv-maintenance/actions";
 import {
   jvMaintenanceVoucherSchema,
   type JvMaintenanceVoucherFormValues,
@@ -54,18 +57,23 @@ export function JvMaintenanceVoucherForm({
   accounts,
   currencies,
   journalVouchers,
+  voucherId,
+  initialValues,
 }: {
   accounts: AccountOption[];
   currencies: CurrencyOption[];
   journalVouchers: JournalVoucherOption[];
+  voucherId?: string;
+  initialValues?: JvMaintenanceVoucherFormValues;
 }) {
   const router = useRouter();
+  const isEdit = !!voucherId;
   const [isPending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
 
   const form = useForm<JvMaintenanceVoucherFormValues, unknown, JvMaintenanceVoucherInput>({
     resolver: zodResolver(jvMaintenanceVoucherSchema),
-    defaultValues: {
+    defaultValues: initialValues ?? {
       entryDate: today(),
       currencyId: currencies[0]?.id ?? "",
       originalJvId: "",
@@ -86,13 +94,15 @@ export function JvMaintenanceVoucherForm({
   function onSubmit(values: JvMaintenanceVoucherInput) {
     setFormError(null);
     startTransition(async () => {
-      const result = await createJvMaintenanceVoucher(values);
+      const result = isEdit
+        ? await updateJvMaintenanceVoucher(voucherId!, values)
+        : await createJvMaintenanceVoucher(values);
       if (result?.error) {
         setFormError(result.error);
         return;
       }
-      toast.success("JV maintenance voucher created");
-      router.push(`/accounting/vouchers/jv_maintenance_voucher/${result.id}`);
+      toast.success(isEdit ? "JV maintenance voucher updated" : "JV maintenance voucher created");
+      router.push(`/accounting/vouchers/jv_maintenance_voucher/${isEdit ? voucherId : result.id}`);
     });
   }
 
@@ -246,7 +256,7 @@ export function JvMaintenanceVoucherForm({
 
         {formError && <p className="text-sm text-destructive">{formError}</p>}
         <Button type="submit" disabled={isPending}>
-          {isPending ? "Creating…" : "Create JV maintenance voucher"}
+          {isPending ? (isEdit ? "Saving…" : "Creating…") : isEdit ? "Save changes" : "Create JV maintenance voucher"}
         </Button>
       </form>
     </Form>

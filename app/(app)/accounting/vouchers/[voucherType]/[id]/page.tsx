@@ -40,6 +40,8 @@ const EDITABLE_VOUCHER_TYPES = [
   "pdc_payment_voucher",
   "pdc_receipt_voucher",
   "opening_balance_voucher",
+  "journal_voucher",
+  "jv_maintenance_voucher",
 ] as const;
 
 const POST_ACTIONS = {

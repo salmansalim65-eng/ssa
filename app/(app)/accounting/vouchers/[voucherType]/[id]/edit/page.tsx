@@ -1,5 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 
+import { JournalVoucherForm } from "@/components/vouchers/forms/journal-voucher-form";
+import { JvMaintenanceVoucherForm } from "@/components/vouchers/forms/jv-maintenance-voucher-form";
 import { OpeningBalanceVoucherForm } from "@/components/vouchers/forms/opening-balance-voucher-form";
 import { PaymentVoucherForm } from "@/components/vouchers/forms/payment-voucher-form";
 import { PdcPaymentVoucherForm } from "@/components/vouchers/forms/pdc-payment-voucher-form";
@@ -10,16 +12,21 @@ import { createClient } from "@/lib/supabase/server";
 import { isPhase5VoucherType, VOUCHER_TYPE_LABELS } from "@/lib/vouchers/meta";
 import type { JournalEntryStatus } from "@/types/database.types";
 
-// Voucher types whose draft can currently be re-opened in its form, mapped to
-// their header table. These are the single-journal-entry (two-line) vouchers.
+// Voucher types whose draft can be re-opened in its form, mapped to their header
+// table. All of these are a single journal entry (two-line or a balanced
+// multi-line grid).
 const EDITABLE_TABLE = {
   receipt_voucher: "receipt_vouchers",
   payment_voucher: "payment_vouchers",
   pdc_payment_voucher: "pdc_payment_vouchers",
   pdc_receipt_voucher: "pdc_receipt_vouchers",
   opening_balance_voucher: "opening_balance_vouchers",
+  journal_voucher: "journal_vouchers",
+  jv_maintenance_voucher: "jv_maintenance_vouchers",
 } as const;
 type EditableVoucherType = keyof typeof EDITABLE_TABLE;
+
+const MULTI_LINE_TYPES: readonly string[] = ["journal_voucher", "jv_maintenance_voucher"];
 
 export default async function EditVoucherPage({
   params,
@@ -30,7 +37,6 @@ export default async function EditVoucherPage({
   if (!isPhase5VoucherType(voucherType)) notFound();
 
   const detailHref = `/accounting/vouchers/${voucherType}/${id}`;
-  // Only the single-entry vouchers support edit for now; others fall back to detail.
   if (!(voucherType in EDITABLE_TABLE)) redirect(detailHref);
   const editableType = voucherType as EditableVoucherType;
 
@@ -69,19 +75,55 @@ export default async function EditVoucherPage({
   const { data: voucher } = await supabase
     .schema("accounting")
     .from(table)
-    .select("*, journal_entries:journal_entry_id(status)")
+    .select("*, journal_entries:journal_entry_id(status, currency_id)")
     .eq("company_id", companyId)
     .eq("id", id)
     .maybeSingle();
   if (!voucher) notFound();
 
-  const status =
-    (voucher as unknown as { journal_entries: { status: JournalEntryStatus } | null }).journal_entries?.status ??
-    "draft";
+  const jeEmbed = (voucher as unknown as {
+    journal_entries: { status: JournalEntryStatus; currency_id: string } | null;
+  }).journal_entries;
+  const status = jeEmbed?.status ?? "draft";
   // A posted (or in-approval) voucher is part of the ledger — send the user back.
   if (status !== "draft") redirect(detailHref);
 
   const v = voucher as unknown as Record<string, unknown>;
+
+  // Multi-line vouchers (Journal / JV Maintenance) rebuild their grid from the
+  // journal entry's lines and take the currency from the entry header.
+  const isMultiLine = MULTI_LINE_TYPES.includes(voucherType);
+  let lineValues: { accountId: string; costCenterId: string; debit: number; credit: number; description: string }[] =
+    [];
+  if (isMultiLine) {
+    const { data: lines } = await supabase
+      .schema("accounting")
+      .from("journal_entry_lines")
+      .select("account_id, cost_center_id, debit_amount, credit_amount, description")
+      .eq("journal_entry_id", v.journal_entry_id as string)
+      .order("line_no");
+    lineValues = (lines ?? []).map((l) => ({
+      accountId: l.account_id,
+      costCenterId: l.cost_center_id ?? "",
+      debit: l.debit_amount,
+      credit: l.credit_amount,
+      description: l.description ?? "",
+    }));
+  }
+
+  let journalVouchers: { id: string; voucherNo: string | null }[] = [];
+  if (voucherType === "jv_maintenance_voucher") {
+    const { data: jvs } = await supabase
+      .schema("accounting")
+      .from("journal_vouchers")
+      .select("id, voucher_no")
+      .eq("company_id", companyId)
+      .not("voucher_no", "is", null)
+      .order("created_at", { ascending: false });
+    journalVouchers = (jvs ?? []).map((jv) => ({ id: jv.id, voucherNo: jv.voucher_no }));
+  }
+
+  const jeCurrency = jeEmbed?.currency_id ?? "";
 
   return (
     <div className="space-y-4">
@@ -165,6 +207,34 @@ export default async function EditVoucherPage({
             currencyId: v.currency_id as string,
             debitAmount: v.debit_amount as number,
             creditAmount: v.credit_amount as number,
+          }}
+        />
+      )}
+      {voucherType === "journal_voucher" && (
+        <JournalVoucherForm
+          accounts={accountOptions}
+          currencies={currencyOptions}
+          voucherId={id}
+          initialValues={{
+            entryDate: v.entry_date as string,
+            currencyId: jeCurrency,
+            narration: v.narration as string,
+            lines: lineValues,
+          }}
+        />
+      )}
+      {voucherType === "jv_maintenance_voucher" && (
+        <JvMaintenanceVoucherForm
+          accounts={accountOptions}
+          currencies={currencyOptions}
+          journalVouchers={journalVouchers}
+          voucherId={id}
+          initialValues={{
+            entryDate: v.entry_date as string,
+            currencyId: jeCurrency,
+            originalJvId: v.original_jv_id as string,
+            adjustmentReason: v.adjustment_reason as string,
+            lines: lineValues,
           }}
         />
       )}

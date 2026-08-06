@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/table";
 import { AccountSelect, type AccountOption } from "@/components/vouchers/account-select";
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
-import { createJournalVoucher } from "@/features/accounting/vouchers/journal/actions";
+import { createJournalVoucher, updateJournalVoucher } from "@/features/accounting/vouchers/journal/actions";
 import {
   journalVoucherSchema,
   type JournalVoucherFormValues,
@@ -41,17 +41,22 @@ function today() {
 export function JournalVoucherForm({
   accounts,
   currencies,
+  voucherId,
+  initialValues,
 }: {
   accounts: AccountOption[];
   currencies: CurrencyOption[];
+  voucherId?: string;
+  initialValues?: JournalVoucherFormValues;
 }) {
   const router = useRouter();
+  const isEdit = !!voucherId;
   const [isPending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
 
   const form = useForm<JournalVoucherFormValues, unknown, JournalVoucherInput>({
     resolver: zodResolver(journalVoucherSchema),
-    defaultValues: {
+    defaultValues: initialValues ?? {
       entryDate: today(),
       currencyId: currencies[0]?.id ?? "",
       narration: "",
@@ -71,13 +76,15 @@ export function JournalVoucherForm({
   function onSubmit(values: JournalVoucherInput) {
     setFormError(null);
     startTransition(async () => {
-      const result = await createJournalVoucher(values);
+      const result = isEdit
+        ? await updateJournalVoucher(voucherId!, values)
+        : await createJournalVoucher(values);
       if (result?.error) {
         setFormError(result.error);
         return;
       }
-      toast.success("Journal voucher created");
-      router.push(`/accounting/vouchers/journal_voucher/${result.id}`);
+      toast.success(isEdit ? "Journal voucher updated" : "Journal voucher created");
+      router.push(`/accounting/vouchers/journal_voucher/${isEdit ? voucherId : result.id}`);
     });
   }
 
@@ -210,7 +217,7 @@ export function JournalVoucherForm({
         )}
         {formError && <p className="text-sm text-destructive">{formError}</p>}
         <Button type="submit" disabled={isPending}>
-          {isPending ? "Creating…" : "Create journal voucher"}
+          {isPending ? (isEdit ? "Saving…" : "Creating…") : isEdit ? "Save changes" : "Create journal voucher"}
         </Button>
       </form>
     </Form>

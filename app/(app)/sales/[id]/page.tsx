@@ -40,23 +40,20 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
 
   if (!sale) notFound();
 
-  type Refs = {
-    assets: { asset_code: string; asset_name: string } | null;
-    currencies: { code: string } | null;
-    journal_entries: { status: JournalEntryStatus } | null;
-  };
-  const saleAssets = (sale as unknown as {
-    assets: { asset_code: string; asset_name: string } | null;
-  }).assets;
+  const { data: lines } = await supabase
+    .schema("assets")
+    .from("asset_sale_lines")
+    .select("id, line_no, fixed_asset_account_id, gross, remarks")
+    .eq("sale_id", id)
+    .order("line_no");
 
-  const [currenciesById, journalEntriesById] = await Promise.all([
-    fetchRefs<{ id: string; code: string }>(
-      supabase,
-      "core",
-      "currencies",
-      "code",
-      [sale.currency_id],
-    ),
+  type LineRow = { id: string; line_no: number; fixed_asset_account_id: string; gross: number; remarks: string | null };
+  const lineRows = (lines as unknown as LineRow[]) ?? [];
+
+  const saleAsset = (sale as unknown as { assets: { asset_code: string; asset_name: string } | null }).assets;
+
+  const [currenciesById, journalEntriesById, accountsById] = await Promise.all([
+    fetchRefs<{ id: string; code: string }>(supabase, "core", "currencies", "code", [sale.currency_id]),
     fetchRefs<{ id: string; status: JournalEntryStatus }>(
       supabase,
       "accounting",
@@ -64,13 +61,20 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
       "status",
       [sale.journal_entry_id],
     ),
+    fetchRefs<{ id: string; account_name: string }>(
+      supabase,
+      "accounting",
+      "chart_of_accounts",
+      "account_name",
+      [sale.customer_account_id, ...lineRows.map((l) => l.fixed_asset_account_id)],
+    ),
   ]);
 
-  const refs: Refs = {
-    assets: saleAssets,
-    currencies: currenciesById.get(sale.currency_id) ?? null,
-    journal_entries: journalEntriesById.get(sale.journal_entry_id) ?? null,
-  };
+  const status = journalEntriesById.get(sale.journal_entry_id)?.status ?? "draft";
+  const currencyCode = currenciesById.get(sale.currency_id)?.code ?? "";
+  const customer = sale.customer_account_id
+    ? accountsById.get(sale.customer_account_id)?.account_name ?? "—"
+    : "—";
 
   const approval = await getVoucherApproval("asset_sales", id);
 
@@ -78,76 +82,81 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Asset Sale</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Sale Asset Voucher</h1>
           <p className="font-mono text-sm text-muted-foreground">{sale.voucher_no ?? "Draft"}</p>
         </div>
-        <VoucherStatusBadge status={refs.journal_entries?.status ?? "draft"} />
+        <VoucherStatusBadge status={status} />
       </div>
 
-      <div className="grid gap-x-8 gap-y-2 rounded-md border p-4 sm:grid-cols-2">
+      <div className="grid gap-x-8 gap-y-2 rounded-md border p-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div>
+          <p className="text-xs text-muted-foreground">Customer (Dr)</p>
+          <p>{customer}</p>
+        </div>
         <div>
           <p className="text-xs text-muted-foreground">Asset</p>
-          <p>{refs.assets ? `${refs.assets.asset_code} — ${refs.assets.asset_name}` : "—"}</p>
+          <p>{saleAsset ? `${saleAsset.asset_code} — ${saleAsset.asset_name}` : "—"}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Buyer</p>
-          <p>{sale.buyer}</p>
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground">Sale date</p>
+          <p className="text-xs text-muted-foreground">Date</p>
           <p>{sale.sale_date}</p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Currency</p>
-          <p>{refs.currencies?.code ?? "—"}</p>
+          <p>
+            {currencyCode} @ {sale.exchange_rate.toLocaleString()}
+          </p>
         </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Pak. Exch</p>
+          <p>{sale.pak_exch.toLocaleString()}</p>
+        </div>
+        {sale.narration && (
+          <div className="sm:col-span-2 lg:col-span-3">
+            <p className="text-xs text-muted-foreground">Narration</p>
+            <p>{sale.narration}</p>
+          </div>
+        )}
       </div>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Component</TableHead>
-            <TableHead className="text-right">Amount</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          <TableRow>
-            <TableCell>Sale price</TableCell>
-            <TableCell className="text-right">{sale.sale_price.toLocaleString()}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell>Book value at sale</TableCell>
-            <TableCell className="text-right">{sale.book_value_at_sale.toLocaleString()}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell className="font-medium">Profit / (Loss)</TableCell>
-            <TableCell
-              className={`text-right font-medium ${sale.profit_loss_amount >= 0 ? "text-success" : "text-destructive"}`}
-            >
-              {sale.profit_loss_amount.toLocaleString()}
-            </TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell>Original purchase value</TableCell>
-            <TableCell className="text-right">{sale.purchase_value_at_sale.toLocaleString()}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell className="font-medium">Capital gain / (loss)</TableCell>
-            <TableCell
-              className={`text-right font-medium ${sale.capital_gain_amount >= 0 ? "text-success" : "text-destructive"}`}
-            >
-              {sale.capital_gain_amount.toLocaleString()}
-            </TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
+      <div className="overflow-x-auto rounded-md border">
+        <Table className="min-w-[700px]">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-10">Sno</TableHead>
+              <TableHead>Fixed Asset (Property) (Cr)</TableHead>
+              <TableHead className="text-right">Gross</TableHead>
+              <TableHead>Remarks</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {lineRows.map((l) => (
+              <TableRow key={l.id}>
+                <TableCell className="text-muted-foreground">{l.line_no}</TableCell>
+                <TableCell>{accountsById.get(l.fixed_asset_account_id)?.account_name ?? "—"}</TableCell>
+                <TableCell className="text-right">{l.gross.toLocaleString()}</TableCell>
+                <TableCell>{l.remarks ?? "—"}</TableCell>
+              </TableRow>
+            ))}
+            <TableRow>
+              <TableCell colSpan={2} className="text-right font-medium">
+                Total Value
+              </TableCell>
+              <TableCell className="text-right font-medium">
+                {sale.total_value.toLocaleString()} {currencyCode}
+              </TableCell>
+              <TableCell />
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
 
       <VoucherActions
-        status={refs.journal_entries?.status ?? "draft"}
+        status={status}
         voucherType="asset_sales"
         voucherId={sale.id}
         journalEntryId={sale.journal_entry_id}
-        amount={sale.sale_price}
+        amount={sale.total_value}
         approvalId={approval?.id ?? null}
         canSubmit={canSubmit}
         canApprove={canApprove}

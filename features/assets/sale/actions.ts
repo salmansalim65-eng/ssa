@@ -7,17 +7,6 @@ import { createClient } from "@/lib/supabase/server";
 import { createJournalEntry, getCurrentCompanyId, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { assetSaleSchema, type AssetSaleInput } from "./schemas";
 
-async function getPostingAccount(companyId: string, accountRole: string) {
-  const supabase = await createClient();
-  const { data, error } = await supabase.schema("accounting").rpc("fn_get_posting_account", {
-    p_company_id: companyId,
-    p_voucher_type: "asset_sales",
-    p_account_role: accountRole,
-  });
-  if (error) throw new Error(error.message);
-  return data as string | null;
-}
-
 export async function createAssetSale(input: AssetSaleInput) {
   const parsed = assetSaleSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -28,75 +17,53 @@ export async function createAssetSale(input: AssetSaleInput) {
   const { data: user } = await supabase.auth.getUser();
   const createdBy = user.user!.id;
 
-  const { data: asset, error: assetError } = await supabase
-    .schema("assets")
-    .from("assets")
-    .select("status, current_value, purchase_value")
-    .eq("id", parsed.data.assetId)
-    .single();
-  if (assetError || !asset) return { error: "Asset not found" };
-  if (asset.status === "sold") return { error: "This asset has already been sold" };
+  const assetId = parsed.data.assetId || null;
+  const lines = parsed.data.lines;
+  const total = lines.reduce((sum, l) => sum + l.gross, 0);
+  if (total <= 0) return { error: "Total value must be greater than zero" };
 
-  const bookValue = asset.current_value ?? 0;
-  const purchaseValue = asset.purchase_value ?? 0;
-  const profitLoss = parsed.data.salePrice - bookValue;
-
-  const [receivableId, fixedAssetId, gainId, lossId] = await Promise.all([
-    getPostingAccount(companyId, "sale_proceeds_receivable"),
-    getPostingAccount(companyId, "fixed_asset_property"),
-    getPostingAccount(companyId, "gain_on_sale"),
-    getPostingAccount(companyId, "loss_on_sale"),
-  ]);
-  if (!receivableId || !fixedAssetId) {
-    return {
-      error: "Configure Posting Templates for Asset Sale first (Sale Proceeds Receivable + Fixed Asset accounts).",
-    };
-  }
-  if (profitLoss > 0 && !gainId) {
-    return { error: "Configure the Gain on Sale of Asset account in Posting Templates first." };
-  }
-  if (profitLoss < 0 && !lossId) {
-    return { error: "Configure the Loss on Sale of Asset account in Posting Templates first." };
+  if (assetId) {
+    const { data: asset } = await supabase
+      .schema("assets")
+      .from("assets")
+      .select("status")
+      .eq("id", assetId)
+      .maybeSingle();
+    if (asset?.status === "sold") return { error: "This asset has already been sold" };
   }
 
-  const { data: costCenter } = await supabase
-    .schema("accounting")
-    .from("cost_centers")
-    .select("id")
-    .eq("asset_id", parsed.data.assetId)
-    .maybeSingle();
-  const costCenterId = costCenter?.id ?? null;
-
-  const lines: EntryLineInput[] = [
-    {
-      accountId: receivableId,
-      costCenterId,
-      debit: parsed.data.salePrice,
-      credit: 0,
-      description: "Asset sale proceeds",
-    },
-  ];
-  if (profitLoss < 0) {
-    lines.push({
-      accountId: lossId!,
-      costCenterId,
-      debit: -profitLoss,
-      credit: 0,
-      description: "Loss on sale of asset",
-    });
-  }
-  lines.push({ accountId: fixedAssetId, costCenterId, debit: 0, credit: bookValue, description: "Asset disposed" });
-  if (profitLoss > 0) {
-    lines.push({
-      accountId: gainId!,
-      costCenterId,
-      debit: 0,
-      credit: profitLoss,
-      description: "Gain on sale of asset",
-    });
+  // Cost center of the (optional) header asset, tagged onto the entry lines.
+  let costCenterId: string | null = null;
+  if (assetId) {
+    const { data: costCenter } = await supabase
+      .schema("accounting")
+      .from("cost_centers")
+      .select("id")
+      .eq("asset_id", assetId)
+      .maybeSingle();
+    costCenterId = costCenter?.id ?? null;
   }
 
   const saleId = crypto.randomUUID();
+
+  // Debit the Customer (receivable) account for the total; credit each line's
+  // Fixed Asset (Property) account for its gross.
+  const jeLines: EntryLineInput[] = [
+    {
+      accountId: parsed.data.customerAccountId,
+      costCenterId,
+      debit: total,
+      credit: 0,
+      description: "Asset sale proceeds",
+    },
+    ...lines.map((l) => ({
+      accountId: l.fixedAssetAccountId,
+      costCenterId,
+      debit: 0,
+      credit: l.gross,
+      description: "Asset disposed",
+    })),
+  ];
 
   const je = await createJournalEntry({
     companyId,
@@ -104,9 +71,10 @@ export async function createAssetSale(input: AssetSaleInput) {
     voucherId: saleId,
     entryDate: parsed.data.saleDate,
     currencyId: parsed.data.currencyId,
-    narration: "Asset sale",
+    narration: parsed.data.narration || "Asset sale",
     createdBy,
-    lines,
+    lines: jeLines,
+    exchangeRate: parsed.data.exchangeRate,
   });
   if ("error" in je) return { error: je.error };
 
@@ -114,17 +82,27 @@ export async function createAssetSale(input: AssetSaleInput) {
     id: saleId,
     company_id: companyId,
     journal_entry_id: je.journalEntryId,
-    asset_id: parsed.data.assetId,
-    buyer: parsed.data.buyer,
+    asset_id: assetId,
+    customer_account_id: parsed.data.customerAccountId,
     sale_date: parsed.data.saleDate,
-    sale_price: parsed.data.salePrice,
-    book_value_at_sale: bookValue,
-    purchase_value_at_sale: purchaseValue,
     currency_id: parsed.data.currencyId,
     exchange_rate: je.exchangeRate,
+    pak_exch: parsed.data.pakExch,
+    narration: parsed.data.narration || null,
+    total_value: total,
     created_by: createdBy,
   });
   if (error) return { error: error.message };
+
+  const lineRows = lines.map((l, index) => ({
+    sale_id: saleId,
+    line_no: index + 1,
+    fixed_asset_account_id: l.fixedAssetAccountId,
+    gross: l.gross,
+    remarks: l.remarks || null,
+  }));
+  const { error: linesError } = await supabase.schema("assets").from("asset_sale_lines").insert(lineRows);
+  if (linesError) return { error: linesError.message };
 
   revalidatePath("/sales");
   return { success: true, id: saleId };
@@ -147,10 +125,12 @@ export async function postAssetSale(id: string, journalEntryId: string) {
     .single();
   if (updateError || !sale) return { error: updateError?.message ?? "Failed to update voucher" };
 
-  await supabase.schema("assets").from("assets").update({ status: "sold" }).eq("id", sale.asset_id);
+  if (sale.asset_id) {
+    await supabase.schema("assets").from("assets").update({ status: "sold" }).eq("id", sale.asset_id);
+    revalidatePath(`/assets/${sale.asset_id}`);
+  }
 
   revalidatePath("/sales");
   revalidatePath(`/sales/${id}`);
-  revalidatePath(`/assets/${sale.asset_id}`);
   return { success: true, voucherNo: result.voucherNo };
 }

@@ -968,32 +968,43 @@ export interface Database {
           company_id: string;
           journal_entry_id: string;
           voucher_no: string | null;
-          asset_id: string;
-          buyer: string;
+          asset_id: string | null;
+          customer_account_id: string | null;
           sale_date: string;
-          sale_price: number;
-          book_value_at_sale: number;
-          purchase_value_at_sale: number;
-          profit_loss_amount: number;
-          capital_gain_amount: number;
           currency_id: string;
           exchange_rate: number;
+          pak_exch: number;
+          narration: string | null;
+          total_value: number;
           created_by: string;
           created_at: string;
         };
         Insert: Partial<Database["assets"]["Tables"]["asset_sales"]["Row"]> & {
           company_id: string;
           journal_entry_id: string;
-          asset_id: string;
-          buyer: string;
           sale_date: string;
-          sale_price: number;
-          book_value_at_sale: number;
-          purchase_value_at_sale: number;
           currency_id: string;
           created_by: string;
         };
         Update: Partial<Database["assets"]["Tables"]["asset_sales"]["Row"]>;
+      };
+      asset_sale_lines: {
+        Row: {
+          id: string;
+          sale_id: string;
+          line_no: number;
+          fixed_asset_account_id: string;
+          gross: number;
+          remarks: string | null;
+          created_at: string;
+        };
+        Insert: Partial<Database["assets"]["Tables"]["asset_sale_lines"]["Row"]> & {
+          sale_id: string;
+          line_no: number;
+          fixed_asset_account_id: string;
+          gross: number;
+        };
+        Update: Partial<Database["assets"]["Tables"]["asset_sale_lines"]["Row"]>;
       };
     };
     Views: {
@@ -1367,14 +1378,9 @@ export interface Database {
           sale_id: string;
           voucher_no: string | null;
           sale_date: string;
-          buyer: string;
           asset_code: string;
           asset_name: string;
-          sale_price: number;
-          book_value_at_sale: number;
-          profit_loss_amount: number;
-          purchase_value_at_sale: number;
-          capital_gain_amount: number;
+          gross: number;
           currency_code: string;
           status: JournalEntryStatus;
         };

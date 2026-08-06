@@ -14,8 +14,12 @@ import { GenerateInvoiceButton } from "@/components/rental/generate-invoice-butt
 import { GenerateAllInvoicesButton } from "@/components/rental/generate-all-invoices-button";
 import { LeaseDeleteButton } from "@/components/rental/lease-delete-button";
 import { LeaseStatusMenu } from "@/components/rental/lease-status-menu";
+import { Button } from "@/components/ui/button";
+import { CopyVoucherButton } from "@/components/vouchers/copy-voucher-button";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
+import { copyUaeLease } from "@/features/rental/uae-leases/actions";
+import { PencilIcon } from "lucide-react";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
@@ -49,7 +53,10 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
 
   if (!lease) notFound();
 
-  const canDelete = await hasPermission("uae_rent_invoice", "delete");
+  const [canDelete, canEdit] = await Promise.all([
+    hasPermission("uae_rent_invoice", "delete"),
+    hasPermission("uae_rent_invoice", "edit"),
+  ]);
 
   const [assetsById, currenciesById] = await Promise.all([
     fetchRefs<{ id: string; asset_code: string; asset_name: string }>(
@@ -115,6 +122,16 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
         <div className="flex items-center gap-2">
           <Badge variant={leaseStatusVariant[lease.status as keyof typeof leaseStatusVariant]}>{lease.status}</Badge>
           <PrintButton />
+          {canEdit && (
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/rental/uae/leases/${lease.id}/edit`}>
+                <PencilIcon /> Edit
+              </Link>
+            </Button>
+          )}
+          {canCreate && (
+            <CopyVoucherButton id={lease.id} onCopy={copyUaeLease} hrefBase="/rental/uae/leases" label="Lease" />
+          )}
           {canCreate && <LeaseStatusMenu leaseId={lease.id} status={lease.status} />}
           {canDelete && <LeaseDeleteButton leaseId={lease.id} country="uae" />}
         </div>

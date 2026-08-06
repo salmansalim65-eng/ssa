@@ -14,8 +14,12 @@ import { GeneratePkInvoiceDialog } from "@/components/rental/generate-pk-invoice
 import { GenerateAllInvoicesButton } from "@/components/rental/generate-all-invoices-button";
 import { LeaseDeleteButton } from "@/components/rental/lease-delete-button";
 import { PkLeaseStatusMenu } from "@/components/rental/pk-lease-status-menu";
+import { Button } from "@/components/ui/button";
+import { CopyVoucherButton } from "@/components/vouchers/copy-voucher-button";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
+import { copyPkLease } from "@/features/rental/pk-leases/actions";
+import { PencilIcon } from "lucide-react";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
@@ -49,7 +53,10 @@ export default async function PkLeaseDetailPage({ params }: { params: Promise<{ 
 
   if (!lease) notFound();
 
-  const canDelete = await hasPermission("pk_rent_invoice", "delete");
+  const [canDelete, canEdit] = await Promise.all([
+    hasPermission("pk_rent_invoice", "delete"),
+    hasPermission("pk_rent_invoice", "edit"),
+  ]);
 
   const [assetsById, currenciesById] = await Promise.all([
     fetchRefs<{ id: string; asset_code: string; asset_name: string }>(
@@ -121,6 +128,16 @@ export default async function PkLeaseDetailPage({ params }: { params: Promise<{ 
         <div className="flex items-center gap-2">
           <Badge variant={leaseStatusVariant[lease.status as keyof typeof leaseStatusVariant]}>{lease.status}</Badge>
           <PrintButton />
+          {canEdit && (
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/rental/pk/leases/${lease.id}/edit`}>
+                <PencilIcon /> Edit
+              </Link>
+            </Button>
+          )}
+          {canCreate && (
+            <CopyVoucherButton id={lease.id} onCopy={copyPkLease} hrefBase="/rental/pk/leases" label="Lease" />
+          )}
           {canCreate && <PkLeaseStatusMenu leaseId={lease.id} status={lease.status} />}
           {canDelete && <LeaseDeleteButton leaseId={lease.id} country="pk" />}
         </div>

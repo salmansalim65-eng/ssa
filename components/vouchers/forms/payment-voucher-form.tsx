@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/form";
 import { AccountSelect, type AccountOption } from "@/components/vouchers/account-select";
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
-import { createPaymentVoucher } from "@/features/accounting/vouchers/payment/actions";
+import { createPaymentVoucher, updatePaymentVoucher } from "@/features/accounting/vouchers/payment/actions";
 import {
   paymentVoucherSchema,
   type PaymentVoucherFormValues,
@@ -32,17 +32,22 @@ function today() {
 export function PaymentVoucherForm({
   accounts,
   currencies,
+  voucherId,
+  initialValues,
 }: {
   accounts: AccountOption[];
   currencies: CurrencyOption[];
+  voucherId?: string;
+  initialValues?: PaymentVoucherFormValues;
 }) {
   const router = useRouter();
+  const isEdit = !!voucherId;
   const [isPending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
 
   const form = useForm<PaymentVoucherFormValues, unknown, PaymentVoucherInput>({
     resolver: zodResolver(paymentVoucherSchema),
-    defaultValues: {
+    defaultValues: initialValues ?? {
       paymentDate: today(),
       paidTo: "",
       debitAccountId: "",
@@ -56,13 +61,15 @@ export function PaymentVoucherForm({
   function onSubmit(values: PaymentVoucherInput) {
     setFormError(null);
     startTransition(async () => {
-      const result = await createPaymentVoucher(values);
+      const result = isEdit
+        ? await updatePaymentVoucher(voucherId!, values)
+        : await createPaymentVoucher(values);
       if (result?.error) {
         setFormError(result.error);
         return;
       }
-      toast.success("Payment voucher created");
-      router.push(`/accounting/vouchers/payment_voucher/${result.id}`);
+      toast.success(isEdit ? "Payment voucher updated" : "Payment voucher created");
+      router.push(`/accounting/vouchers/payment_voucher/${isEdit ? voucherId : result.id}`);
     });
   }
 
@@ -156,7 +163,7 @@ export function PaymentVoucherForm({
         />
         {formError && <p className="text-sm text-destructive sm:col-span-2">{formError}</p>}
         <Button type="submit" disabled={isPending} className="sm:col-span-2 sm:w-fit">
-          {isPending ? "Creating…" : "Create payment voucher"}
+          {isPending ? (isEdit ? "Saving…" : "Creating…") : isEdit ? "Save changes" : "Create payment voucher"}
         </Button>
       </form>
     </Form>

@@ -1,9 +1,10 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -13,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { VOUCHER_TYPES } from "@/types/database.types";
 
 export interface AccountOption {
   id: string;
@@ -20,58 +22,181 @@ export interface AccountOption {
   account_name: string;
 }
 
+export interface CurrencyChoice {
+  id: string;
+  code: string;
+}
+
+const ACCOUNT_CURRENCY = "account";
+
+function titleCase(s: string) {
+  return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export function GeneralLedgerFilters({
   accounts,
-  defaultAccountId,
+  currencies,
+  defaultAccountIds,
   defaultFrom,
   defaultTo,
+  defaultCurrency,
+  defaultVoucherType,
+  defaultQuery,
+  defaultMin,
+  defaultMax,
 }: {
   accounts: AccountOption[];
-  defaultAccountId: string;
+  currencies: CurrencyChoice[];
+  defaultAccountIds: string[];
   defaultFrom: string;
   defaultTo: string;
+  defaultCurrency: string;
+  defaultVoucherType: string;
+  defaultQuery: string;
+  defaultMin: string;
+  defaultMax: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [accountId, setAccountId] = useState(defaultAccountId);
+
+  const [selected, setSelected] = useState<Set<string>>(new Set(defaultAccountIds));
+  const [accountSearch, setAccountSearch] = useState("");
   const [from, setFrom] = useState(defaultFrom);
   const [to, setTo] = useState(defaultTo);
+  const [currency, setCurrency] = useState(defaultCurrency || ACCOUNT_CURRENCY);
+  const [voucherType, setVoucherType] = useState(defaultVoucherType || "all");
+  const [query, setQuery] = useState(defaultQuery);
+  const [min, setMin] = useState(defaultMin);
+  const [max, setMax] = useState(defaultMax);
+
+  const filteredAccounts = useMemo(() => {
+    const q = accountSearch.trim().toLowerCase();
+    const list = q
+      ? accounts.filter(
+          (a) => a.account_name.toLowerCase().includes(q) || a.account_code.toLowerCase().includes(q),
+        )
+      : accounts;
+    return list.slice(0, 200);
+  }, [accounts, accountSearch]);
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   function apply() {
     const params = new URLSearchParams(searchParams.toString());
-    if (accountId) params.set("accountId", accountId);
-    else params.delete("accountId");
+    if (selected.size) params.set("accountIds", [...selected].join(","));
+    else params.delete("accountIds");
+    params.delete("accountId"); // legacy single-account param
     params.set("from", from);
     params.set("to", to);
+    if (currency && currency !== ACCOUNT_CURRENCY) params.set("cur", currency);
+    else params.delete("cur");
+    if (voucherType && voucherType !== "all") params.set("vtype", voucherType);
+    else params.delete("vtype");
+    if (query.trim()) params.set("q", query.trim());
+    else params.delete("q");
+    if (min.trim()) params.set("min", min.trim());
+    else params.delete("min");
+    if (max.trim()) params.set("max", max.trim());
+    else params.delete("max");
     router.push(`${pathname}?${params.toString()}`);
   }
 
   return (
-    <div className="flex flex-wrap items-end gap-3 print:hidden">
-      <div className="w-64 space-y-1">
-        <Label>Account</Label>
-        <Select value={accountId} onValueChange={setAccountId}>
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Select an account" />
-          </SelectTrigger>
-          <SelectContent>
-            {accounts.map((a) => (
-              <SelectItem key={a.id} value={a.id}>
-                {a.account_code} — {a.account_name}
-              </SelectItem>
+    <div className="space-y-3 rounded-md border p-4 print:hidden">
+      <div className="flex flex-wrap gap-4">
+        {/* Multi-account picker */}
+        <div className="w-72 space-y-1">
+          <Label>Accounts ({selected.size} selected)</Label>
+          <Input
+            placeholder="Search accounts by name…"
+            value={accountSearch}
+            onChange={(e) => setAccountSearch(e.target.value)}
+          />
+          <div className="max-h-48 overflow-y-auto rounded-md border p-1">
+            {filteredAccounts.map((a) => (
+              <label
+                key={a.id}
+                className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1 text-sm hover:bg-accent"
+              >
+                <Checkbox checked={selected.has(a.id)} onCheckedChange={() => toggle(a.id)} />
+                <span className="truncate">{a.account_name}</span>
+              </label>
             ))}
-          </SelectContent>
-        </Select>
+            {filteredAccounts.length === 0 && (
+              <p className="px-2 py-2 text-center text-sm text-muted-foreground">No account found.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="gl-from">From</Label>
+              <Input id="gl-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="gl-to">To</Label>
+              <Input id="gl-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            </div>
+            <div className="w-44 space-y-1">
+              <Label>Reporting currency</Label>
+              <Select value={currency} onValueChange={setCurrency}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ACCOUNT_CURRENCY}>Account currency</SelectItem>
+                  {currencies.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.code}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <div className="w-44 space-y-1">
+              <Label>Voucher type</Label>
+              <Select value={voucherType} onValueChange={setVoucherType}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All types</SelectItem>
+                  {VOUCHER_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {titleCase(t)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="w-56 space-y-1">
+              <Label htmlFor="gl-q">Search (voucher / narration)</Label>
+              <Input id="gl-q" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Contains…" />
+            </div>
+            <div className="w-28 space-y-1">
+              <Label htmlFor="gl-min">Min amount</Label>
+              <Input id="gl-min" type="number" step="0.01" value={min} onChange={(e) => setMin(e.target.value)} />
+            </div>
+            <div className="w-28 space-y-1">
+              <Label htmlFor="gl-max">Max amount</Label>
+              <Input id="gl-max" type="number" step="0.01" value={max} onChange={(e) => setMax(e.target.value)} />
+            </div>
+          </div>
+        </div>
       </div>
-      <div className="space-y-1">
-        <Label htmlFor="gl-from">From</Label>
-        <Input id="gl-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-      </div>
-      <div className="space-y-1">
-        <Label htmlFor="gl-to">To</Label>
-        <Input id="gl-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-      </div>
+
       <Button size="sm" onClick={apply}>
         Apply
       </Button>

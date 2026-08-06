@@ -43,7 +43,7 @@ export default async function PurchaseReportPage({
     .lte("purchase_date", to)
     .order("purchase_date", { ascending: false });
 
-  const totalAmount = (rows ?? []).reduce((sum, r) => sum + r.total_amount, 0);
+  const totalAmount = (rows ?? []).reduce((sum, r) => sum + r.gross, 0);
 
   return (
     <div className="space-y-4">
@@ -55,29 +55,13 @@ export default async function PurchaseReportPage({
         <div className="flex gap-2">
           <CsvExportButton
             filename={`purchase-report-${from}-to-${to}.csv`}
-            headers={[
-              "Voucher No",
-              "Date",
-              "Asset",
-              "Supplier",
-              "Purchase Price",
-              "Taxes",
-              "Registration Charges",
-              "Additional Expenses",
-              "Total",
-              "Currency",
-              "Status",
-            ]}
+            headers={["Voucher No", "Date", "Asset", "Supplier", "Gross", "Currency", "Status"]}
             rows={(rows ?? []).map((r) => [
               r.voucher_no ?? "",
               r.purchase_date,
               `${r.asset_code} - ${r.asset_name}`,
               r.supplier_name,
-              r.purchase_price,
-              r.taxes,
-              r.registration_charges,
-              r.additional_expenses,
-              r.total_amount,
+              r.gross,
               r.currency_code,
               r.status,
             ])}
@@ -97,7 +81,7 @@ export default async function PurchaseReportPage({
             <TableHead>Date</TableHead>
             <TableHead>Asset</TableHead>
             <TableHead>Supplier</TableHead>
-            <TableHead className="text-right">Total</TableHead>
+            <TableHead className="text-right">Gross</TableHead>
             <TableHead>Status</TableHead>
           </TableRow>
         </TableHeader>
@@ -111,7 +95,7 @@ export default async function PurchaseReportPage({
               </TableCell>
               <TableCell>{r.supplier_name}</TableCell>
               <TableCell className="text-right">
-                {r.total_amount.toLocaleString()} {r.currency_code}
+                {r.gross.toLocaleString()} {r.currency_code}
               </TableCell>
               <TableCell>
                 <VoucherStatusBadge status={r.status} />

@@ -26,7 +26,7 @@ export default async function PurchasesPage() {
       .schema("accounting")
       .from("purchase_vouchers")
       .select(
-        "id, voucher_no, purchase_date, total_amount, asset_id, supplier_id, journal_entries:journal_entry_id(status)",
+        "id, voucher_no, purchase_date, total_value, supplier_id, journal_entries:journal_entry_id(status)",
       )
       .eq("company_id", companyId)
       .order("created_at", { ascending: false }),
@@ -37,30 +37,20 @@ export default async function PurchasesPage() {
     id: string;
     voucher_no: string | null;
     purchase_date: string;
-    total_amount: number;
-    asset_id: string | null;
+    total_value: number;
     supplier_id: string | null;
     journal_entries: { status: JournalEntryStatus } | null;
   };
 
   const rawRows = (rows as unknown as RawRow[]) ?? [];
 
-  const [assetsById, suppliersById] = await Promise.all([
-    fetchRefs<{ id: string; asset_code: string; asset_name: string }>(
-      supabase,
-      "assets",
-      "assets",
-      "asset_code, asset_name",
-      rawRows.map((r) => r.asset_id),
-    ),
-    fetchRefs<{ id: string; name: string }>(
-      supabase,
-      "assets",
-      "suppliers",
-      "name",
-      rawRows.map((r) => r.supplier_id),
-    ),
-  ]);
+  const suppliersById = await fetchRefs<{ id: string; name: string }>(
+    supabase,
+    "assets",
+    "suppliers",
+    "name",
+    rawRows.map((r) => r.supplier_id),
+  );
 
   return (
     <div className="space-y-4">
@@ -81,15 +71,13 @@ export default async function PurchasesPage() {
           <TableRow>
             <TableHead>Voucher no</TableHead>
             <TableHead>Date</TableHead>
-            <TableHead>Asset</TableHead>
             <TableHead>Supplier</TableHead>
-            <TableHead>Total</TableHead>
+            <TableHead className="text-right">Total value</TableHead>
             <TableHead>Status</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rawRows.map((row) => {
-            const asset = assetsById.get(row.asset_id ?? "") ?? null;
             const supplier = suppliersById.get(row.supplier_id ?? "") ?? null;
             return (
               <TableRow key={row.id}>
@@ -99,11 +87,8 @@ export default async function PurchasesPage() {
                   </Link>
                 </TableCell>
                 <TableCell>{row.purchase_date}</TableCell>
-                <TableCell>
-                  {asset ? `${asset.asset_code} — ${asset.asset_name}` : "—"}
-                </TableCell>
                 <TableCell>{supplier?.name ?? "—"}</TableCell>
-                <TableCell>{row.total_amount.toLocaleString()}</TableCell>
+                <TableCell className="text-right">{row.total_value.toLocaleString()}</TableCell>
                 <TableCell>
                   <VoucherStatusBadge status={row.journal_entries?.status ?? "draft"} />
                 </TableCell>
@@ -112,7 +97,7 @@ export default async function PurchasesPage() {
           })}
           {rawRows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={6} className="text-center text-muted-foreground">
+              <TableCell colSpan={5} className="text-center text-muted-foreground">
                 No purchase vouchers yet.
               </TableCell>
             </TableRow>

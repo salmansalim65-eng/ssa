@@ -2,8 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { PlusIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -47,6 +48,10 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function emptyLine() {
+  return { assetId: "", fixedAssetAccountId: "", gross: 0, dueDate: "", installmentMonth: "", remarks: "" };
+}
+
 export function PurchaseVoucherForm({
   assets,
   suppliers,
@@ -65,25 +70,20 @@ export function PurchaseVoucherForm({
   const form = useForm<PurchaseVoucherFormValues, unknown, PurchaseVoucherInput>({
     resolver: zodResolver(purchaseVoucherSchema),
     defaultValues: {
-      assetId: "",
       supplierId: "",
-      fixedAssetAccountId: "",
       vendorAccountId: "",
       purchaseDate: today(),
       currencyId: currencies[0]?.id ?? "",
-      purchasePrice: 0,
-      taxes: 0,
-      registrationCharges: 0,
-      additionalExpenses: 0,
+      narration: "",
+      paymentTerms: "",
+      sharePercentage: 0,
+      lines: [emptyLine()],
     },
   });
 
-  const watched = useWatch({ control: form.control });
-  const total =
-    (Number(watched.purchasePrice) || 0) +
-    (Number(watched.taxes) || 0) +
-    (Number(watched.registrationCharges) || 0) +
-    (Number(watched.additionalExpenses) || 0);
+  const { fields, append, remove } = useFieldArray({ control: form.control, name: "lines" });
+  const watchedLines = useWatch({ control: form.control, name: "lines" });
+  const totalValue = (watchedLines ?? []).reduce((sum, l) => sum + (Number(l?.gross) || 0), 0);
 
   function onSubmit(values: PurchaseVoucherInput) {
     setFormError(null);
@@ -100,168 +100,256 @@ export function PurchaseVoucherForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="grid max-w-2xl gap-4 sm:grid-cols-2">
-        <FormField
-          control={form.control}
-          name="assetId"
-          render={({ field }) => (
-            <FormItem className="sm:col-span-2">
-              <FormLabel>Asset</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {/* Voucher header */}
+        <div className="grid gap-4 rounded-md border p-4 sm:grid-cols-2 lg:grid-cols-3">
+          <FormItem>
+            <FormLabel>Document No.</FormLabel>
+            <Input value="Auto" disabled readOnly />
+          </FormItem>
+          <FormField
+            control={form.control}
+            name="purchaseDate"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Date</FormLabel>
                 <FormControl>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select the asset being purchased" />
-                  </SelectTrigger>
+                  <Input type="date" {...field} />
                 </FormControl>
-                <SelectContent>
-                  {assets.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.asset_code} — {a.asset_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="supplierId"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Supplier</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value}>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="currencyId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Currency</FormLabel>
+                <CurrencySelect currencies={currencies} value={field.value} onValueChange={field.onChange} />
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="vendorAccountId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Vendor (Cr)</FormLabel>
+                <AccountCombobox accounts={accounts} value={field.value} onValueChange={field.onChange} />
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="supplierId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Supplier</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select supplier" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {suppliers.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="sharePercentage"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Share %</FormLabel>
                 <FormControl>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select supplier" />
-                  </SelectTrigger>
+                  <Input type="number" step="0.01" min="0" max="100" {...field} value={field.value as number} />
                 </FormControl>
-                <SelectContent>
-                  {suppliers.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="fixedAssetAccountId"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Fixed Asset Account (Dr)</FormLabel>
-              <AccountCombobox
-                accounts={accounts}
-                value={field.value}
-                onValueChange={field.onChange}
-                placeholder="Search account by name"
-              />
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="vendorAccountId"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Vendor (Cr)</FormLabel>
-              <AccountCombobox
-                accounts={accounts}
-                value={field.value}
-                onValueChange={field.onChange}
-                placeholder="Search account by name"
-              />
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="purchaseDate"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Purchase date</FormLabel>
-              <FormControl>
-                <Input type="date" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="currencyId"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Currency</FormLabel>
-              <CurrencySelect currencies={currencies} value={field.value} onValueChange={field.onChange} />
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="purchasePrice"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Purchase price</FormLabel>
-              <FormControl>
-                <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="taxes"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Taxes</FormLabel>
-              <FormControl>
-                <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="registrationCharges"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Registration charges</FormLabel>
-              <FormControl>
-                <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="additionalExpenses"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Additional expenses</FormLabel>
-              <FormControl>
-                <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="paymentTerms"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Payment terms</FormLabel>
+                <FormControl>
+                  <Input placeholder="e.g. 30 days" {...field} value={(field.value as string) ?? ""} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="narration"
+            render={({ field }) => (
+              <FormItem className="sm:col-span-2">
+                <FormLabel>Narration</FormLabel>
+                <FormControl>
+                  <Input placeholder="Optional" {...field} value={(field.value as string) ?? ""} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
 
-        <p className="text-sm font-medium sm:col-span-2">Total: {total.toLocaleString()}</p>
+        {/* Asset line grid */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-medium">Assets</h2>
+            <Button type="button" variant="outline" size="sm" onClick={() => append(emptyLine())}>
+              <PlusIcon className="size-4" /> Add row
+            </Button>
+          </div>
 
-        {formError && <p className="text-sm text-destructive sm:col-span-2">{formError}</p>}
-        <Button type="submit" disabled={isPending} className="sm:col-span-2 sm:w-fit">
+          <div className="overflow-x-auto rounded-md border">
+            <table className="w-full min-w-[1000px] text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50 text-left [&_th]:px-2 [&_th]:py-2 [&_th]:font-medium">
+                  <th className="w-10">Sno</th>
+                  <th className="min-w-[200px]">Asset</th>
+                  <th className="min-w-[200px]">Fixed Asset Account (Dr)</th>
+                  <th className="w-32">Gross</th>
+                  <th className="w-40">Due Date</th>
+                  <th className="w-32">Installment Month</th>
+                  <th className="min-w-[150px]">Remarks</th>
+                  <th className="w-10" />
+                </tr>
+              </thead>
+              <tbody>
+                {fields.map((line, index) => (
+                  <tr key={line.id} className="border-b align-top [&_td]:px-2 [&_td]:py-2">
+                    <td className="pt-4 text-muted-foreground">{index + 1}</td>
+                    <td>
+                      <FormField
+                        control={form.control}
+                        name={`lines.${index}.assetId`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="Select asset" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {assets.map((a) => (
+                                  <SelectItem key={a.id} value={a.id}>
+                                    {a.asset_code} — {a.asset_name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </td>
+                    <td>
+                      <FormField
+                        control={form.control}
+                        name={`lines.${index}.fixedAssetAccountId`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <AccountCombobox accounts={accounts} value={field.value} onValueChange={field.onChange} />
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </td>
+                    <td>
+                      <FormField
+                        control={form.control}
+                        name={`lines.${index}.gross`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </td>
+                    <td>
+                      <FormField
+                        control={form.control}
+                        name={`lines.${index}.dueDate`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Input type="date" {...field} value={(field.value as string) ?? ""} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </td>
+                    <td>
+                      <FormField
+                        control={form.control}
+                        name={`lines.${index}.installmentMonth`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Input placeholder="Aug-2026" {...field} value={(field.value as string) ?? ""} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </td>
+                    <td>
+                      <FormField
+                        control={form.control}
+                        name={`lines.${index}.remarks`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Input placeholder="Optional" {...field} value={(field.value as string) ?? ""} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </td>
+                    <td className="pt-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        disabled={fields.length === 1}
+                        onClick={() => remove(index)}
+                        aria-label="Remove row"
+                      >
+                        <Trash2Icon className="size-4" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <p className="text-right text-sm font-medium">Total Value: {totalValue.toLocaleString()}</p>
+        </div>
+
+        {formError && <p className="text-sm text-destructive">{formError}</p>}
+        <Button type="submit" disabled={isPending} className="sm:w-fit">
           {isPending ? "Creating…" : "Create purchase voucher"}
         </Button>
       </form>

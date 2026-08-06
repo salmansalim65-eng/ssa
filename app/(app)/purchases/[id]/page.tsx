@@ -11,8 +11,9 @@ import {
 } from "@/components/ui/table";
 import { AttachmentList, type AttachmentItem } from "@/components/attachments/attachment-list";
 import { VoucherActions } from "@/components/vouchers/voucher-actions";
+import { VoucherDeleteButton } from "@/components/vouchers/voucher-delete-button";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
-import { postPurchaseVoucher } from "@/features/accounting/purchase-voucher/actions";
+import { deletePurchaseVoucher, postPurchaseVoucher } from "@/features/accounting/purchase-voucher/actions";
 import { getSignedUrl } from "@/features/attachments/actions";
 import { hasPermission } from "@/lib/auth/permissions";
 import { fetchRefs } from "@/lib/supabase/hydrate";
@@ -42,6 +43,8 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
   ]);
 
   if (!voucher) notFound();
+
+  const canDelete = await hasPermission("purchase_voucher", "delete");
 
   const { data: lines } = await supabase
     .schema("accounting")
@@ -115,7 +118,17 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
           <h1 className="text-2xl font-semibold tracking-tight">Purchase Voucher</h1>
           <p className="font-mono text-sm text-muted-foreground">{voucher.voucher_no ?? "Draft"}</p>
         </div>
-        <VoucherStatusBadge status={status} />
+        <div className="flex items-center gap-2">
+          <VoucherStatusBadge status={status} />
+          {status === "draft" && canDelete && (
+            <VoucherDeleteButton
+              id={voucher.id}
+              onDelete={deletePurchaseVoucher}
+              listHref="/purchases"
+              label="purchase voucher"
+            />
+          )}
+        </div>
       </div>
 
       <div className="grid gap-x-8 gap-y-2 rounded-md border p-4 sm:grid-cols-2 lg:grid-cols-3">

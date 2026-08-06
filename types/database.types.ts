@@ -831,6 +831,10 @@ export interface Database {
       };
     };
     Functions: {
+      fn_delete_draft_purchase_voucher: {
+        Args: { p_id: string };
+        Returns: undefined;
+      };
       fn_get_posting_account: {
         Args: { p_company_id: string; p_voucher_type: VoucherType; p_account_role: string };
         Returns: string | null;
@@ -1025,7 +1029,12 @@ export interface Database {
         };
       };
     };
-    Functions: Record<string, never>;
+    Functions: {
+      fn_delete_draft_asset_sale: {
+        Args: { p_id: string };
+        Returns: undefined;
+      };
+    };
   };
   rental: {
     Tables: {

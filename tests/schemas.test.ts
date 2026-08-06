@@ -14,24 +14,30 @@ const UUID_C = "33333333-3333-4333-8333-333333333333";
 
 describe("assetSaleSchema", () => {
   const valid = {
-    assetId: UUID_A,
-    buyer: "Jane Doe",
+    customerAccountId: UUID_A,
     saleDate: "2026-01-15",
-    salePrice: 500000,
     currencyId: UUID_B,
+    exchangeRate: 1,
+    pakExch: 3.5,
+    lines: [{ fixedAssetAccountId: UUID_C, gross: 500000, remarks: "" }],
   };
 
   it("accepts a valid sale", () => {
     expect(assetSaleSchema.safeParse(valid).success).toBe(true);
   });
 
-  it("rejects a zero or negative sale price", () => {
-    expect(assetSaleSchema.safeParse({ ...valid, salePrice: 0 }).success).toBe(false);
-    expect(assetSaleSchema.safeParse({ ...valid, salePrice: -100 }).success).toBe(false);
+  it("rejects a total value of zero", () => {
+    expect(
+      assetSaleSchema.safeParse({ ...valid, lines: [{ fixedAssetAccountId: UUID_C, gross: 0 }] }).success,
+    ).toBe(false);
   });
 
-  it("rejects a buyer name that's too short", () => {
-    expect(assetSaleSchema.safeParse({ ...valid, buyer: "A" }).success).toBe(false);
+  it("rejects a sale with no lines", () => {
+    expect(assetSaleSchema.safeParse({ ...valid, lines: [] }).success).toBe(false);
+  });
+
+  it("rejects a missing customer account", () => {
+    expect(assetSaleSchema.safeParse({ ...valid, customerAccountId: "" }).success).toBe(false);
   });
 });
 

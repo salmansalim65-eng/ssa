@@ -9,6 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { RecordPkRentPaymentForm } from "@/components/rental/record-pk-rent-payment-form";
+import { PrintButton } from "@/components/vouchers/print-button";
 import { VoucherActions } from "@/components/vouchers/voucher-actions";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { postPkRentInvoice } from "@/features/rental/pk-rent-invoices/actions";
@@ -111,12 +112,20 @@ export default async function PkRentInvoiceDetailPage({ params }: { params: Prom
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between print:hidden">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Pakistan Rent Invoice</h1>
           <p className="font-mono text-sm text-muted-foreground">{invoice.voucher_no ?? "Draft"}</p>
         </div>
-        <VoucherStatusBadge status={status} />
+        <div className="flex items-center gap-2">
+          <VoucherStatusBadge status={status} />
+          <PrintButton />
+        </div>
+      </div>
+
+      <div className="hidden print:block">
+        <h1 className="text-xl font-semibold">Pakistan Rent Invoice</h1>
+        <p className="font-mono text-sm">{invoice.voucher_no ?? "Draft"}</p>
       </div>
 
       <div className="grid gap-x-8 gap-y-2 rounded-md border p-4 sm:grid-cols-2">
@@ -178,19 +187,21 @@ export default async function PkRentInvoiceDetailPage({ params }: { params: Prom
         </TableBody>
       </Table>
 
-      <VoucherActions
-        status={status}
-        voucherType="pk_rent_invoice"
-        voucherId={invoice.id}
-        journalEntryId={invoice.journal_entry_id}
-        amount={invoice.total_amount}
-        approvalId={approval?.id ?? null}
-        canSubmit={canSubmit}
-        canApprove={canApprove}
-        canReject={canReject}
-        canPost={canPost}
-        onPost={postPkRentInvoice}
-      />
+      <div className="print:hidden">
+        <VoucherActions
+          status={status}
+          voucherType="pk_rent_invoice"
+          voucherId={invoice.id}
+          journalEntryId={invoice.journal_entry_id}
+          amount={invoice.total_amount}
+          approvalId={approval?.id ?? null}
+          canSubmit={canSubmit}
+          canApprove={canApprove}
+          canReject={canReject}
+          canPost={canPost}
+          onPost={postPkRentInvoice}
+        />
+      </div>
 
       <div className="space-y-2">
         <h2 className="text-lg font-medium">Payments</h2>

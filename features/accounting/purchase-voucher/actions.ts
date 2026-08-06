@@ -83,6 +83,48 @@ export async function createPurchaseVoucher(input: PurchaseVoucherInput) {
   return { success: true, id: voucherId };
 }
 
+export async function copyPurchaseVoucher(id: string) {
+  await requirePermission("purchase_voucher", "create");
+  const companyId = await getCurrentCompanyId();
+  const supabase = await createClient();
+
+  // Read the source header + lines, then re-create a fresh draft (dated today)
+  // by reusing the normal create flow — the copy is never linked to the
+  // original and always starts unposted.
+  const { data: src } = await supabase
+    .schema("accounting")
+    .from("purchase_vouchers")
+    .select("vendor_account_id, currency_id, exchange_rate, narration, payment_terms, share_percentage")
+    .eq("company_id", companyId)
+    .eq("id", id)
+    .maybeSingle();
+  if (!src) return { error: "Purchase voucher not found" };
+
+  const { data: lines } = await supabase
+    .schema("accounting")
+    .from("purchase_voucher_lines")
+    .select("fixed_asset_account_id, gross, due_date, installment_month, remarks")
+    .eq("voucher_id", id)
+    .order("line_no");
+
+  return createPurchaseVoucher({
+    vendorAccountId: src.vendor_account_id ?? "",
+    purchaseDate: new Date().toISOString().slice(0, 10),
+    currencyId: src.currency_id,
+    exchangeRate: src.exchange_rate,
+    narration: src.narration ?? "",
+    paymentTerms: src.payment_terms ?? "",
+    sharePercentage: src.share_percentage ?? 0,
+    lines: (lines ?? []).map((l) => ({
+      fixedAssetAccountId: l.fixed_asset_account_id,
+      gross: l.gross,
+      dueDate: l.due_date ?? "",
+      installmentMonth: l.installment_month ?? "",
+      remarks: l.remarks ?? "",
+    })),
+  });
+}
+
 export async function deletePurchaseVoucher(id: string) {
   await requirePermission("purchase_voucher", "delete");
   const supabase = await createClient();

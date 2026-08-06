@@ -8,10 +8,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { CopyVoucherButton } from "@/components/vouchers/copy-voucher-button";
+import { PrintButton } from "@/components/vouchers/print-button";
 import { VoucherActions } from "@/components/vouchers/voucher-actions";
 import { VoucherDeleteButton } from "@/components/vouchers/voucher-delete-button";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
-import { deleteAssetSale, postAssetSale } from "@/features/assets/sale/actions";
+import { copyAssetSale, deleteAssetSale, postAssetSale } from "@/features/assets/sale/actions";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
@@ -41,7 +43,10 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
 
   if (!sale) notFound();
 
-  const canDelete = await hasPermission("asset_sales", "delete");
+  const [canDelete, canCreate] = await Promise.all([
+    hasPermission("asset_sales", "delete"),
+    hasPermission("asset_sales", "create"),
+  ]);
 
   const { data: lines } = await supabase
     .schema("assets")
@@ -83,13 +88,22 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between print:hidden">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Sale Asset Voucher</h1>
           <p className="font-mono text-sm text-muted-foreground">{sale.voucher_no ?? "Draft"}</p>
         </div>
         <div className="flex items-center gap-2">
           <VoucherStatusBadge status={status} />
+          <PrintButton />
+          {canCreate && (
+            <CopyVoucherButton
+              id={sale.id}
+              onCopy={copyAssetSale}
+              hrefBase="/sales"
+              label="Sale asset voucher"
+            />
+          )}
           {status === "draft" && canDelete && (
             <VoucherDeleteButton
               id={sale.id}
@@ -99,6 +113,11 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
             />
           )}
         </div>
+      </div>
+
+      <div className="hidden print:block">
+        <h1 className="text-xl font-semibold">Sale Asset Voucher</h1>
+        <p className="font-mono text-sm">{sale.voucher_no ?? "Draft"}</p>
       </div>
 
       <div className="grid gap-x-8 gap-y-2 rounded-md border p-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -164,19 +183,21 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
         </Table>
       </div>
 
-      <VoucherActions
-        status={status}
-        voucherType="asset_sales"
-        voucherId={sale.id}
-        journalEntryId={sale.journal_entry_id}
-        amount={sale.total_value}
-        approvalId={approval?.id ?? null}
-        canSubmit={canSubmit}
-        canApprove={canApprove}
-        canReject={canReject}
-        canPost={canPost}
-        onPost={postAssetSale}
-      />
+      <div className="print:hidden">
+        <VoucherActions
+          status={status}
+          voucherType="asset_sales"
+          voucherId={sale.id}
+          journalEntryId={sale.journal_entry_id}
+          amount={sale.total_value}
+          approvalId={approval?.id ?? null}
+          canSubmit={canSubmit}
+          canApprove={canApprove}
+          canReject={canReject}
+          canPost={canPost}
+          onPost={postAssetSale}
+        />
+      </div>
     </div>
   );
 }

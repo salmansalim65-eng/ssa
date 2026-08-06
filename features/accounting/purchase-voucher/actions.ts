@@ -21,18 +21,6 @@ export async function createPurchaseVoucher(input: PurchaseVoucherInput) {
   const total = lines.reduce((sum, l) => sum + l.gross, 0);
   if (total <= 0) return { error: "Total value must be greater than zero" };
 
-  // Cost center for each line's asset (auto-created per asset), so the debit
-  // lines carry the property they belong to.
-  const { data: costCenters } = await supabase
-    .schema("accounting")
-    .from("cost_centers")
-    .select("id, asset_id")
-    .in(
-      "asset_id",
-      lines.map((l) => l.assetId),
-    );
-  const costCenterByAsset = new Map((costCenters ?? []).map((c) => [c.asset_id, c.id]));
-
   const voucherId = crypto.randomUUID();
 
   // Debit each line's Fixed Asset account; credit the Vendor (payable) account
@@ -40,7 +28,6 @@ export async function createPurchaseVoucher(input: PurchaseVoucherInput) {
   const jeLines: EntryLineInput[] = [
     ...lines.map((l) => ({
       accountId: l.fixedAssetAccountId,
-      costCenterId: costCenterByAsset.get(l.assetId) ?? null,
       debit: l.gross,
       credit: 0,
       description: "Property purchase",
@@ -65,7 +52,6 @@ export async function createPurchaseVoucher(input: PurchaseVoucherInput) {
     id: voucherId,
     company_id: companyId,
     journal_entry_id: je.journalEntryId,
-    supplier_id: parsed.data.supplierId,
     vendor_account_id: parsed.data.vendorAccountId,
     purchase_date: parsed.data.purchaseDate,
     currency_id: parsed.data.currencyId,
@@ -81,7 +67,6 @@ export async function createPurchaseVoucher(input: PurchaseVoucherInput) {
   const lineRows = lines.map((l, index) => ({
     voucher_id: voucherId,
     line_no: index + 1,
-    asset_id: l.assetId,
     fixed_asset_account_id: l.fixedAssetAccountId,
     gross: l.gross,
     due_date: l.dueDate || null,
@@ -124,22 +109,6 @@ export async function postPurchaseVoucher(id: string, journalEntryId: string) {
     .update({ voucher_no: result.voucherNo })
     .eq("id", id);
   if (updateError) return { error: updateError.message };
-
-  // Record each purchased asset's value from its line's gross amount.
-  const { data: lines } = await supabase
-    .schema("accounting")
-    .from("purchase_voucher_lines")
-    .select("asset_id, gross")
-    .eq("voucher_id", id);
-
-  for (const line of lines ?? []) {
-    await supabase
-      .schema("assets")
-      .from("assets")
-      .update({ purchase_value: line.gross, current_value: line.gross })
-      .eq("id", line.asset_id);
-    revalidatePath(`/assets/${line.asset_id}`);
-  }
 
   revalidatePath("/purchases");
   revalidatePath(`/purchases/${id}`);

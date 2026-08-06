@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -17,24 +17,11 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
 import { AccountCombobox, type AccountOption } from "@/components/vouchers/account-combobox";
 import { DateInput } from "@/components/vouchers/date-input";
 import { createAssetSale } from "@/features/assets/sale/actions";
 import { assetSaleSchema, type AssetSaleFormValues, type AssetSaleInput } from "@/features/assets/sale/schemas";
-
-export interface SellableAssetOption {
-  id: string;
-  asset_code: string;
-  asset_name: string;
-}
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -45,27 +32,22 @@ function emptyLine() {
 }
 
 export function AssetSaleForm({
-  assets,
   accounts,
   currencies,
 }: {
-  assets: SellableAssetOption[];
   accounts: AccountOption[];
   currencies: CurrencyOption[];
 }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
 
-  const preselectedAssetId = searchParams.get("assetId") ?? "";
   const rateById = new Map(currencies.map((c) => [c.id, c.rate ?? 1] as const));
 
   const form = useForm<AssetSaleFormValues, unknown, AssetSaleInput>({
     resolver: zodResolver(assetSaleSchema),
     defaultValues: {
       customerAccountId: "",
-      assetId: assets.some((a) => a.id === preselectedAssetId) ? preselectedAssetId : "",
       saleDate: today(),
       currencyId: currencies[0]?.id ?? "",
       exchangeRate: currencies[0]?.rate ?? 1,
@@ -121,30 +103,6 @@ export function AssetSaleForm({
               <FormItem>
                 <FormLabel>Customer (Dr)</FormLabel>
                 <AccountCombobox accounts={accounts} value={field.value} onValueChange={field.onChange} />
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="assetId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Asset</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select asset (optional)" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {assets.map((a) => (
-                      <SelectItem key={a.id} value={a.id}>
-                        {a.asset_code} — {a.asset_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
                 <FormMessage />
               </FormItem>
             )}

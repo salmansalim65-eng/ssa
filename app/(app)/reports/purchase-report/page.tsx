@@ -55,12 +55,11 @@ export default async function PurchaseReportPage({
         <div className="flex gap-2">
           <CsvExportButton
             filename={`purchase-report-${from}-to-${to}.csv`}
-            headers={["Voucher No", "Date", "Asset", "Supplier", "Gross", "Currency", "Status"]}
+            headers={["Voucher No", "Date", "Account", "Gross", "Currency", "Status"]}
             rows={(rows ?? []).map((r) => [
               r.voucher_no ?? "",
               r.purchase_date,
-              `${r.asset_code} - ${r.asset_name}`,
-              r.supplier_name,
+              r.account_name,
               r.gross,
               r.currency_code,
               r.status,
@@ -79,8 +78,7 @@ export default async function PurchaseReportPage({
           <TableRow>
             <TableHead>Voucher No</TableHead>
             <TableHead>Date</TableHead>
-            <TableHead>Asset</TableHead>
-            <TableHead>Supplier</TableHead>
+            <TableHead>Account</TableHead>
             <TableHead className="text-right">Gross</TableHead>
             <TableHead>Status</TableHead>
           </TableRow>
@@ -90,10 +88,7 @@ export default async function PurchaseReportPage({
             <TableRow key={r.purchase_voucher_id}>
               <TableCell>{r.voucher_no ?? "Draft"}</TableCell>
               <TableCell>{r.purchase_date}</TableCell>
-              <TableCell>
-                {r.asset_code} — {r.asset_name}
-              </TableCell>
-              <TableCell>{r.supplier_name}</TableCell>
+              <TableCell>{r.account_name}</TableCell>
               <TableCell className="text-right">
                 {r.gross.toLocaleString()} {r.currency_code}
               </TableCell>
@@ -104,7 +99,7 @@ export default async function PurchaseReportPage({
           ))}
           {(rows ?? []).length === 0 && (
             <TableRow>
-              <TableCell colSpan={6} className="text-center text-muted-foreground">
+              <TableCell colSpan={5} className="text-center text-muted-foreground">
                 No purchases in this period.
               </TableCell>
             </TableRow>
@@ -113,7 +108,7 @@ export default async function PurchaseReportPage({
         {(rows ?? []).length > 0 && (
           <tfoot>
             <TableRow>
-              <TableCell colSpan={4} className="font-medium">
+              <TableCell colSpan={3} className="font-medium">
                 Total
               </TableCell>
               <TableCell className="text-right font-medium">{totalAmount.toLocaleString()}</TableCell>

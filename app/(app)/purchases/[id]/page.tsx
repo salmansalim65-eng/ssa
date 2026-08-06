@@ -49,14 +49,13 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
   const { data: lines } = await supabase
     .schema("accounting")
     .from("purchase_voucher_lines")
-    .select("id, line_no, asset_id, fixed_asset_account_id, gross, due_date, installment_month, remarks")
+    .select("id, line_no, fixed_asset_account_id, gross, due_date, installment_month, remarks")
     .eq("voucher_id", id)
     .order("line_no");
 
   type LineRow = {
     id: string;
     line_no: number;
-    asset_id: string;
     fixed_asset_account_id: string;
     gross: number;
     due_date: string | null;
@@ -65,8 +64,7 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
   };
   const lineRows = (lines as unknown as LineRow[]) ?? [];
 
-  const [suppliersById, currenciesById, accountsById, assetsById] = await Promise.all([
-    fetchRefs<{ id: string; name: string }>(supabase, "assets", "suppliers", "name", [voucher.supplier_id]),
+  const [currenciesById, accountsById] = await Promise.all([
     fetchRefs<{ id: string; code: string }>(supabase, "core", "currencies", "code", [voucher.currency_id]),
     fetchRefs<{ id: string; account_name: string }>(
       supabase,
@@ -75,19 +73,11 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
       "account_name",
       [voucher.vendor_account_id, ...lineRows.map((l) => l.fixed_asset_account_id)],
     ),
-    fetchRefs<{ id: string; asset_code: string; asset_name: string }>(
-      supabase,
-      "assets",
-      "assets",
-      "asset_code, asset_name",
-      lineRows.map((l) => l.asset_id),
-    ),
   ]);
 
   const status =
     (voucher as unknown as { journal_entries: { status: JournalEntryStatus } | null }).journal_entries?.status ??
     "draft";
-  const supplierName = suppliersById.get(voucher.supplier_id)?.name ?? "—";
   const currencyCode = currenciesById.get(voucher.currency_id)?.code ?? "";
   const vendorAccount = voucher.vendor_account_id
     ? accountsById.get(voucher.vendor_account_id)?.account_name ?? "—"
@@ -137,10 +127,6 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
           <p>{vendorAccount}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Supplier</p>
-          <p>{supplierName}</p>
-        </div>
-        <div>
           <p className="text-xs text-muted-foreground">Date</p>
           <p>{voucher.purchase_date}</p>
         </div>
@@ -171,7 +157,6 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
           <TableHeader>
             <TableRow>
               <TableHead className="w-10">Sno</TableHead>
-              <TableHead>Asset</TableHead>
               <TableHead>Fixed Asset Account (Dr)</TableHead>
               <TableHead className="text-right">Gross</TableHead>
               <TableHead>Due Date</TableHead>
@@ -181,11 +166,9 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
           </TableHeader>
           <TableBody>
             {lineRows.map((l) => {
-              const asset = assetsById.get(l.asset_id) ?? null;
               return (
                 <TableRow key={l.id}>
                   <TableCell className="text-muted-foreground">{l.line_no}</TableCell>
-                  <TableCell>{asset ? `${asset.asset_code} — ${asset.asset_name}` : "—"}</TableCell>
                   <TableCell>{accountsById.get(l.fixed_asset_account_id)?.account_name ?? "—"}</TableCell>
                   <TableCell className="text-right">{l.gross.toLocaleString()}</TableCell>
                   <TableCell>{l.due_date ?? "—"}</TableCell>
@@ -195,7 +178,7 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
               );
             })}
             <TableRow>
-              <TableCell colSpan={3} className="text-right font-medium">
+              <TableCell colSpan={2} className="text-right font-medium">
                 Total Value
               </TableCell>
               <TableCell className="text-right font-medium">

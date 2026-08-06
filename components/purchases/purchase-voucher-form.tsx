@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
 import { AccountCombobox, type AccountOption } from "@/components/vouchers/account-combobox";
+import { DateInput } from "@/components/vouchers/date-input";
 import { createPurchaseVoucher } from "@/features/accounting/purchase-voucher/actions";
 import {
   purchaseVoucherSchema,
@@ -74,12 +75,15 @@ export function PurchaseVoucherForm({
       vendorAccountId: "",
       purchaseDate: today(),
       currencyId: currencies[0]?.id ?? "",
+      exchangeRate: currencies[0]?.rate ?? 1,
       narration: "",
       paymentTerms: "",
       sharePercentage: 0,
       lines: [emptyLine()],
     },
   });
+
+  const rateById = new Map(currencies.map((c) => [c.id, c.rate ?? 1] as const));
 
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "lines" });
   const watchedLines = useWatch({ control: form.control, name: "lines" });
@@ -114,7 +118,7 @@ export function PurchaseVoucherForm({
               <FormItem>
                 <FormLabel>Date</FormLabel>
                 <FormControl>
-                  <Input type="date" {...field} />
+                  <DateInput {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -126,7 +130,27 @@ export function PurchaseVoucherForm({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Currency</FormLabel>
-                <CurrencySelect currencies={currencies} value={field.value} onValueChange={field.onChange} />
+                <CurrencySelect
+                  currencies={currencies}
+                  value={field.value}
+                  onValueChange={(v) => {
+                    field.onChange(v);
+                    form.setValue("exchangeRate", rateById.get(v) ?? 1, { shouldValidate: true });
+                  }}
+                />
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="exchangeRate"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Currency Conv.</FormLabel>
+                <FormControl>
+                  <Input type="number" step="0.0001" min="0" {...field} value={field.value as number} />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -292,7 +316,7 @@ export function PurchaseVoucherForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormControl>
-                              <Input type="date" {...field} value={(field.value as string) ?? ""} />
+                              <DateInput {...field} value={(field.value as string) ?? ""} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>

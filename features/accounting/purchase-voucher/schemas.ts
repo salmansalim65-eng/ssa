@@ -15,6 +15,7 @@ export const purchaseVoucherSchema = z.object({
   vendorAccountId: z.string().uuid("Select the vendor account"),
   purchaseDate: z.string().date("Enter a valid date"),
   currencyId: z.string().uuid("Select a currency"),
+  exchangeRate: z.coerce.number().positive("Currency conversion is required"),
   narration: z.string().trim().max(500, "Keep it under 500 characters").optional().or(z.literal("")),
   paymentTerms: z.string().trim().max(200, "Keep it under 200 characters").optional().or(z.literal("")),
   sharePercentage: z.coerce.number().min(0).max(100, "0–100").default(0),

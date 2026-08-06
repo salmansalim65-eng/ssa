@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/table";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { VoucherActions } from "@/components/vouchers/voucher-actions";
+import { VoucherDeleteButton } from "@/components/vouchers/voucher-delete-button";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
@@ -25,6 +26,7 @@ import { postPaymentVoucher } from "@/features/accounting/vouchers/payment/actio
 import { postPdcPaymentVoucher, setPdcPaymentStatus } from "@/features/accounting/vouchers/pdc-payment/actions";
 import { postPdcReceiptVoucher, setPdcReceiptStatus } from "@/features/accounting/vouchers/pdc-receipt/actions";
 import { postReceiptVoucher } from "@/features/accounting/vouchers/receipt/actions";
+import { deleteAccountingVoucher } from "@/features/accounting/vouchers/shared-actions";
 import { PdcStatusActions } from "./pdc-status-actions";
 
 const POST_ACTIONS = {
@@ -50,12 +52,13 @@ export default async function VoucherDetailPage({
   const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
   const companyId = companyIdData as string;
 
-  const [detail, canSubmit, canApprove, canReject, canPost] = await Promise.all([
+  const [detail, canSubmit, canApprove, canReject, canPost, canDelete] = await Promise.all([
     getVoucherDetail(companyId, voucherType, id),
     hasPermission(voucherType, "edit"),
     hasPermission(voucherType, "approve"),
     hasPermission(voucherType, "reject"),
     hasPermission(voucherType, "post"),
+    hasPermission(voucherType, "delete"),
   ]);
 
   if (!detail) notFound();
@@ -73,6 +76,14 @@ export default async function VoucherDetailPage({
         <div className="flex items-center gap-2">
           <VoucherStatusBadge status={detail.status} />
           <PrintButton />
+          {detail.status === "draft" && canDelete && (
+            <VoucherDeleteButton
+              id={detail.id}
+              onDelete={deleteAccountingVoucher.bind(null, voucherType)}
+              listHref={`/accounting/vouchers/${voucherType}`}
+              label="voucher"
+            />
+          )}
         </div>
       </div>
 

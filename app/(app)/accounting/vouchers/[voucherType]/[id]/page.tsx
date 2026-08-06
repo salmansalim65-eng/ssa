@@ -1,5 +1,8 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { PencilIcon } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -29,6 +32,9 @@ import { postPdcReceiptVoucher, setPdcReceiptStatus } from "@/features/accountin
 import { postReceiptVoucher } from "@/features/accounting/vouchers/receipt/actions";
 import { copyAccountingVoucher, deleteAccountingVoucher } from "@/features/accounting/vouchers/shared-actions";
 import { PdcStatusActions } from "./pdc-status-actions";
+
+// Voucher types whose draft can be re-opened in its form (see the /edit route).
+const EDITABLE_VOUCHER_TYPES = ["receipt_voucher", "payment_voucher"] as const;
 
 const POST_ACTIONS = {
   receipt_voucher: postReceiptVoucher,
@@ -78,6 +84,15 @@ export default async function VoucherDetailPage({
         <div className="flex items-center gap-2">
           <VoucherStatusBadge status={detail.status} />
           <PrintButton />
+          {detail.status === "draft" &&
+            canSubmit &&
+            (EDITABLE_VOUCHER_TYPES as readonly string[]).includes(voucherType) && (
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/accounting/vouchers/${voucherType}/${detail.id}/edit`}>
+                  <PencilIcon /> Edit
+                </Link>
+              </Button>
+            )}
           {canCreate && voucherType !== "cheque_return_voucher" && (
             <CopyVoucherButton
               id={detail.id}

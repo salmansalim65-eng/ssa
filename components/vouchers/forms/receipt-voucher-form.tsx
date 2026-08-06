@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/form";
 import { AccountSelect, type AccountOption } from "@/components/vouchers/account-select";
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
-import { createReceiptVoucher } from "@/features/accounting/vouchers/receipt/actions";
+import { createReceiptVoucher, updateReceiptVoucher } from "@/features/accounting/vouchers/receipt/actions";
 import {
   receiptVoucherSchema,
   type ReceiptVoucherFormValues,
@@ -32,17 +32,22 @@ function today() {
 export function ReceiptVoucherForm({
   accounts,
   currencies,
+  voucherId,
+  initialValues,
 }: {
   accounts: AccountOption[];
   currencies: CurrencyOption[];
+  voucherId?: string;
+  initialValues?: ReceiptVoucherFormValues;
 }) {
   const router = useRouter();
+  const isEdit = !!voucherId;
   const [isPending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
 
   const form = useForm<ReceiptVoucherFormValues, unknown, ReceiptVoucherInput>({
     resolver: zodResolver(receiptVoucherSchema),
-    defaultValues: {
+    defaultValues: initialValues ?? {
       receiptDate: today(),
       receivedFrom: "",
       debitAccountId: "",
@@ -56,13 +61,15 @@ export function ReceiptVoucherForm({
   function onSubmit(values: ReceiptVoucherInput) {
     setFormError(null);
     startTransition(async () => {
-      const result = await createReceiptVoucher(values);
+      const result = isEdit
+        ? await updateReceiptVoucher(voucherId!, values)
+        : await createReceiptVoucher(values);
       if (result?.error) {
         setFormError(result.error);
         return;
       }
-      toast.success("Receipt voucher created");
-      router.push(`/accounting/vouchers/receipt_voucher/${result.id}`);
+      toast.success(isEdit ? "Receipt voucher updated" : "Receipt voucher created");
+      router.push(`/accounting/vouchers/receipt_voucher/${isEdit ? voucherId : result.id}`);
     });
   }
 
@@ -156,7 +163,7 @@ export function ReceiptVoucherForm({
         />
         {formError && <p className="text-sm text-destructive sm:col-span-2">{formError}</p>}
         <Button type="submit" disabled={isPending} className="sm:col-span-2 sm:w-fit">
-          {isPending ? "Creating…" : "Create receipt voucher"}
+          {isPending ? (isEdit ? "Saving…" : "Creating…") : isEdit ? "Save changes" : "Create receipt voucher"}
         </Button>
       </form>
     </Form>

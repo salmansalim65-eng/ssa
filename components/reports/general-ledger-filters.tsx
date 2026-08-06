@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
+import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -44,6 +45,7 @@ export function GeneralLedgerFilters({
   defaultQuery,
   defaultMin,
   defaultMax,
+  collapsedByDefault = false,
 }: {
   accounts: AccountOption[];
   currencies: CurrencyChoice[];
@@ -55,11 +57,13 @@ export function GeneralLedgerFilters({
   defaultQuery: string;
   defaultMin: string;
   defaultMax: string;
+  collapsedByDefault?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
+  const [expanded, setExpanded] = useState(!collapsedByDefault);
   const [selected, setSelected] = useState<Set<string>>(new Set(defaultAccountIds));
   const [accountSearch, setAccountSearch] = useState("");
   const [from, setFrom] = useState(defaultFrom);
@@ -106,12 +110,31 @@ export function GeneralLedgerFilters({
     else params.delete("min");
     if (max.trim()) params.set("max", max.trim());
     else params.delete("max");
+    setExpanded(false); // collapse so the ledger gets the full page
     router.push(`${pathname}?${params.toString()}`);
   }
 
   return (
-    <div className="space-y-3 rounded-md border p-4 print:hidden">
-      <div className="flex flex-wrap gap-4">
+    <div className="rounded-md border print:hidden">
+      <button
+        type="button"
+        onClick={() => setExpanded((e) => !e)}
+        className="flex w-full items-center justify-between px-4 py-2 text-sm font-medium hover:bg-accent"
+      >
+        <span>
+          Filters
+          {!expanded && (
+            <span className="ml-2 font-normal text-muted-foreground">
+              {selected.size} account{selected.size === 1 ? "" : "s"} · {from} → {to}
+            </span>
+          )}
+        </span>
+        {expanded ? <ChevronUpIcon className="size-4" /> : <ChevronDownIcon className="size-4" />}
+      </button>
+
+      {expanded && (
+        <div className="space-y-3 border-t p-4">
+          <div className="flex flex-wrap gap-4">
         {/* Multi-account picker */}
         <div className="w-72 space-y-1">
           <Label>Accounts ({selected.size} selected)</Label>
@@ -197,9 +220,11 @@ export function GeneralLedgerFilters({
         </div>
       </div>
 
-      <Button size="sm" onClick={apply}>
-        Apply
-      </Button>
+          <Button size="sm" onClick={apply}>
+            Apply
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

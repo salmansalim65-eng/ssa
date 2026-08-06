@@ -1339,6 +1339,7 @@ export interface Database {
           description: string | null;
           narration: string | null;
           status: JournalEntryStatus;
+          due_date: string | null;
         };
       };
       v_asset_register: {

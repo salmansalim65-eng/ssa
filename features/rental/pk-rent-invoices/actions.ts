@@ -168,6 +168,18 @@ export async function generateAllPkRentInvoices(leaseId: string) {
   return { success: true, generated, error: firstError };
 }
 
+export async function deletePkRentInvoice(id: string) {
+  await requirePermission("pk_rent_invoice", "delete");
+  const supabase = await createClient();
+  // Definer function removes the draft invoice, its utility charges, its journal
+  // entry and reverts the payment schedule to 'pending'; it refuses posted ones.
+  const { error } = await supabase.schema("rental").rpc("fn_delete_draft_pk_rent_invoice", { p_id: id });
+  if (error) return { error: error.message };
+
+  revalidatePath("/rental/pk/leases");
+  return { success: true };
+}
+
 export async function postPkRentInvoice(id: string, journalEntryId: string) {
   await requirePermission("pk_rent_invoice", "post");
   const companyId = await getCurrentCompanyId();

@@ -11,8 +11,9 @@ import {
 import { RecordPkRentPaymentForm } from "@/components/rental/record-pk-rent-payment-form";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { VoucherActions } from "@/components/vouchers/voucher-actions";
+import { VoucherDeleteButton } from "@/components/vouchers/voucher-delete-button";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
-import { postPkRentInvoice } from "@/features/rental/pk-rent-invoices/actions";
+import { deletePkRentInvoice, postPkRentInvoice } from "@/features/rental/pk-rent-invoices/actions";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
@@ -47,6 +48,8 @@ export default async function PkRentInvoiceDetailPage({ params }: { params: Prom
   ]);
 
   if (!invoice) notFound();
+
+  const canDelete = await hasPermission("pk_rent_invoice", "delete");
 
   type Refs = {
     pk_leases: {
@@ -120,6 +123,14 @@ export default async function PkRentInvoiceDetailPage({ params }: { params: Prom
         <div className="flex items-center gap-2">
           <VoucherStatusBadge status={status} />
           <PrintButton />
+          {status === "draft" && canDelete && (
+            <VoucherDeleteButton
+              id={invoice.id}
+              onDelete={deletePkRentInvoice}
+              listHref={`/rental/pk/leases/${invoice.lease_id}`}
+              label="rent invoice"
+            />
+          )}
         </div>
       </div>
 

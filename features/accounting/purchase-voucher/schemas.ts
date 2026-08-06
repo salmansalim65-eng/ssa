@@ -1,8 +1,7 @@
 import { z } from "zod";
 
-// One asset line of the purchase voucher grid.
+// One line of the purchase voucher grid.
 export const purchaseVoucherLineSchema = z.object({
-  assetId: z.string().uuid("Select an asset"),
   fixedAssetAccountId: z.string().uuid("Select the fixed asset account"),
   gross: z.coerce.number().nonnegative("Must be zero or more"),
   dueDate: z.string().date("Enter a valid date").optional().or(z.literal("")),
@@ -11,7 +10,6 @@ export const purchaseVoucherLineSchema = z.object({
 });
 
 export const purchaseVoucherSchema = z.object({
-  supplierId: z.string().uuid("Select a supplier"),
   vendorAccountId: z.string().uuid("Select the vendor account"),
   purchaseDate: z.string().date("Enter a valid date"),
   currencyId: z.string().uuid("Select a currency"),

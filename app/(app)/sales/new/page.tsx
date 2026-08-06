@@ -14,15 +14,7 @@ export default async function NewAssetSalePage() {
   const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
   const companyId = companyIdData as string;
 
-  const [{ data: assets }, { data: accounts }, { data: companyCurrencies }] = await Promise.all([
-    supabase
-      .schema("assets")
-      .from("assets")
-      .select("id, asset_code, asset_name")
-      .eq("company_id", companyId)
-      .eq("status", "active")
-      .is("deleted_at", null)
-      .order("asset_code"),
+  const [{ data: accounts }, { data: companyCurrencies }] = await Promise.all([
     // Postable (non-group) accounts, offered as searchable pickers by name.
     supabase
       .schema("accounting")
@@ -60,7 +52,7 @@ export default async function NewAssetSalePage() {
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold tracking-tight">New sale asset voucher</h1>
       <Suspense>
-        <AssetSaleForm assets={assets ?? []} accounts={accounts ?? []} currencies={currencyOptions} />
+        <AssetSaleForm accounts={accounts ?? []} currencies={currencyOptions} />
       </Suspense>
     </div>
   );

@@ -766,7 +766,7 @@ export interface Database {
           company_id: string;
           journal_entry_id: string;
           voucher_no: string | null;
-          supplier_id: string;
+          supplier_id: string | null;
           vendor_account_id: string | null;
           purchase_date: string;
           currency_id: string;
@@ -793,7 +793,7 @@ export interface Database {
           id: string;
           voucher_id: string;
           line_no: number;
-          asset_id: string;
+          asset_id: string | null;
           fixed_asset_account_id: string;
           gross: number;
           due_date: string | null;
@@ -804,7 +804,6 @@ export interface Database {
         Insert: Partial<Database["accounting"]["Tables"]["purchase_voucher_lines"]["Row"]> & {
           voucher_id: string;
           line_no: number;
-          asset_id: string;
           fixed_asset_account_id: string;
           gross: number;
         };
@@ -1374,9 +1373,7 @@ export interface Database {
           purchase_voucher_id: string;
           voucher_no: string | null;
           purchase_date: string;
-          asset_code: string;
-          asset_name: string;
-          supplier_name: string;
+          account_name: string;
           gross: number;
           currency_code: string;
           status: JournalEntryStatus;

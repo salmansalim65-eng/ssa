@@ -17,13 +17,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
 import { AccountCombobox, type AccountOption } from "@/components/vouchers/account-combobox";
 import { DateInput } from "@/components/vouchers/date-input";
@@ -34,33 +27,18 @@ import {
   type PurchaseVoucherInput,
 } from "@/features/accounting/purchase-voucher/schemas";
 
-export interface AssetOption {
-  id: string;
-  asset_code: string;
-  asset_name: string;
-}
-
-export interface SupplierOption {
-  id: string;
-  name: string;
-}
-
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
 function emptyLine() {
-  return { assetId: "", fixedAssetAccountId: "", gross: 0, dueDate: "", installmentMonth: "", remarks: "" };
+  return { fixedAssetAccountId: "", gross: 0, dueDate: "", installmentMonth: "", remarks: "" };
 }
 
 export function PurchaseVoucherForm({
-  assets,
-  suppliers,
   accounts,
   currencies,
 }: {
-  assets: AssetOption[];
-  suppliers: SupplierOption[];
   accounts: AccountOption[];
   currencies: CurrencyOption[];
 }) {
@@ -71,7 +49,6 @@ export function PurchaseVoucherForm({
   const form = useForm<PurchaseVoucherFormValues, unknown, PurchaseVoucherInput>({
     resolver: zodResolver(purchaseVoucherSchema),
     defaultValues: {
-      supplierId: "",
       vendorAccountId: "",
       purchaseDate: today(),
       currencyId: currencies[0]?.id ?? "",
@@ -168,30 +145,6 @@ export function PurchaseVoucherForm({
           />
           <FormField
             control={form.control}
-            name="supplierId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Supplier</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select supplier" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {suppliers.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
             name="sharePercentage"
             render={({ field }) => (
               <FormItem>
@@ -245,7 +198,6 @@ export function PurchaseVoucherForm({
               <thead>
                 <tr className="border-b bg-muted/50 text-left [&_th]:px-2 [&_th]:py-2 [&_th]:font-medium">
                   <th className="w-10">Sno</th>
-                  <th className="min-w-[200px]">Asset</th>
                   <th className="min-w-[200px]">Fixed Asset Account (Dr)</th>
                   <th className="w-32">Gross</th>
                   <th className="w-40">Due Date</th>
@@ -258,31 +210,6 @@ export function PurchaseVoucherForm({
                 {fields.map((line, index) => (
                   <tr key={line.id} className="border-b align-top [&_td]:px-2 [&_td]:py-2">
                     <td className="pt-4 text-muted-foreground">{index + 1}</td>
-                    <td>
-                      <FormField
-                        control={form.control}
-                        name={`lines.${index}.assetId`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger className="w-full">
-                                  <SelectValue placeholder="Select asset" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {assets.map((a) => (
-                                  <SelectItem key={a.id} value={a.id}>
-                                    {a.asset_code} — {a.asset_name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </td>
                     <td>
                       <FormField
                         control={form.control}

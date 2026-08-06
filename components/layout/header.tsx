@@ -22,7 +22,7 @@ export function Header({
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b bg-background px-4">
+    <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b bg-background px-4 print:hidden">
       <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
         <Button
           variant="ghost"

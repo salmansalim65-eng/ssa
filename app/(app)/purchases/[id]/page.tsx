@@ -10,10 +10,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AttachmentList, type AttachmentItem } from "@/components/attachments/attachment-list";
+import { CopyVoucherButton } from "@/components/vouchers/copy-voucher-button";
+import { PrintButton } from "@/components/vouchers/print-button";
 import { VoucherActions } from "@/components/vouchers/voucher-actions";
 import { VoucherDeleteButton } from "@/components/vouchers/voucher-delete-button";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
-import { deletePurchaseVoucher, postPurchaseVoucher } from "@/features/accounting/purchase-voucher/actions";
+import {
+  copyPurchaseVoucher,
+  deletePurchaseVoucher,
+  postPurchaseVoucher,
+} from "@/features/accounting/purchase-voucher/actions";
 import { getSignedUrl } from "@/features/attachments/actions";
 import { hasPermission } from "@/lib/auth/permissions";
 import { fetchRefs } from "@/lib/supabase/hydrate";
@@ -44,7 +50,10 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
 
   if (!voucher) notFound();
 
-  const canDelete = await hasPermission("purchase_voucher", "delete");
+  const [canDelete, canCreate] = await Promise.all([
+    hasPermission("purchase_voucher", "delete"),
+    hasPermission("purchase_voucher", "create"),
+  ]);
 
   const { data: lines } = await supabase
     .schema("accounting")
@@ -103,13 +112,22 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between print:hidden">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Purchase Voucher</h1>
           <p className="font-mono text-sm text-muted-foreground">{voucher.voucher_no ?? "Draft"}</p>
         </div>
         <div className="flex items-center gap-2">
           <VoucherStatusBadge status={status} />
+          <PrintButton />
+          {canCreate && (
+            <CopyVoucherButton
+              id={voucher.id}
+              onCopy={copyPurchaseVoucher}
+              hrefBase="/purchases"
+              label="Purchase voucher"
+            />
+          )}
           {status === "draft" && canDelete && (
             <VoucherDeleteButton
               id={voucher.id}
@@ -119,6 +137,11 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
             />
           )}
         </div>
+      </div>
+
+      <div className="hidden print:block">
+        <h1 className="text-xl font-semibold">Purchase Voucher</h1>
+        <p className="font-mono text-sm">{voucher.voucher_no ?? "Draft"}</p>
       </div>
 
       <div className="grid gap-x-8 gap-y-2 rounded-md border p-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -190,21 +213,23 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
         </Table>
       </div>
 
-      <VoucherActions
-        status={status}
-        voucherType="purchase_voucher"
-        voucherId={voucher.id}
-        journalEntryId={voucher.journal_entry_id}
-        amount={voucher.total_value}
-        approvalId={approval?.id ?? null}
-        canSubmit={canSubmit}
-        canApprove={canApprove}
-        canReject={canReject}
-        canPost={canPost}
-        onPost={postPurchaseVoucher}
-      />
+      <div className="print:hidden">
+        <VoucherActions
+          status={status}
+          voucherType="purchase_voucher"
+          voucherId={voucher.id}
+          journalEntryId={voucher.journal_entry_id}
+          amount={voucher.total_value}
+          approvalId={approval?.id ?? null}
+          canSubmit={canSubmit}
+          canApprove={canApprove}
+          canReject={canReject}
+          canPost={canPost}
+          onPost={postPurchaseVoucher}
+        />
+      </div>
 
-      <Card>
+      <Card className="print:hidden">
         <CardHeader>
           <CardTitle>Agreements &amp; invoices</CardTitle>
         </CardHeader>

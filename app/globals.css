@@ -99,3 +99,13 @@ body {
 * {
   border-color: var(--border);
 }
+
+/* Print: drop the app chrome so a voucher/invoice prints as a clean document.
+   The sidebar and header carry `print:hidden`; here we also flatten the main
+   content padding and let it overflow so nothing is clipped on paper. */
+@media print {
+  main {
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+}

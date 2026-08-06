@@ -108,6 +108,45 @@ export async function createAssetSale(input: AssetSaleInput) {
   return { success: true, id: saleId };
 }
 
+export async function copyAssetSale(id: string) {
+  await requirePermission("asset_sales", "create");
+  const companyId = await getCurrentCompanyId();
+  const supabase = await createClient();
+
+  // Read the source header + lines, then re-create a fresh draft (dated today)
+  // by reusing the normal create flow. The optional header asset isn't copied —
+  // new sales are account-driven — so the copy never re-marks an asset sold.
+  const { data: src } = await supabase
+    .schema("assets")
+    .from("asset_sales")
+    .select("customer_account_id, currency_id, exchange_rate, pak_exch, narration")
+    .eq("company_id", companyId)
+    .eq("id", id)
+    .maybeSingle();
+  if (!src) return { error: "Sale asset voucher not found" };
+
+  const { data: lines } = await supabase
+    .schema("assets")
+    .from("asset_sale_lines")
+    .select("fixed_asset_account_id, gross, remarks")
+    .eq("sale_id", id)
+    .order("line_no");
+
+  return createAssetSale({
+    customerAccountId: src.customer_account_id ?? "",
+    saleDate: new Date().toISOString().slice(0, 10),
+    currencyId: src.currency_id,
+    exchangeRate: src.exchange_rate,
+    pakExch: src.pak_exch ?? 0,
+    narration: src.narration ?? "",
+    lines: (lines ?? []).map((l) => ({
+      fixedAssetAccountId: l.fixed_asset_account_id,
+      gross: l.gross,
+      remarks: l.remarks ?? "",
+    })),
+  });
+}
+
 export async function deleteAssetSale(id: string) {
   await requirePermission("asset_sales", "delete");
   const supabase = await createClient();

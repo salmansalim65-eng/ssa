@@ -14,6 +14,7 @@ import { GenerateInvoiceButton } from "@/components/rental/generate-invoice-butt
 import { GenerateAllInvoicesButton } from "@/components/rental/generate-all-invoices-button";
 import { LeaseDeleteButton } from "@/components/rental/lease-delete-button";
 import { LeaseStatusMenu } from "@/components/rental/lease-status-menu";
+import { PrintButton } from "@/components/vouchers/print-button";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
@@ -104,7 +105,7 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between print:hidden">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">UAE Lease</h1>
           <p className="text-sm text-muted-foreground">
@@ -113,9 +114,17 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
         </div>
         <div className="flex items-center gap-2">
           <Badge variant={leaseStatusVariant[lease.status as keyof typeof leaseStatusVariant]}>{lease.status}</Badge>
+          <PrintButton />
           {canCreate && <LeaseStatusMenu leaseId={lease.id} status={lease.status} />}
           {canDelete && <LeaseDeleteButton leaseId={lease.id} country="uae" />}
         </div>
+      </div>
+
+      <div className="hidden print:block">
+        <h1 className="text-xl font-semibold">UAE Lease</h1>
+        <p className="text-sm">
+          {refs.assets ? `${refs.assets.asset_code} — ${refs.assets.asset_name}` : "—"}
+        </p>
       </div>
 
       <div className="grid gap-x-8 gap-y-2 rounded-md border p-4 sm:grid-cols-2">

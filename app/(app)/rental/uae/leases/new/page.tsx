@@ -18,6 +18,7 @@ export default async function NewUaeLeasePage() {
       .from("assets")
       .select("id, asset_code, asset_name")
       .eq("company_id", companyId)
+      .eq("country", "AE")
       .is("deleted_at", null)
       .order("asset_code"),
     supabase

@@ -24,6 +24,9 @@ import {
 } from "@/components/ui/select";
 import { assetSchema, type AssetFormValues, type AssetInput } from "@/features/assets/schemas";
 
+// A newly-picked country pre-selects its currency (if the company has it).
+const COUNTRY_CURRENCY: Record<string, string> = { PK: "PKR", AE: "AED" };
+
 export interface CurrencyOption {
   id: string;
   code: string;
@@ -99,7 +102,14 @@ export function AssetForm({
           render={({ field }) => (
             <FormItem>
               <FormLabel>Country</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <Select
+                value={field.value}
+                onValueChange={(v) => {
+                  field.onChange(v);
+                  const currency = currencies.find((c) => c.code === COUNTRY_CURRENCY[v]);
+                  if (currency) form.setValue("currencyId", currency.id, { shouldValidate: true });
+                }}
+              >
                 <FormControl>
                   <SelectTrigger className="w-full">
                     <SelectValue />
@@ -248,7 +258,7 @@ export function AssetForm({
               <FormLabel>Currency</FormLabel>
               <Select
                 onValueChange={(value) => field.onChange(value === "none" ? "" : value)}
-                defaultValue={field.value || "none"}
+                value={field.value || "none"}
               >
                 <FormControl>
                   <SelectTrigger className="w-full">

@@ -132,6 +132,18 @@ export async function generateAllUaeRentInvoices(leaseId: string) {
   return { success: true, generated, error: firstError };
 }
 
+export async function deleteUaeRentInvoice(id: string) {
+  await requirePermission("uae_rent_invoice", "delete");
+  const supabase = await createClient();
+  // Definer function removes the draft invoice, its journal entry and reverts
+  // the payment schedule to 'pending'; it refuses anything already posted.
+  const { error } = await supabase.schema("rental").rpc("fn_delete_draft_uae_rent_invoice", { p_id: id });
+  if (error) return { error: error.message };
+
+  revalidatePath("/rental/uae/leases");
+  return { success: true };
+}
+
 export async function postUaeRentInvoice(id: string, journalEntryId: string) {
   await requirePermission("uae_rent_invoice", "post");
   const companyId = await getCurrentCompanyId();

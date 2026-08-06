@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { deleteExchangeRate } from "@/features/admin/exchange-rates/actions";
 import { ExchangeRateForm, type RateableCurrency } from "./exchange-rate-form";
 import { ExchangeRateHistory, type RateHistoryRow } from "./exchange-rate-history";
 
@@ -74,7 +75,7 @@ export default async function ExchangeRatesPage() {
           <CardTitle>History</CardTitle>
         </CardHeader>
         <CardContent>
-          <ExchangeRateHistory rows={historyRows} />
+          <ExchangeRateHistory rows={historyRows} canEdit={canEdit} onDelete={deleteExchangeRate} />
         </CardContent>
       </Card>
     </div>

@@ -32,3 +32,16 @@ export async function upsertExchangeRate(input: ExchangeRateInput) {
   revalidatePath("/admin/exchange-rates");
   return { success: true };
 }
+
+export async function deleteExchangeRate(id: string) {
+  await requirePermission("exchange_rates", "edit");
+
+  const supabase = await createClient();
+  // The exchange_rates write policy (ALL) already scopes deletes to the current
+  // company + the 'exchange_rates' edit permission, so a direct delete is safe.
+  const { error } = await supabase.schema("core").from("exchange_rates").delete().eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin/exchange-rates");
+  return { success: true };
+}

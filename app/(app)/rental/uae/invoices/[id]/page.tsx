@@ -11,8 +11,9 @@ import {
 import { RecordRentPaymentForm } from "@/components/rental/record-rent-payment-form";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { VoucherActions } from "@/components/vouchers/voucher-actions";
+import { VoucherDeleteButton } from "@/components/vouchers/voucher-delete-button";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
-import { postUaeRentInvoice } from "@/features/rental/uae-rent-invoices/actions";
+import { deleteUaeRentInvoice, postUaeRentInvoice } from "@/features/rental/uae-rent-invoices/actions";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
@@ -45,6 +46,8 @@ export default async function UaeRentInvoiceDetailPage({ params }: { params: Pro
   ]);
 
   if (!invoice) notFound();
+
+  const canDelete = await hasPermission("uae_rent_invoice", "delete");
 
   type Refs = {
     uae_leases: {
@@ -117,6 +120,14 @@ export default async function UaeRentInvoiceDetailPage({ params }: { params: Pro
         <div className="flex items-center gap-2">
           <VoucherStatusBadge status={status} />
           <PrintButton />
+          {status === "draft" && canDelete && (
+            <VoucherDeleteButton
+              id={invoice.id}
+              onDelete={deleteUaeRentInvoice}
+              listHref={`/rental/uae/leases/${invoice.lease_id}`}
+              label="rent invoice"
+            />
+          )}
         </div>
       </div>
 

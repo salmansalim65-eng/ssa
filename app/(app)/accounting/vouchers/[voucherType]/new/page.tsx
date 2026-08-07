@@ -135,10 +135,18 @@ export default async function NewVoucherPage({
         />
       )}
       {voucherType === "pdc_payment_voucher" && (
-        <PdcPaymentVoucherForm accounts={accountOptions} currencies={currencyOptions} />
+        <PdcPaymentVoucherForm
+          accounts={accountOptions}
+          currencies={currencyOptions}
+          costCenters={costCenterOptions}
+        />
       )}
       {voucherType === "pdc_receipt_voucher" && (
-        <PdcReceiptVoucherForm accounts={accountOptions} currencies={currencyOptions} />
+        <PdcReceiptVoucherForm
+          accounts={accountOptions}
+          currencies={currencyOptions}
+          costCenters={costCenterOptions}
+        />
       )}
       {voucherType === "opening_balance_voucher" && (
         <OpeningBalanceVoucherForm accounts={accountOptions} currencies={currencyOptions} />

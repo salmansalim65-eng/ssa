@@ -125,15 +125,21 @@ export default async function EditVoucherPage({
 
   const jeCurrency = jeEmbed?.currency_id ?? "";
 
-  // The Receipt and Payment vouchers are header + line documents: load their
-  // cost centres, conversion-rate-carrying currencies, and their own lines.
-  const isHeaderDoc = voucherType === "receipt_voucher" || voucherType === "payment_voucher";
+  // The Receipt, Payment and PDC vouchers are header + line documents: load
+  // their cost centres, conversion-rate-carrying currencies, and their own lines.
+  const HEADER_DOC_LINES: Record<string, string> = {
+    receipt_voucher: "receipt_voucher_lines",
+    payment_voucher: "payment_voucher_lines",
+    pdc_payment_voucher: "pdc_payment_voucher_lines",
+    pdc_receipt_voucher: "pdc_receipt_voucher_lines",
+  };
+  const isHeaderDoc = voucherType in HEADER_DOC_LINES;
   let docCostCenters: { id: string; name: string }[] = [];
   let docCurrencies: { id: string; code: string; rate: number }[] = [];
   let docLines: { accountId: string; amount: number; rentMonth: string; remarks: string }[] = [];
   if (isHeaderDoc) {
     const today = new Date().toISOString().slice(0, 10);
-    const linesTable = voucherType === "receipt_voucher" ? "receipt_voucher_lines" : "payment_voucher_lines";
+    const linesTable = HEADER_DOC_LINES[voucherType];
     const [{ data: ccs }, { data: dlines }, rates] = await Promise.all([
       supabase
         .schema("accounting")
@@ -215,34 +221,40 @@ export default async function EditVoucherPage({
       {voucherType === "pdc_payment_voucher" && (
         <PdcPaymentVoucherForm
           accounts={accountOptions}
-          currencies={currencyOptions}
+          currencies={docCurrencies}
+          costCenters={docCostCenters}
           voucherId={id}
           initialValues={{
             chequeDate: v.cheque_date as string,
+            dueDate: (v.due_date as string | null) ?? "",
             chequeNo: v.cheque_no as string,
             payee: v.payee as string,
-            debitAccountId: v.debit_account_id as string,
             creditAccountId: v.credit_account_id as string,
+            costCenterId: (v.cost_center_id as string | null) ?? "",
             currencyId: v.currency_id as string,
-            amount: v.amount as number,
+            exchangeRate: v.exchange_rate as number,
             narration: (v.narration as string | null) ?? "",
+            lines: docLines.length ? docLines : [{ accountId: "", amount: 0, rentMonth: "", remarks: "" }],
           }}
         />
       )}
       {voucherType === "pdc_receipt_voucher" && (
         <PdcReceiptVoucherForm
           accounts={accountOptions}
-          currencies={currencyOptions}
+          currencies={docCurrencies}
+          costCenters={docCostCenters}
           voucherId={id}
           initialValues={{
             chequeDate: v.cheque_date as string,
+            dueDate: (v.due_date as string | null) ?? "",
             chequeNo: v.cheque_no as string,
             payer: v.payer as string,
             debitAccountId: v.debit_account_id as string,
-            creditAccountId: v.credit_account_id as string,
+            costCenterId: (v.cost_center_id as string | null) ?? "",
             currencyId: v.currency_id as string,
-            amount: v.amount as number,
+            exchangeRate: v.exchange_rate as number,
             narration: (v.narration as string | null) ?? "",
+            lines: docLines.length ? docLines : [{ accountId: "", amount: 0, rentMonth: "", remarks: "" }],
           }}
         />
       )}

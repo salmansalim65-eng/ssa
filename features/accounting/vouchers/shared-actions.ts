@@ -73,19 +73,30 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
     case "receipt_voucher": {
       const { data: v } = await acc
         .from("receipt_vouchers")
-        .select("received_from, debit_account_id, credit_account_id, currency_id, amount, narration")
+        .select("due_date, debit_account_id, cost_center_id, currency_id, exchange_rate, narration")
         .eq("company_id", companyId)
         .eq("id", id)
         .maybeSingle();
       if (!v) return { error: "Voucher not found" };
+      const { data: rlines } = await acc
+        .from("receipt_voucher_lines")
+        .select("account_id, amount, rent_month, remarks")
+        .eq("voucher_id", id)
+        .order("line_no");
       return createReceiptVoucher({
         receiptDate: today,
-        receivedFrom: v.received_from,
-        debitAccountId: v.debit_account_id,
-        creditAccountId: v.credit_account_id,
+        dueDate: v.due_date ?? "",
+        debitAccountId: v.debit_account_id ?? "",
+        costCenterId: v.cost_center_id ?? "",
         currencyId: v.currency_id,
-        amount: v.amount,
+        exchangeRate: v.exchange_rate,
         narration: v.narration ?? "",
+        lines: (rlines ?? []).map((l) => ({
+          accountId: l.account_id,
+          amount: l.amount,
+          rentMonth: l.rent_month ?? "",
+          remarks: l.remarks ?? "",
+        })),
       });
     }
     case "payment_voucher": {

@@ -545,12 +545,15 @@ export interface Database {
           journal_entry_id: string;
           voucher_no: string | null;
           receipt_date: string;
-          received_from: string;
+          due_date: string | null;
+          received_from: string | null;
           debit_account_id: string;
-          credit_account_id: string;
+          credit_account_id: string | null;
+          cost_center_id: string | null;
           currency_id: string;
           exchange_rate: number;
-          amount: number;
+          amount: number | null;
+          total_amount: number;
           narration: string | null;
           created_by: string;
           created_at: string;
@@ -559,14 +562,30 @@ export interface Database {
           company_id: string;
           journal_entry_id: string;
           receipt_date: string;
-          received_from: string;
           debit_account_id: string;
-          credit_account_id: string;
           currency_id: string;
-          amount: number;
           created_by: string;
         };
         Update: Partial<Database["accounting"]["Tables"]["receipt_vouchers"]["Row"]>;
+      };
+      receipt_voucher_lines: {
+        Row: {
+          id: string;
+          voucher_id: string;
+          line_no: number;
+          account_id: string;
+          amount: number;
+          rent_month: string | null;
+          remarks: string | null;
+          created_at: string;
+        };
+        Insert: Partial<Database["accounting"]["Tables"]["receipt_voucher_lines"]["Row"]> & {
+          voucher_id: string;
+          line_no: number;
+          account_id: string;
+          amount: number;
+        };
+        Update: Partial<Database["accounting"]["Tables"]["receipt_voucher_lines"]["Row"]>;
       };
       payment_vouchers: {
         Row: {

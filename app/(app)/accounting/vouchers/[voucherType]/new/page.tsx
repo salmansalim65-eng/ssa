@@ -27,7 +27,7 @@ export default async function NewVoucherPage({
   const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
   const companyId = companyIdData as string;
 
-  const [{ data: accounts }, { data: companyCurrencies }] = await Promise.all([
+  const [{ data: accounts }, { data: companyCurrencies }, { data: costCenters }] = await Promise.all([
     supabase
       .schema("accounting")
       .from("chart_of_accounts")
@@ -43,13 +43,34 @@ export default async function NewVoucherPage({
       .select("currencies:currency_id(id, code)")
       .eq("company_id", companyId)
       .eq("is_active", true),
+    supabase
+      .schema("accounting")
+      .from("cost_centers")
+      .select("id, name")
+      .eq("company_id", companyId)
+      .eq("is_active", true)
+      .is("deleted_at", null)
+      .order("name"),
   ]);
 
   const accountOptions = accounts ?? [];
+  const costCenterOptions = costCenters ?? [];
   type RawCurrency = { currencies: { id: string; code: string } | null };
-  const currencyOptions = ((companyCurrencies as unknown as RawCurrency[]) ?? [])
-    .filter((cc) => cc.currencies)
-    .map((cc) => ({ id: cc.currencies!.id, code: cc.currencies!.code }));
+  const today = new Date().toISOString().slice(0, 10);
+  // Currency options carry a conversion rate seeded from the exchange-rate table
+  // (base currency = 1); the header vouchers use it for "Currency Conv.".
+  const currencyOptions = await Promise.all(
+    ((companyCurrencies as unknown as RawCurrency[]) ?? [])
+      .filter((cc) => cc.currencies)
+      .map(async (cc) => {
+        const { data: rate } = await supabase.schema("core").rpc("fn_exchange_rate_to_base", {
+          p_company_id: companyId,
+          p_currency_id: cc.currencies!.id,
+          p_as_of_date: today,
+        });
+        return { id: cc.currencies!.id, code: cc.currencies!.code, rate: (rate as number | null) ?? 1 };
+      }),
+  );
 
   let extra: { journalVouchers?: JournalVoucherOption[]; pdcOptions?: ReturnablePdcOption[] } = {};
 
@@ -100,7 +121,11 @@ export default async function NewVoucherPage({
       <h1 className="text-2xl font-semibold tracking-tight">New {VOUCHER_TYPE_LABELS[voucherType]}</h1>
 
       {voucherType === "receipt_voucher" && (
-        <ReceiptVoucherForm accounts={accountOptions} currencies={currencyOptions} />
+        <ReceiptVoucherForm
+          accounts={accountOptions}
+          currencies={currencyOptions}
+          costCenters={costCenterOptions}
+        />
       )}
       {voucherType === "payment_voucher" && (
         <PaymentVoucherForm accounts={accountOptions} currencies={currencyOptions} />

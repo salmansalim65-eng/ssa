@@ -102,19 +102,30 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
     case "payment_voucher": {
       const { data: v } = await acc
         .from("payment_vouchers")
-        .select("paid_to, debit_account_id, credit_account_id, currency_id, amount, narration")
+        .select("due_date, credit_account_id, cost_center_id, currency_id, exchange_rate, narration")
         .eq("company_id", companyId)
         .eq("id", id)
         .maybeSingle();
       if (!v) return { error: "Voucher not found" };
+      const { data: plines } = await acc
+        .from("payment_voucher_lines")
+        .select("account_id, amount, rent_month, remarks")
+        .eq("voucher_id", id)
+        .order("line_no");
       return createPaymentVoucher({
         paymentDate: today,
-        paidTo: v.paid_to,
-        debitAccountId: v.debit_account_id,
-        creditAccountId: v.credit_account_id,
+        dueDate: v.due_date ?? "",
+        creditAccountId: v.credit_account_id ?? "",
+        costCenterId: v.cost_center_id ?? "",
         currencyId: v.currency_id,
-        amount: v.amount,
+        exchangeRate: v.exchange_rate,
         narration: v.narration ?? "",
+        lines: (plines ?? []).map((l) => ({
+          accountId: l.account_id,
+          amount: l.amount,
+          rentMonth: l.rent_month ?? "",
+          remarks: l.remarks ?? "",
+        })),
       });
     }
     case "pdc_payment_voucher": {

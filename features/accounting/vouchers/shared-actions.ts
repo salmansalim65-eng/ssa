@@ -57,7 +57,7 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
   const loadLines = async (journalEntryId: string) => {
     const { data } = await acc
       .from("journal_entry_lines")
-      .select("account_id, cost_center_id, debit_amount, credit_amount, description")
+      .select("account_id, cost_center_id, debit_amount, credit_amount, reference, description")
       .eq("journal_entry_id", journalEntryId)
       .order("line_no");
     return (data ?? []).map((l) => ({
@@ -65,7 +65,8 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
       costCenterId: l.cost_center_id ?? "",
       debit: l.debit_amount,
       credit: l.credit_amount,
-      description: l.description ?? "",
+      reference: l.reference ?? "",
+      remarks: l.description ?? "",
     }));
   };
 
@@ -193,43 +194,48 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
     case "journal_voucher": {
       const { data: v } = await acc
         .from("journal_vouchers")
-        .select("journal_entry_id, narration")
+        .select("journal_entry_id, due_date, ref_no, narration")
         .eq("company_id", companyId)
         .eq("id", id)
         .maybeSingle();
       if (!v) return { error: "Voucher not found" };
       const { data: je } = await acc
         .from("journal_entries")
-        .select("currency_id")
+        .select("currency_id, exchange_rate")
         .eq("id", v.journal_entry_id)
         .single();
       if (!je) return { error: "Voucher not found" };
       return createJournalVoucher({
         entryDate: today,
+        dueDate: v.due_date ?? "",
+        refNo: v.ref_no ?? "",
         currencyId: je.currency_id,
-        narration: v.narration,
+        exchangeRate: je.exchange_rate ?? 1,
+        narration: v.narration ?? "",
         lines: await loadLines(v.journal_entry_id),
       });
     }
     case "jv_maintenance_voucher": {
       const { data: v } = await acc
         .from("jv_maintenance_vouchers")
-        .select("journal_entry_id, original_jv_id, adjustment_reason")
+        .select("journal_entry_id, due_date, narration")
         .eq("company_id", companyId)
         .eq("id", id)
         .maybeSingle();
       if (!v) return { error: "Voucher not found" };
       const { data: je } = await acc
         .from("journal_entries")
-        .select("currency_id")
+        .select("currency_id, exchange_rate")
         .eq("id", v.journal_entry_id)
         .single();
       if (!je) return { error: "Voucher not found" };
       return createJvMaintenanceVoucher({
         entryDate: today,
+        dueDate: v.due_date ?? "",
+        refNo: "",
         currencyId: je.currency_id,
-        originalJvId: v.original_jv_id,
-        adjustmentReason: v.adjustment_reason,
+        exchangeRate: je.exchange_rate ?? 1,
+        narration: v.narration ?? "",
         lines: await loadLines(v.journal_entry_id),
       });
     }

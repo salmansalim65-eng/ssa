@@ -1,23 +1,31 @@
 import { z } from "zod";
 
+// One journal grid line: an account (with optional cost centre) carrying a
+// Debit or a Credit, plus a Reference and Remarks.
 export const journalLineSchema = z
   .object({
     accountId: z.string().uuid("Select an account"),
-    costCenterId: z.string().optional().or(z.literal("")),
+    costCenterId: z.string().uuid("Select a cost center").optional().or(z.literal("")),
     debit: z.coerce.number().nonnegative(),
     credit: z.coerce.number().nonnegative(),
-    description: z.string().optional().or(z.literal("")),
+    reference: z.string().trim().max(200, "Keep it under 200 characters").optional().or(z.literal("")),
+    remarks: z.string().trim().max(200, "Keep it under 200 characters").optional().or(z.literal("")),
   })
   .refine((d) => !(d.debit > 0 && d.credit > 0), {
     message: "A line can't be both debit and credit",
     path: ["credit"],
   });
 
+// Shared header + grid schema for the Journal Voucher and (identically) the JV
+// Maintenance Voucher. REF_NO is optional and simply not shown on JV Maintenance.
 export const journalVoucherSchema = z
   .object({
     entryDate: z.string().date("Enter a valid date"),
+    dueDate: z.string().date("Enter a valid date").optional().or(z.literal("")),
+    refNo: z.string().trim().max(100, "Keep it under 100 characters").optional().or(z.literal("")),
     currencyId: z.string().uuid("Select a currency"),
-    narration: z.string().min(1, "Required"),
+    exchangeRate: z.coerce.number().positive("Currency conversion is required"),
+    narration: z.string().trim().max(500, "Keep it under 500 characters").optional().or(z.literal("")),
     lines: z.array(journalLineSchema).min(2, "At least two lines are required"),
   })
   .refine(

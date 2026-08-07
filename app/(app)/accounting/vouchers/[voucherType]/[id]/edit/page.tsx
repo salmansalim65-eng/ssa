@@ -67,22 +67,19 @@ export default async function EditVoucherPage({
 
   const accountOptions = accounts ?? [];
   type RawCurrency = { currencies: { id: string; code: string } | null };
-  const currencyOptions = ((companyCurrencies as unknown as RawCurrency[]) ?? [])
-    .filter((cc) => cc.currencies)
-    .map((cc) => ({ id: cc.currencies!.id, code: cc.currencies!.code }));
 
   const table = EDITABLE_TABLE[editableType];
   const { data: voucher } = await supabase
     .schema("accounting")
     .from(table)
-    .select("*, journal_entries:journal_entry_id(status, currency_id)")
+    .select("*, journal_entries:journal_entry_id(status, currency_id, exchange_rate)")
     .eq("company_id", companyId)
     .eq("id", id)
     .maybeSingle();
   if (!voucher) notFound();
 
   const jeEmbed = (voucher as unknown as {
-    journal_entries: { status: JournalEntryStatus; currency_id: string } | null;
+    journal_entries: { status: JournalEntryStatus; currency_id: string; exchange_rate: number } | null;
   }).journal_entries;
   const status = jeEmbed?.status ?? "draft";
   // A posted (or in-approval) voucher is part of the ledger — send the user back.
@@ -93,37 +90,33 @@ export default async function EditVoucherPage({
   // Multi-line vouchers (Journal / JV Maintenance) rebuild their grid from the
   // journal entry's lines and take the currency from the entry header.
   const isMultiLine = MULTI_LINE_TYPES.includes(voucherType);
-  let lineValues: { accountId: string; costCenterId: string; debit: number; credit: number; description: string }[] =
-    [];
+  let jvLines: {
+    accountId: string;
+    costCenterId: string;
+    debit: number;
+    credit: number;
+    reference: string;
+    remarks: string;
+  }[] = [];
   if (isMultiLine) {
     const { data: lines } = await supabase
       .schema("accounting")
       .from("journal_entry_lines")
-      .select("account_id, cost_center_id, debit_amount, credit_amount, description")
+      .select("account_id, cost_center_id, debit_amount, credit_amount, reference, description")
       .eq("journal_entry_id", v.journal_entry_id as string)
       .order("line_no");
-    lineValues = (lines ?? []).map((l) => ({
+    jvLines = (lines ?? []).map((l) => ({
       accountId: l.account_id,
       costCenterId: l.cost_center_id ?? "",
       debit: l.debit_amount,
       credit: l.credit_amount,
-      description: l.description ?? "",
+      reference: l.reference ?? "",
+      remarks: l.description ?? "",
     }));
   }
 
-  let journalVouchers: { id: string; voucherNo: string | null }[] = [];
-  if (voucherType === "jv_maintenance_voucher") {
-    const { data: jvs } = await supabase
-      .schema("accounting")
-      .from("journal_vouchers")
-      .select("id, voucher_no")
-      .eq("company_id", companyId)
-      .not("voucher_no", "is", null)
-      .order("created_at", { ascending: false });
-    journalVouchers = (jvs ?? []).map((jv) => ({ id: jv.id, voucherNo: jv.voucher_no }));
-  }
-
   const jeCurrency = jeEmbed?.currency_id ?? "";
+  const jeExchangeRate = jeEmbed?.exchange_rate ?? 1;
 
   // The Receipt, Payment and PDC vouchers are header + line documents: load
   // their cost centres, conversion-rate-carrying currencies, and their own lines.
@@ -139,7 +132,7 @@ export default async function EditVoucherPage({
   let docCurrencies: { id: string; code: string; rate: number }[] = [];
   let docLines: { accountId: string; amount: number; rentMonth: string; remarks: string }[] = [];
   let obLines: { accountId: string; debit: number; credit: number; remarks: string }[] = [];
-  if (isHeaderDoc || isOpeningBalance) {
+  if (isHeaderDoc || isOpeningBalance || isMultiLine) {
     const today = new Date().toISOString().slice(0, 10);
     const [{ data: ccs }, rates] = await Promise.all([
       supabase
@@ -295,28 +288,34 @@ export default async function EditVoucherPage({
       {voucherType === "journal_voucher" && (
         <JournalVoucherForm
           accounts={accountOptions}
-          currencies={currencyOptions}
+          currencies={docCurrencies}
+          costCenters={docCostCenters}
           voucherId={id}
           initialValues={{
             entryDate: v.entry_date as string,
+            dueDate: (v.due_date as string | null) ?? "",
+            refNo: (v.ref_no as string | null) ?? "",
             currencyId: jeCurrency,
-            narration: v.narration as string,
-            lines: lineValues,
+            exchangeRate: jeExchangeRate,
+            narration: (v.narration as string | null) ?? "",
+            lines: jvLines,
           }}
         />
       )}
       {voucherType === "jv_maintenance_voucher" && (
         <JvMaintenanceVoucherForm
           accounts={accountOptions}
-          currencies={currencyOptions}
-          journalVouchers={journalVouchers}
+          currencies={docCurrencies}
+          costCenters={docCostCenters}
           voucherId={id}
           initialValues={{
             entryDate: v.entry_date as string,
+            dueDate: (v.due_date as string | null) ?? "",
+            refNo: "",
             currencyId: jeCurrency,
-            originalJvId: v.original_jv_id as string,
-            adjustmentReason: v.adjustment_reason as string,
-            lines: lineValues,
+            exchangeRate: jeExchangeRate,
+            narration: (v.narration as string | null) ?? "",
+            lines: jvLines,
           }}
         />
       )}

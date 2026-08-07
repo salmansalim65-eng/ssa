@@ -9,6 +9,7 @@ export interface EntryLineInput {
   debit: number;
   credit: number;
   description?: string | null;
+  reference?: string | null;
 }
 
 function round2(n: number) {
@@ -109,6 +110,7 @@ export async function createJournalEntry(params: {
     base_debit_amount: round2(line.debit * exchangeRate),
     base_credit_amount: round2(line.credit * exchangeRate),
     description: line.description ?? null,
+    reference: line.reference ?? null,
   }));
 
   const { error: linesError } = await supabase

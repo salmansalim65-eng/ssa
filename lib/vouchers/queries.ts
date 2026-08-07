@@ -36,6 +36,7 @@ export interface VoucherDetail {
     debit: number;
     credit: number;
     description: string | null;
+    reference?: string | null;
   }[];
 }
 
@@ -152,21 +153,18 @@ export async function getVoucherListRows(
       const { data } = await supabase
         .schema("accounting")
         .from("jv_maintenance_vouchers")
-        .select("id, voucher_no, adjustment_reason, journal_entry_id, journal_entries:journal_entry_id(status, entry_date)")
+        .select("id, voucher_no, entry_date, narration, journal_entry_id, journal_entries:journal_entry_id(status)")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false });
-      return (data ?? []).map((r) => {
-        const je = r.journal_entries as unknown as { status: JournalEntryStatus; entry_date: string };
-        return {
-          id: r.id,
-          voucherNo: r.voucher_no,
-          date: je.entry_date,
-          party: r.adjustment_reason,
-          amount: 0,
-          journalEntryId: r.journal_entry_id,
-          status: je.status,
-        };
-      });
+      return (data ?? []).map((r) => ({
+        id: r.id,
+        voucherNo: r.voucher_no,
+        date: r.entry_date,
+        party: r.narration,
+        amount: 0,
+        journalEntryId: r.journal_entry_id,
+        status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
+      }));
     }
     case "opening_balance_voucher": {
       const { data } = await supabase
@@ -196,7 +194,7 @@ async function getJournalEntryWithLines(journalEntryId: string) {
   const { data: je } = await supabase
     .schema("accounting")
     .from("journal_entries")
-    .select("id, status, narration, currency_id")
+    .select("id, status, narration, currency_id, exchange_rate")
     .eq("id", journalEntryId)
     .single();
 
@@ -212,7 +210,7 @@ async function getJournalEntryWithLines(journalEntryId: string) {
     .schema("accounting")
     .from("journal_entry_lines")
     .select(
-      "debit_amount, credit_amount, description, chart_of_accounts:account_id(account_code, account_name), cost_centers:cost_center_id(name)",
+      "debit_amount, credit_amount, description, reference, chart_of_accounts:account_id(account_code, account_name), cost_centers:cost_center_id(name)",
     )
     .eq("journal_entry_id", journalEntryId)
     .order("line_no");
@@ -220,6 +218,7 @@ async function getJournalEntryWithLines(journalEntryId: string) {
   return {
     status: (je?.status ?? "draft") as JournalEntryStatus,
     narration: je?.narration ?? null,
+    exchangeRate: (je?.exchange_rate as number | null) ?? 1,
     currencyCode: (je?.currency_id ? currenciesById.get(je.currency_id)?.code : undefined) ?? "",
     lines: (lines ?? []).map((l) => {
       const account = l.chart_of_accounts as unknown as { account_code: string; account_name: string } | null;
@@ -231,6 +230,7 @@ async function getJournalEntryWithLines(journalEntryId: string) {
         debit: l.debit_amount,
         credit: l.credit_amount,
         description: l.description,
+        reference: (l.reference as string | null) ?? null,
       };
     }),
   };
@@ -414,7 +414,11 @@ export async function getVoucherDetail(
         journalEntryId: v.journal_entry_id,
         status: je.status,
         currencyCode: je.currencyCode,
-        fields: [],
+        fields: [
+          { label: "Due date", value: v.due_date ?? "—" },
+          { label: "REF No.", value: v.ref_no ?? "—" },
+          { label: "Currency conv.", value: je.exchangeRate.toLocaleString() },
+        ],
         lines: je.lines,
       };
     }
@@ -422,24 +426,23 @@ export async function getVoucherDetail(
       const { data: v } = await supabase
         .schema("accounting")
         .from("jv_maintenance_vouchers")
-        .select("*, original:original_jv_id(voucher_no)")
+        .select("*")
         .eq("company_id", companyId)
         .eq("id", id)
         .maybeSingle();
       if (!v) return null;
       const je = await getJournalEntryWithLines(v.journal_entry_id);
-      const original = v.original as unknown as { voucher_no: string | null } | null;
       return {
         id: v.id,
         voucherNo: v.voucher_no,
-        date: je.narration ?? "",
-        narration: v.adjustment_reason,
+        date: v.entry_date,
+        narration: v.narration,
         journalEntryId: v.journal_entry_id,
         status: je.status,
         currencyCode: je.currencyCode,
         fields: [
-          { label: "Original JV", value: original?.voucher_no ?? "—" },
-          { label: "Adjustment reason", value: v.adjustment_reason },
+          { label: "Due date", value: v.due_date ?? "—" },
+          { label: "Currency conv.", value: je.exchangeRate.toLocaleString() },
         ],
         lines: je.lines,
       };

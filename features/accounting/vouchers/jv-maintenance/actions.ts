@@ -4,11 +4,22 @@ import { revalidatePath } from "next/cache";
 
 import { requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
-import { createJournalEntry, getCurrentCompanyId, postVoucher, resolveExchangeRate } from "@/lib/vouchers/engine";
+import { createJournalEntry, getCurrentCompanyId, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { jvMaintenanceVoucherSchema, type JvMaintenanceVoucherInput } from "./schemas";
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;
+}
+
+function toEntryLines(lines: JvMaintenanceVoucherInput["lines"]): EntryLineInput[] {
+  return lines.map((l) => ({
+    accountId: l.accountId,
+    costCenterId: l.costCenterId || null,
+    debit: l.debit,
+    credit: l.credit,
+    description: l.remarks || null,
+    reference: l.reference || null,
+  }));
 }
 
 export async function createJvMaintenanceVoucher(input: JvMaintenanceVoucherInput) {
@@ -28,15 +39,10 @@ export async function createJvMaintenanceVoucher(input: JvMaintenanceVoucherInpu
     voucherId,
     entryDate: parsed.data.entryDate,
     currencyId: parsed.data.currencyId,
-    narration: parsed.data.adjustmentReason,
+    narration: parsed.data.narration || null,
     createdBy,
-    lines: parsed.data.lines.map((l) => ({
-      accountId: l.accountId,
-      costCenterId: l.costCenterId || null,
-      debit: l.debit,
-      credit: l.credit,
-      description: l.description || null,
-    })),
+    lines: toEntryLines(parsed.data.lines),
+    exchangeRate: parsed.data.exchangeRate,
   });
   if ("error" in je) return { error: je.error };
 
@@ -44,8 +50,9 @@ export async function createJvMaintenanceVoucher(input: JvMaintenanceVoucherInpu
     id: voucherId,
     company_id: companyId,
     journal_entry_id: je.journalEntryId,
-    original_jv_id: parsed.data.originalJvId,
-    adjustment_reason: parsed.data.adjustmentReason,
+    entry_date: parsed.data.entryDate,
+    due_date: parsed.data.dueDate || null,
+    narration: parsed.data.narration || null,
     created_by: createdBy,
   });
   if (error) return { error: error.message };
@@ -81,7 +88,7 @@ export async function updateJvMaintenanceVoucher(id: string, input: JvMaintenanc
   if (!je) return { error: "Voucher not found" };
   if (je.status !== "draft") return { error: "Only draft vouchers can be edited" };
 
-  const exchangeRate = await resolveExchangeRate(companyId, parsed.data.currencyId, parsed.data.entryDate);
+  const rate = parsed.data.exchangeRate;
 
   const { error: jeErr } = await supabase
     .schema("accounting")
@@ -89,13 +96,12 @@ export async function updateJvMaintenanceVoucher(id: string, input: JvMaintenanc
     .update({
       entry_date: parsed.data.entryDate,
       currency_id: parsed.data.currencyId,
-      exchange_rate: exchangeRate,
-      narration: parsed.data.adjustmentReason,
+      exchange_rate: rate,
+      narration: parsed.data.narration || null,
     })
     .eq("id", jeId);
   if (jeErr) return { error: jeErr.message };
 
-  // Variable line count — replace the whole set (see updateJournalVoucher).
   const { error: delErr } = await supabase
     .schema("accounting")
     .from("journal_entry_lines")
@@ -103,29 +109,31 @@ export async function updateJvMaintenanceVoucher(id: string, input: JvMaintenanc
     .eq("journal_entry_id", jeId);
   if (delErr) return { error: delErr.message };
 
-  const lineRows = parsed.data.lines.map((l, index) => ({
+  const lineRows = toEntryLines(parsed.data.lines).map((l, index) => ({
     journal_entry_id: jeId,
     line_no: index + 1,
     account_id: l.accountId,
-    cost_center_id: l.costCenterId || null,
+    cost_center_id: l.costCenterId ?? null,
     debit_amount: l.debit,
     credit_amount: l.credit,
     currency_id: parsed.data.currencyId,
-    exchange_rate: exchangeRate,
-    base_debit_amount: round2(l.debit * exchangeRate),
-    base_credit_amount: round2(l.credit * exchangeRate),
-    description: l.description || null,
+    exchange_rate: rate,
+    base_debit_amount: round2(l.debit * rate),
+    base_credit_amount: round2(l.credit * rate),
+    description: l.description ?? null,
+    reference: l.reference ?? null,
   }));
-  const { error: insErr } = await supabase
-    .schema("accounting")
-    .from("journal_entry_lines")
-    .insert(lineRows);
+  const { error: insErr } = await supabase.schema("accounting").from("journal_entry_lines").insert(lineRows);
   if (insErr) return { error: insErr.message };
 
   const { error: vErr } = await supabase
     .schema("accounting")
     .from("jv_maintenance_vouchers")
-    .update({ original_jv_id: parsed.data.originalJvId, adjustment_reason: parsed.data.adjustmentReason })
+    .update({
+      entry_date: parsed.data.entryDate,
+      due_date: parsed.data.dueDate || null,
+      narration: parsed.data.narration || null,
+    })
     .eq("id", id);
   if (vErr) return { error: vErr.message };
 

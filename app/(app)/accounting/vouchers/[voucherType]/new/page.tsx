@@ -128,7 +128,11 @@ export default async function NewVoucherPage({
         />
       )}
       {voucherType === "payment_voucher" && (
-        <PaymentVoucherForm accounts={accountOptions} currencies={currencyOptions} />
+        <PaymentVoucherForm
+          accounts={accountOptions}
+          currencies={currencyOptions}
+          costCenters={costCenterOptions}
+        />
       )}
       {voucherType === "pdc_payment_voucher" && (
         <PdcPaymentVoucherForm accounts={accountOptions} currencies={currencyOptions} />

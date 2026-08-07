@@ -125,14 +125,16 @@ export default async function EditVoucherPage({
 
   const jeCurrency = jeEmbed?.currency_id ?? "";
 
-  // The Receipt voucher is a header + line document: load its cost centres,
-  // conversion-rate-carrying currencies, and its own lines.
-  let costCenterOptions: { id: string; name: string }[] = [];
-  let receiptCurrencyOptions: { id: string; code: string; rate: number }[] = [];
-  let receiptLines: { accountId: string; amount: number; rentMonth: string; remarks: string }[] = [];
-  if (voucherType === "receipt_voucher") {
+  // The Receipt and Payment vouchers are header + line documents: load their
+  // cost centres, conversion-rate-carrying currencies, and their own lines.
+  const isHeaderDoc = voucherType === "receipt_voucher" || voucherType === "payment_voucher";
+  let docCostCenters: { id: string; name: string }[] = [];
+  let docCurrencies: { id: string; code: string; rate: number }[] = [];
+  let docLines: { accountId: string; amount: number; rentMonth: string; remarks: string }[] = [];
+  if (isHeaderDoc) {
     const today = new Date().toISOString().slice(0, 10);
-    const [{ data: ccs }, { data: rlines }, rates] = await Promise.all([
+    const linesTable = voucherType === "receipt_voucher" ? "receipt_voucher_lines" : "payment_voucher_lines";
+    const [{ data: ccs }, { data: dlines }, rates] = await Promise.all([
       supabase
         .schema("accounting")
         .from("cost_centers")
@@ -143,7 +145,7 @@ export default async function EditVoucherPage({
         .order("name"),
       supabase
         .schema("accounting")
-        .from("receipt_voucher_lines")
+        .from(linesTable)
         .select("account_id, amount, rent_month, remarks")
         .eq("voucher_id", id)
         .order("line_no"),
@@ -160,9 +162,9 @@ export default async function EditVoucherPage({
           }),
       ),
     ]);
-    costCenterOptions = ccs ?? [];
-    receiptCurrencyOptions = rates;
-    receiptLines = (rlines ?? []).map((l) => ({
+    docCostCenters = ccs ?? [];
+    docCurrencies = rates;
+    docLines = (dlines ?? []).map((l) => ({
       accountId: l.account_id,
       amount: l.amount,
       rentMonth: l.rent_month ?? "",
@@ -177,8 +179,8 @@ export default async function EditVoucherPage({
       {voucherType === "receipt_voucher" && (
         <ReceiptVoucherForm
           accounts={accountOptions}
-          currencies={receiptCurrencyOptions}
-          costCenters={costCenterOptions}
+          currencies={docCurrencies}
+          costCenters={docCostCenters}
           voucherId={id}
           initialValues={{
             receiptDate: v.receipt_date as string,
@@ -188,23 +190,25 @@ export default async function EditVoucherPage({
             currencyId: v.currency_id as string,
             exchangeRate: v.exchange_rate as number,
             narration: (v.narration as string | null) ?? "",
-            lines: receiptLines.length ? receiptLines : [{ accountId: "", amount: 0, rentMonth: "", remarks: "" }],
+            lines: docLines.length ? docLines : [{ accountId: "", amount: 0, rentMonth: "", remarks: "" }],
           }}
         />
       )}
       {voucherType === "payment_voucher" && (
         <PaymentVoucherForm
           accounts={accountOptions}
-          currencies={currencyOptions}
+          currencies={docCurrencies}
+          costCenters={docCostCenters}
           voucherId={id}
           initialValues={{
             paymentDate: v.payment_date as string,
-            paidTo: v.paid_to as string,
-            debitAccountId: v.debit_account_id as string,
+            dueDate: (v.due_date as string | null) ?? "",
             creditAccountId: v.credit_account_id as string,
+            costCenterId: (v.cost_center_id as string | null) ?? "",
             currencyId: v.currency_id as string,
-            amount: v.amount as number,
+            exchangeRate: v.exchange_rate as number,
             narration: (v.narration as string | null) ?? "",
+            lines: docLines.length ? docLines : [{ accountId: "", amount: 0, rentMonth: "", remarks: "" }],
           }}
         />
       )}

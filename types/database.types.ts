@@ -818,12 +818,16 @@ export interface Database {
           journal_entry_id: string;
           voucher_no: string | null;
           as_of_date: string;
-          account_id: string;
+          due_date: string | null;
+          account_id: string | null;
           contra_account_id: string;
+          cost_center_id: string | null;
           currency_id: string;
           exchange_rate: number;
-          debit_amount: number;
-          credit_amount: number;
+          debit_amount: number | null;
+          credit_amount: number | null;
+          total_amount: number;
+          narration: string | null;
           created_by: string;
           created_at: string;
         };
@@ -831,12 +835,29 @@ export interface Database {
           company_id: string;
           journal_entry_id: string;
           as_of_date: string;
-          account_id: string;
           contra_account_id: string;
           currency_id: string;
           created_by: string;
         };
         Update: Partial<Database["accounting"]["Tables"]["opening_balance_vouchers"]["Row"]>;
+      };
+      opening_balance_voucher_lines: {
+        Row: {
+          id: string;
+          voucher_id: string;
+          line_no: number;
+          account_id: string;
+          debit: number;
+          credit: number;
+          remarks: string | null;
+          created_at: string;
+        };
+        Insert: Partial<Database["accounting"]["Tables"]["opening_balance_voucher_lines"]["Row"]> & {
+          voucher_id: string;
+          line_no: number;
+          account_id: string;
+        };
+        Update: Partial<Database["accounting"]["Tables"]["opening_balance_voucher_lines"]["Row"]>;
       };
       purchase_vouchers: {
         Row: {

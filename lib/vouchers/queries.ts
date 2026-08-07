@@ -50,15 +50,15 @@ export async function getVoucherListRows(
       const { data } = await supabase
         .schema("accounting")
         .from("receipt_vouchers")
-        .select("id, voucher_no, receipt_date, received_from, amount, journal_entry_id, journal_entries:journal_entry_id(status)")
+        .select("id, voucher_no, receipt_date, total_amount, journal_entry_id, journal_entries:journal_entry_id(status), debit:debit_account_id(account_name)")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false });
       return (data ?? []).map((r) => ({
         id: r.id,
         voucherNo: r.voucher_no,
         date: r.receipt_date,
-        party: r.received_from,
-        amount: r.amount,
+        party: (r.debit as unknown as { account_name: string } | null)?.account_name ?? "—",
+        amount: r.total_amount,
         journalEntryId: r.journal_entry_id,
         status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
       }));
@@ -248,14 +248,14 @@ export async function getVoucherDetail(
       const { data: v } = await supabase
         .schema("accounting")
         .from("receipt_vouchers")
-        .select("*, debit:debit_account_id(account_code, account_name), credit:credit_account_id(account_code, account_name)")
+        .select("*, debit:debit_account_id(account_code, account_name), cost_center:cost_center_id(name)")
         .eq("company_id", companyId)
         .eq("id", id)
         .maybeSingle();
       if (!v) return null;
       const je = await getJournalEntryWithLines(v.journal_entry_id);
-      const debit = v.debit as unknown as { account_code: string; account_name: string };
-      const credit = v.credit as unknown as { account_code: string; account_name: string };
+      const debit = v.debit as unknown as { account_code: string; account_name: string } | null;
+      const costCenter = v.cost_center as unknown as { name: string } | null;
       return {
         id: v.id,
         voucherNo: v.voucher_no,
@@ -265,10 +265,11 @@ export async function getVoucherDetail(
         status: je.status,
         currencyCode: je.currencyCode,
         fields: [
-          { label: "Received from", value: v.received_from },
-          { label: "Amount", value: v.amount.toLocaleString() },
-          { label: "Debit account (Cash/Bank)", value: `${debit.account_code} — ${debit.account_name}` },
-          { label: "Credit account", value: `${credit.account_code} — ${credit.account_name}` },
+          { label: "Debit account (Cash/Bank)", value: debit ? `${debit.account_code} — ${debit.account_name}` : "—" },
+          { label: "Due date", value: v.due_date ?? "—" },
+          { label: "Cost center", value: costCenter?.name ?? "—" },
+          { label: "Currency conv.", value: v.exchange_rate.toLocaleString() },
+          { label: "Total", value: v.total_amount.toLocaleString() },
         ],
         lines: je.lines,
       };

@@ -125,6 +125,51 @@ export default async function EditVoucherPage({
 
   const jeCurrency = jeEmbed?.currency_id ?? "";
 
+  // The Receipt voucher is a header + line document: load its cost centres,
+  // conversion-rate-carrying currencies, and its own lines.
+  let costCenterOptions: { id: string; name: string }[] = [];
+  let receiptCurrencyOptions: { id: string; code: string; rate: number }[] = [];
+  let receiptLines: { accountId: string; amount: number; rentMonth: string; remarks: string }[] = [];
+  if (voucherType === "receipt_voucher") {
+    const today = new Date().toISOString().slice(0, 10);
+    const [{ data: ccs }, { data: rlines }, rates] = await Promise.all([
+      supabase
+        .schema("accounting")
+        .from("cost_centers")
+        .select("id, name")
+        .eq("company_id", companyId)
+        .eq("is_active", true)
+        .is("deleted_at", null)
+        .order("name"),
+      supabase
+        .schema("accounting")
+        .from("receipt_voucher_lines")
+        .select("account_id, amount, rent_month, remarks")
+        .eq("voucher_id", id)
+        .order("line_no"),
+      Promise.all(
+        ((companyCurrencies as unknown as RawCurrency[]) ?? [])
+          .filter((cc) => cc.currencies)
+          .map(async (cc) => {
+            const { data: rate } = await supabase.schema("core").rpc("fn_exchange_rate_to_base", {
+              p_company_id: companyId,
+              p_currency_id: cc.currencies!.id,
+              p_as_of_date: today,
+            });
+            return { id: cc.currencies!.id, code: cc.currencies!.code, rate: (rate as number | null) ?? 1 };
+          }),
+      ),
+    ]);
+    costCenterOptions = ccs ?? [];
+    receiptCurrencyOptions = rates;
+    receiptLines = (rlines ?? []).map((l) => ({
+      accountId: l.account_id,
+      amount: l.amount,
+      rentMonth: l.rent_month ?? "",
+      remarks: l.remarks ?? "",
+    }));
+  }
+
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold tracking-tight">Edit {VOUCHER_TYPE_LABELS[voucherType]}</h1>
@@ -132,16 +177,18 @@ export default async function EditVoucherPage({
       {voucherType === "receipt_voucher" && (
         <ReceiptVoucherForm
           accounts={accountOptions}
-          currencies={currencyOptions}
+          currencies={receiptCurrencyOptions}
+          costCenters={costCenterOptions}
           voucherId={id}
           initialValues={{
             receiptDate: v.receipt_date as string,
-            receivedFrom: v.received_from as string,
+            dueDate: (v.due_date as string | null) ?? "",
             debitAccountId: v.debit_account_id as string,
-            creditAccountId: v.credit_account_id as string,
+            costCenterId: (v.cost_center_id as string | null) ?? "",
             currencyId: v.currency_id as string,
-            amount: v.amount as number,
+            exchangeRate: v.exchange_rate as number,
             narration: (v.narration as string | null) ?? "",
+            lines: receiptLines.length ? receiptLines : [{ accountId: "", amount: 0, rentMonth: "", remarks: "" }],
           }}
         />
       )}

@@ -443,6 +443,7 @@ export interface Database {
           base_debit_amount: number;
           base_credit_amount: number;
           description: string | null;
+          reference: string | null;
         };
         Insert: Partial<Database["accounting"]["Tables"]["journal_entry_lines"]["Row"]> & {
           journal_entry_id: string;
@@ -778,7 +779,9 @@ export interface Database {
           journal_entry_id: string;
           voucher_no: string | null;
           entry_date: string;
-          narration: string;
+          due_date: string | null;
+          ref_no: string | null;
+          narration: string | null;
           created_by: string;
           created_at: string;
         };
@@ -786,7 +789,6 @@ export interface Database {
           company_id: string;
           journal_entry_id: string;
           entry_date: string;
-          narration: string;
           created_by: string;
         };
         Update: Partial<Database["accounting"]["Tables"]["journal_vouchers"]["Row"]>;
@@ -797,16 +799,18 @@ export interface Database {
           company_id: string;
           journal_entry_id: string;
           voucher_no: string | null;
-          original_jv_id: string;
-          adjustment_reason: string;
+          original_jv_id: string | null;
+          adjustment_reason: string | null;
+          entry_date: string;
+          due_date: string | null;
+          narration: string | null;
           created_by: string;
           created_at: string;
         };
         Insert: Partial<Database["accounting"]["Tables"]["jv_maintenance_vouchers"]["Row"]> & {
           company_id: string;
           journal_entry_id: string;
-          original_jv_id: string;
-          adjustment_reason: string;
+          entry_date: string;
           created_by: string;
         };
         Update: Partial<Database["accounting"]["Tables"]["jv_maintenance_vouchers"]["Row"]>;

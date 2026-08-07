@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { PencilIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AttachmentList, type AttachmentItem } from "@/components/attachments/attachment-list";
 import {
   Table,
   TableBody,
@@ -31,6 +33,7 @@ import { postPdcPaymentVoucher, setPdcPaymentStatus } from "@/features/accountin
 import { postPdcReceiptVoucher, setPdcReceiptStatus } from "@/features/accounting/vouchers/pdc-receipt/actions";
 import { postReceiptVoucher } from "@/features/accounting/vouchers/receipt/actions";
 import { copyAccountingVoucher, deleteAccountingVoucher } from "@/features/accounting/vouchers/shared-actions";
+import { getSignedUrl } from "@/features/attachments/actions";
 import { PdcStatusActions } from "./pdc-status-actions";
 
 // Voucher types whose draft can be re-opened in its form (see the /edit route).
@@ -81,6 +84,26 @@ export default async function VoucherDetailPage({
 
   const approval = await getVoucherApproval(voucherType, id);
   const totalDebit = detail.lines.reduce((sum, l) => sum + l.debit, 0);
+  const hasReference = detail.lines.some((l) => l.reference);
+
+  // Journal vouchers support file attachments (see the create form).
+  let attachmentItems: AttachmentItem[] = [];
+  if (voucherType === "journal_voucher") {
+    const { data: attachments } = await supabase
+      .schema("core")
+      .from("attachments")
+      .select("id, file_name, path, bucket")
+      .eq("entity_type", "journal_voucher")
+      .eq("entity_id", id)
+      .is("deleted_at", null);
+    attachmentItems = await Promise.all(
+      (attachments ?? []).map(async (a) => ({
+        id: a.id,
+        fileName: a.file_name,
+        url: await getSignedUrl(a.bucket, a.path),
+      })),
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -153,6 +176,7 @@ export default async function VoucherDetailPage({
           <TableRow>
             <TableHead>Account</TableHead>
             <TableHead>Cost center</TableHead>
+            {hasReference && <TableHead>Reference</TableHead>}
             <TableHead>Description</TableHead>
             <TableHead className="text-right">Debit</TableHead>
             <TableHead className="text-right">Credit</TableHead>
@@ -165,6 +189,7 @@ export default async function VoucherDetailPage({
                 {line.accountCode} — {line.accountName}
               </TableCell>
               <TableCell>{line.costCenterName ?? "—"}</TableCell>
+              {hasReference && <TableCell>{line.reference ?? "—"}</TableCell>}
               <TableCell>{line.description ?? "—"}</TableCell>
               <TableCell className="text-right">{line.debit ? line.debit.toLocaleString() : ""}</TableCell>
               <TableCell className="text-right">{line.credit ? line.credit.toLocaleString() : ""}</TableCell>
@@ -173,7 +198,7 @@ export default async function VoucherDetailPage({
         </TableBody>
         <TableFooter>
           <TableRow>
-            <TableCell colSpan={3}>Total</TableCell>
+            <TableCell colSpan={hasReference ? 4 : 3}>Total</TableCell>
             <TableCell className="text-right">{totalDebit.toLocaleString()}</TableCell>
             <TableCell className="text-right">{totalDebit.toLocaleString()}</TableCell>
           </TableRow>
@@ -195,6 +220,23 @@ export default async function VoucherDetailPage({
           onPost={POST_ACTIONS[voucherType]}
         />
       </div>
+
+      {voucherType === "journal_voucher" && (
+        <Card className="print:hidden">
+          <CardHeader>
+            <CardTitle>Attachments</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AttachmentList
+              bucket="attachments"
+              entityType="journal_voucher"
+              entityId={detail.id}
+              items={attachmentItems}
+              canEdit={canSubmit}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {detail.status === "posted" && voucherType === "pdc_payment_voucher" && canSubmit && (
         <PdcStatusActions onSetStatus={(status) => setPdcPaymentStatus(detail.id, status)} />

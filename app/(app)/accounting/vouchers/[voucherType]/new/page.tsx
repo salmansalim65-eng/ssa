@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { ChequeReturnVoucherForm, type ReturnablePdcOption } from "@/components/vouchers/forms/cheque-return-voucher-form";
 import { JournalVoucherForm } from "@/components/vouchers/forms/journal-voucher-form";
-import { JvMaintenanceVoucherForm, type JournalVoucherOption } from "@/components/vouchers/forms/jv-maintenance-voucher-form";
+import { JvMaintenanceVoucherForm } from "@/components/vouchers/forms/jv-maintenance-voucher-form";
 import { OpeningBalanceVoucherForm } from "@/components/vouchers/forms/opening-balance-voucher-form";
 import { PaymentVoucherForm } from "@/components/vouchers/forms/payment-voucher-form";
 import { PdcPaymentVoucherForm } from "@/components/vouchers/forms/pdc-payment-voucher-form";
@@ -72,18 +72,7 @@ export default async function NewVoucherPage({
       }),
   );
 
-  let extra: { journalVouchers?: JournalVoucherOption[]; pdcOptions?: ReturnablePdcOption[] } = {};
-
-  if (voucherType === "jv_maintenance_voucher") {
-    const { data: jvs } = await supabase
-      .schema("accounting")
-      .from("journal_vouchers")
-      .select("id, voucher_no")
-      .eq("company_id", companyId)
-      .not("voucher_no", "is", null)
-      .order("created_at", { ascending: false });
-    extra = { journalVouchers: (jvs ?? []).map((jv) => ({ id: jv.id, voucherNo: jv.voucher_no })) };
-  }
+  let extra: { pdcOptions?: ReturnablePdcOption[] } = {};
 
   if (voucherType === "cheque_return_voucher") {
     const [{ data: pdcPayments }, { data: pdcReceipts }] = await Promise.all([
@@ -156,13 +145,17 @@ export default async function NewVoucherPage({
         />
       )}
       {voucherType === "journal_voucher" && (
-        <JournalVoucherForm accounts={accountOptions} currencies={currencyOptions} />
+        <JournalVoucherForm
+          accounts={accountOptions}
+          currencies={currencyOptions}
+          costCenters={costCenterOptions}
+        />
       )}
       {voucherType === "jv_maintenance_voucher" && (
         <JvMaintenanceVoucherForm
           accounts={accountOptions}
           currencies={currencyOptions}
-          journalVouchers={extra.journalVouchers ?? []}
+          costCenters={costCenterOptions}
         />
       )}
       {voucherType === "cheque_return_voucher" && (

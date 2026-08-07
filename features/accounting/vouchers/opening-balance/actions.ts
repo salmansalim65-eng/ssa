@@ -4,11 +4,39 @@ import { revalidatePath } from "next/cache";
 
 import { requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
-import { createJournalEntry, getCurrentCompanyId, postVoucher, resolveExchangeRate } from "@/lib/vouchers/engine";
+import { createJournalEntry, getCurrentCompanyId, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { openingBalanceVoucherSchema, type OpeningBalanceVoucherInput } from "./schemas";
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;
+}
+
+// Body lines plus a balancing entry on the contra account for the net.
+function buildEntryLines(
+  lines: OpeningBalanceVoucherInput["lines"],
+  contraAccountId: string,
+  costCenterId: string | null,
+) {
+  const sumD = lines.reduce((s, l) => s + l.debit, 0);
+  const sumC = lines.reduce((s, l) => s + l.credit, 0);
+  const net = round2(sumD - sumC);
+  const jeLines: EntryLineInput[] = lines.map((l) => ({
+    accountId: l.accountId,
+    costCenterId,
+    debit: l.debit,
+    credit: l.credit,
+    description: l.remarks || "Opening balance",
+  }));
+  if (net !== 0) {
+    jeLines.push({
+      accountId: contraAccountId,
+      costCenterId,
+      debit: net < 0 ? -net : 0,
+      credit: net > 0 ? net : 0,
+      description: "Opening balance",
+    });
+  }
+  return { jeLines, total: Math.max(sumD, sumC) };
 }
 
 export async function createOpeningBalanceVoucher(input: OpeningBalanceVoucherInput) {
@@ -20,19 +48,11 @@ export async function createOpeningBalanceVoucher(input: OpeningBalanceVoucherIn
   const supabase = await createClient();
   const { data: user } = await supabase.auth.getUser();
   const createdBy = user.user!.id;
-  const voucherId = crypto.randomUUID();
 
-  const amount = parsed.data.debitAmount > 0 ? parsed.data.debitAmount : parsed.data.creditAmount;
-  const lines =
-    parsed.data.debitAmount > 0
-      ? [
-          { accountId: parsed.data.accountId, debit: amount, credit: 0, description: "Opening balance" },
-          { accountId: parsed.data.contraAccountId, debit: 0, credit: amount, description: "Opening balance" },
-        ]
-      : [
-          { accountId: parsed.data.contraAccountId, debit: amount, credit: 0, description: "Opening balance" },
-          { accountId: parsed.data.accountId, debit: 0, credit: amount, description: "Opening balance" },
-        ];
+  const costCenterId = parsed.data.costCenterId || null;
+  const { jeLines, total } = buildEntryLines(parsed.data.lines, parsed.data.contraAccountId, costCenterId);
+  if (total <= 0) return { error: "Enter at least one debit or credit amount" };
+  const voucherId = crypto.randomUUID();
 
   const je = await createJournalEntry({
     companyId,
@@ -40,9 +60,10 @@ export async function createOpeningBalanceVoucher(input: OpeningBalanceVoucherIn
     voucherId,
     entryDate: parsed.data.asOfDate,
     currencyId: parsed.data.currencyId,
-    narration: "Opening balance",
+    narration: parsed.data.narration || "Opening balance",
     createdBy,
-    lines,
+    lines: jeLines,
+    exchangeRate: parsed.data.exchangeRate,
   });
   if ("error" in je) return { error: je.error };
 
@@ -51,14 +72,29 @@ export async function createOpeningBalanceVoucher(input: OpeningBalanceVoucherIn
     company_id: companyId,
     journal_entry_id: je.journalEntryId,
     as_of_date: parsed.data.asOfDate,
-    account_id: parsed.data.accountId,
     contra_account_id: parsed.data.contraAccountId,
+    cost_center_id: costCenterId,
     currency_id: parsed.data.currencyId,
-    debit_amount: parsed.data.debitAmount,
-    credit_amount: parsed.data.creditAmount,
+    exchange_rate: je.exchangeRate,
+    narration: parsed.data.narration || null,
+    total_amount: total,
     created_by: createdBy,
   });
   if (error) return { error: error.message };
+
+  const lineRows = parsed.data.lines.map((l, index) => ({
+    voucher_id: voucherId,
+    line_no: index + 1,
+    account_id: l.accountId,
+    debit: l.debit,
+    credit: l.credit,
+    remarks: l.remarks || null,
+  }));
+  const { error: linesError } = await supabase
+    .schema("accounting")
+    .from("opening_balance_voucher_lines")
+    .insert(lineRows);
+  if (linesError) return { error: linesError.message };
 
   revalidatePath("/accounting/vouchers/opening_balance_voucher");
   return { success: true, id: voucherId };
@@ -91,14 +127,10 @@ export async function updateOpeningBalanceVoucher(id: string, input: OpeningBala
   if (!je) return { error: "Voucher not found" };
   if (je.status !== "draft") return { error: "Only draft vouchers can be edited" };
 
-  const exchangeRate = await resolveExchangeRate(companyId, parsed.data.currencyId, parsed.data.asOfDate);
-  const amount = parsed.data.debitAmount > 0 ? parsed.data.debitAmount : parsed.data.creditAmount;
-  const base = round2(amount * exchangeRate);
-
-  // Line 1 is always the debit line, line 2 the credit line — which account
-  // fills each depends on the balance's direction, mirroring create.
-  const debitAccount = parsed.data.debitAmount > 0 ? parsed.data.accountId : parsed.data.contraAccountId;
-  const creditAccount = parsed.data.debitAmount > 0 ? parsed.data.contraAccountId : parsed.data.accountId;
+  const costCenterId = parsed.data.costCenterId || null;
+  const rate = parsed.data.exchangeRate;
+  const { jeLines, total } = buildEntryLines(parsed.data.lines, parsed.data.contraAccountId, costCenterId);
+  if (total <= 0) return { error: "Enter at least one debit or credit amount" };
 
   const { error: jeErr } = await supabase
     .schema("accounting")
@@ -106,56 +138,67 @@ export async function updateOpeningBalanceVoucher(id: string, input: OpeningBala
     .update({
       entry_date: parsed.data.asOfDate,
       currency_id: parsed.data.currencyId,
-      exchange_rate: exchangeRate,
-      narration: "Opening balance",
+      exchange_rate: rate,
+      narration: parsed.data.narration || "Opening balance",
     })
     .eq("id", jeId);
   if (jeErr) return { error: jeErr.message };
 
-  const { error: l1 } = await supabase
+  const { error: delJe } = await supabase
     .schema("accounting")
     .from("journal_entry_lines")
-    .update({
-      account_id: debitAccount,
-      debit_amount: amount,
-      credit_amount: 0,
-      currency_id: parsed.data.currencyId,
-      exchange_rate: exchangeRate,
-      base_debit_amount: base,
-      base_credit_amount: 0,
-      description: "Opening balance",
-    })
-    .eq("journal_entry_id", jeId)
-    .eq("line_no", 1);
-  if (l1) return { error: l1.message };
+    .delete()
+    .eq("journal_entry_id", jeId);
+  if (delJe) return { error: delJe.message };
 
-  const { error: l2 } = await supabase
+  const jeRows = jeLines.map((l, index) => ({
+    journal_entry_id: jeId,
+    line_no: index + 1,
+    account_id: l.accountId,
+    cost_center_id: l.costCenterId ?? null,
+    debit_amount: l.debit,
+    credit_amount: l.credit,
+    currency_id: parsed.data.currencyId,
+    exchange_rate: rate,
+    base_debit_amount: round2(l.debit * rate),
+    base_credit_amount: round2(l.credit * rate),
+    description: l.description ?? null,
+  }));
+  const { error: insJe } = await supabase.schema("accounting").from("journal_entry_lines").insert(jeRows);
+  if (insJe) return { error: insJe.message };
+
+  const { error: delLines } = await supabase
     .schema("accounting")
-    .from("journal_entry_lines")
-    .update({
-      account_id: creditAccount,
-      debit_amount: 0,
-      credit_amount: amount,
-      currency_id: parsed.data.currencyId,
-      exchange_rate: exchangeRate,
-      base_debit_amount: 0,
-      base_credit_amount: base,
-      description: "Opening balance",
-    })
-    .eq("journal_entry_id", jeId)
-    .eq("line_no", 2);
-  if (l2) return { error: l2.message };
+    .from("opening_balance_voucher_lines")
+    .delete()
+    .eq("voucher_id", id);
+  if (delLines) return { error: delLines.message };
+
+  const lineRows = parsed.data.lines.map((l, index) => ({
+    voucher_id: id,
+    line_no: index + 1,
+    account_id: l.accountId,
+    debit: l.debit,
+    credit: l.credit,
+    remarks: l.remarks || null,
+  }));
+  const { error: insLines } = await supabase
+    .schema("accounting")
+    .from("opening_balance_voucher_lines")
+    .insert(lineRows);
+  if (insLines) return { error: insLines.message };
 
   const { error: vErr } = await supabase
     .schema("accounting")
     .from("opening_balance_vouchers")
     .update({
       as_of_date: parsed.data.asOfDate,
-      account_id: parsed.data.accountId,
       contra_account_id: parsed.data.contraAccountId,
+      cost_center_id: costCenterId,
       currency_id: parsed.data.currencyId,
-      debit_amount: parsed.data.debitAmount,
-      credit_amount: parsed.data.creditAmount,
+      exchange_rate: rate,
+      narration: parsed.data.narration || null,
+      total_amount: total,
     })
     .eq("id", id);
   if (vErr) return { error: vErr.message };

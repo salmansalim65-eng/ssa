@@ -236,18 +236,29 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
     case "opening_balance_voucher": {
       const { data: v } = await acc
         .from("opening_balance_vouchers")
-        .select("account_id, contra_account_id, currency_id, debit_amount, credit_amount")
+        .select("contra_account_id, cost_center_id, currency_id, exchange_rate, narration")
         .eq("company_id", companyId)
         .eq("id", id)
         .maybeSingle();
       if (!v) return { error: "Voucher not found" };
+      const { data: olines } = await acc
+        .from("opening_balance_voucher_lines")
+        .select("account_id, debit, credit, remarks")
+        .eq("voucher_id", id)
+        .order("line_no");
       return createOpeningBalanceVoucher({
         asOfDate: today,
-        accountId: v.account_id,
-        contraAccountId: v.contra_account_id,
+        contraAccountId: v.contra_account_id ?? "",
+        costCenterId: v.cost_center_id ?? "",
         currencyId: v.currency_id,
-        debitAmount: v.debit_amount,
-        creditAmount: v.credit_amount,
+        exchangeRate: v.exchange_rate,
+        narration: v.narration ?? "",
+        lines: (olines ?? []).map((l) => ({
+          accountId: l.account_id,
+          debit: l.debit,
+          credit: l.credit,
+          remarks: l.remarks ?? "",
+        })),
       });
     }
     default:

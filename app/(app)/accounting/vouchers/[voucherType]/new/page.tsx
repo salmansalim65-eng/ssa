@@ -149,7 +149,11 @@ export default async function NewVoucherPage({
         />
       )}
       {voucherType === "opening_balance_voucher" && (
-        <OpeningBalanceVoucherForm accounts={accountOptions} currencies={currencyOptions} />
+        <OpeningBalanceVoucherForm
+          accounts={accountOptions}
+          currencies={currencyOptions}
+          costCenters={costCenterOptions}
+        />
       )}
       {voucherType === "journal_voucher" && (
         <JournalVoucherForm accounts={accountOptions} currencies={currencyOptions} />

@@ -134,13 +134,14 @@ export default async function EditVoucherPage({
     pdc_receipt_voucher: "pdc_receipt_voucher_lines",
   };
   const isHeaderDoc = voucherType in HEADER_DOC_LINES;
+  const isOpeningBalance = voucherType === "opening_balance_voucher";
   let docCostCenters: { id: string; name: string }[] = [];
   let docCurrencies: { id: string; code: string; rate: number }[] = [];
   let docLines: { accountId: string; amount: number; rentMonth: string; remarks: string }[] = [];
-  if (isHeaderDoc) {
+  let obLines: { accountId: string; debit: number; credit: number; remarks: string }[] = [];
+  if (isHeaderDoc || isOpeningBalance) {
     const today = new Date().toISOString().slice(0, 10);
-    const linesTable = HEADER_DOC_LINES[voucherType];
-    const [{ data: ccs }, { data: dlines }, rates] = await Promise.all([
+    const [{ data: ccs }, rates] = await Promise.all([
       supabase
         .schema("accounting")
         .from("cost_centers")
@@ -149,12 +150,6 @@ export default async function EditVoucherPage({
         .eq("is_active", true)
         .is("deleted_at", null)
         .order("name"),
-      supabase
-        .schema("accounting")
-        .from(linesTable)
-        .select("account_id, amount, rent_month, remarks")
-        .eq("voucher_id", id)
-        .order("line_no"),
       Promise.all(
         ((companyCurrencies as unknown as RawCurrency[]) ?? [])
           .filter((cc) => cc.currencies)
@@ -170,10 +165,32 @@ export default async function EditVoucherPage({
     ]);
     docCostCenters = ccs ?? [];
     docCurrencies = rates;
+  }
+  if (isHeaderDoc) {
+    const { data: dlines } = await supabase
+      .schema("accounting")
+      .from(HEADER_DOC_LINES[voucherType])
+      .select("account_id, amount, rent_month, remarks")
+      .eq("voucher_id", id)
+      .order("line_no");
     docLines = (dlines ?? []).map((l) => ({
       accountId: l.account_id,
       amount: l.amount,
       rentMonth: l.rent_month ?? "",
+      remarks: l.remarks ?? "",
+    }));
+  }
+  if (isOpeningBalance) {
+    const { data: obl } = await supabase
+      .schema("accounting")
+      .from("opening_balance_voucher_lines")
+      .select("account_id, debit, credit, remarks")
+      .eq("voucher_id", id)
+      .order("line_no");
+    obLines = (obl ?? []).map((l) => ({
+      accountId: l.account_id,
+      debit: l.debit,
+      credit: l.credit,
       remarks: l.remarks ?? "",
     }));
   }
@@ -261,15 +278,17 @@ export default async function EditVoucherPage({
       {voucherType === "opening_balance_voucher" && (
         <OpeningBalanceVoucherForm
           accounts={accountOptions}
-          currencies={currencyOptions}
+          currencies={docCurrencies}
+          costCenters={docCostCenters}
           voucherId={id}
           initialValues={{
             asOfDate: v.as_of_date as string,
-            accountId: v.account_id as string,
             contraAccountId: v.contra_account_id as string,
+            costCenterId: (v.cost_center_id as string | null) ?? "",
             currencyId: v.currency_id as string,
-            debitAmount: v.debit_amount as number,
-            creditAmount: v.credit_amount as number,
+            exchangeRate: v.exchange_rate as number,
+            narration: (v.narration as string | null) ?? "",
+            lines: obLines.length ? obLines : [{ accountId: "", debit: 0, credit: 0, remarks: "" }],
           }}
         />
       )}

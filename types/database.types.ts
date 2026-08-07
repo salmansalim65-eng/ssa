@@ -644,12 +644,15 @@ export interface Database {
           voucher_no: string | null;
           cheque_no: string;
           cheque_date: string;
+          due_date: string | null;
           payee: string;
-          debit_account_id: string;
+          debit_account_id: string | null;
           credit_account_id: string;
+          cost_center_id: string | null;
           currency_id: string;
           exchange_rate: number;
-          amount: number;
+          amount: number | null;
+          total_amount: number;
           pdc_status: "pending" | "cleared" | "returned" | "cancelled";
           narration: string | null;
           created_by: string;
@@ -661,13 +664,30 @@ export interface Database {
           cheque_no: string;
           cheque_date: string;
           payee: string;
-          debit_account_id: string;
           credit_account_id: string;
           currency_id: string;
-          amount: number;
           created_by: string;
         };
         Update: Partial<Database["accounting"]["Tables"]["pdc_payment_vouchers"]["Row"]>;
+      };
+      pdc_payment_voucher_lines: {
+        Row: {
+          id: string;
+          voucher_id: string;
+          line_no: number;
+          account_id: string;
+          amount: number;
+          rent_month: string | null;
+          remarks: string | null;
+          created_at: string;
+        };
+        Insert: Partial<Database["accounting"]["Tables"]["pdc_payment_voucher_lines"]["Row"]> & {
+          voucher_id: string;
+          line_no: number;
+          account_id: string;
+          amount: number;
+        };
+        Update: Partial<Database["accounting"]["Tables"]["pdc_payment_voucher_lines"]["Row"]>;
       };
       pdc_receipt_vouchers: {
         Row: {
@@ -677,12 +697,15 @@ export interface Database {
           voucher_no: string | null;
           cheque_no: string;
           cheque_date: string;
+          due_date: string | null;
           payer: string;
           debit_account_id: string;
-          credit_account_id: string;
+          credit_account_id: string | null;
+          cost_center_id: string | null;
           currency_id: string;
           exchange_rate: number;
-          amount: number;
+          amount: number | null;
+          total_amount: number;
           pdc_status: "pending" | "cleared" | "returned" | "cancelled";
           narration: string | null;
           created_by: string;
@@ -695,12 +718,29 @@ export interface Database {
           cheque_date: string;
           payer: string;
           debit_account_id: string;
-          credit_account_id: string;
           currency_id: string;
-          amount: number;
           created_by: string;
         };
         Update: Partial<Database["accounting"]["Tables"]["pdc_receipt_vouchers"]["Row"]>;
+      };
+      pdc_receipt_voucher_lines: {
+        Row: {
+          id: string;
+          voucher_id: string;
+          line_no: number;
+          account_id: string;
+          amount: number;
+          rent_month: string | null;
+          remarks: string | null;
+          created_at: string;
+        };
+        Insert: Partial<Database["accounting"]["Tables"]["pdc_receipt_voucher_lines"]["Row"]> & {
+          voucher_id: string;
+          line_no: number;
+          account_id: string;
+          amount: number;
+        };
+        Update: Partial<Database["accounting"]["Tables"]["pdc_receipt_voucher_lines"]["Row"]>;
       };
       cheque_return_vouchers: {
         Row: {

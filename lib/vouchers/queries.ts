@@ -84,7 +84,7 @@ export async function getVoucherListRows(
       const { data } = await supabase
         .schema("accounting")
         .from("pdc_payment_vouchers")
-        .select("id, voucher_no, cheque_date, payee, amount, journal_entry_id, journal_entries:journal_entry_id(status)")
+        .select("id, voucher_no, cheque_date, payee, total_amount, journal_entry_id, journal_entries:journal_entry_id(status)")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false });
       return (data ?? []).map((r) => ({
@@ -92,7 +92,7 @@ export async function getVoucherListRows(
         voucherNo: r.voucher_no,
         date: r.cheque_date,
         party: r.payee,
-        amount: r.amount,
+        amount: r.total_amount,
         journalEntryId: r.journal_entry_id,
         status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
       }));
@@ -101,7 +101,7 @@ export async function getVoucherListRows(
       const { data } = await supabase
         .schema("accounting")
         .from("pdc_receipt_vouchers")
-        .select("id, voucher_no, cheque_date, payer, amount, journal_entry_id, journal_entries:journal_entry_id(status)")
+        .select("id, voucher_no, cheque_date, payer, total_amount, journal_entry_id, journal_entries:journal_entry_id(status)")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false });
       return (data ?? []).map((r) => ({
@@ -109,7 +109,7 @@ export async function getVoucherListRows(
         voucherNo: r.voucher_no,
         date: r.cheque_date,
         party: r.payer,
-        amount: r.amount,
+        amount: r.total_amount,
         journalEntryId: r.journal_entry_id,
         status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
       }));
@@ -308,14 +308,14 @@ export async function getVoucherDetail(
       const { data: v } = await supabase
         .schema("accounting")
         .from("pdc_payment_vouchers")
-        .select("*, debit:debit_account_id(account_code, account_name), credit:credit_account_id(account_code, account_name)")
+        .select("*, credit:credit_account_id(account_code, account_name), cost_center:cost_center_id(name)")
         .eq("company_id", companyId)
         .eq("id", id)
         .maybeSingle();
       if (!v) return null;
       const je = await getJournalEntryWithLines(v.journal_entry_id);
-      const debit = v.debit as unknown as { account_code: string; account_name: string };
-      const credit = v.credit as unknown as { account_code: string; account_name: string };
+      const credit = v.credit as unknown as { account_code: string; account_name: string } | null;
+      const costCenter = v.cost_center as unknown as { name: string } | null;
       return {
         id: v.id,
         voucherNo: v.voucher_no,
@@ -325,12 +325,14 @@ export async function getVoucherDetail(
         status: je.status,
         currencyCode: je.currencyCode,
         fields: [
+          { label: "Credit account (PDC liability)", value: credit ? `${credit.account_code} — ${credit.account_name}` : "—" },
           { label: "Payee", value: v.payee },
           { label: "Cheque number", value: v.cheque_no },
+          { label: "Due date", value: v.due_date ?? "—" },
           { label: "Cheque status", value: v.pdc_status },
-          { label: "Amount", value: v.amount.toLocaleString() },
-          { label: "Debit account", value: `${debit.account_code} — ${debit.account_name}` },
-          { label: "Credit account (PDC liability)", value: `${credit.account_code} — ${credit.account_name}` },
+          { label: "Cost center", value: costCenter?.name ?? "—" },
+          { label: "Currency conv.", value: v.exchange_rate.toLocaleString() },
+          { label: "Total", value: v.total_amount.toLocaleString() },
         ],
         lines: je.lines,
       };
@@ -339,14 +341,14 @@ export async function getVoucherDetail(
       const { data: v } = await supabase
         .schema("accounting")
         .from("pdc_receipt_vouchers")
-        .select("*, debit:debit_account_id(account_code, account_name), credit:credit_account_id(account_code, account_name)")
+        .select("*, debit:debit_account_id(account_code, account_name), cost_center:cost_center_id(name)")
         .eq("company_id", companyId)
         .eq("id", id)
         .maybeSingle();
       if (!v) return null;
       const je = await getJournalEntryWithLines(v.journal_entry_id);
-      const debit = v.debit as unknown as { account_code: string; account_name: string };
-      const credit = v.credit as unknown as { account_code: string; account_name: string };
+      const debit = v.debit as unknown as { account_code: string; account_name: string } | null;
+      const costCenter = v.cost_center as unknown as { name: string } | null;
       return {
         id: v.id,
         voucherNo: v.voucher_no,
@@ -356,12 +358,14 @@ export async function getVoucherDetail(
         status: je.status,
         currencyCode: je.currencyCode,
         fields: [
+          { label: "Debit account (PDC asset)", value: debit ? `${debit.account_code} — ${debit.account_name}` : "—" },
           { label: "Payer", value: v.payer },
           { label: "Cheque number", value: v.cheque_no },
+          { label: "Due date", value: v.due_date ?? "—" },
           { label: "Cheque status", value: v.pdc_status },
-          { label: "Amount", value: v.amount.toLocaleString() },
-          { label: "Debit account (PDC asset)", value: `${debit.account_code} — ${debit.account_name}` },
-          { label: "Credit account", value: `${credit.account_code} — ${credit.account_name}` },
+          { label: "Cost center", value: costCenter?.name ?? "—" },
+          { label: "Currency conv.", value: v.exchange_rate.toLocaleString() },
+          { label: "Total", value: v.total_amount.toLocaleString() },
         ],
         lines: je.lines,
       };

@@ -4,11 +4,16 @@ import { revalidatePath } from "next/cache";
 
 import { requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
-import { createJournalEntry, getCurrentCompanyId, postVoucher, resolveExchangeRate } from "@/lib/vouchers/engine";
+import { createJournalEntry, getCurrentCompanyId, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { pdcPaymentVoucherSchema, type PdcPaymentVoucherInput } from "./schemas";
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;
+}
+
+function lineDescription(chequeNo: string, rentMonth?: string, remarks?: string) {
+  const parts = [rentMonth || "", remarks || ""].filter(Boolean);
+  return parts.length ? parts.join(" — ") : `PDC ${chequeNo}`;
 }
 
 export async function createPdcPaymentVoucher(input: PdcPaymentVoucherInput) {
@@ -20,7 +25,30 @@ export async function createPdcPaymentVoucher(input: PdcPaymentVoucherInput) {
   const supabase = await createClient();
   const { data: user } = await supabase.auth.getUser();
   const createdBy = user.user!.id;
+
+  const lines = parsed.data.lines;
+  const total = lines.reduce((sum, l) => sum + l.amount, 0);
+  if (total <= 0) return { error: "Total must be greater than zero" };
+  const costCenterId = parsed.data.costCenterId || null;
   const voucherId = crypto.randomUUID();
+
+  // Debit each line's account; credit the PDC liability account for the total.
+  const jeLines: EntryLineInput[] = [
+    ...lines.map((l) => ({
+      accountId: l.accountId,
+      costCenterId,
+      debit: l.amount,
+      credit: 0,
+      description: lineDescription(parsed.data.chequeNo, l.rentMonth, l.remarks),
+    })),
+    {
+      accountId: parsed.data.creditAccountId,
+      costCenterId,
+      debit: 0,
+      credit: total,
+      description: `PDC ${parsed.data.chequeNo}`,
+    },
+  ];
 
   const je = await createJournalEntry({
     companyId,
@@ -28,12 +56,10 @@ export async function createPdcPaymentVoucher(input: PdcPaymentVoucherInput) {
     voucherId,
     entryDate: parsed.data.chequeDate,
     currencyId: parsed.data.currencyId,
-    narration: parsed.data.narration || null,
+    narration: parsed.data.narration || `PDC ${parsed.data.chequeNo}`,
     createdBy,
-    lines: [
-      { accountId: parsed.data.debitAccountId, debit: parsed.data.amount, credit: 0, description: `PDC ${parsed.data.chequeNo}` },
-      { accountId: parsed.data.creditAccountId, debit: 0, credit: parsed.data.amount, description: `PDC ${parsed.data.chequeNo}` },
-    ],
+    lines: jeLines,
+    exchangeRate: parsed.data.exchangeRate,
   });
   if ("error" in je) return { error: je.error };
 
@@ -43,15 +69,31 @@ export async function createPdcPaymentVoucher(input: PdcPaymentVoucherInput) {
     journal_entry_id: je.journalEntryId,
     cheque_no: parsed.data.chequeNo,
     cheque_date: parsed.data.chequeDate,
+    due_date: parsed.data.dueDate || null,
     payee: parsed.data.payee,
-    debit_account_id: parsed.data.debitAccountId,
     credit_account_id: parsed.data.creditAccountId,
+    cost_center_id: costCenterId,
     currency_id: parsed.data.currencyId,
-    amount: parsed.data.amount,
+    exchange_rate: je.exchangeRate,
     narration: parsed.data.narration || null,
+    total_amount: total,
     created_by: createdBy,
   });
   if (error) return { error: error.message };
+
+  const lineRows = lines.map((l, index) => ({
+    voucher_id: voucherId,
+    line_no: index + 1,
+    account_id: l.accountId,
+    amount: l.amount,
+    rent_month: l.rentMonth || null,
+    remarks: l.remarks || null,
+  }));
+  const { error: linesError } = await supabase
+    .schema("accounting")
+    .from("pdc_payment_voucher_lines")
+    .insert(lineRows);
+  if (linesError) return { error: linesError.message };
 
   revalidatePath("/accounting/vouchers/pdc_payment_voucher");
   return { success: true, id: voucherId };
@@ -84,10 +126,11 @@ export async function updatePdcPaymentVoucher(id: string, input: PdcPaymentVouch
   if (!je) return { error: "Voucher not found" };
   if (je.status !== "draft") return { error: "Only draft vouchers can be edited" };
 
-  const exchangeRate = await resolveExchangeRate(companyId, parsed.data.currencyId, parsed.data.chequeDate);
-  const amount = parsed.data.amount;
-  const base = round2(amount * exchangeRate);
-  const desc = `PDC ${parsed.data.chequeNo}`;
+  const lines = parsed.data.lines;
+  const total = lines.reduce((sum, l) => sum + l.amount, 0);
+  if (total <= 0) return { error: "Total must be greater than zero" };
+  const rate = parsed.data.exchangeRate;
+  const costCenterId = parsed.data.costCenterId || null;
 
   const { error: jeErr } = await supabase
     .schema("accounting")
@@ -95,45 +138,70 @@ export async function updatePdcPaymentVoucher(id: string, input: PdcPaymentVouch
     .update({
       entry_date: parsed.data.chequeDate,
       currency_id: parsed.data.currencyId,
-      exchange_rate: exchangeRate,
-      narration: parsed.data.narration || null,
+      exchange_rate: rate,
+      narration: parsed.data.narration || `PDC ${parsed.data.chequeNo}`,
     })
     .eq("id", jeId);
   if (jeErr) return { error: jeErr.message };
 
-  const { error: l1 } = await supabase
+  const { error: delJe } = await supabase
     .schema("accounting")
     .from("journal_entry_lines")
-    .update({
-      account_id: parsed.data.debitAccountId,
-      debit_amount: amount,
+    .delete()
+    .eq("journal_entry_id", jeId);
+  if (delJe) return { error: delJe.message };
+
+  const jeRows = [
+    ...lines.map((l, index) => ({
+      journal_entry_id: jeId,
+      line_no: index + 1,
+      account_id: l.accountId,
+      cost_center_id: costCenterId,
+      debit_amount: l.amount,
       credit_amount: 0,
       currency_id: parsed.data.currencyId,
-      exchange_rate: exchangeRate,
-      base_debit_amount: base,
+      exchange_rate: rate,
+      base_debit_amount: round2(l.amount * rate),
       base_credit_amount: 0,
-      description: desc,
-    })
-    .eq("journal_entry_id", jeId)
-    .eq("line_no", 1);
-  if (l1) return { error: l1.message };
-
-  const { error: l2 } = await supabase
-    .schema("accounting")
-    .from("journal_entry_lines")
-    .update({
+      description: lineDescription(parsed.data.chequeNo, l.rentMonth, l.remarks),
+    })),
+    {
+      journal_entry_id: jeId,
+      line_no: lines.length + 1,
       account_id: parsed.data.creditAccountId,
+      cost_center_id: costCenterId,
       debit_amount: 0,
-      credit_amount: amount,
+      credit_amount: total,
       currency_id: parsed.data.currencyId,
-      exchange_rate: exchangeRate,
+      exchange_rate: rate,
       base_debit_amount: 0,
-      base_credit_amount: base,
-      description: desc,
-    })
-    .eq("journal_entry_id", jeId)
-    .eq("line_no", 2);
-  if (l2) return { error: l2.message };
+      base_credit_amount: round2(total * rate),
+      description: `PDC ${parsed.data.chequeNo}`,
+    },
+  ];
+  const { error: insJe } = await supabase.schema("accounting").from("journal_entry_lines").insert(jeRows);
+  if (insJe) return { error: insJe.message };
+
+  const { error: delLines } = await supabase
+    .schema("accounting")
+    .from("pdc_payment_voucher_lines")
+    .delete()
+    .eq("voucher_id", id);
+  if (delLines) return { error: delLines.message };
+
+  const lineRows = lines.map((l, index) => ({
+    voucher_id: id,
+    line_no: index + 1,
+    account_id: l.accountId,
+    amount: l.amount,
+    rent_month: l.rentMonth || null,
+    remarks: l.remarks || null,
+  }));
+  const { error: insLines } = await supabase
+    .schema("accounting")
+    .from("pdc_payment_voucher_lines")
+    .insert(lineRows);
+  if (insLines) return { error: insLines.message };
 
   const { error: vErr } = await supabase
     .schema("accounting")
@@ -141,12 +209,14 @@ export async function updatePdcPaymentVoucher(id: string, input: PdcPaymentVouch
     .update({
       cheque_no: parsed.data.chequeNo,
       cheque_date: parsed.data.chequeDate,
+      due_date: parsed.data.dueDate || null,
       payee: parsed.data.payee,
-      debit_account_id: parsed.data.debitAccountId,
       credit_account_id: parsed.data.creditAccountId,
+      cost_center_id: costCenterId,
       currency_id: parsed.data.currencyId,
-      amount,
+      exchange_rate: rate,
       narration: parsed.data.narration || null,
+      total_amount: total,
     })
     .eq("id", id);
   if (vErr) return { error: vErr.message };

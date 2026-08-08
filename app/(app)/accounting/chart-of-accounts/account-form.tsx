@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { FormSection } from "@/components/ui/form-section";
 import { Input } from "@/components/ui/input";
 import {
   Form,
@@ -93,179 +94,200 @@ export function AccountForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="grid gap-4 sm:grid-cols-2">
-        <FormField
-          control={form.control}
-          name="accountName"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Account name</FormLabel>
-              <FormControl>
-                <Input {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="parentId"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Parent account</FormLabel>
-              <Select
-                onValueChange={(value) => handleParentChange(value, field.onChange)}
-                defaultValue={field.value || "none"}
-              >
-                <FormControl>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="none">No parent (root)</SelectItem>
-                  {parentOptions.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.account_code} — {p.account_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="accountType"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Account type</FormLabel>
-              <Select
-                onValueChange={field.onChange}
-                defaultValue={field.value}
-                disabled={lockAccountType}
-              >
-                <FormControl>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {ACCOUNT_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {typeLabels[type]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {lockAccountType && (
-                <FormDescription>Inherited from the parent account.</FormDescription>
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+        <FormSection title="Account information">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="accountName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Account name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g. Cash in Hand" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="currencyId"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Restrict to currency</FormLabel>
-              <Select
-                onValueChange={(value) => field.onChange(value === "base" ? "" : value)}
-                defaultValue={field.value || "base"}
-              >
+            />
+            <FormField
+              control={form.control}
+              name="parentId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Parent account</FormLabel>
+                  <Select
+                    onValueChange={(value) => handleParentChange(value, field.onChange)}
+                    defaultValue={field.value || "none"}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">No parent (root)</SelectItem>
+                      {parentOptions.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.account_code} — {p.account_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </FormSection>
+
+        <FormSection title="Classification">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="accountType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Account type</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                    disabled={lockAccountType}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {ACCOUNT_TYPES.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {typeLabels[type]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {lockAccountType && (
+                    <FormDescription>Inherited from the parent account.</FormDescription>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="currencyId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Restrict to currency</FormLabel>
+                  <Select
+                    onValueChange={(value) => field.onChange(value === "base" ? "" : value)}
+                    defaultValue={field.value || "base"}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="base">Company base currency</SelectItem>
+                      {currencies.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.code}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>Only this currency can post to the account.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+          <FormField
+            control={form.control}
+            name="isGroup"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-start gap-2.5 rounded-lg border p-3">
                 <FormControl>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
+                  <Checkbox checked={field.value} onCheckedChange={field.onChange} />
                 </FormControl>
-                <SelectContent>
-                  <SelectItem value="base">Company base currency</SelectItem>
-                  {currencies.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.code}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormDescription>Only this currency can post to the account.</FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="openingBalance"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Opening balance</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  step="0.01"
-                  disabled={isGroup}
-                  {...field}
-                  value={field.value as number}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="isGroup"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-start gap-2 sm:col-span-2">
-              <FormControl>
-                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-              </FormControl>
-              <div className="space-y-1 leading-none">
-                <FormLabel>Group / header account</FormLabel>
-                <FormDescription>
-                  Groups organize the tree and can have child accounts, but
-                  can&apos;t be posted to directly.
-                </FormDescription>
-              </div>
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="isCash"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-start gap-2 sm:col-span-2">
-              <FormControl>
-                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-              </FormControl>
-              <div className="space-y-1 leading-none">
-                <FormLabel>Cash account</FormLabel>
-                <FormDescription>Included in the Cash Book report.</FormDescription>
-              </div>
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="isBank"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-start gap-2 sm:col-span-2">
-              <FormControl>
-                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-              </FormControl>
-              <div className="space-y-1 leading-none">
-                <FormLabel>Bank account</FormLabel>
-                <FormDescription>Included in the Bank Book report.</FormDescription>
-              </div>
-            </FormItem>
-          )}
-        />
-        {formError && <p className="text-sm text-destructive sm:col-span-2">{formError}</p>}
-        <Button type="submit" disabled={isPending} className="sm:col-span-2 sm:w-fit">
-          {isPending ? "Saving…" : submitLabel}
-        </Button>
+                <div className="space-y-1 leading-none">
+                  <FormLabel>Group / header account</FormLabel>
+                  <FormDescription>
+                    Groups organize the tree and can have child accounts, but
+                    can&apos;t be posted to directly.
+                  </FormDescription>
+                </div>
+              </FormItem>
+            )}
+          />
+        </FormSection>
+
+        <FormSection title="Balances &amp; reporting">
+          <FormField
+            control={form.control}
+            name="openingBalance"
+            render={({ field }) => (
+              <FormItem className="sm:max-w-xs">
+                <FormLabel>Opening balance</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    disabled={isGroup}
+                    {...field}
+                    value={field.value as number}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="isCash"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start gap-2.5 rounded-lg border p-3">
+                  <FormControl>
+                    <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>Cash account</FormLabel>
+                    <FormDescription>Included in the Cash Book report.</FormDescription>
+                  </div>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="isBank"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start gap-2.5 rounded-lg border p-3">
+                  <FormControl>
+                    <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>Bank account</FormLabel>
+                    <FormDescription>Included in the Bank Book report.</FormDescription>
+                  </div>
+                </FormItem>
+              )}
+            />
+          </div>
+        </FormSection>
+
+        {formError && (
+          <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            {formError}
+          </p>
+        )}
+        <div className="flex justify-end gap-2 border-t pt-4">
+          <Button type="submit" disabled={isPending}>
+            {isPending ? "Saving…" : submitLabel}
+          </Button>
+        </div>
       </form>
     </Form>
   );

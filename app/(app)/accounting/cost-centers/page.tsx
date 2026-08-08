@@ -1,4 +1,9 @@
+import { LandmarkIcon } from "lucide-react";
+
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   Table,
   TableBody,
@@ -38,77 +43,77 @@ export default async function CostCentersPage() {
     hasPermission("cost_centers", "delete"),
   ]);
 
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Cost Centers</h1>
-          <p className="text-sm text-muted-foreground">
-            One cost center per registered asset. Linking to the asset itself
-            happens once Asset Registration (Phase 6) ships.
-          </p>
-        </div>
-        {canCreate && <AddCostCenterDialog />}
-      </div>
+  const rows = costCenters ?? [];
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Code</TableHead>
-            <TableHead>Name</TableHead>
-            <TableHead>Country / City</TableHead>
-            <TableHead>Property type</TableHead>
-            <TableHead>Owner</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Active</TableHead>
-            <TableHead className="w-10" />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {(costCenters ?? []).map((cc) => (
-            <TableRow key={cc.id}>
-              <TableCell className="font-mono font-medium">{cc.code}</TableCell>
-              <TableCell>{cc.name}</TableCell>
-              <TableCell>{[cc.country, cc.city].filter(Boolean).join(" / ") || "—"}</TableCell>
-              <TableCell>{cc.property_type || "—"}</TableCell>
-              <TableCell>{cc.owner || "—"}</TableCell>
-              <TableCell>
-                <Badge variant="outline">{statusLabels[cc.rental_status]}</Badge>
-              </TableCell>
-              <TableCell>
-                <Badge variant={cc.is_active ? "success" : "secondary"}>
-                  {cc.is_active ? "Active" : "Inactive"}
-                </Badge>
-              </TableCell>
-              <TableCell>
-                <CostCenterRowActions
-                  costCenterId={cc.id}
-                  isActive={cc.is_active}
-                  canEdit={canEdit}
-                  canDelete={canDelete}
-                  defaultValues={{
-                    name: cc.name,
-                    country: cc.country ?? "",
-                    city: cc.city ?? "",
-                    propertyType: cc.property_type ?? "",
-                    building: cc.building ?? "",
-                    plotNumber: cc.plot_number ?? "",
-                    owner: cc.owner ?? "",
-                    rentalStatus: cc.rental_status,
-                  }}
-                />
-              </TableCell>
-            </TableRow>
-          ))}
-          {(costCenters ?? []).length === 0 && (
-            <TableRow>
-              <TableCell colSpan={8} className="text-center text-muted-foreground">
-                No cost centers yet.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Accounting"
+        title="Cost Centers"
+        description="Track one cost center per registered asset to tag transactions and drive property-level reporting."
+        actions={canCreate && <AddCostCenterDialog />}
+      />
+
+      <div className="rounded-xl border bg-card shadow-sm">
+        {rows.length === 0 ? (
+          <EmptyState
+            icon={LandmarkIcon}
+            title="No cost centers yet"
+            description="Cost centers let you attribute income and costs to individual properties."
+            action={canCreate && <AddCostCenterDialog />}
+          />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Code</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Country / City</TableHead>
+                <TableHead>Property type</TableHead>
+                <TableHead>Owner</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Active</TableHead>
+                <TableHead className="w-10" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((cc) => (
+                <TableRow key={cc.id}>
+                  <TableCell className="font-mono font-medium">{cc.code}</TableCell>
+                  <TableCell className="font-medium">{cc.name}</TableCell>
+                  <TableCell>{[cc.country, cc.city].filter(Boolean).join(" / ") || "—"}</TableCell>
+                  <TableCell>{cc.property_type || "—"}</TableCell>
+                  <TableCell>{cc.owner || "—"}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{statusLabels[cc.rental_status]}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge active={cc.is_active} />
+                  </TableCell>
+                  <TableCell>
+                    <CostCenterRowActions
+                      costCenterId={cc.id}
+                      isActive={cc.is_active}
+                      canEdit={canEdit}
+                      canDelete={canDelete}
+                      defaultValues={{
+                        name: cc.name,
+                        country: cc.country ?? "",
+                        city: cc.city ?? "",
+                        propertyType: cc.property_type ?? "",
+                        building: cc.building ?? "",
+                        plotNumber: cc.plot_number ?? "",
+                        owner: cc.owner ?? "",
+                        rentalStatus: cc.rental_status,
+                      }}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </div>
     </div>
   );
 }

@@ -40,55 +40,49 @@ export function Sidebar() {
     <TooltipProvider>
       <aside
         className={cn(
-          "hidden shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground transition-[width] duration-200 md:flex print:hidden",
+          // Pinned full-height column so the nav scrolls on its own and stays
+          // in view no matter how tall the page content is.
+          "sticky top-0 hidden h-screen shrink-0 flex-col overflow-hidden border-r bg-sidebar text-sidebar-foreground transition-[width] duration-200 md:flex print:hidden",
           collapsed ? "w-16" : "w-64",
         )}
       >
+        {/* Top bar: brand + collapse/expand toggle */}
         <div
           className={cn(
-            "flex h-14 items-center border-b",
-            collapsed ? "justify-center px-2" : "gap-2.5 px-4",
+            "flex h-14 shrink-0 items-center border-b",
+            collapsed ? "justify-center px-2" : "gap-2.5 px-3",
           )}
         >
-          <Image
-            src="/logo.svg"
-            alt="SSA logo"
-            width={32}
-            height={32}
-            priority
-            className="size-8 shrink-0"
-          />
-          {!collapsed && (
-            <div className="min-w-0 leading-tight">
-              <p className="truncate text-sm font-semibold">Rental &amp; Accounting</p>
-              <p className="truncate text-xs text-muted-foreground">Enterprise ERP</p>
-            </div>
+          {collapsed ? (
+            <button
+              type="button"
+              onClick={toggle}
+              aria-label="Expand sidebar"
+              className="flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
+            >
+              <PanelLeftOpenIcon className="size-5" />
+            </button>
+          ) : (
+            <>
+              <Image src="/logo.svg" alt="SSA logo" width={32} height={32} priority className="size-8 shrink-0" />
+              <div className="min-w-0 leading-tight">
+                <p className="truncate text-sm font-semibold">Rental &amp; Accounting</p>
+                <p className="truncate text-xs text-muted-foreground">Enterprise ERP</p>
+              </div>
+              <button
+                type="button"
+                onClick={toggle}
+                aria-label="Collapse sidebar"
+                className="ml-auto flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
+              >
+                <PanelLeftCloseIcon className="size-4.5" />
+              </button>
+            </>
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain">
           <SidebarNav collapsed={collapsed} />
-        </div>
-
-        <div className={cn("border-t p-2", collapsed && "flex justify-center")}>
-          <button
-            type="button"
-            onClick={toggle}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className={cn(
-              "flex items-center rounded-md text-sm font-medium text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground",
-              collapsed ? "size-9 justify-center" : "w-full gap-2.5 px-3 py-2",
-            )}
-          >
-            {collapsed ? (
-              <PanelLeftOpenIcon className="size-4 shrink-0" />
-            ) : (
-              <>
-                <PanelLeftCloseIcon className="size-4 shrink-0" />
-                <span>Collapse</span>
-              </>
-            )}
-          </button>
         </div>
       </aside>
     </TooltipProvider>

@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { POSTING_TEMPLATE_ROLES } from "@/lib/vouchers/posting-templates";
@@ -33,15 +34,12 @@ export default async function PostingTemplatesPage() {
   const templateByKey = new Map((templates ?? []).map((t) => [`${t.voucher_type}:${t.account_role}`, t.account_id]));
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Posting Templates</h1>
-        <p className="text-sm text-muted-foreground">
-          For voucher types whose accounting treatment never changes
-          transaction-to-transaction, map each role to a Chart of Accounts
-          entry once here instead of picking it every time.
-        </p>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Administration"
+        title="Posting Templates"
+        description="For voucher types whose accounting treatment never changes transaction-to-transaction, map each role to a Chart of Accounts entry once here instead of picking it every time."
+      />
 
       {Object.entries(POSTING_TEMPLATE_ROLES).map(([voucherType, roles]) => (
         <Card key={voucherType}>

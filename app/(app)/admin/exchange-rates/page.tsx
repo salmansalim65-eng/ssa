@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { deleteExchangeRate } from "@/features/admin/exchange-rates/actions";
@@ -50,14 +51,12 @@ export default async function ExchangeRatesPage() {
   }));
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Daily Exchange Rates</h1>
-        <p className="text-sm text-muted-foreground">
-          One rate per currency per day, relative to this company&apos;s base
-          currency. Historical rates are never overwritten by a later date.
-        </p>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Administration"
+        title="Daily Exchange Rates"
+        description="One rate per currency per day, relative to this company's base currency. Historical rates are never overwritten by a later date."
+      />
 
       {canEdit && (
         <Card>

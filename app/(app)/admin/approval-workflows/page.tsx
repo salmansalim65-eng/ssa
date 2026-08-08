@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/ui/page-header";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
@@ -63,16 +64,12 @@ export default async function ApprovalWorkflowsPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Approval Workflows</h1>
-        <p className="text-sm text-muted-foreground">
-          Configure multi-level approval per voucher type. Steps run in
-          order; an amount range restricts a step to vouchers within it. A
-          voucher type with no active workflow (or no matching step) posts
-          without approval.
-        </p>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Administration"
+        title="Approval Workflows"
+        description="Configure multi-level approval per voucher type. Steps run in order; an amount range restricts a step to vouchers within it. A voucher type with no active workflow (or no matching step) posts without approval."
+      />
       <ApprovalWorkflowsManager
         voucherTypes={[...VOUCHER_TYPES]}
         workflowByVoucherType={workflowByVoucherType}

@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/ui/page-header";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { AddCurrencyDialog } from "./add-currency-dialog";
@@ -34,18 +35,16 @@ export default async function CurrenciesPage() {
   }));
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Currencies</h1>
-          <p className="text-sm text-muted-foreground">
-            Shared across every company. Enable the ones you transact in and
-            pick one base currency.
-          </p>
-        </div>
-        {canCreate && <AddCurrencyDialog />}
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Administration"
+        title="Currencies"
+        description="Shared across every company. Enable the ones you transact in and pick one base currency."
+        actions={canCreate && <AddCurrencyDialog />}
+      />
+      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        <CurrenciesTable rows={rows} canEdit={canEdit} />
       </div>
-      <CurrenciesTable rows={rows} canEdit={canEdit} />
     </div>
   );
 }

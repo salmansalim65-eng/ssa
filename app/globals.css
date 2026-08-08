@@ -48,6 +48,9 @@
   --warning: oklch(0.72 0.15 70);
   --info: oklch(0.55 0.12 240);
 
+  /* Logo blue (#3A53A4) — used to mark group/structural rows. */
+  --group: oklch(0.44 0.14 266);
+
   /* Application header band — the darkest chrome, giving the app identity. */
   --header: oklch(0.29 0.055 258);
   --header-foreground: oklch(0.97 0.006 255);
@@ -85,6 +88,7 @@
   --success: oklch(0.72 0.14 155);
   --warning: oklch(0.8 0.16 75);
   --info: oklch(0.7 0.12 240);
+  --group: oklch(0.74 0.13 266);
   --header: oklch(0.2 0.02 258);
   --header-foreground: oklch(0.96 0.004 255);
   --header-muted: oklch(0.68 0.02 255);
@@ -119,6 +123,7 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-info: var(--info);
+  --color-group: var(--group);
   --color-header: var(--header);
   --color-header-foreground: var(--header-foreground);
   --color-header-muted: var(--header-muted);

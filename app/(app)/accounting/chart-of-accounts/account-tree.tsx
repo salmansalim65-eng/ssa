@@ -257,7 +257,11 @@ export function AccountTree({
           key={account.id}
           className={cn(
             "group",
-            isGroup ? "bg-muted/40 hover:bg-muted/60" : "hover:bg-muted/30",
+            // Group rows carry a soft brand tint so the hierarchy reads at a
+            // glance; posting rows stay on the plain white card surface.
+            isGroup
+              ? "bg-primary/[0.08] hover:bg-primary/[0.12]"
+              : "hover:bg-muted/30",
             !account.is_active && "opacity-70",
           )}
         >

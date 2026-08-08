@@ -14,7 +14,7 @@ export default async function NewAssetSalePage() {
   const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
   const companyId = companyIdData as string;
 
-  const [{ data: accounts }, { data: companyCurrencies }] = await Promise.all([
+  const [{ data: accounts }, { data: companyCurrencies }, { data: costCenters }] = await Promise.all([
     // Postable (non-group) accounts, offered as searchable pickers by name.
     supabase
       .schema("accounting")
@@ -31,6 +31,14 @@ export default async function NewAssetSalePage() {
       .select("currencies:currency_id(id, code)")
       .eq("company_id", companyId)
       .eq("is_active", true),
+    supabase
+      .schema("accounting")
+      .from("cost_centers")
+      .select("id, name")
+      .eq("company_id", companyId)
+      .eq("is_active", true)
+      .is("deleted_at", null)
+      .order("name"),
   ]);
 
   type RawCurrency = { currencies: { id: string; code: string } | null };
@@ -52,7 +60,7 @@ export default async function NewAssetSalePage() {
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold tracking-tight">New sale asset voucher</h1>
       <Suspense>
-        <AssetSaleForm accounts={accounts ?? []} currencies={currencyOptions} />
+        <AssetSaleForm accounts={accounts ?? []} currencies={currencyOptions} costCenters={costCenters ?? []} />
       </Suspense>
     </div>
   );

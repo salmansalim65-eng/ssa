@@ -897,6 +897,7 @@ export interface Database {
           voucher_id: string;
           line_no: number;
           asset_id: string | null;
+          cost_center_id: string | null;
           fixed_asset_account_id: string;
           gross: number;
           due_date: string | null;
@@ -1099,6 +1100,7 @@ export interface Database {
           id: string;
           sale_id: string;
           line_no: number;
+          cost_center_id: string | null;
           fixed_asset_account_id: string;
           gross: number;
           remarks: string | null;

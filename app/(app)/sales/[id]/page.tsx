@@ -54,16 +54,23 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
   const { data: lines } = await supabase
     .schema("assets")
     .from("asset_sale_lines")
-    .select("id, line_no, fixed_asset_account_id, gross, remarks")
+    .select("id, line_no, cost_center_id, fixed_asset_account_id, gross, remarks")
     .eq("sale_id", id)
     .order("line_no");
 
-  type LineRow = { id: string; line_no: number; fixed_asset_account_id: string; gross: number; remarks: string | null };
+  type LineRow = {
+    id: string;
+    line_no: number;
+    cost_center_id: string | null;
+    fixed_asset_account_id: string;
+    gross: number;
+    remarks: string | null;
+  };
   const lineRows = (lines as unknown as LineRow[]) ?? [];
 
   const saleAsset = (sale as unknown as { assets: { asset_code: string; asset_name: string } | null }).assets;
 
-  const [currenciesById, journalEntriesById, accountsById] = await Promise.all([
+  const [currenciesById, journalEntriesById, accountsById, costCentersById] = await Promise.all([
     fetchRefs<{ id: string; code: string }>(supabase, "core", "currencies", "code", [sale.currency_id]),
     fetchRefs<{ id: string; status: JournalEntryStatus }>(
       supabase,
@@ -78,6 +85,13 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
       "chart_of_accounts",
       "account_name",
       [sale.customer_account_id, ...lineRows.map((l) => l.fixed_asset_account_id)],
+    ),
+    fetchRefs<{ id: string; name: string }>(
+      supabase,
+      "accounting",
+      "cost_centers",
+      "name",
+      lineRows.map((l) => l.cost_center_id).filter((v): v is string => !!v),
     ),
   ]);
 
@@ -162,10 +176,11 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
       </div>
 
       <div className="overflow-x-auto rounded-md border">
-        <Table className="min-w-[700px]">
+        <Table className="min-w-[850px]">
           <TableHeader>
             <TableRow>
               <TableHead className="w-10">Sno</TableHead>
+              <TableHead>Cost Center</TableHead>
               <TableHead>Fixed Asset (Property) (Cr)</TableHead>
               <TableHead className="text-right">Gross</TableHead>
               <TableHead>Remarks</TableHead>
@@ -175,13 +190,14 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
             {lineRows.map((l) => (
               <TableRow key={l.id}>
                 <TableCell className="text-muted-foreground">{l.line_no}</TableCell>
+                <TableCell>{l.cost_center_id ? costCentersById.get(l.cost_center_id)?.name ?? "—" : "—"}</TableCell>
                 <TableCell>{accountsById.get(l.fixed_asset_account_id)?.account_name ?? "—"}</TableCell>
                 <TableCell className="text-right">{l.gross.toLocaleString()}</TableCell>
                 <TableCell>{l.remarks ?? "—"}</TableCell>
               </TableRow>
             ))}
             <TableRow>
-              <TableCell colSpan={2} className="text-right font-medium">
+              <TableCell colSpan={3} className="text-right font-medium">
                 Total Value
               </TableCell>
               <TableCell className="text-right font-medium">

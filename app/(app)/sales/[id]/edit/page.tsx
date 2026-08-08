@@ -17,7 +17,7 @@ export default async function EditAssetSalePage({ params }: { params: Promise<{ 
   const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
   const companyId = companyIdData as string;
 
-  const [{ data: accounts }, { data: companyCurrencies }, { data: sale }] = await Promise.all([
+  const [{ data: accounts }, { data: companyCurrencies }, { data: costCenters }, { data: sale }] = await Promise.all([
     supabase
       .schema("accounting")
       .from("chart_of_accounts")
@@ -33,6 +33,14 @@ export default async function EditAssetSalePage({ params }: { params: Promise<{ 
       .select("currencies:currency_id(id, code)")
       .eq("company_id", companyId)
       .eq("is_active", true),
+    supabase
+      .schema("accounting")
+      .from("cost_centers")
+      .select("id, name")
+      .eq("company_id", companyId)
+      .eq("is_active", true)
+      .is("deleted_at", null)
+      .order("name"),
     supabase
       .schema("assets")
       .from("asset_sales")
@@ -73,7 +81,7 @@ export default async function EditAssetSalePage({ params }: { params: Promise<{ 
   const { data: lines } = await supabase
     .schema("assets")
     .from("asset_sale_lines")
-    .select("fixed_asset_account_id, gross, remarks")
+    .select("cost_center_id, fixed_asset_account_id, gross, remarks")
     .eq("sale_id", id)
     .order("line_no");
 
@@ -83,6 +91,7 @@ export default async function EditAssetSalePage({ params }: { params: Promise<{ 
       <AssetSaleForm
         accounts={accounts ?? []}
         currencies={currencyOptions}
+        costCenters={costCenters ?? []}
         voucherId={id}
         initialValues={{
           customerAccountId: sale.customer_account_id,
@@ -92,6 +101,7 @@ export default async function EditAssetSalePage({ params }: { params: Promise<{ 
           pakExch: sale.pak_exch,
           narration: sale.narration ?? "",
           lines: (lines ?? []).map((l) => ({
+            costCenterId: l.cost_center_id ?? "",
             fixedAssetAccountId: l.fixed_asset_account_id,
             gross: l.gross,
             remarks: l.remarks ?? "",

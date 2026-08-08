@@ -17,6 +17,7 @@ import { deleteUaeRentInvoice, postUaeRentInvoice } from "@/features/rental/uae-
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
+import { formatDate, formatMoney } from "@/lib/format";
 import { getVoucherApproval } from "@/lib/vouchers/engine";
 import type { JournalEntryStatus } from "@/types/database.types";
 
@@ -112,12 +113,12 @@ export default async function UaeRentInvoiceDetailPage({ params }: { params: Pro
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between print:hidden">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">UAE Rent Invoice</h1>
-          <p className="font-mono text-sm text-muted-foreground">{invoice.voucher_no ?? "Draft"}</p>
+      <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between print:hidden">
+        <div className="space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary">Rent Invoice</p>
+          <h1 className="font-mono text-2xl font-semibold tracking-tight">{invoice.voucher_no ?? "Draft"}</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <VoucherStatusBadge status={status} />
           <PrintButton />
           {status === "draft" && canDelete && (
@@ -136,39 +137,39 @@ export default async function UaeRentInvoiceDetailPage({ params }: { params: Pro
         <p className="font-mono text-sm">{invoice.voucher_no ?? "Draft"}</p>
       </div>
 
-      <div className="grid gap-x-8 gap-y-2 rounded-md border p-4 sm:grid-cols-2">
+      <div className="grid gap-x-8 gap-y-4 rounded-xl border bg-card p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-3">
         <div>
-          <p className="text-xs text-muted-foreground">Asset</p>
-          <p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Asset</p>
+          <p className="mt-0.5">
             {refs.uae_leases?.assets
               ? `${refs.uae_leases.assets.asset_code} — ${refs.uae_leases.assets.asset_name}`
               : "—"}
           </p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Tenant</p>
-          <p>{refs.uae_leases?.tenants?.name ?? "—"}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Tenant</p>
+          <p className="mt-0.5">{refs.uae_leases?.tenants?.name ?? "—"}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Period</p>
-          <p>
-            {invoice.period_start} – {invoice.period_end}
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Period</p>
+          <p className="mt-0.5">
+            {formatDate(invoice.period_start)} – {formatDate(invoice.period_end)}
           </p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Due date</p>
-          <p>{invoice.due_date}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Due date</p>
+          <p className="mt-0.5">{formatDate(invoice.due_date)}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Amount</p>
-          <p>
-            {invoice.amount.toLocaleString()} {refs.currencies?.code}
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Amount</p>
+          <p className="mt-0.5 font-mono tabular-nums">
+            {formatMoney(invoice.amount)} {refs.currencies?.code}
           </p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Outstanding balance</p>
-          <p>
-            {invoice.outstanding_balance.toLocaleString()} {refs.currencies?.code}
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Outstanding balance</p>
+          <p className="mt-0.5 font-mono tabular-nums">
+            {formatMoney(invoice.outstanding_balance)} {refs.currencies?.code}
           </p>
         </div>
       </div>
@@ -191,34 +192,36 @@ export default async function UaeRentInvoiceDetailPage({ params }: { params: Pro
 
       <div className="space-y-2">
         <h2 className="text-lg font-medium">Payments</h2>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Account</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {paymentRows.map((p) => {
-              const acct = p.cash_bank_account_id ? paymentAccountsById.get(p.cash_bank_account_id) ?? null : null;
-              return (
-                <TableRow key={p.id}>
-                  <TableCell>{p.payment_date}</TableCell>
-                  <TableCell>{acct ? `${acct.account_code} — ${acct.account_name}` : "—"}</TableCell>
-                  <TableCell className="text-right">{p.amount.toLocaleString()}</TableCell>
-                </TableRow>
-              );
-            })}
-            {paymentRows.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={3} className="text-center text-muted-foreground">
-                  No payments recorded yet.
-                </TableCell>
+        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Date</TableHead>
+                <TableHead>Account</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {paymentRows.map((p) => {
+                const acct = p.cash_bank_account_id ? paymentAccountsById.get(p.cash_bank_account_id) ?? null : null;
+                return (
+                  <TableRow key={p.id}>
+                    <TableCell className="text-muted-foreground">{formatDate(p.payment_date)}</TableCell>
+                    <TableCell>{acct ? `${acct.account_code} — ${acct.account_name}` : "—"}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{formatMoney(p.amount)}</TableCell>
+                  </TableRow>
+                );
+              })}
+              {paymentRows.length === 0 && (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={3} className="py-10 text-center text-muted-foreground">
+                    No payments recorded yet.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       {status === "posted" && invoice.outstanding_balance > 0 && canRecordPayment && (

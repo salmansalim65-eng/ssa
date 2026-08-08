@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { ReceiptIcon } from "lucide-react";
 
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   Table,
   TableBody,
@@ -11,6 +14,7 @@ import {
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
+import { formatDate, formatMoney } from "@/lib/format";
 import type { JournalEntryStatus } from "@/types/database.types";
 
 export default async function PkRentInvoicesPage() {
@@ -63,55 +67,62 @@ export default async function PkRentInvoicesPage() {
   ]);
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Pakistan Rent Invoices</h1>
-        <p className="text-sm text-muted-foreground">Invoices generated from Pakistan lease payment schedules.</p>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Rentals"
+        title="Pakistan Rent Invoices"
+        description="Invoices generated from Pakistan lease payment schedules."
+      />
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Voucher #</TableHead>
-            <TableHead>Asset</TableHead>
-            <TableHead>Tenant</TableHead>
-            <TableHead>Invoice date</TableHead>
-            <TableHead className="text-right">Total</TableHead>
-            <TableHead className="text-right">Outstanding</TableHead>
-            <TableHead>Status</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((inv) => {
-            const asset = inv.pk_leases?.asset_id ? assetsById.get(inv.pk_leases.asset_id) ?? null : null;
-            const status = journalEntriesById.get(inv.journal_entry_id ?? "")?.status ?? "draft";
-            return (
-              <TableRow key={inv.id}>
-                <TableCell>
-                  <Link href={`/rental/pk/invoices/${inv.id}`} className="font-medium hover:underline">
-                    {inv.voucher_no ?? "Draft"}
-                  </Link>
-                </TableCell>
-                <TableCell>{asset ? `${asset.asset_code} — ${asset.asset_name}` : "—"}</TableCell>
-                <TableCell>{inv.pk_leases?.tenants?.name ?? "—"}</TableCell>
-                <TableCell>{inv.invoice_date}</TableCell>
-                <TableCell className="text-right">{inv.total_amount.toLocaleString()}</TableCell>
-                <TableCell className="text-right">{inv.outstanding_amount.toLocaleString()}</TableCell>
-                <TableCell>
-                  <VoucherStatusBadge status={status} />
-                </TableCell>
+      <div className="rounded-xl border bg-card shadow-sm">
+        {rows.length === 0 ? (
+          <EmptyState
+            icon={ReceiptIcon}
+            title="No invoices yet"
+            description="Invoices appear here once generated from a lease payment schedule."
+          />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Voucher #</TableHead>
+                <TableHead>Asset</TableHead>
+                <TableHead>Tenant</TableHead>
+                <TableHead>Invoice date</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+                <TableHead className="text-right">Outstanding</TableHead>
+                <TableHead>Status</TableHead>
               </TableRow>
-            );
-          })}
-          {rows.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={7} className="text-center text-muted-foreground">
-                No invoices yet.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+            </TableHeader>
+            <TableBody>
+              {rows.map((inv) => {
+                const asset = inv.pk_leases?.asset_id ? assetsById.get(inv.pk_leases.asset_id) ?? null : null;
+                const status = journalEntriesById.get(inv.journal_entry_id ?? "")?.status ?? "draft";
+                return (
+                  <TableRow key={inv.id}>
+                    <TableCell>
+                      <Link
+                        href={`/rental/pk/invoices/${inv.id}`}
+                        className="font-mono font-medium text-primary hover:underline"
+                      >
+                        {inv.voucher_no ?? "Draft"}
+                      </Link>
+                    </TableCell>
+                    <TableCell>{asset ? `${asset.asset_code} — ${asset.asset_name}` : "—"}</TableCell>
+                    <TableCell>{inv.pk_leases?.tenants?.name ?? "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{formatDate(inv.invoice_date)}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{formatMoney(inv.total_amount)}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{formatMoney(inv.outstanding_amount)}</TableCell>
+                    <TableCell>
+                      <VoucherStatusBadge status={status} />
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </div>
     </div>
   );
 }

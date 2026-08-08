@@ -8,11 +8,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageHeader } from "@/components/ui/page-header";
 import { AsOfDateFilter } from "@/components/reports/as-of-date-filter";
 import { CsvExportButton } from "@/components/reports/csv-export-button";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { aggregateByAccount } from "@/lib/reports/account-aggregation";
 import { createClient } from "@/lib/supabase/server";
+import { formatDate, formatMoney } from "@/lib/format";
 import type { AccountType } from "@/types/database.types";
 
 function today() {
@@ -37,9 +39,9 @@ function sectionRows(title: string, rows: AccountBalance[]) {
         <TableRow key={r.account_code}>
           <TableCell className="pl-6">
             <span className="mr-2 font-mono text-xs text-muted-foreground">{r.account_code}</span>
-            {r.account_name}
+            <span className="font-medium">{r.account_name}</span>
           </TableCell>
-          <TableCell className="text-right">{r.balance.toLocaleString()}</TableCell>
+          <TableCell className="text-right font-mono tabular-nums">{formatMoney(r.balance)}</TableCell>
         </TableRow>
       ))}
     </>
@@ -101,66 +103,74 @@ export default async function BalanceSheetPage({
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-start justify-between gap-4 print:hidden">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Balance Sheet</h1>
-          <p className="text-sm text-muted-foreground">Assets, liabilities, and equity as of {asOf}.</p>
-        </div>
-        <div className="flex gap-2">
-          <CsvExportButton
-            filename={`balance-sheet-${asOf}.csv`}
-            headers={["Section", "Code", "Name", "Balance"]}
-            rows={exportRows.map((r) => [r.section, r.account_code, r.account_name, r.balance])}
-          />
-          <PrintButton />
-        </div>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Reports"
+        title="Balance Sheet"
+        description={`Assets, liabilities, and equity as of ${formatDate(asOf)}.`}
+        className="print:hidden"
+        actions={
+          <>
+            <CsvExportButton
+              filename={`balance-sheet-${asOf}.csv`}
+              headers={["Section", "Code", "Name", "Balance"]}
+              rows={exportRows.map((r) => [r.section, r.account_code, r.account_name, r.balance])}
+            />
+            <PrintButton />
+          </>
+        }
+      />
 
       <Suspense>
         <AsOfDateFilter defaultAsOf={asOf} />
       </Suspense>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Account</TableHead>
-            <TableHead className="text-right">Balance</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sectionRows("Assets", buckets.asset)}
-          <TableRow>
-            <TableCell className="font-medium">Total assets</TableCell>
-            <TableCell className="text-right font-medium">{assetTotal.toLocaleString()}</TableCell>
-          </TableRow>
+      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>Account</TableHead>
+              <TableHead className="text-right">Balance</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sectionRows("Assets", buckets.asset)}
+            <TableRow>
+              <TableCell className="font-medium">Total assets</TableCell>
+              <TableCell className="text-right font-mono font-medium tabular-nums">{formatMoney(assetTotal)}</TableCell>
+            </TableRow>
 
-          {sectionRows("Liabilities", buckets.liability)}
-          <TableRow>
-            <TableCell className="font-medium">Total liabilities</TableCell>
-            <TableCell className="text-right font-medium">{liabilityTotal.toLocaleString()}</TableCell>
-          </TableRow>
+            {sectionRows("Liabilities", buckets.liability)}
+            <TableRow>
+              <TableCell className="font-medium">Total liabilities</TableCell>
+              <TableCell className="text-right font-mono font-medium tabular-nums">
+                {formatMoney(liabilityTotal)}
+              </TableCell>
+            </TableRow>
 
-          {sectionRows("Equity", buckets.equity)}
-          <TableRow>
-            <TableCell className="pl-6">Current period profit/(loss)</TableCell>
-            <TableCell className="text-right">{netProfit.toLocaleString()}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell className="font-medium">Total equity</TableCell>
-            <TableCell className="text-right font-medium">{equityAndProfitTotal.toLocaleString()}</TableCell>
-          </TableRow>
+            {sectionRows("Equity", buckets.equity)}
+            <TableRow>
+              <TableCell className="pl-6">Current period profit/(loss)</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">{formatMoney(netProfit)}</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell className="font-medium">Total equity</TableCell>
+              <TableCell className="text-right font-mono font-medium tabular-nums">
+                {formatMoney(equityAndProfitTotal)}
+              </TableCell>
+            </TableRow>
 
-          <TableRow className="border-t-2">
-            <TableCell className="font-semibold">Total liabilities + equity</TableCell>
-            <TableCell
-              className={`text-right font-semibold ${assetTotal !== liabilitiesAndEquityTotal ? "text-destructive" : ""}`}
-            >
-              {liabilitiesAndEquityTotal.toLocaleString()}
-            </TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
+            <TableRow className="border-t-2">
+              <TableCell className="font-semibold">Total liabilities + equity</TableCell>
+              <TableCell
+                className={`text-right font-mono font-semibold tabular-nums ${assetTotal !== liabilitiesAndEquityTotal ? "text-destructive" : ""}`}
+              >
+                {formatMoney(liabilitiesAndEquityTotal)}
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

@@ -1,5 +1,9 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ArrowLeftIcon } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { HhLeaseForm } from "@/components/rental/hh-lease-form";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
@@ -43,14 +47,19 @@ export default async function NewHhLeasePage() {
     .map((cc) => ({ id: cc.currencies!.id, code: cc.currencies!.code }));
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">HH Lease</h1>
-        <p className="text-sm text-muted-foreground">
-          Enter one tenant and many asset lines at once. Each line is saved as its own UAE lease under a shared
-          document number.
-        </p>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Rentals"
+        title="HH Lease"
+        description="Enter one tenant and many asset lines at once. Each line is saved as its own UAE lease under a shared document number."
+        actions={
+          <Button asChild variant="outline">
+            <Link href="/rental/uae/leases">
+              <ArrowLeftIcon /> Back to list
+            </Link>
+          </Button>
+        }
+      />
       <HhLeaseForm assets={assets ?? []} tenants={tenants ?? []} currencies={currencyOptions} />
     </div>
   );

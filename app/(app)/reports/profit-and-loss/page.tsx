@@ -8,10 +8,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageHeader } from "@/components/ui/page-header";
 import { CsvExportButton } from "@/components/reports/csv-export-button";
 import { DateRangeFilter } from "@/components/reports/date-range-filter";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { createClient } from "@/lib/supabase/server";
+import { formatDate, formatMoney } from "@/lib/format";
 
 function startOfYear() {
   const now = new Date();
@@ -89,82 +91,86 @@ export default async function ProfitAndLossPage({
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-start justify-between gap-4 print:hidden">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Profit &amp; Loss</h1>
-          <p className="text-sm text-muted-foreground">
-            Income vs. expense for {from} to {to}.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <CsvExportButton
-            filename={`profit-and-loss-${from}-to-${to}.csv`}
-            headers={["Section", "Code", "Name", "Amount"]}
-            rows={exportRows.map((r) => [r.section, r.account_code, r.account_name, r.balance])}
-          />
-          <PrintButton />
-        </div>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Reports"
+        title="Profit & Loss"
+        description={`Income vs. expense for ${formatDate(from)} to ${formatDate(to)}.`}
+        className="print:hidden"
+        actions={
+          <>
+            <CsvExportButton
+              filename={`profit-and-loss-${from}-to-${to}.csv`}
+              headers={["Section", "Code", "Name", "Amount"]}
+              rows={exportRows.map((r) => [r.section, r.account_code, r.account_name, r.balance])}
+            />
+            <PrintButton />
+          </>
+        }
+      />
 
       <Suspense>
         <DateRangeFilter defaultFrom={from} defaultTo={to} />
       </Suspense>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Account</TableHead>
-            <TableHead className="text-right">Amount</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          <TableRow className="bg-muted/50">
-            <TableCell colSpan={2} className="font-semibold">
-              Income
-            </TableCell>
-          </TableRow>
-          {income.map((r) => (
-            <TableRow key={r.account_code}>
-              <TableCell className="pl-6">
-                <span className="mr-2 font-mono text-xs text-muted-foreground">{r.account_code}</span>
-                {r.account_name}
-              </TableCell>
-              <TableCell className="text-right">{r.balance.toLocaleString()}</TableCell>
+      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>Account</TableHead>
+              <TableHead className="text-right">Amount</TableHead>
             </TableRow>
-          ))}
-          <TableRow>
-            <TableCell className="font-medium">Total income</TableCell>
-            <TableCell className="text-right font-medium">{totalIncome.toLocaleString()}</TableCell>
-          </TableRow>
-
-          <TableRow className="bg-muted/50">
-            <TableCell colSpan={2} className="font-semibold">
-              Expense
-            </TableCell>
-          </TableRow>
-          {expense.map((r) => (
-            <TableRow key={r.account_code}>
-              <TableCell className="pl-6">
-                <span className="mr-2 font-mono text-xs text-muted-foreground">{r.account_code}</span>
-                {r.account_name}
+          </TableHeader>
+          <TableBody>
+            <TableRow className="bg-muted/50">
+              <TableCell colSpan={2} className="font-semibold">
+                Income
               </TableCell>
-              <TableCell className="text-right">{r.balance.toLocaleString()}</TableCell>
             </TableRow>
-          ))}
-          <TableRow>
-            <TableCell className="font-medium">Total expense</TableCell>
-            <TableCell className="text-right font-medium">{totalExpense.toLocaleString()}</TableCell>
-          </TableRow>
+            {income.map((r) => (
+              <TableRow key={r.account_code}>
+                <TableCell className="pl-6">
+                  <span className="mr-2 font-mono text-xs text-muted-foreground">{r.account_code}</span>
+                  <span className="font-medium">{r.account_name}</span>
+                </TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{formatMoney(r.balance)}</TableCell>
+              </TableRow>
+            ))}
+            <TableRow>
+              <TableCell className="font-medium">Total income</TableCell>
+              <TableCell className="text-right font-mono font-medium tabular-nums">{formatMoney(totalIncome)}</TableCell>
+            </TableRow>
 
-          <TableRow className="border-t-2">
-            <TableCell className="font-semibold">Net profit / (loss)</TableCell>
-            <TableCell className={`text-right font-semibold ${netProfit >= 0 ? "text-success" : "text-destructive"}`}>
-              {netProfit.toLocaleString()}
-            </TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
+            <TableRow className="bg-muted/50">
+              <TableCell colSpan={2} className="font-semibold">
+                Expense
+              </TableCell>
+            </TableRow>
+            {expense.map((r) => (
+              <TableRow key={r.account_code}>
+                <TableCell className="pl-6">
+                  <span className="mr-2 font-mono text-xs text-muted-foreground">{r.account_code}</span>
+                  <span className="font-medium">{r.account_name}</span>
+                </TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{formatMoney(r.balance)}</TableCell>
+              </TableRow>
+            ))}
+            <TableRow>
+              <TableCell className="font-medium">Total expense</TableCell>
+              <TableCell className="text-right font-mono font-medium tabular-nums">{formatMoney(totalExpense)}</TableCell>
+            </TableRow>
+
+            <TableRow className="border-t-2">
+              <TableCell className="font-semibold">Net profit / (loss)</TableCell>
+              <TableCell
+                className={`text-right font-mono font-semibold tabular-nums ${netProfit >= 0 ? "text-success" : "text-destructive"}`}
+              >
+                {formatMoney(netProfit)}
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

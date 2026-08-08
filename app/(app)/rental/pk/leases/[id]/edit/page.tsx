@@ -1,5 +1,9 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { ArrowLeftIcon } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { PkLeaseForm } from "@/components/rental/pk-lease-form";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
@@ -56,8 +60,19 @@ export default async function EditPkLeasePage({ params }: { params: Promise<{ id
     .map((cc) => ({ id: cc.currencies!.id, code: cc.currencies!.code }));
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Edit Pakistan lease</h1>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Rentals"
+        title="Edit Pakistan lease"
+        description="Update the terms of this Pakistan lease."
+        actions={
+          <Button asChild variant="outline">
+            <Link href="/rental/pk/leases">
+              <ArrowLeftIcon /> Back to list
+            </Link>
+          </Button>
+        }
+      />
       <PkLeaseForm
         assets={assets ?? []}
         tenants={tenants ?? []}

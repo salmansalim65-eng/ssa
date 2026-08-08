@@ -8,10 +8,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageHeader } from "@/components/ui/page-header";
 import { CsvExportButton } from "@/components/reports/csv-export-button";
 import { DateRangeFilter } from "@/components/reports/date-range-filter";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { createClient } from "@/lib/supabase/server";
+import { formatDate } from "@/lib/format";
 
 function startOfYear() {
   const now = new Date();
@@ -43,53 +45,57 @@ export default async function CurrencyExchangePage({
     .order("rate_date", { ascending: false });
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-start justify-between gap-4 print:hidden">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Currency Exchange History</h1>
-          <p className="text-sm text-muted-foreground">Daily exchange rates recorded from {from} to {to}.</p>
-        </div>
-        <div className="flex gap-2">
-          <CsvExportButton
-            filename={`currency-exchange-${from}-to-${to}.csv`}
-            headers={["Currency", "Date", "Rate to base", "Source"]}
-            rows={(rows ?? []).map((r) => [r.currency_code, r.rate_date, r.rate_to_base, r.source])}
-          />
-          <PrintButton />
-        </div>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Reports"
+        title="Currency Exchange History"
+        description={`Daily exchange rates recorded from ${formatDate(from)} to ${formatDate(to)}.`}
+        className="print:hidden"
+        actions={
+          <>
+            <CsvExportButton
+              filename={`currency-exchange-${from}-to-${to}.csv`}
+              headers={["Currency", "Date", "Rate to base", "Source"]}
+              rows={(rows ?? []).map((r) => [r.currency_code, r.rate_date, r.rate_to_base, r.source])}
+            />
+            <PrintButton />
+          </>
+        }
+      />
 
       <Suspense>
         <DateRangeFilter defaultFrom={from} defaultTo={to} />
       </Suspense>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Currency</TableHead>
-            <TableHead>Date</TableHead>
-            <TableHead className="text-right">Rate to base</TableHead>
-            <TableHead>Source</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {(rows ?? []).map((r, i) => (
-            <TableRow key={`${r.currency_code}-${r.rate_date}-${i}`}>
-              <TableCell>{r.currency_code}</TableCell>
-              <TableCell>{r.rate_date}</TableCell>
-              <TableCell className="text-right">{r.rate_to_base}</TableCell>
-              <TableCell className="capitalize">{r.source}</TableCell>
+      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>Currency</TableHead>
+              <TableHead>Date</TableHead>
+              <TableHead className="text-right">Rate to base</TableHead>
+              <TableHead>Source</TableHead>
             </TableRow>
-          ))}
-          {(rows ?? []).length === 0 && (
-            <TableRow>
-              <TableCell colSpan={4} className="text-center text-muted-foreground">
-                No exchange rates recorded in this period.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {(rows ?? []).map((r, i) => (
+              <TableRow key={`${r.currency_code}-${r.rate_date}-${i}`}>
+                <TableCell>{r.currency_code}</TableCell>
+                <TableCell>{formatDate(r.rate_date)}</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{r.rate_to_base}</TableCell>
+                <TableCell className="capitalize">{r.source}</TableCell>
+              </TableRow>
+            ))}
+            {(rows ?? []).length === 0 && (
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
+                  No exchange rates recorded in this period.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

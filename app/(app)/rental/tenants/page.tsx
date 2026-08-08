@@ -13,14 +13,14 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { AddTenantDialog } from "./add-tenant-dialog";
 import { TenantRowActions } from "./tenant-row-actions";
 
 export default async function TenantsPage() {
   const supabase = await createClient();
 
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   const [{ data: tenants }, canCreate, canEdit] = await Promise.all([
     supabase

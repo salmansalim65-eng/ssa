@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { CsvExportButton } from "@/components/reports/csv-export-button";
 import { DateRangeFilter } from "@/components/reports/date-range-filter";
 import { PrintButton } from "@/components/vouchers/print-button";
+import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/format";
 
@@ -32,8 +33,7 @@ export default async function CurrencyExchangePage({
   const { from = startOfYear(), to = today() } = await searchParams;
 
   const supabase = await createClient();
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   const { data: rows } = await supabase
     .schema("reporting")

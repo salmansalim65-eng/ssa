@@ -7,14 +7,14 @@ import { PageHeader } from "@/components/ui/page-header";
 import { PurchaseVoucherForm } from "@/components/purchases/purchase-voucher-form";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 
 export default async function NewPurchaseVoucherPage() {
   const canCreate = await hasPermission("purchase_voucher", "create");
   if (!canCreate) redirect("/purchases");
 
   const supabase = await createClient();
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   const [{ data: accounts }, { data: companyCurrencies }, { data: costCenters }] = await Promise.all([
     // Postable (non-group) accounts, offered as searchable pickers by name.

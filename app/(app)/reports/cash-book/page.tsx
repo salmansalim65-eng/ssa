@@ -1,6 +1,6 @@
 import { CashBankBookView } from "@/components/reports/cash-bank-book-view";
 import { getCashOrBankBookSections } from "@/lib/reports/cash-bank-book";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 
 function startOfYear() {
   const now = new Date();
@@ -18,9 +18,7 @@ export default async function CashBookPage({
 }) {
   const { from = startOfYear(), to = today() } = await searchParams;
 
-  const supabase = await createClient();
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   const sections = await getCashOrBankBookSections({ companyId, flag: "is_cash", from, to });
 

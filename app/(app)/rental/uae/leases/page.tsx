@@ -17,14 +17,14 @@ import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
 import { formatDate, formatMoney } from "@/lib/format";
+import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 
 const statusVariant = { active: "success", expired: "secondary", terminated: "destructive" } as const;
 
 export default async function UaeLeasesPage() {
   const supabase = await createClient();
 
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   const [{ data: leases }, canCreate] = await Promise.all([
     supabase

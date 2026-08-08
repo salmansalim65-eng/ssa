@@ -17,13 +17,13 @@ import { hasPermission } from "@/lib/auth/permissions";
 import { fetchRefs } from "@/lib/supabase/hydrate";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, formatMoney } from "@/lib/format";
+import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import type { JournalEntryStatus } from "@/types/database.types";
 
 export default async function PurchasesPage() {
   const supabase = await createClient();
 
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   const [{ data: rows }, canCreate] = await Promise.all([
     supabase

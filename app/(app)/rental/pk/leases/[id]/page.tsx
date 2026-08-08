@@ -24,6 +24,7 @@ import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
 import { formatDate, formatMoney } from "@/lib/format";
+import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import type { JournalEntryStatus } from "@/types/database.types";
 
 const leaseStatusVariant = { active: "success", expired: "secondary", terminated: "destructive" } as const;
@@ -38,8 +39,7 @@ export default async function PkLeaseDetailPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const supabase = await createClient();
 
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   const [{ data: lease }, canCreate] = await Promise.all([
     supabase

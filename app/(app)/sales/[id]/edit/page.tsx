@@ -4,6 +4,7 @@ import { AssetSaleForm } from "@/components/sales/asset-sale-form";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
+import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import type { JournalEntryStatus } from "@/types/database.types";
 
 export default async function EditAssetSalePage({ params }: { params: Promise<{ id: string }> }) {
@@ -14,8 +15,7 @@ export default async function EditAssetSalePage({ params }: { params: Promise<{ 
   if (!canEdit) redirect(detailHref);
 
   const supabase = await createClient();
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   const [{ data: accounts }, { data: companyCurrencies }, { data: costCenters }, { data: sale }] = await Promise.all([
     supabase
@@ -65,25 +65,26 @@ export default async function EditAssetSalePage({ params }: { params: Promise<{ 
 
   type RawCurrency = { currencies: { id: string; code: string } | null };
   const saleDay = new Date().toISOString().slice(0, 10);
-  const currencyOptions = await Promise.all(
-    ((companyCurrencies as unknown as RawCurrency[]) ?? [])
-      .filter((cc) => cc.currencies)
-      .map(async (cc) => {
-        const { data: rate } = await supabase.schema("core").rpc("fn_exchange_rate_to_base", {
-          p_company_id: companyId,
-          p_currency_id: cc.currencies!.id,
-          p_as_of_date: saleDay,
-        });
-        return { id: cc.currencies!.id, code: cc.currencies!.code, rate: (rate as number | null) ?? 1 };
-      }),
-  );
-
-  const { data: lines } = await supabase
-    .schema("assets")
-    .from("asset_sale_lines")
-    .select("cost_center_id, fixed_asset_account_id, gross, remarks")
-    .eq("sale_id", id)
-    .order("line_no");
+  const [currencyOptions, { data: lines }] = await Promise.all([
+    Promise.all(
+      ((companyCurrencies as unknown as RawCurrency[]) ?? [])
+        .filter((cc) => cc.currencies)
+        .map(async (cc) => {
+          const { data: rate } = await supabase.schema("core").rpc("fn_exchange_rate_to_base", {
+            p_company_id: companyId,
+            p_currency_id: cc.currencies!.id,
+            p_as_of_date: saleDay,
+          });
+          return { id: cc.currencies!.id, code: cc.currencies!.code, rate: (rate as number | null) ?? 1 };
+        }),
+    ),
+    supabase
+      .schema("assets")
+      .from("asset_sale_lines")
+      .select("cost_center_id, fixed_asset_account_id, gross, remarks")
+      .eq("sale_id", id)
+      .order("line_no"),
+  ]);
 
   return (
     <div className="space-y-4">

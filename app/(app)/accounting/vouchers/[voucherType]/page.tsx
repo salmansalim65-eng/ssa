@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { SummaryCard } from "@/components/ui/summary-card";
 import { VoucherListTable } from "@/components/vouchers/voucher-list-table";
 import { hasPermission } from "@/lib/auth/permissions";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { getVoucherListRows } from "@/lib/vouchers/queries";
 import { isPhase5VoucherType, VOUCHER_TYPE_LABELS } from "@/lib/vouchers/meta";
 
@@ -31,9 +31,7 @@ export default async function VoucherListPage({
   const { voucherType } = await params;
   if (!isPhase5VoucherType(voucherType)) notFound();
 
-  const supabase = await createClient();
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   const [rows, canCreate] = await Promise.all([
     getVoucherListRows(companyId, voucherType),

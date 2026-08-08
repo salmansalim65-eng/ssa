@@ -1,13 +1,13 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { RolesManager } from "./roles-manager";
 
 export default async function RolesPage() {
   const supabase = await createClient();
 
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   const [{ data: roles }, { data: permissions }, canCreate, canEdit, canDelete] =
     await Promise.all([

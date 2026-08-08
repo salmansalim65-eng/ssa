@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { AddCostCenterDialog } from "./add-cost-center-dialog";
 import { CostCenterRowActions } from "./cost-center-row-actions";
 
@@ -27,8 +28,7 @@ const statusLabels: Record<string, string> = {
 export default async function CostCentersPage() {
   const supabase = await createClient();
 
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   const [{ data: costCenters }, canCreate, canEdit, canDelete] = await Promise.all([
     supabase

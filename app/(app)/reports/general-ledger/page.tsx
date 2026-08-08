@@ -13,6 +13,7 @@ import { CsvExportButton } from "@/components/reports/csv-export-button";
 import { GeneralLedgerFilters } from "@/components/reports/general-ledger-filters";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { computeRunningBalances } from "@/lib/reports/ledger-balance";
+import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, formatMoney } from "@/lib/format";
 import type { AccountType } from "@/types/database.types";
@@ -73,8 +74,7 @@ export default async function GeneralLedgerPage({
   const maxAmount = sp.max ? Number(sp.max) : null;
 
   const supabase = await createClient();
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   const [{ data: accounts }, { data: companyCurrencies }] = await Promise.all([
     supabase

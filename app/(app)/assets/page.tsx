@@ -1,7 +1,10 @@
 import Link from "next/link";
+import { HomeIcon, PlusIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   Table,
   TableBody,
@@ -12,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { formatMoney } from "@/lib/format";
 
 const statusVariant = {
   active: "success",
@@ -35,60 +39,84 @@ export default async function AssetsPage() {
     hasPermission("assets", "create"),
   ]);
 
+  const rows = assetRows ?? [];
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Assets</h1>
-          <p className="text-sm text-muted-foreground">Registered rental properties and other assets.</p>
-        </div>
-        {canCreate && (
-          <Button asChild size="sm">
-            <Link href="/assets/new">New asset</Link>
-          </Button>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Assets & Property"
+        title="Asset Register"
+        description="Registered rental properties and other assets."
+        actions={
+          canCreate && (
+            <Button asChild>
+              <Link href="/assets/new">
+                <PlusIcon /> New asset
+              </Link>
+            </Button>
+          )
+        }
+      />
+
+      <div className="rounded-xl border bg-card shadow-sm">
+        {rows.length === 0 ? (
+          <EmptyState
+            icon={HomeIcon}
+            title="No assets registered yet"
+            description="Register a property or asset to start tracking it here."
+            action={
+              canCreate && (
+                <Button asChild>
+                  <Link href="/assets/new">
+                    <PlusIcon /> New asset
+                  </Link>
+                </Button>
+              )
+            }
+          />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Code</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Property type</TableHead>
+                <TableHead>Location</TableHead>
+                <TableHead className="text-right">Current Value</TableHead>
+                <TableHead className="w-28">Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((asset) => (
+                <TableRow key={asset.id}>
+                  <TableCell>
+                    <Link
+                      href={`/assets/${asset.id}`}
+                      className="font-mono font-medium text-primary hover:underline"
+                    >
+                      {asset.asset_code}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="font-medium">{asset.asset_name}</TableCell>
+                  <TableCell>{asset.property_type}</TableCell>
+                  <TableCell>
+                    {asset.city ? `${asset.city}, ` : ""}
+                    {asset.country}
+                  </TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">
+                    {asset.current_value != null ? formatMoney(asset.current_value) : "—"}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={statusVariant[asset.status as keyof typeof statusVariant]} className="capitalize">
+                      {asset.status}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
       </div>
-
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Code</TableHead>
-            <TableHead>Name</TableHead>
-            <TableHead>Property type</TableHead>
-            <TableHead>Location</TableHead>
-            <TableHead>Current value</TableHead>
-            <TableHead>Status</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {(assetRows ?? []).map((asset) => (
-            <TableRow key={asset.id}>
-              <TableCell>
-                <Link href={`/assets/${asset.id}`} className="font-mono font-medium hover:underline">
-                  {asset.asset_code}
-                </Link>
-              </TableCell>
-              <TableCell>{asset.asset_name}</TableCell>
-              <TableCell>{asset.property_type}</TableCell>
-              <TableCell>
-                {asset.city ? `${asset.city}, ` : ""}
-                {asset.country}
-              </TableCell>
-              <TableCell>{asset.current_value?.toLocaleString() ?? "—"}</TableCell>
-              <TableCell>
-                <Badge variant={statusVariant[asset.status as keyof typeof statusVariant]}>{asset.status}</Badge>
-              </TableCell>
-            </TableRow>
-          ))}
-          {(assetRows ?? []).length === 0 && (
-            <TableRow>
-              <TableCell colSpan={6} className="text-center text-muted-foreground">
-                No assets registered yet.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
     </div>
   );
 }

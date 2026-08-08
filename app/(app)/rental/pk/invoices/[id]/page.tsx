@@ -17,6 +17,7 @@ import { deletePkRentInvoice, postPkRentInvoice } from "@/features/rental/pk-ren
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
+import { formatDate, formatMoney } from "@/lib/format";
 import { getVoucherApproval } from "@/lib/vouchers/engine";
 import type { JournalEntryStatus } from "@/types/database.types";
 
@@ -115,12 +116,12 @@ export default async function PkRentInvoiceDetailPage({ params }: { params: Prom
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between print:hidden">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Pakistan Rent Invoice</h1>
-          <p className="font-mono text-sm text-muted-foreground">{invoice.voucher_no ?? "Draft"}</p>
+      <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between print:hidden">
+        <div className="space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary">Rent Invoice</p>
+          <h1 className="font-mono text-2xl font-semibold tracking-tight">{invoice.voucher_no ?? "Draft"}</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <VoucherStatusBadge status={status} />
           <PrintButton />
           {status === "draft" && canDelete && (

@@ -1,5 +1,9 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { ArrowLeftIcon } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { UaeLeaseForm } from "@/components/rental/uae-lease-form";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
@@ -56,8 +60,19 @@ export default async function EditUaeLeasePage({ params }: { params: Promise<{ i
     .map((cc) => ({ id: cc.currencies!.id, code: cc.currencies!.code }));
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Edit UAE lease</h1>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Rentals"
+        title="Edit UAE lease"
+        description="Update the terms of this UAE lease."
+        actions={
+          <Button asChild variant="outline">
+            <Link href={detailHref}>
+              <ArrowLeftIcon /> Back to lease
+            </Link>
+          </Button>
+        }
+      />
       <UaeLeaseForm
         assets={assets ?? []}
         tenants={tenants ?? []}

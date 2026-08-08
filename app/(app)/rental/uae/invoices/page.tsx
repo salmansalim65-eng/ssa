@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { ReceiptIcon } from "lucide-react";
 
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   Table,
   TableBody,
@@ -11,6 +14,7 @@ import {
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
+import { formatDate, formatMoney } from "@/lib/format";
 import type { JournalEntryStatus } from "@/types/database.types";
 
 export default async function UaeRentInvoicesPage() {
@@ -63,55 +67,62 @@ export default async function UaeRentInvoicesPage() {
   ]);
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">UAE Rent Invoices</h1>
-        <p className="text-sm text-muted-foreground">Invoices generated from UAE lease payment schedules.</p>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Rentals"
+        title="UAE Rent Invoices"
+        description="Invoices generated from UAE lease payment schedules."
+      />
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Voucher #</TableHead>
-            <TableHead>Asset</TableHead>
-            <TableHead>Tenant</TableHead>
-            <TableHead>Invoice date</TableHead>
-            <TableHead className="text-right">Amount</TableHead>
-            <TableHead className="text-right">Outstanding</TableHead>
-            <TableHead>Status</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((inv) => {
-            const asset = inv.uae_leases?.asset_id ? assetsById.get(inv.uae_leases.asset_id) ?? null : null;
-            const status = journalEntriesById.get(inv.journal_entry_id ?? "")?.status ?? "draft";
-            return (
-              <TableRow key={inv.id}>
-                <TableCell>
-                  <Link href={`/rental/uae/invoices/${inv.id}`} className="font-medium hover:underline">
-                    {inv.voucher_no ?? "Draft"}
-                  </Link>
-                </TableCell>
-                <TableCell>{asset ? `${asset.asset_code} — ${asset.asset_name}` : "—"}</TableCell>
-                <TableCell>{inv.uae_leases?.tenants?.name ?? "—"}</TableCell>
-                <TableCell>{inv.invoice_date}</TableCell>
-                <TableCell className="text-right">{inv.amount.toLocaleString()}</TableCell>
-                <TableCell className="text-right">{inv.outstanding_balance.toLocaleString()}</TableCell>
-                <TableCell>
-                  <VoucherStatusBadge status={status} />
-                </TableCell>
+      <div className="rounded-xl border bg-card shadow-sm">
+        {rows.length === 0 ? (
+          <EmptyState
+            icon={ReceiptIcon}
+            title="No invoices yet"
+            description="Generate an invoice from a UAE lease payment schedule to see it here."
+          />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Voucher #</TableHead>
+                <TableHead>Asset</TableHead>
+                <TableHead>Tenant</TableHead>
+                <TableHead>Invoice date</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+                <TableHead className="text-right">Outstanding</TableHead>
+                <TableHead>Status</TableHead>
               </TableRow>
-            );
-          })}
-          {rows.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={7} className="text-center text-muted-foreground">
-                No invoices yet.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+            </TableHeader>
+            <TableBody>
+              {rows.map((inv) => {
+                const asset = inv.uae_leases?.asset_id ? assetsById.get(inv.uae_leases.asset_id) ?? null : null;
+                const status = journalEntriesById.get(inv.journal_entry_id ?? "")?.status ?? "draft";
+                return (
+                  <TableRow key={inv.id}>
+                    <TableCell>
+                      <Link
+                        href={`/rental/uae/invoices/${inv.id}`}
+                        className="font-mono font-medium text-primary hover:underline"
+                      >
+                        {inv.voucher_no ?? "Draft"}
+                      </Link>
+                    </TableCell>
+                    <TableCell>{asset ? `${asset.asset_code} — ${asset.asset_name}` : "—"}</TableCell>
+                    <TableCell>{inv.uae_leases?.tenants?.name ?? "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{formatDate(inv.invoice_date)}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{formatMoney(inv.amount)}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{formatMoney(inv.outstanding_balance)}</TableCell>
+                    <TableCell>
+                      <VoucherStatusBadge status={status} />
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </div>
     </div>
   );
 }

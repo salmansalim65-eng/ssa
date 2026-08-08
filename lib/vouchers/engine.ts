@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cache } from "react";
+
 import { createClient } from "@/lib/supabase/server";
 import type { ApprovalStatus, VoucherType } from "@/types/database.types";
 
@@ -16,12 +18,14 @@ function round2(n: number) {
   return Math.round(n * 100) / 100;
 }
 
-export async function getCurrentCompanyId() {
+// Cached per request: many actions/pages resolve the company id, and it never
+// changes within a single request, so this collapses those to one RPC.
+export const getCurrentCompanyId = cache(async () => {
   const supabase = await createClient();
   const { data, error } = await supabase.schema("core").rpc("current_company_id");
   if (error || !data) throw new Error("No active company");
   return data;
-}
+});
 
 export async function getVoucherApproval(voucherType: VoucherType, voucherId: string) {
   const supabase = await createClient();

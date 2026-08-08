@@ -257,10 +257,10 @@ export function AccountTree({
           key={account.id}
           className={cn(
             "group",
-            // Group rows carry a soft brand tint so the hierarchy reads at a
-            // glance; posting rows stay on the plain white card surface.
+            // Group rows carry a soft logo-blue tint so the hierarchy reads at
+            // a glance; posting rows stay on the plain white card surface.
             isGroup
-              ? "bg-primary/[0.08] hover:bg-primary/[0.12]"
+              ? "bg-group/[0.10] hover:bg-group/[0.14]"
               : "hover:bg-muted/30",
             !account.is_active && "opacity-70",
           )}
@@ -291,9 +291,9 @@ export function AccountTree({
               )}
               {isGroup ? (
                 isExpanded ? (
-                  <FolderOpenIcon className="mr-2 size-4 shrink-0 text-primary" />
+                  <FolderOpenIcon className="mr-2 size-4 shrink-0 text-group" />
                 ) : (
-                  <FolderIcon className="mr-2 size-4 shrink-0 text-primary" />
+                  <FolderIcon className="mr-2 size-4 shrink-0 text-group" />
                 )
               ) : (
                 <FileTextIcon className="mr-2 size-4 shrink-0 text-muted-foreground" />
@@ -301,7 +301,7 @@ export function AccountTree({
               <span
                 className={cn(
                   "font-mono text-xs",
-                  isGroup ? "font-bold text-foreground" : "text-muted-foreground",
+                  isGroup ? "font-bold text-group" : "text-muted-foreground",
                 )}
               >
                 {account.account_code}
@@ -312,11 +312,14 @@ export function AccountTree({
           {/* Account name */}
           <td className="p-3 align-middle">
             <div className="flex items-center gap-2">
-              <span className={cn("truncate", isGroup ? "font-bold text-foreground" : "font-medium")}>
+              <span className={cn("truncate", isGroup ? "font-bold text-group" : "font-medium")}>
                 {account.account_name}
               </span>
               {isGroup && (
-                <Badge variant="secondary" className="shrink-0 text-[0.65rem] uppercase tracking-wide">
+                <Badge
+                  variant="outline"
+                  className="shrink-0 border-group/30 bg-group/10 text-[0.65rem] uppercase tracking-wide text-group"
+                >
                   Group
                 </Badge>
               )}

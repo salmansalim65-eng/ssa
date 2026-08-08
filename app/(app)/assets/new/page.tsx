@@ -1,5 +1,9 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ArrowLeftIcon } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { NewAssetForm } from "./new-asset-form";
@@ -34,8 +38,19 @@ export default async function NewAssetPage() {
     .map((cc) => ({ id: cc.currencies!.id, code: cc.currencies!.code }));
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold tracking-tight">New asset</h1>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Assets & Property"
+        title="New Asset"
+        description="Register a rental property or other asset."
+        actions={
+          <Button asChild variant="outline">
+            <Link href="/assets">
+              <ArrowLeftIcon /> Back to register
+            </Link>
+          </Button>
+        }
+      />
       <NewAssetForm currencies={currencyOptions} costCenters={costCenters ?? []} />
     </div>
   );

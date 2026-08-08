@@ -149,13 +149,15 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary">
+            Asset · <span className="font-mono">{asset.asset_code}</span>
+          </p>
           <h1 className="text-2xl font-semibold tracking-tight">{asset.asset_name}</h1>
-          <p className="font-mono text-sm text-muted-foreground">{asset.asset_code}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Badge>{asset.status}</Badge>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge className="capitalize">{asset.status}</Badge>
           {canSell && asset.status === "active" && (
             <Button asChild size="sm" variant="outline">
               <Link href={`/sales/new?assetId=${asset.id}`}>Sell asset</Link>

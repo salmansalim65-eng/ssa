@@ -1,4 +1,8 @@
-import { Badge } from "@/components/ui/badge";
+import { Users2Icon } from "lucide-react";
+
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   Table,
   TableBody,
@@ -30,62 +34,67 @@ export default async function SuppliersPage() {
     hasPermission("purchase_voucher", "edit"),
   ]);
 
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Suppliers</h1>
-          <p className="text-sm text-muted-foreground">Used when recording a Purchase Voucher.</p>
-        </div>
-        {canCreate && <AddSupplierDialog />}
-      </div>
+  const rows = suppliers ?? [];
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Contact</TableHead>
-            <TableHead>Phone</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="w-10" />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {(suppliers ?? []).map((s) => (
-            <TableRow key={s.id}>
-              <TableCell className="font-medium">{s.name}</TableCell>
-              <TableCell>{s.contact_person ?? "—"}</TableCell>
-              <TableCell>{s.phone ?? "—"}</TableCell>
-              <TableCell>{s.email ?? "—"}</TableCell>
-              <TableCell>
-                <Badge variant={s.is_active ? "success" : "secondary"}>{s.is_active ? "Active" : "Inactive"}</Badge>
-              </TableCell>
-              <TableCell>
-                <SupplierRowActions
-                  supplierId={s.id}
-                  isActive={s.is_active}
-                  canEdit={canEdit}
-                  defaultValues={{
-                    name: s.name,
-                    contactPerson: s.contact_person ?? "",
-                    phone: s.phone ?? "",
-                    email: s.email ?? "",
-                    address: s.address ?? "",
-                  }}
-                />
-              </TableCell>
-            </TableRow>
-          ))}
-          {(suppliers ?? []).length === 0 && (
-            <TableRow>
-              <TableCell colSpan={6} className="text-center text-muted-foreground">
-                No suppliers yet.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Assets & Property"
+        title="Suppliers"
+        description="Vendors used when recording a Purchase Voucher."
+        actions={canCreate && <AddSupplierDialog />}
+      />
+
+      <div className="rounded-xl border bg-card shadow-sm">
+        {rows.length === 0 ? (
+          <EmptyState
+            icon={Users2Icon}
+            title="No suppliers yet"
+            description="Add a supplier to reference it on purchase vouchers."
+            action={canCreate && <AddSupplierDialog />}
+          />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Name</TableHead>
+                <TableHead>Contact</TableHead>
+                <TableHead>Phone</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-10" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((s) => (
+                <TableRow key={s.id}>
+                  <TableCell className="font-medium">{s.name}</TableCell>
+                  <TableCell>{s.contact_person ?? "—"}</TableCell>
+                  <TableCell>{s.phone ?? "—"}</TableCell>
+                  <TableCell>{s.email ?? "—"}</TableCell>
+                  <TableCell>
+                    <StatusBadge active={s.is_active} />
+                  </TableCell>
+                  <TableCell>
+                    <SupplierRowActions
+                      supplierId={s.id}
+                      isActive={s.is_active}
+                      canEdit={canEdit}
+                      defaultValues={{
+                        name: s.name,
+                        contactPerson: s.contact_person ?? "",
+                        phone: s.phone ?? "",
+                        email: s.email ?? "",
+                        address: s.address ?? "",
+                      }}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </div>
     </div>
   );
 }

@@ -137,37 +137,6 @@ export function PaymentVoucherForm({
           />
           <FormField
             control={form.control}
-            name="currencyId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Currency</FormLabel>
-                <CurrencySelect
-                  currencies={currencies}
-                  value={field.value}
-                  onValueChange={(v) => {
-                    field.onChange(v);
-                    form.setValue("exchangeRate", rateById.get(v) ?? 1, { shouldValidate: true });
-                  }}
-                />
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="exchangeRate"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Currency Conv.</FormLabel>
-                <FormControl>
-                  <Input type="number" step="0.0001" min="0" {...field} value={field.value as number} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
             name="creditAccountId"
             render={({ field }) => (
               <FormItem>
@@ -201,6 +170,37 @@ export function PaymentVoucherForm({
                     ))}
                   </SelectContent>
                 </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="currencyId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Currency</FormLabel>
+                <CurrencySelect
+                  currencies={currencies}
+                  value={field.value}
+                  onValueChange={(v) => {
+                    field.onChange(v);
+                    form.setValue("exchangeRate", rateById.get(v) ?? 1, { shouldValidate: true });
+                  }}
+                />
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="exchangeRate"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Currency Conv.</FormLabel>
+                <FormControl>
+                  <Input type="number" step="0.0001" min="0" {...field} value={field.value as number} />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}

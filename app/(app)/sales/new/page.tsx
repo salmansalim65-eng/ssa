@@ -1,7 +1,11 @@
 import { Suspense } from "react";
 
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ArrowLeftIcon } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { AssetSaleForm } from "@/components/sales/asset-sale-form";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
@@ -57,8 +61,19 @@ export default async function NewAssetSalePage() {
   );
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold tracking-tight">New sale asset voucher</h1>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Assets & Property"
+        title="New Sale Asset Voucher"
+        description="Record a property disposal and its accounting entries."
+        actions={
+          <Button asChild variant="outline">
+            <Link href="/sales">
+              <ArrowLeftIcon /> Back to list
+            </Link>
+          </Button>
+        }
+      />
       <Suspense>
         <AssetSaleForm accounts={accounts ?? []} currencies={currencyOptions} costCenters={costCenters ?? []} />
       </Suspense>

@@ -1,5 +1,9 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { ArrowLeftIcon } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { JournalVoucherForm } from "@/components/vouchers/forms/journal-voucher-form";
 import { JvMaintenanceVoucherForm } from "@/components/vouchers/forms/jv-maintenance-voucher-form";
 import { OpeningBalanceVoucherForm } from "@/components/vouchers/forms/opening-balance-voucher-form";
@@ -189,8 +193,19 @@ export default async function EditVoucherPage({
   }
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Edit {VOUCHER_TYPE_LABELS[voucherType]}</h1>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Vouchers"
+        title={`Edit ${VOUCHER_TYPE_LABELS[voucherType]}`}
+        description="Update this draft voucher. Posted vouchers can't be edited."
+        actions={
+          <Button asChild variant="outline">
+            <Link href={`/accounting/vouchers/${voucherType}/${id}`}>
+              <ArrowLeftIcon /> Back
+            </Link>
+          </Button>
+        }
+      />
 
       {voucherType === "receipt_voucher" && (
         <ReceiptVoucherForm

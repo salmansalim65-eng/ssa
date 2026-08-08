@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { CheckCircle2Icon, ClockIcon, FileTextIcon, PencilLineIcon, PlusIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
+import { SummaryCard } from "@/components/ui/summary-card";
 import { VoucherListTable } from "@/components/vouchers/voucher-list-table";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
@@ -37,28 +40,43 @@ export default async function VoucherListPage({
     hasPermission(voucherType, "create"),
   ]);
 
+  const label = VOUCHER_TYPE_LABELS[voucherType];
+  const drafts = rows.filter((r) => r.status === "draft").length;
+  const pending = rows.filter((r) => r.status === "pending").length;
+  const posted = rows.filter((r) => r.status === "posted").length;
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{VOUCHER_TYPE_LABELS[voucherType]}</h1>
-          <p className="text-sm text-muted-foreground">
-            {rows.length} voucher{rows.length === 1 ? "" : "s"}
-          </p>
-        </div>
-        {canCreate && (
-          <Button asChild size="sm">
-            <Link href={`/accounting/vouchers/${voucherType}/new`}>New</Link>
-          </Button>
-        )}
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Vouchers"
+        title={label}
+        description={`Create, review, approve and post ${label.toLowerCase()}.`}
+        actions={
+          canCreate && (
+            <Button asChild>
+              <Link href={`/accounting/vouchers/${voucherType}/new`}>
+                <PlusIcon /> New voucher
+              </Link>
+            </Button>
+          )
+        }
+      />
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <SummaryCard label="Total" value={rows.length} icon={FileTextIcon} accent="primary" />
+        <SummaryCard label="Draft" value={drafts} icon={PencilLineIcon} accent="neutral" />
+        <SummaryCard label="Pending approval" value={pending} icon={ClockIcon} accent="warning" />
+        <SummaryCard label="Posted" value={posted} icon={CheckCircle2Icon} accent="success" />
       </div>
 
-      <VoucherListTable
-        rows={rows}
-        voucherType={voucherType}
-        partyLabel={PARTY_LABELS[voucherType]}
-        showAmount={!NO_AMOUNT_TYPES.has(voucherType)}
-      />
+      <div className="rounded-xl border bg-card shadow-sm">
+        <VoucherListTable
+          rows={rows}
+          voucherType={voucherType}
+          partyLabel={PARTY_LABELS[voucherType]}
+          showAmount={!NO_AMOUNT_TYPES.has(voucherType)}
+        />
+      </div>
     </div>
   );
 }

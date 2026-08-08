@@ -42,7 +42,7 @@ export default async function CurrenciesPage() {
         description="Shared across every company. Enable the ones you transact in and pick one base currency."
         actions={canCreate && <AddCurrencyDialog />}
       />
-      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      <div className="overflow-hidden rounded-lg border bg-card shadow-xs">
         <CurrenciesTable rows={rows} canEdit={canEdit} />
       </div>
     </div>

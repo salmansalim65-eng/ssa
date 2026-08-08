@@ -67,7 +67,7 @@ export default async function VoucherListPage({
         <SummaryCard label="Posted" value={posted} icon={CheckCircle2Icon} accent="success" />
       </div>
 
-      <div className="rounded-xl border bg-card shadow-sm">
+      <div className="rounded-lg border bg-card shadow-xs">
         <VoucherListTable
           rows={rows}
           voucherType={voucherType}

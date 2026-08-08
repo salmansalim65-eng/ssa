@@ -236,7 +236,7 @@ export default async function GeneralLedgerPage({
       {selectedAccounts.length === 0 ? (
         <p className="text-sm text-muted-foreground">Select one or more accounts to view their ledger.</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
+        <div className="overflow-x-auto rounded-lg border bg-card shadow-xs">
           <Table className="min-w-[1000px]">
             <TableHeader>
               <TableRow className="hover:bg-transparent">

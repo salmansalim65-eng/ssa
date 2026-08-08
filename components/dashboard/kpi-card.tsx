@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 export function KpiCard({
@@ -22,33 +22,45 @@ export function KpiCard({
   const card = (
     <Card
       className={cn(
-        "h-full",
-        href && "transition-colors hover:border-ring hover:bg-accent/40",
+        "h-full gap-0 py-0",
+        href && "transition-colors hover:border-ring/50 hover:bg-accent/30",
       )}
     >
-      <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
-        <Icon className="size-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent>
-        <p
+      <CardContent className="flex items-start justify-between gap-3 p-5">
+        <div className="min-w-0 space-y-1">
+          <p className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {label}
+          </p>
+          <p
+            className={cn(
+              "text-2xl font-semibold tracking-tight tabular-nums text-foreground",
+              tone === "success" && "text-success",
+              tone === "destructive" && "text-destructive",
+              tone === "warning" && "text-warning",
+            )}
+          >
+            {value}
+          </p>
+          {subtext && <p className="text-xs text-muted-foreground">{subtext}</p>}
+        </div>
+        <span
           className={cn(
-            "text-2xl font-semibold tracking-tight tabular-nums",
-            tone === "success" && "text-success",
-            tone === "destructive" && "text-destructive",
-            tone === "warning" && "text-warning",
+            "flex size-9 shrink-0 items-center justify-center rounded-lg",
+            tone === "success" && "bg-success/12 text-success",
+            tone === "destructive" && "bg-destructive/10 text-destructive",
+            tone === "warning" && "bg-warning/15 text-warning",
+            !tone && "bg-primary/10 text-primary",
           )}
         >
-          {value}
-        </p>
-        {subtext && <p className="text-xs text-muted-foreground">{subtext}</p>}
+          <Icon className="size-4.5" />
+        </span>
       </CardContent>
     </Card>
   );
 
   if (href) {
     return (
-      <Link href={href} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl">
+      <Link href={href} className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
         {card}
       </Link>
     );

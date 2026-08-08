@@ -73,7 +73,7 @@ export default async function PurchasesPage() {
         }
       />
 
-      <div className="rounded-xl border bg-card shadow-sm">
+      <div className="rounded-lg border bg-card shadow-xs">
         {rawRows.length === 0 ? (
           <EmptyState
             icon={ShoppingCartIcon}

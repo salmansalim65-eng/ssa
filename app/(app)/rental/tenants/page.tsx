@@ -50,7 +50,7 @@ export default async function TenantsPage() {
           description="Tenants are shared between UAE and Pakistan rental leases."
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        <div className="overflow-hidden rounded-lg border bg-card shadow-xs">
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">

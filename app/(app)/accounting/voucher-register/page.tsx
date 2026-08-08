@@ -41,7 +41,7 @@ export default async function VoucherRegisterPage() {
         description="Every voucher across every type, most recent first."
       />
 
-      <div className="rounded-xl border bg-card shadow-sm">
+      <div className="rounded-lg border bg-card shadow-xs">
         {list.length === 0 ? (
           <EmptyState
             icon={ListOrderedIcon}

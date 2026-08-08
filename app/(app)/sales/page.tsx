@@ -80,7 +80,7 @@ export default async function AssetSalesPage() {
         }
       />
 
-      <div className="rounded-xl border bg-card shadow-sm">
+      <div className="rounded-lg border bg-card shadow-xs">
         {saleRows.length === 0 ? (
           <EmptyState
             icon={BadgeDollarSignIcon}

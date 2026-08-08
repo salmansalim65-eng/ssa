@@ -9,7 +9,8 @@ import {
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -182,7 +183,7 @@ export default async function DashboardPage() {
           tone={(pendingApprovals ?? 0) > 0 ? "warning" : undefined}
           href="/accounting/voucher-register"
         />
-        <Link href="/admin/exchange-rates" className="block rounded-xl">
+        <Link href="/admin/exchange-rates" className="block rounded-lg">
           <Card className="h-full transition-colors hover:border-ring hover:bg-accent/40">
             <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Currency summary</CardTitle>
@@ -213,7 +214,7 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Link href="/reports/asset-register" className="block rounded-xl">
+        <Link href="/reports/asset-register" className="block rounded-lg">
           <Card className="h-full transition-colors hover:border-ring hover:bg-accent/40">
             <CardHeader>
               <CardTitle>Assets by country</CardTitle>
@@ -223,7 +224,7 @@ export default async function DashboardPage() {
             </CardContent>
           </Card>
         </Link>
-        <Link href="/reports/asset-register" className="block rounded-xl">
+        <Link href="/reports/asset-register" className="block rounded-lg">
           <Card className="h-full transition-colors hover:border-ring hover:bg-accent/40">
             <CardHeader>
               <CardTitle>Assets by property type</CardTitle>
@@ -236,11 +237,16 @@ export default async function DashboardPage() {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="border-b pb-4">
           <CardTitle>Recent transactions</CardTitle>
+          <CardAction>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/accounting/voucher-register">View all</Link>
+            </Button>
+          </CardAction>
         </CardHeader>
-        <CardContent>
-          <Table>
+        <CardContent className="px-0">
+          <Table className="[&_td]:first:pl-5 [&_td]:last:pr-5 [&_th]:first:pl-5 [&_th]:last:pr-5">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead>Voucher No</TableHead>

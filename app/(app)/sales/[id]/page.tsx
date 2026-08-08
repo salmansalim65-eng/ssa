@@ -175,7 +175,7 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
         )}
       </div>
 
-      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      <div className="overflow-hidden rounded-lg border bg-card shadow-xs">
         <Table className="min-w-[850px]">
           <TableHeader>
             <TableRow className="hover:bg-transparent">

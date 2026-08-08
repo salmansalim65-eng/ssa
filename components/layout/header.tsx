@@ -11,6 +11,9 @@ import { SidebarNav } from "./sidebar-nav";
 import { ThemeToggle } from "./theme-toggle";
 import { UserMenu } from "./user-menu";
 
+// The application header band: the darkest chrome in the shell, spanning the
+// content column and visually continuous with the sidebar's navy brand cap so
+// the whole top strip reads as one professional header.
 export function Header({
   fullName,
   email,
@@ -23,20 +26,20 @@ export function Header({
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70 print:hidden">
+    <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-header-border bg-header px-4 text-header-foreground print:hidden">
       <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
         <Button
           variant="ghost"
           size="icon"
-          className="md:hidden"
+          className="text-header-foreground hover:bg-header-accent hover:text-header-foreground md:hidden"
           onClick={() => setMobileNavOpen(true)}
           aria-label="Open navigation"
         >
           <MenuIcon />
         </Button>
         <SheetContent side="left" className="flex w-64 flex-col p-0">
-          <SheetHeader className="shrink-0 border-b p-4">
-            <SheetTitle className="flex items-center gap-2.5">
+          <SheetHeader className="shrink-0 border-b bg-header p-4 text-header-foreground">
+            <SheetTitle className="flex items-center gap-2.5 text-header-foreground">
               <Image src="/logo.svg" alt="SSA logo" width={28} height={28} className="size-7" />
               Rental &amp; Accounting ERP
             </SheetTitle>
@@ -49,14 +52,15 @@ export function Header({
 
       <Breadcrumbs />
 
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex items-center gap-1.5">
         {companyName && (
-          <span className="hidden items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-xs font-medium text-foreground shadow-sm sm:inline-flex">
-            <Building2Icon className="size-3.5 text-muted-foreground" />
+          <span className="hidden items-center gap-1.5 rounded-md border border-header-border bg-header-accent px-2.5 py-1 text-xs font-medium text-header-foreground sm:inline-flex">
+            <Building2Icon className="size-3.5 text-header-muted" />
             {companyName}
           </span>
         )}
         <ThemeToggle />
+        <div className="mx-1 hidden h-6 w-px bg-header-border sm:block" />
         <UserMenu fullName={fullName} email={email} />
       </div>
     </header>

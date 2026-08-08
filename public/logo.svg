@@ -1,0 +1,14 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SSA logo">
+  <!-- Cyan diagonal spine running through the centre of the S -->
+  <path d="M322 162 L192 358" stroke="#33A7DD" stroke-width="58" stroke-linecap="round"/>
+
+  <!-- Green upper hook (top bowl of the S) -->
+  <path d="M356 132 C250 74 150 132 158 214 C163 258 208 272 262 264" stroke="#6DBE45" stroke-width="54" stroke-linecap="round" fill="none"/>
+  <!-- Green arrowhead pointing up-right -->
+  <path d="M398 92 L382 152 L338 108 Z" fill="#6DBE45"/>
+
+  <!-- Blue lower hook (bottom bowl of the S) -->
+  <path d="M262 250 C316 242 352 262 354 302 C360 382 258 440 150 392" stroke="#33459B" stroke-width="54" stroke-linecap="round" fill="none"/>
+  <!-- Blue arrowhead pointing down-left -->
+  <path d="M114 428 L130 368 L174 412 Z" fill="#33459B"/>
+</svg>

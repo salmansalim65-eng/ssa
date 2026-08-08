@@ -1,7 +1,8 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { Building2Icon, PanelLeftCloseIcon, PanelLeftOpenIcon } from "lucide-react";
+import Image from "next/image";
+import { PanelLeftCloseIcon, PanelLeftOpenIcon } from "lucide-react";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -49,9 +50,14 @@ export function Sidebar() {
             collapsed ? "justify-center px-2" : "gap-2.5 px-4",
           )}
         >
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <Building2Icon className="size-4.5" />
-          </span>
+          <Image
+            src="/logo.svg"
+            alt="SSA logo"
+            width={32}
+            height={32}
+            priority
+            className="size-8 shrink-0"
+          />
           {!collapsed && (
             <div className="min-w-0 leading-tight">
               <p className="truncate text-sm font-semibold">Rental &amp; Accounting</p>

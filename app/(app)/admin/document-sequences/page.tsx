@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   Table,
   TableBody,
@@ -30,19 +31,17 @@ export default async function DocumentSequencesPage() {
   const byVoucherType = new Map(sequences?.map((s) => [s.voucher_type, s]));
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Document Sequences</h1>
-        <p className="text-sm text-muted-foreground">
-          Configure the prefix and numbering format each voucher type uses,
-          e.g. PV-000001. Numbers are handed out atomically when a voucher is
-          posted in Phase 5+.
-        </p>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Administration"
+        title="Document Sequences"
+        description="Configure the prefix and numbering format each voucher type uses, e.g. PV-000001. Numbers are handed out atomically when a voucher is posted in Phase 5+."
+      />
 
-      <Table>
+      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        <Table>
         <TableHeader>
-          <TableRow>
+          <TableRow className="hover:bg-transparent">
             <TableHead>Voucher type</TableHead>
             <TableHead>Prefix</TableHead>
             <TableHead>Next number</TableHead>
@@ -89,7 +88,8 @@ export default async function DocumentSequencesPage() {
             );
           })}
         </TableBody>
-      </Table>
+        </Table>
+      </div>
     </div>
   );
 }

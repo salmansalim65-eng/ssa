@@ -67,7 +67,7 @@ export default async function CurrencyExchangePage({
         <DateRangeFilter defaultFrom={from} defaultTo={to} />
       </Suspense>
 
-      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      <div className="overflow-hidden rounded-lg border bg-card shadow-xs">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">

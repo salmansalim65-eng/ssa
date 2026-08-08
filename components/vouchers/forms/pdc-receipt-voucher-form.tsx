@@ -1,13 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { PlusIcon, Trash2Icon } from "lucide-react";
+import { AlertCircleIcon, FileTextIcon, ListPlusIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { FormSection } from "@/components/ui/form-section";
 import { Input } from "@/components/ui/input";
 import {
   Form,
@@ -85,7 +87,9 @@ export function PdcReceiptVoucherForm({
 
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "lines" });
   const watchedLines = useWatch({ control: form.control, name: "lines" });
+  const currencyId = useWatch({ control: form.control, name: "currencyId" });
   const total = (watchedLines ?? []).reduce((sum, l) => sum + (Number(l?.amount) || 0), 0);
+  const currencyCode = currencies.find((c) => c.id === currencyId)?.code ?? "";
 
   function onSubmit(values: PdcReceiptVoucherInput) {
     setFormError(null);
@@ -104,8 +108,14 @@ export function PdcReceiptVoucherForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <div className="grid gap-4 rounded-md border p-4 sm:grid-cols-2 lg:grid-cols-3">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+        {/* Document header */}
+        <FormSection
+          title="Document information"
+          description="Header details for this PDC receipt voucher."
+          icon={FileTextIcon}
+        >
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <FormItem>
             <FormLabel>Document No.</FormLabel>
             <Input value="Auto" disabled readOnly />
@@ -245,23 +255,28 @@ export function PdcReceiptVoucherForm({
               </FormItem>
             )}
           />
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-medium">Accounts</h2>
-            <Button type="button" variant="outline" size="sm" onClick={() => append(emptyLine())}>
-              <PlusIcon className="size-4" /> Add row
-            </Button>
           </div>
+        </FormSection>
 
-          <div className="overflow-x-auto rounded-md border">
+        {/* Line entries */}
+        <FormSection
+          title="Receipt entries"
+          description="Accounts credited and the amount received against each."
+          icon={ListPlusIcon}
+          contentClassName="p-0"
+          actions={
+            <Button type="button" variant="outline" size="sm" onClick={() => append(emptyLine())}>
+              <PlusIcon /> Add entry
+            </Button>
+          }
+        >
+          <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] text-sm">
               <thead>
-                <tr className="border-b bg-muted/50 text-left [&_th]:px-2 [&_th]:py-2 [&_th]:font-medium">
+                <tr className="border-b bg-muted/50 text-left [&_th]:px-3 [&_th]:py-2 [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground">
                   <th className="w-10">Sno</th>
                   <th className="min-w-[240px]">Account (Cr)</th>
-                  <th className="w-40">Amount</th>
+                  <th className="w-40 text-right">Amount</th>
                   <th className="w-40">Rent Month</th>
                   <th className="min-w-[150px]">Remarks</th>
                   <th className="w-10" />
@@ -269,8 +284,8 @@ export function PdcReceiptVoucherForm({
               </thead>
               <tbody>
                 {fields.map((line, index) => (
-                  <tr key={line.id} className="border-b align-top [&_td]:px-2 [&_td]:py-2">
-                    <td className="pt-4 text-muted-foreground">{index + 1}</td>
+                  <tr key={line.id} className="border-b align-top last:border-0 [&_td]:px-3 [&_td]:py-2">
+                    <td className="pt-4 text-muted-foreground tabular-nums">{index + 1}</td>
                     <td>
                       <FormField
                         control={form.control}
@@ -290,7 +305,14 @@ export function PdcReceiptVoucherForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormControl>
-                              <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                className="text-right tabular-nums"
+                                {...field}
+                                value={field.value as number}
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -330,6 +352,7 @@ export function PdcReceiptVoucherForm({
                         type="button"
                         variant="ghost"
                         size="icon"
+                        className="text-muted-foreground hover:text-destructive"
                         disabled={fields.length === 1}
                         onClick={() => remove(index)}
                         aria-label="Remove row"
@@ -343,13 +366,32 @@ export function PdcReceiptVoucherForm({
             </table>
           </div>
 
-          <p className="text-right text-sm font-medium">Total: {total.toLocaleString()}</p>
-        </div>
+          {/* Strong totals bar */}
+          <div className="flex items-center justify-end gap-6 border-t bg-muted/30 px-4 py-3">
+            <span className="text-sm font-medium text-muted-foreground">Total Receipt Amount</span>
+            <span className="text-xl font-semibold tabular-nums text-foreground">
+              {currencyCode && <span className="mr-1 text-sm font-medium text-muted-foreground">{currencyCode}</span>}
+              {total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
+        </FormSection>
 
-        {formError && <p className="text-sm text-destructive">{formError}</p>}
-        <Button type="submit" disabled={isPending} className="sm:w-fit">
-          {isPending ? (isEdit ? "Saving…" : "Creating…") : isEdit ? "Save changes" : "Create PDC receipt voucher"}
-        </Button>
+        {formError && (
+          <p className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            <AlertCircleIcon className="size-4 shrink-0" />
+            {formError}
+          </p>
+        )}
+
+        {/* Actions */}
+        <div className="flex items-center justify-end gap-2 border-t pt-4">
+          <Button type="button" variant="outline" asChild>
+            <Link href="/accounting/vouchers/pdc_receipt_voucher">Cancel</Link>
+          </Button>
+          <Button type="submit" disabled={isPending}>
+            {isPending ? (isEdit ? "Saving…" : "Creating…") : isEdit ? "Save changes" : "Create PDC receipt voucher"}
+          </Button>
+        </div>
       </form>
     </Form>
   );

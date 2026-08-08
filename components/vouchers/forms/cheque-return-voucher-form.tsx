@@ -1,12 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { AlertCircleIcon, FileTextIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { FormSection } from "@/components/ui/form-section";
 import { Input } from "@/components/ui/input";
 import {
   Form,
@@ -83,7 +86,14 @@ export function ChequeReturnVoucherForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="grid max-w-2xl gap-4 sm:grid-cols-2">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+        {/* Document header */}
+        <FormSection
+          title="Document information"
+          description="Details of the returned post-dated cheque."
+          icon={FileTextIcon}
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
         <FormField
           control={form.control}
           name="originalPdcId"
@@ -168,10 +178,25 @@ export function ChequeReturnVoucherForm({
             )}
           />
         )}
-        {formError && <p className="text-sm text-destructive sm:col-span-2">{formError}</p>}
-        <Button type="submit" disabled={isPending} className="sm:col-span-2 sm:w-fit">
-          {isPending ? "Creating…" : "Create cheque return voucher"}
-        </Button>
+          </div>
+        </FormSection>
+
+        {formError && (
+          <p className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            <AlertCircleIcon className="size-4 shrink-0" />
+            {formError}
+          </p>
+        )}
+
+        {/* Actions */}
+        <div className="flex items-center justify-end gap-2 border-t pt-4">
+          <Button type="button" variant="outline" asChild>
+            <Link href="/accounting/vouchers/cheque_return_voucher">Cancel</Link>
+          </Button>
+          <Button type="submit" disabled={isPending}>
+            {isPending ? "Creating…" : "Create cheque return voucher"}
+          </Button>
+        </div>
       </form>
     </Form>
   );

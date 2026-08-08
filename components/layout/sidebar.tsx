@@ -46,10 +46,10 @@ export function Sidebar() {
           collapsed ? "w-16" : "w-64",
         )}
       >
-        {/* Top bar: brand + collapse/expand toggle */}
+        {/* Navy brand cap — continuous with the header band across the top. */}
         <div
           className={cn(
-            "flex h-14 shrink-0 items-center border-b",
+            "flex h-14 shrink-0 items-center border-b border-header-border bg-header text-header-foreground",
             collapsed ? "justify-center px-2" : "gap-2.5 px-3",
           )}
         >
@@ -58,7 +58,7 @@ export function Sidebar() {
               type="button"
               onClick={toggle}
               aria-label="Expand sidebar"
-              className="flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
+              className="flex size-9 items-center justify-center rounded-md text-header-muted transition-colors hover:bg-header-accent hover:text-header-foreground"
             >
               <PanelLeftOpenIcon className="size-5" />
             </button>
@@ -66,14 +66,14 @@ export function Sidebar() {
             <>
               <Image src="/logo.svg" alt="SSA logo" width={32} height={32} priority className="size-8 shrink-0" />
               <div className="min-w-0 leading-tight">
-                <p className="truncate text-sm font-semibold">Rental &amp; Accounting</p>
-                <p className="truncate text-xs text-muted-foreground">Enterprise ERP</p>
+                <p className="truncate text-sm font-semibold text-header-foreground">Rental &amp; Accounting</p>
+                <p className="truncate text-[0.7rem] uppercase tracking-wider text-header-muted">Enterprise ERP</p>
               </div>
               <button
                 type="button"
                 onClick={toggle}
                 aria-label="Collapse sidebar"
-                className="ml-auto flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
+                className="ml-auto flex size-8 shrink-0 items-center justify-center rounded-md text-header-muted transition-colors hover:bg-header-accent hover:text-header-foreground"
               >
                 <PanelLeftCloseIcon className="size-4.5" />
               </button>

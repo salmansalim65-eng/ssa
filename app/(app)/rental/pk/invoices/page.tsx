@@ -74,7 +74,7 @@ export default async function PkRentInvoicesPage() {
         description="Invoices generated from Pakistan lease payment schedules."
       />
 
-      <div className="rounded-xl border bg-card shadow-sm">
+      <div className="rounded-lg border bg-card shadow-xs">
         {rows.length === 0 ? (
           <EmptyState
             icon={ReceiptIcon}

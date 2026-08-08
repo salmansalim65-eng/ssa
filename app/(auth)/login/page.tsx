@@ -5,8 +5,8 @@ export default function LoginPage() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Sign in</CardTitle>
-        <CardDescription>Rental &amp; Accounting ERP</CardDescription>
+        <CardTitle className="text-xl">Sign in</CardTitle>
+        <CardDescription>Enter your credentials to access your workspace.</CardDescription>
       </CardHeader>
       <CardContent>
         <LoginForm />

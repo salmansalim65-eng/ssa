@@ -205,7 +205,7 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
             <GenerateAllInvoicesButton leaseId={lease.id} country="uae" pendingCount={pendingScheduleCount} />
           )}
         </div>
-        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        <div className="overflow-hidden rounded-lg border bg-card shadow-xs">
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
@@ -242,7 +242,7 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
 
       <div className="space-y-2">
         <h2 className="text-lg font-medium">Invoices</h2>
-        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        <div className="overflow-hidden rounded-lg border bg-card shadow-xs">
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">

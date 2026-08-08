@@ -45,7 +45,7 @@ export default async function SuppliersPage() {
         actions={canCreate && <AddSupplierDialog />}
       />
 
-      <div className="rounded-xl border bg-card shadow-sm">
+      <div className="rounded-lg border bg-card shadow-xs">
         {rows.length === 0 ? (
           <EmptyState
             icon={Users2Icon}

@@ -38,7 +38,7 @@ export default async function DocumentSequencesPage() {
         description="Configure the prefix and numbering format each voucher type uses, e.g. PV-000001. Numbers are handed out atomically when a voucher is posted in Phase 5+."
       />
 
-      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      <div className="overflow-hidden rounded-lg border bg-card shadow-xs">
         <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">

@@ -35,7 +35,7 @@ export default async function AssetValuationReportPage() {
         className="print:hidden"
       />
 
-      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      <div className="overflow-hidden rounded-lg border bg-card shadow-xs">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">

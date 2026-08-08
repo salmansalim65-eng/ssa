@@ -67,7 +67,7 @@ export default async function UsersPage() {
         actions={canCreate && <InviteUserDialog roles={roles ?? []} />}
       />
 
-      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      <div className="overflow-hidden rounded-lg border bg-card shadow-xs">
         {rows.length === 0 ? (
           <EmptyState
             icon={UsersIcon}

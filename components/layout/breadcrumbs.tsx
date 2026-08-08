@@ -19,17 +19,20 @@ export function Breadcrumbs() {
   if (segments.length === 0) return null;
 
   return (
-    <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-sm text-muted-foreground">
+    <nav
+      aria-label="Breadcrumb"
+      className="flex items-center gap-1.5 text-sm text-header-muted"
+    >
       {segments.map((segment, index) => {
         const href = "/" + segments.slice(0, index + 1).join("/");
         const isLast = index === segments.length - 1;
         return (
           <Fragment key={href}>
-            {index > 0 && <ChevronRightIcon className="size-3.5" />}
+            {index > 0 && <ChevronRightIcon className="size-3.5 text-header-muted/70" />}
             {isLast ? (
-              <span className="font-medium text-foreground">{toLabel(segment)}</span>
+              <span className="font-semibold text-header-foreground">{toLabel(segment)}</span>
             ) : (
-              <Link href={href} className="hover:text-foreground">
+              <Link href={href} className="transition-colors hover:text-header-foreground">
                 {toLabel(segment)}
               </Link>
             )}

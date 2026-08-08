@@ -191,7 +191,7 @@ export default async function UaeRentInvoiceDetailPage({ params }: { params: Pro
 
       <div className="space-y-2">
         <h2 className="text-lg font-medium">Payments</h2>
-        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        <div className="overflow-hidden rounded-lg border bg-card shadow-xs">
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">

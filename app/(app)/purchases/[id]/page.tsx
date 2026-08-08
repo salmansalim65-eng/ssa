@@ -194,7 +194,7 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
         )}
       </div>
 
-      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      <div className="overflow-hidden rounded-lg border bg-card shadow-xs">
         <Table className="min-w-[1000px]">
           <TableHeader>
             <TableRow className="hover:bg-transparent">

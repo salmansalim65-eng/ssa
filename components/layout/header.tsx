@@ -34,14 +34,16 @@ export function Header({
         >
           <MenuIcon />
         </Button>
-        <SheetContent side="left" className="w-64 p-0">
-          <SheetHeader className="border-b p-4">
+        <SheetContent side="left" className="flex w-64 flex-col p-0">
+          <SheetHeader className="shrink-0 border-b p-4">
             <SheetTitle className="flex items-center gap-2.5">
               <Image src="/logo.svg" alt="SSA logo" width={28} height={28} className="size-7" />
               Rental &amp; Accounting ERP
             </SheetTitle>
           </SheetHeader>
-          <SidebarNav onNavigate={() => setMobileNavOpen(false)} />
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <SidebarNav onNavigate={() => setMobileNavOpen(false)} />
+          </div>
         </SheetContent>
       </Sheet>
 

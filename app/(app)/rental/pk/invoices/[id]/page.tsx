@@ -140,64 +140,66 @@ export default async function PkRentInvoiceDetailPage({ params }: { params: Prom
         <p className="font-mono text-sm">{invoice.voucher_no ?? "Draft"}</p>
       </div>
 
-      <div className="grid gap-x-8 gap-y-2 rounded-md border p-4 sm:grid-cols-2">
+      <div className="grid gap-x-8 gap-y-4 rounded-xl border bg-card p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-3">
         <div>
-          <p className="text-xs text-muted-foreground">Asset</p>
-          <p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Asset</p>
+          <p className="mt-0.5">
             {refs.pk_leases?.assets ? `${refs.pk_leases.assets.asset_code} — ${refs.pk_leases.assets.asset_name}` : "—"}
           </p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Tenant</p>
-          <p>{refs.pk_leases?.tenants?.name ?? "—"}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Tenant</p>
+          <p className="mt-0.5">{refs.pk_leases?.tenants?.name ?? "—"}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Invoice date</p>
-          <p>{invoice.invoice_date}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Invoice date</p>
+          <p className="mt-0.5">{formatDate(invoice.invoice_date)}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Due date</p>
-          <p>{invoice.due_date}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Due date</p>
+          <p className="mt-0.5">{formatDate(invoice.due_date)}</p>
         </div>
       </div>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Component</TableHead>
-            <TableHead className="text-right">Amount</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          <TableRow>
-            <TableCell>Rent</TableCell>
-            <TableCell className="text-right">{invoice.rent_amount.toLocaleString()}</TableCell>
-          </TableRow>
-          {(utilityCharges ?? []).map((u) => (
-            <TableRow key={u.id}>
-              <TableCell>
-                {utilityTypeLabels[u.utility_type as keyof typeof utilityTypeLabels]}
-                {u.description ? ` — ${u.description}` : ""}
-              </TableCell>
-              <TableCell className="text-right">{u.amount.toLocaleString()}</TableCell>
+      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>Component</TableHead>
+              <TableHead className="text-right">Amount</TableHead>
             </TableRow>
-          ))}
-          {invoice.advance_adjusted > 0 && (
+          </TableHeader>
+          <TableBody>
             <TableRow>
-              <TableCell>Advance rent adjusted</TableCell>
-              <TableCell className="text-right">-{invoice.advance_adjusted.toLocaleString()}</TableCell>
+              <TableCell>Rent</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">{formatMoney(invoice.rent_amount)}</TableCell>
             </TableRow>
-          )}
-          <TableRow>
-            <TableCell className="font-medium">Total ({refs.currencies?.code})</TableCell>
-            <TableCell className="text-right font-medium">{invoice.total_amount.toLocaleString()}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell className="font-medium">Outstanding</TableCell>
-            <TableCell className="text-right font-medium">{invoice.outstanding_amount.toLocaleString()}</TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
+            {(utilityCharges ?? []).map((u) => (
+              <TableRow key={u.id}>
+                <TableCell>
+                  {utilityTypeLabels[u.utility_type as keyof typeof utilityTypeLabels]}
+                  {u.description ? ` — ${u.description}` : ""}
+                </TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{formatMoney(u.amount)}</TableCell>
+              </TableRow>
+            ))}
+            {invoice.advance_adjusted > 0 && (
+              <TableRow>
+                <TableCell>Advance rent adjusted</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">-{formatMoney(invoice.advance_adjusted)}</TableCell>
+              </TableRow>
+            )}
+            <TableRow className="hover:bg-transparent">
+              <TableCell className="font-medium">Total ({refs.currencies?.code})</TableCell>
+              <TableCell className="text-right font-mono font-medium tabular-nums">{formatMoney(invoice.total_amount)}</TableCell>
+            </TableRow>
+            <TableRow className="hover:bg-transparent">
+              <TableCell className="font-medium">Outstanding</TableCell>
+              <TableCell className="text-right font-mono font-medium tabular-nums">{formatMoney(invoice.outstanding_amount)}</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
 
       <div className="print:hidden">
         <VoucherActions
@@ -217,34 +219,36 @@ export default async function PkRentInvoiceDetailPage({ params }: { params: Prom
 
       <div className="space-y-2">
         <h2 className="text-lg font-medium">Payments</h2>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Account</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {paymentRows.map((p) => {
-              const acct = p.cash_bank_account_id ? paymentAccountsById.get(p.cash_bank_account_id) ?? null : null;
-              return (
-                <TableRow key={p.id}>
-                  <TableCell>{p.payment_date}</TableCell>
-                  <TableCell>{acct ? `${acct.account_code} — ${acct.account_name}` : "—"}</TableCell>
-                  <TableCell className="text-right">{p.amount.toLocaleString()}</TableCell>
-                </TableRow>
-              );
-            })}
-            {paymentRows.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={3} className="text-center text-muted-foreground">
-                  No payments recorded yet.
-                </TableCell>
+        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Date</TableHead>
+                <TableHead>Account</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {paymentRows.map((p) => {
+                const acct = p.cash_bank_account_id ? paymentAccountsById.get(p.cash_bank_account_id) ?? null : null;
+                return (
+                  <TableRow key={p.id}>
+                    <TableCell className="text-muted-foreground">{formatDate(p.payment_date)}</TableCell>
+                    <TableCell>{acct ? `${acct.account_code} — ${acct.account_name}` : "—"}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{formatMoney(p.amount)}</TableCell>
+                  </TableRow>
+                );
+              })}
+              {paymentRows.length === 0 && (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={3} className="py-10 text-center text-muted-foreground">
+                    No payments recorded yet.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       {status === "posted" && invoice.outstanding_amount > 0 && canRecordPayment && (

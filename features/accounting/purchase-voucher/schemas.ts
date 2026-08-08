@@ -2,6 +2,7 @@ import { z } from "zod";
 
 // One line of the purchase voucher grid.
 export const purchaseVoucherLineSchema = z.object({
+  costCenterId: z.string().uuid().optional().or(z.literal("")),
   fixedAssetAccountId: z.string().uuid("Select the fixed asset account"),
   gross: z.coerce.number().nonnegative("Must be zero or more"),
   dueDate: z.string().date("Enter a valid date").optional().or(z.literal("")),

@@ -62,7 +62,7 @@ export async function createAssetSale(input: AssetSaleInput) {
     },
     ...lines.map((l) => ({
       accountId: l.fixedAssetAccountId,
-      costCenterId,
+      costCenterId: l.costCenterId || costCenterId,
       debit: 0,
       credit: l.gross,
       description: "Asset disposed",
@@ -101,6 +101,7 @@ export async function createAssetSale(input: AssetSaleInput) {
   const lineRows = lines.map((l, index) => ({
     sale_id: saleId,
     line_no: index + 1,
+    cost_center_id: l.costCenterId || null,
     fixed_asset_account_id: l.fixedAssetAccountId,
     gross: l.gross,
     remarks: l.remarks || null,
@@ -183,7 +184,7 @@ export async function updateAssetSale(id: string, input: AssetSaleInput) {
       journal_entry_id: jeId,
       line_no: index + 2,
       account_id: l.fixedAssetAccountId,
-      cost_center_id: null,
+      cost_center_id: l.costCenterId || null,
       debit_amount: 0,
       credit_amount: l.gross,
       currency_id: parsed.data.currencyId,
@@ -207,6 +208,7 @@ export async function updateAssetSale(id: string, input: AssetSaleInput) {
   const lineRows = lines.map((l, index) => ({
     sale_id: id,
     line_no: index + 1,
+    cost_center_id: l.costCenterId || null,
     fixed_asset_account_id: l.fixedAssetAccountId,
     gross: l.gross,
     remarks: l.remarks || null,
@@ -254,7 +256,7 @@ export async function copyAssetSale(id: string) {
   const { data: lines } = await supabase
     .schema("assets")
     .from("asset_sale_lines")
-    .select("fixed_asset_account_id, gross, remarks")
+    .select("cost_center_id, fixed_asset_account_id, gross, remarks")
     .eq("sale_id", id)
     .order("line_no");
 
@@ -266,6 +268,7 @@ export async function copyAssetSale(id: string) {
     pakExch: src.pak_exch ?? 0,
     narration: src.narration ?? "",
     lines: (lines ?? []).map((l) => ({
+      costCenterId: l.cost_center_id ?? "",
       fixedAssetAccountId: l.fixed_asset_account_id,
       gross: l.gross,
       remarks: l.remarks ?? "",

@@ -17,6 +17,13 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
 import { AccountCombobox, type AccountOption } from "@/components/vouchers/account-combobox";
 import { DateInput } from "@/components/vouchers/date-input";
@@ -27,18 +34,25 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
+export interface CostCenterOption {
+  id: string;
+  name: string;
+}
+
 function emptyLine() {
-  return { fixedAssetAccountId: "", gross: 0, remarks: "" };
+  return { costCenterId: "", fixedAssetAccountId: "", gross: 0, remarks: "" };
 }
 
 export function AssetSaleForm({
   accounts,
   currencies,
+  costCenters,
   voucherId,
   initialValues,
 }: {
   accounts: AccountOption[];
   currencies: CurrencyOption[];
+  costCenters: CostCenterOption[];
   voucherId?: string;
   initialValues?: AssetSaleFormValues;
 }) {
@@ -183,10 +197,11 @@ export function AssetSaleForm({
           </div>
 
           <div className="overflow-x-auto rounded-md border">
-            <table className="w-full min-w-[800px] text-sm">
+            <table className="w-full min-w-[950px] text-sm">
               <thead>
                 <tr className="border-b bg-muted/50 text-left [&_th]:px-2 [&_th]:py-2 [&_th]:font-medium">
                   <th className="w-10">Sno</th>
+                  <th className="w-44">Cost Center</th>
                   <th className="min-w-[240px]">Fixed Asset (Property) (Cr)</th>
                   <th className="w-40">Gross</th>
                   <th className="min-w-[200px]">Remarks</th>
@@ -197,6 +212,35 @@ export function AssetSaleForm({
                 {fields.map((line, index) => (
                   <tr key={line.id} className="border-b align-top [&_td]:px-2 [&_td]:py-2">
                     <td className="pt-4 text-muted-foreground">{index + 1}</td>
+                    <td>
+                      <FormField
+                        control={form.control}
+                        name={`lines.${index}.costCenterId`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <Select
+                              value={field.value ? field.value : "none"}
+                              onValueChange={(v) => field.onChange(v === "none" ? "" : v)}
+                            >
+                              <FormControl>
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="None" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="none">— None —</SelectItem>
+                                {costCenters.map((c) => (
+                                  <SelectItem key={c.id} value={c.id}>
+                                    {c.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </td>
                     <td>
                       <FormField
                         control={form.control}

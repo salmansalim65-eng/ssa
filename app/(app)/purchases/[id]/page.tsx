@@ -61,13 +61,14 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
   const { data: lines } = await supabase
     .schema("accounting")
     .from("purchase_voucher_lines")
-    .select("id, line_no, fixed_asset_account_id, gross, due_date, installment_month, remarks")
+    .select("id, line_no, cost_center_id, fixed_asset_account_id, gross, due_date, installment_month, remarks")
     .eq("voucher_id", id)
     .order("line_no");
 
   type LineRow = {
     id: string;
     line_no: number;
+    cost_center_id: string | null;
     fixed_asset_account_id: string;
     gross: number;
     due_date: string | null;
@@ -76,7 +77,7 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
   };
   const lineRows = (lines as unknown as LineRow[]) ?? [];
 
-  const [currenciesById, accountsById] = await Promise.all([
+  const [currenciesById, accountsById, costCentersById] = await Promise.all([
     fetchRefs<{ id: string; code: string }>(supabase, "core", "currencies", "code", [voucher.currency_id]),
     fetchRefs<{ id: string; account_name: string }>(
       supabase,
@@ -84,6 +85,13 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
       "chart_of_accounts",
       "account_name",
       [voucher.vendor_account_id, ...lineRows.map((l) => l.fixed_asset_account_id)],
+    ),
+    fetchRefs<{ id: string; name: string }>(
+      supabase,
+      "accounting",
+      "cost_centers",
+      "name",
+      lineRows.map((l) => l.cost_center_id).filter((v): v is string => !!v),
     ),
   ]);
 
@@ -186,10 +194,11 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
       </div>
 
       <div className="overflow-x-auto rounded-md border">
-        <Table className="min-w-[900px]">
+        <Table className="min-w-[1000px]">
           <TableHeader>
             <TableRow>
               <TableHead className="w-10">Sno</TableHead>
+              <TableHead>Cost Center</TableHead>
               <TableHead>Fixed Asset Account (Dr)</TableHead>
               <TableHead className="text-right">Gross</TableHead>
               <TableHead>Due Date</TableHead>
@@ -202,6 +211,7 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
               return (
                 <TableRow key={l.id}>
                   <TableCell className="text-muted-foreground">{l.line_no}</TableCell>
+                  <TableCell>{l.cost_center_id ? costCentersById.get(l.cost_center_id)?.name ?? "—" : "—"}</TableCell>
                   <TableCell>{accountsById.get(l.fixed_asset_account_id)?.account_name ?? "—"}</TableCell>
                   <TableCell className="text-right">{l.gross.toLocaleString()}</TableCell>
                   <TableCell>{l.due_date ?? "—"}</TableCell>
@@ -211,7 +221,7 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
               );
             })}
             <TableRow>
-              <TableCell colSpan={2} className="text-right font-medium">
+              <TableCell colSpan={3} className="text-right font-medium">
                 Total Value
               </TableCell>
               <TableCell className="text-right font-medium">

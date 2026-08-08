@@ -16,7 +16,7 @@ export default async function EditPurchaseVoucherPage({ params }: { params: Prom
   const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
   const companyId = companyIdData as string;
 
-  const [{ data: accounts }, { data: companyCurrencies }, { data: voucher }] = await Promise.all([
+  const [{ data: accounts }, { data: companyCurrencies }, { data: costCenters }, { data: voucher }] = await Promise.all([
     supabase
       .schema("accounting")
       .from("chart_of_accounts")
@@ -32,6 +32,14 @@ export default async function EditPurchaseVoucherPage({ params }: { params: Prom
       .select("currencies:currency_id(id, code)")
       .eq("company_id", companyId)
       .eq("is_active", true),
+    supabase
+      .schema("accounting")
+      .from("cost_centers")
+      .select("id, name")
+      .eq("company_id", companyId)
+      .eq("is_active", true)
+      .is("deleted_at", null)
+      .order("name"),
     supabase
       .schema("accounting")
       .from("purchase_vouchers")
@@ -65,7 +73,7 @@ export default async function EditPurchaseVoucherPage({ params }: { params: Prom
   const { data: lines } = await supabase
     .schema("accounting")
     .from("purchase_voucher_lines")
-    .select("fixed_asset_account_id, gross, due_date, installment_month, remarks")
+    .select("cost_center_id, fixed_asset_account_id, gross, due_date, installment_month, remarks")
     .eq("voucher_id", id)
     .order("line_no");
 
@@ -77,6 +85,7 @@ export default async function EditPurchaseVoucherPage({ params }: { params: Prom
       <PurchaseVoucherForm
         accounts={accounts ?? []}
         currencies={currencyOptions}
+        costCenters={costCenters ?? []}
         voucherId={id}
         initialValues={{
           vendorAccountId: v.vendor_account_id as string,
@@ -87,6 +96,7 @@ export default async function EditPurchaseVoucherPage({ params }: { params: Prom
           paymentTerms: (v.payment_terms as string | null) ?? "",
           sharePercentage: v.share_percentage as number,
           lines: (lines ?? []).map((l) => ({
+            costCenterId: l.cost_center_id ?? "",
             fixedAssetAccountId: l.fixed_asset_account_id,
             gross: l.gross,
             dueDate: l.due_date ?? "",

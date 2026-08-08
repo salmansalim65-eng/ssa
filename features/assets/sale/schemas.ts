@@ -2,6 +2,7 @@ import { z } from "zod";
 
 // One sold-property line: credits a Fixed Asset (Property) account for its gross.
 export const assetSaleLineSchema = z.object({
+  costCenterId: z.string().uuid().optional().or(z.literal("")),
   fixedAssetAccountId: z.string().uuid("Select the fixed asset (property) account"),
   gross: z.coerce.number().nonnegative("Must be zero or more"),
   remarks: z.string().trim().max(200, "Keep it under 200 characters").optional().or(z.literal("")),

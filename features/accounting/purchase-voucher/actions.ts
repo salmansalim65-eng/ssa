@@ -32,6 +32,7 @@ export async function createPurchaseVoucher(input: PurchaseVoucherInput) {
   const jeLines: EntryLineInput[] = [
     ...lines.map((l) => ({
       accountId: l.fixedAssetAccountId,
+      costCenterId: l.costCenterId || null,
       debit: l.gross,
       credit: 0,
       description: "Property purchase",
@@ -71,6 +72,7 @@ export async function createPurchaseVoucher(input: PurchaseVoucherInput) {
   const lineRows = lines.map((l, index) => ({
     voucher_id: voucherId,
     line_no: index + 1,
+    cost_center_id: l.costCenterId || null,
     fixed_asset_account_id: l.fixedAssetAccountId,
     gross: l.gross,
     due_date: l.dueDate || null,
@@ -145,7 +147,7 @@ export async function updatePurchaseVoucher(id: string, input: PurchaseVoucherIn
       journal_entry_id: jeId,
       line_no: index + 1,
       account_id: l.fixedAssetAccountId,
-      cost_center_id: null,
+      cost_center_id: l.costCenterId || null,
       debit_amount: l.gross,
       credit_amount: 0,
       currency_id: parsed.data.currencyId,
@@ -182,6 +184,7 @@ export async function updatePurchaseVoucher(id: string, input: PurchaseVoucherIn
   const lineRows = lines.map((l, index) => ({
     voucher_id: id,
     line_no: index + 1,
+    cost_center_id: l.costCenterId || null,
     fixed_asset_account_id: l.fixedAssetAccountId,
     gross: l.gross,
     due_date: l.dueDate || null,
@@ -235,7 +238,7 @@ export async function copyPurchaseVoucher(id: string) {
   const { data: lines } = await supabase
     .schema("accounting")
     .from("purchase_voucher_lines")
-    .select("fixed_asset_account_id, gross, due_date, installment_month, remarks")
+    .select("cost_center_id, fixed_asset_account_id, gross, due_date, installment_month, remarks")
     .eq("voucher_id", id)
     .order("line_no");
 
@@ -248,6 +251,7 @@ export async function copyPurchaseVoucher(id: string) {
     paymentTerms: src.payment_terms ?? "",
     sharePercentage: src.share_percentage ?? 0,
     lines: (lines ?? []).map((l) => ({
+      costCenterId: l.cost_center_id ?? "",
       fixedAssetAccountId: l.fixed_asset_account_id,
       gross: l.gross,
       dueDate: l.due_date ?? "",

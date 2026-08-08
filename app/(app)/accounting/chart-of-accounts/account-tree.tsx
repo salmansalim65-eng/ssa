@@ -301,7 +301,7 @@ export function AccountTree({
               <span
                 className={cn(
                   "font-mono text-xs",
-                  isGroup ? "font-semibold text-foreground" : "text-muted-foreground",
+                  isGroup ? "font-bold text-foreground" : "text-muted-foreground",
                 )}
               >
                 {account.account_code}
@@ -312,7 +312,7 @@ export function AccountTree({
           {/* Account name */}
           <td className="p-3 align-middle">
             <div className="flex items-center gap-2">
-              <span className={cn("truncate", isGroup ? "font-semibold" : "font-medium")}>
+              <span className={cn("truncate", isGroup ? "font-bold text-foreground" : "font-medium")}>
                 {account.account_name}
               </span>
               {isGroup && (

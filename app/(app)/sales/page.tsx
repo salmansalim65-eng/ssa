@@ -1,6 +1,9 @@
 import Link from "next/link";
+import { BadgeDollarSignIcon, PlusIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   Table,
   TableBody,
@@ -13,6 +16,7 @@ import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
+import { formatDate, formatMoney } from "@/lib/format";
 import type { JournalEntryStatus } from "@/types/database.types";
 
 export default async function AssetSalesPage() {
@@ -60,56 +64,76 @@ export default async function AssetSalesPage() {
   ]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Sale Asset Vouchers</h1>
-          <p className="text-sm text-muted-foreground">Property disposals and their accounting entries.</p>
-        </div>
-        {canCreate && (
-          <Button asChild size="sm">
-            <Link href="/sales/new">New</Link>
-          </Button>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Assets & Property"
+        title="Sale Asset Vouchers"
+        description="Property disposals and their accounting entries."
+        actions={
+          canCreate && (
+            <Button asChild>
+              <Link href="/sales/new">
+                <PlusIcon /> New voucher
+              </Link>
+            </Button>
+          )
+        }
+      />
+
+      <div className="rounded-xl border bg-card shadow-sm">
+        {saleRows.length === 0 ? (
+          <EmptyState
+            icon={BadgeDollarSignIcon}
+            title="No sale asset vouchers yet"
+            description="Record a property disposal to see it here."
+            action={
+              canCreate && (
+                <Button asChild>
+                  <Link href="/sales/new">
+                    <PlusIcon /> New voucher
+                  </Link>
+                </Button>
+              )
+            }
+          />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Voucher No.</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead className="text-right">Total Value</TableHead>
+                <TableHead className="w-36">Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {saleRows.map((sale) => (
+                <TableRow key={sale.id}>
+                  <TableCell>
+                    <Link
+                      href={`/sales/${sale.id}`}
+                      className="font-mono font-medium text-primary hover:underline"
+                    >
+                      {sale.voucher_no ?? "Draft"}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{formatDate(sale.sale_date)}</TableCell>
+                  <TableCell>{accountsById.get(sale.customer_account_id ?? "")?.account_name ?? "—"}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">
+                    {formatMoney(sale.total_value)}
+                  </TableCell>
+                  <TableCell>
+                    <VoucherStatusBadge
+                      status={journalEntriesById.get(sale.journal_entry_id ?? "")?.status ?? "draft"}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
       </div>
-
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Voucher #</TableHead>
-            <TableHead>Date</TableHead>
-            <TableHead>Customer</TableHead>
-            <TableHead className="text-right">Total value</TableHead>
-            <TableHead>Status</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {saleRows.map((sale) => (
-            <TableRow key={sale.id}>
-              <TableCell>
-                <Link href={`/sales/${sale.id}`} className="font-mono font-medium hover:underline">
-                  {sale.voucher_no ?? "Draft"}
-                </Link>
-              </TableCell>
-              <TableCell>{sale.sale_date}</TableCell>
-              <TableCell>{accountsById.get(sale.customer_account_id ?? "")?.account_name ?? "—"}</TableCell>
-              <TableCell className="text-right">{sale.total_value.toLocaleString()}</TableCell>
-              <TableCell>
-                <VoucherStatusBadge
-                  status={journalEntriesById.get(sale.journal_entry_id ?? "")?.status ?? "draft"}
-                />
-              </TableCell>
-            </TableRow>
-          ))}
-          {saleRows.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={5} className="text-center text-muted-foreground">
-                No sale asset vouchers yet.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
     </div>
   );
 }

@@ -1,5 +1,9 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ArrowLeftIcon } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { PurchaseVoucherForm } from "@/components/purchases/purchase-voucher-form";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
@@ -56,8 +60,19 @@ export default async function NewPurchaseVoucherPage() {
   );
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold tracking-tight">New purchase voucher</h1>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Assets & Property"
+        title="New Purchase Voucher"
+        description="Record a property acquisition and its accounting entries."
+        actions={
+          <Button asChild variant="outline">
+            <Link href="/purchases">
+              <ArrowLeftIcon /> Back to list
+            </Link>
+          </Button>
+        }
+      />
       <PurchaseVoucherForm accounts={accounts ?? []} currencies={currencyOptions} costCenters={costCenters ?? []} />
     </div>
   );

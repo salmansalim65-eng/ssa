@@ -21,6 +21,7 @@ import { VoucherDeleteButton } from "@/components/vouchers/voucher-delete-button
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { formatDate, formatMoney } from "@/lib/format";
 import { getVoucherApproval } from "@/lib/vouchers/engine";
 import { isPhase5VoucherType, VOUCHER_TYPE_LABELS } from "@/lib/vouchers/meta";
 import { getVoucherDetail } from "@/lib/vouchers/queries";
@@ -107,12 +108,14 @@ export default async function VoucherDetailPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between print:hidden">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{VOUCHER_TYPE_LABELS[voucherType]}</h1>
-          <p className="font-mono text-sm text-muted-foreground">{detail.voucherNo ?? "Draft"}</p>
+      <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between print:hidden">
+        <div className="space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary">
+            {VOUCHER_TYPE_LABELS[voucherType]}
+          </p>
+          <h1 className="font-mono text-2xl font-semibold tracking-tight">{detail.voucherNo ?? "Draft"}</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <VoucherStatusBadge status={detail.status} />
           <PrintButton />
           {detail.status === "draft" &&
@@ -148,62 +151,69 @@ export default async function VoucherDetailPage({
         <p className="font-mono text-sm">{detail.voucherNo ?? "Draft"}</p>
       </div>
 
-      <div className="grid gap-x-8 gap-y-2 rounded-md border p-4 sm:grid-cols-2">
+      <div className="grid gap-x-8 gap-y-4 rounded-xl border bg-card p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-3">
         <div>
-          <p className="text-xs text-muted-foreground">Date</p>
-          <p>{detail.date}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Date</p>
+          <p className="mt-0.5">{formatDate(detail.date)}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Currency</p>
-          <p>{detail.currencyCode}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Currency</p>
+          <p className="mt-0.5">{detail.currencyCode || "—"}</p>
         </div>
         {detail.fields.map((f) => (
           <div key={f.label}>
-            <p className="text-xs text-muted-foreground">{f.label}</p>
-            <p>{f.value}</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{f.label}</p>
+            <p className="mt-0.5">{f.value}</p>
           </div>
         ))}
         {detail.narration && (
-          <div className="sm:col-span-2">
-            <p className="text-xs text-muted-foreground">Narration</p>
-            <p>{detail.narration}</p>
+          <div className="sm:col-span-2 lg:col-span-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Narration</p>
+            <p className="mt-0.5">{detail.narration}</p>
           </div>
         )}
       </div>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Account</TableHead>
-            <TableHead>Cost center</TableHead>
-            {hasReference && <TableHead>Reference</TableHead>}
-            <TableHead>Description</TableHead>
-            <TableHead className="text-right">Debit</TableHead>
-            <TableHead className="text-right">Credit</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {detail.lines.map((line, index) => (
-            <TableRow key={index}>
-              <TableCell className="font-mono">
-                {line.accountCode} — {line.accountName}
-              </TableCell>
-              <TableCell>{line.costCenterName ?? "—"}</TableCell>
-              {hasReference && <TableCell>{line.reference ?? "—"}</TableCell>}
-              <TableCell>{line.description ?? "—"}</TableCell>
-              <TableCell className="text-right">{line.debit ? line.debit.toLocaleString() : ""}</TableCell>
-              <TableCell className="text-right">{line.credit ? line.credit.toLocaleString() : ""}</TableCell>
+      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>Account</TableHead>
+              <TableHead>Cost center</TableHead>
+              {hasReference && <TableHead>Reference</TableHead>}
+              <TableHead>Description</TableHead>
+              <TableHead className="text-right">Debit</TableHead>
+              <TableHead className="text-right">Credit</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-        <TableFooter>
-          <TableRow>
-            <TableCell colSpan={hasReference ? 4 : 3}>Total</TableCell>
-            <TableCell className="text-right">{totalDebit.toLocaleString()}</TableCell>
-            <TableCell className="text-right">{totalDebit.toLocaleString()}</TableCell>
-          </TableRow>
-        </TableFooter>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {detail.lines.map((line, index) => (
+              <TableRow key={index}>
+                <TableCell className="font-medium">
+                  <span className="font-mono text-xs text-muted-foreground">{line.accountCode}</span>{" "}
+                  {line.accountName}
+                </TableCell>
+                <TableCell>{line.costCenterName ?? "—"}</TableCell>
+                {hasReference && <TableCell>{line.reference ?? "—"}</TableCell>}
+                <TableCell>{line.description ?? "—"}</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">
+                  {line.debit ? formatMoney(line.debit) : ""}
+                </TableCell>
+                <TableCell className="text-right font-mono tabular-nums">
+                  {line.credit ? formatMoney(line.credit) : ""}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+          <TableFooter>
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={hasReference ? 4 : 3}>Total</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">{formatMoney(totalDebit)}</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">{formatMoney(totalDebit)}</TableCell>
+            </TableRow>
+          </TableFooter>
+        </Table>
+      </div>
 
       <div className="print:hidden">
         <VoucherActions

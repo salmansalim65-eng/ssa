@@ -27,6 +27,7 @@ import { getSignedUrl } from "@/features/attachments/actions";
 import { hasPermission } from "@/lib/auth/permissions";
 import { fetchRefs } from "@/lib/supabase/hydrate";
 import { createClient } from "@/lib/supabase/server";
+import { formatDate, formatMoney } from "@/lib/format";
 import { getVoucherApproval } from "@/lib/vouchers/engine";
 import type { JournalEntryStatus } from "@/types/database.types";
 
@@ -123,12 +124,12 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between print:hidden">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Purchase Voucher</h1>
-          <p className="font-mono text-sm text-muted-foreground">{voucher.voucher_no ?? "Draft"}</p>
+      <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between print:hidden">
+        <div className="space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary">Purchase Voucher</p>
+          <h1 className="font-mono text-2xl font-semibold tracking-tight">{voucher.voucher_no ?? "Draft"}</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <VoucherStatusBadge status={status} />
           <PrintButton />
           {status === "draft" && canSubmit && (
@@ -162,41 +163,41 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
         <p className="font-mono text-sm">{voucher.voucher_no ?? "Draft"}</p>
       </div>
 
-      <div className="grid gap-x-8 gap-y-2 rounded-md border p-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-x-8 gap-y-4 rounded-xl border bg-card p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-3">
         <div>
-          <p className="text-xs text-muted-foreground">Vendor (Cr)</p>
-          <p>{vendorAccount}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Vendor (Cr)</p>
+          <p className="mt-0.5">{vendorAccount}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Date</p>
-          <p>{voucher.purchase_date}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Date</p>
+          <p className="mt-0.5">{formatDate(voucher.purchase_date)}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Currency</p>
-          <p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Currency</p>
+          <p className="mt-0.5">
             {currencyCode} @ {voucher.exchange_rate.toLocaleString()}
           </p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Payment terms</p>
-          <p>{voucher.payment_terms ?? "—"}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Payment terms</p>
+          <p className="mt-0.5">{voucher.payment_terms ?? "—"}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Share %</p>
-          <p>{voucher.share_percentage.toLocaleString()}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Share %</p>
+          <p className="mt-0.5">{voucher.share_percentage.toLocaleString()}</p>
         </div>
         {voucher.narration && (
           <div className="sm:col-span-2 lg:col-span-3">
-            <p className="text-xs text-muted-foreground">Narration</p>
-            <p>{voucher.narration}</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Narration</p>
+            <p className="mt-0.5">{voucher.narration}</p>
           </div>
         )}
       </div>
 
-      <div className="overflow-x-auto rounded-md border">
+      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
         <Table className="min-w-[1000px]">
           <TableHeader>
-            <TableRow>
+            <TableRow className="hover:bg-transparent">
               <TableHead className="w-10">Sno</TableHead>
               <TableHead>Cost Center</TableHead>
               <TableHead>Fixed Asset Account (Dr)</TableHead>
@@ -212,20 +213,20 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
                 <TableRow key={l.id}>
                   <TableCell className="text-muted-foreground">{l.line_no}</TableCell>
                   <TableCell>{l.cost_center_id ? costCentersById.get(l.cost_center_id)?.name ?? "—" : "—"}</TableCell>
-                  <TableCell>{accountsById.get(l.fixed_asset_account_id)?.account_name ?? "—"}</TableCell>
-                  <TableCell className="text-right">{l.gross.toLocaleString()}</TableCell>
-                  <TableCell>{l.due_date ?? "—"}</TableCell>
+                  <TableCell className="font-medium">{accountsById.get(l.fixed_asset_account_id)?.account_name ?? "—"}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">{formatMoney(l.gross)}</TableCell>
+                  <TableCell>{l.due_date ? formatDate(l.due_date) : "—"}</TableCell>
                   <TableCell>{l.installment_month ?? "—"}</TableCell>
                   <TableCell>{l.remarks ?? "—"}</TableCell>
                 </TableRow>
               );
             })}
-            <TableRow>
+            <TableRow className="hover:bg-transparent">
               <TableCell colSpan={3} className="text-right font-medium">
                 Total Value
               </TableCell>
-              <TableCell className="text-right font-medium">
-                {voucher.total_value.toLocaleString()} {currencyCode}
+              <TableCell className="text-right font-mono font-medium tabular-nums">
+                {formatMoney(voucher.total_value)} {currencyCode}
               </TableCell>
               <TableCell colSpan={3} />
             </TableRow>

@@ -40,19 +40,62 @@ export interface NavSection {
   items: NavItem[];
 }
 
-// Only routes that exist ship here, grouped by business area so the module a
-// user needs is where they'd expect it. Icons double as the collapsed-rail
-// affordance, so every item carries one.
+// Only routes that exist ship here. Later phases add their own section as
+// each module lands, rather than linking to placeholder pages.
 export const navSections: NavSection[] = [
   {
     label: "",
     items: [{ label: "Dashboard", href: "/dashboard", icon: LayoutDashboardIcon }],
   },
   {
+    label: "Assets",
+    items: [
+      { label: "Assets", href: "/assets", icon: HomeIcon },
+      { label: "Suppliers", href: "/assets/suppliers", icon: Users2Icon },
+    ],
+  },
+  {
+    label: "Purchases",
+    items: [{ label: "Purchase Vouchers", href: "/purchases", icon: ShoppingCartIcon }],
+  },
+  {
+    label: "Sales",
+    items: [{ label: "Asset Sales", href: "/sales", icon: BadgeDollarSignIcon }],
+  },
+  {
+    label: "Rental",
+    items: [
+      { label: "Tenants", href: "/rental/tenants", icon: ContactIcon },
+      { label: "UAE Leases", href: "/rental/uae/leases", icon: KeyRoundIcon },
+      { label: "HH Lease", href: "/rental/uae/hh-lease", icon: KeyRoundIcon },
+      { label: "UAE Rent Invoices", href: "/rental/uae/invoices", icon: ReceiptIcon },
+      { label: "Pakistan Leases", href: "/rental/pk/leases", icon: KeyRoundIcon },
+      { label: "Pakistan Rent Invoices", href: "/rental/pk/invoices", icon: ReceiptIcon },
+    ],
+  },
+  {
+    label: "Administration",
+    items: [
+      { label: "Company", href: "/admin/companies", icon: Building2Icon },
+      { label: "Users", href: "/admin/users", icon: UsersIcon },
+      { label: "Roles & Permissions", href: "/admin/roles", icon: ShieldIcon },
+    ],
+  },
+  {
+    label: "Currency",
+    items: [
+      { label: "Currencies", href: "/admin/currencies", icon: CoinsIcon },
+      { label: "Exchange Rates", href: "/admin/exchange-rates", icon: TrendingUpIcon },
+    ],
+  },
+  {
     label: "Accounting",
     items: [
       { label: "Chart of Accounts", href: "/accounting/chart-of-accounts", icon: ListTreeIcon },
       { label: "Cost Centers", href: "/accounting/cost-centers", icon: LandmarkIcon },
+      { label: "Document Sequences", href: "/admin/document-sequences", icon: HashIcon },
+      { label: "Approval Workflows", href: "/admin/approval-workflows", icon: GitBranchIcon },
+      { label: "Posting Templates", href: "/admin/posting-templates", icon: SlidersHorizontalIcon },
     ],
   },
   {
@@ -67,26 +110,6 @@ export const navSections: NavSection[] = [
       { label: "JV Maintenance", href: "/accounting/vouchers/jv_maintenance_voucher", icon: WrenchIcon },
       { label: "Opening Balances", href: "/accounting/vouchers/opening_balance_voucher", icon: ScaleIcon },
       { label: "Voucher Register", href: "/accounting/voucher-register", icon: ListOrderedIcon },
-    ],
-  },
-  {
-    label: "Assets & Property",
-    items: [
-      { label: "Asset Register", href: "/assets", icon: HomeIcon },
-      { label: "Suppliers", href: "/assets/suppliers", icon: Users2Icon },
-      { label: "Purchase Vouchers", href: "/purchases", icon: ShoppingCartIcon },
-      { label: "Asset Sales", href: "/sales", icon: BadgeDollarSignIcon },
-    ],
-  },
-  {
-    label: "Rentals",
-    items: [
-      { label: "Tenants", href: "/rental/tenants", icon: ContactIcon },
-      { label: "UAE Leases", href: "/rental/uae/leases", icon: KeyRoundIcon },
-      { label: "HH Lease", href: "/rental/uae/hh-lease", icon: KeyRoundIcon },
-      { label: "UAE Rent Invoices", href: "/rental/uae/invoices", icon: ReceiptIcon },
-      { label: "Pakistan Leases", href: "/rental/pk/leases", icon: KeyRoundIcon },
-      { label: "Pakistan Rent Invoices", href: "/rental/pk/invoices", icon: ReceiptIcon },
     ],
   },
   {
@@ -105,19 +128,6 @@ export const navSections: NavSection[] = [
       { label: "Rental Income", href: "/reports/rental-income", icon: ReceiptIcon },
       { label: "Outstanding Rent", href: "/reports/outstanding-rent", icon: ClockIcon },
       { label: "Currency Exchange", href: "/reports/currency-exchange", icon: ArrowUpFromLineIcon },
-    ],
-  },
-  {
-    label: "Administration",
-    items: [
-      { label: "Company", href: "/admin/companies", icon: Building2Icon },
-      { label: "Users", href: "/admin/users", icon: UsersIcon },
-      { label: "Roles & Permissions", href: "/admin/roles", icon: ShieldIcon },
-      { label: "Currencies", href: "/admin/currencies", icon: CoinsIcon },
-      { label: "Exchange Rates", href: "/admin/exchange-rates", icon: TrendingUpIcon },
-      { label: "Document Sequences", href: "/admin/document-sequences", icon: HashIcon },
-      { label: "Approval Workflows", href: "/admin/approval-workflows", icon: GitBranchIcon },
-      { label: "Posting Templates", href: "/admin/posting-templates", icon: SlidersHorizontalIcon },
     ],
   },
 ];

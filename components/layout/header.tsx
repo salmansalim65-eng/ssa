@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { Building2Icon, MenuIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -35,7 +36,10 @@ export function Header({
         </Button>
         <SheetContent side="left" className="w-64 p-0">
           <SheetHeader className="border-b p-4">
-            <SheetTitle>Rental &amp; Accounting ERP</SheetTitle>
+            <SheetTitle className="flex items-center gap-2.5">
+              <Image src="/logo.svg" alt="SSA logo" width={28} height={28} className="size-7" />
+              Rental &amp; Accounting ERP
+            </SheetTitle>
           </SheetHeader>
           <SidebarNav onNavigate={() => setMobileNavOpen(false)} />
         </SheetContent>

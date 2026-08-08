@@ -191,12 +191,24 @@ export async function getVoucherListRows(
 async function getJournalEntryWithLines(journalEntryId: string) {
   const supabase = await createClient();
 
-  const { data: je } = await supabase
-    .schema("accounting")
-    .from("journal_entries")
-    .select("id, status, narration, currency_id, exchange_rate")
-    .eq("id", journalEntryId)
-    .single();
+  // The header and the lines both key off journalEntryId, so fetch them
+  // together rather than one after the other.
+  const [{ data: je }, { data: lines }] = await Promise.all([
+    supabase
+      .schema("accounting")
+      .from("journal_entries")
+      .select("id, status, narration, currency_id, exchange_rate")
+      .eq("id", journalEntryId)
+      .single(),
+    supabase
+      .schema("accounting")
+      .from("journal_entry_lines")
+      .select(
+        "debit_amount, credit_amount, description, reference, chart_of_accounts:account_id(account_code, account_name), cost_centers:cost_center_id(name)",
+      )
+      .eq("journal_entry_id", journalEntryId)
+      .order("line_no"),
+  ]);
 
   const currenciesById = await fetchRefs<{ id: string; code: string }>(
     supabase,
@@ -205,15 +217,6 @@ async function getJournalEntryWithLines(journalEntryId: string) {
     "code",
     [je?.currency_id],
   );
-
-  const { data: lines } = await supabase
-    .schema("accounting")
-    .from("journal_entry_lines")
-    .select(
-      "debit_amount, credit_amount, description, reference, chart_of_accounts:account_id(account_code, account_name), cost_centers:cost_center_id(name)",
-    )
-    .eq("journal_entry_id", journalEntryId)
-    .order("line_no");
 
   return {
     status: (je?.status ?? "draft") as JournalEntryStatus,

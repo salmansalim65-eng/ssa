@@ -19,10 +19,10 @@ import { PrintButton } from "@/components/vouchers/print-button";
 import { VoucherActions } from "@/components/vouchers/voucher-actions";
 import { VoucherDeleteButton } from "@/components/vouchers/voucher-delete-button";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
-import { hasPermission } from "@/lib/auth/permissions";
+import { getModulePermissions } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, formatMoney } from "@/lib/format";
-import { getVoucherApproval } from "@/lib/vouchers/engine";
+import { getCurrentCompanyId, getVoucherApproval } from "@/lib/vouchers/engine";
 import { isPhase5VoucherType, VOUCHER_TYPE_LABELS } from "@/lib/vouchers/meta";
 import { getVoucherDetail } from "@/lib/vouchers/queries";
 import { postChequeReturnVoucher } from "@/features/accounting/vouchers/cheque-return/actions";
@@ -68,43 +68,48 @@ export default async function VoucherDetailPage({
   if (!isPhase5VoucherType(voucherType)) notFound();
 
   const supabase = await createClient();
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
-  const [detail, canSubmit, canApprove, canReject, canPost, canDelete, canCreate] = await Promise.all([
+  // Everything below is independent, so fetch it concurrently instead of in a
+  // waterfall: the voucher detail, its approval row, the caller's permissions
+  // (one batched lookup), and — for journal vouchers — the attachment rows.
+  const [detail, approval, perms, attachments] = await Promise.all([
     getVoucherDetail(companyId, voucherType, id),
-    hasPermission(voucherType, "edit"),
-    hasPermission(voucherType, "approve"),
-    hasPermission(voucherType, "reject"),
-    hasPermission(voucherType, "post"),
-    hasPermission(voucherType, "delete"),
-    hasPermission(voucherType, "create"),
+    getVoucherApproval(voucherType, id),
+    getModulePermissions(voucherType),
+    voucherType === "journal_voucher"
+      ? supabase
+          .schema("core")
+          .from("attachments")
+          .select("id, file_name, path, bucket")
+          .eq("entity_type", "journal_voucher")
+          .eq("entity_id", id)
+          .is("deleted_at", null)
+          .then((r) => r.data ?? [])
+      : Promise.resolve([] as { id: string; file_name: string; path: string; bucket: string }[]),
   ]);
 
   if (!detail) notFound();
 
-  const approval = await getVoucherApproval(voucherType, id);
+  const canSubmit = perms.has("edit");
+  const canApprove = perms.has("approve");
+  const canReject = perms.has("reject");
+  const canPost = perms.has("post");
+  const canDelete = perms.has("delete");
+  const canCreate = perms.has("create");
+
   const totalDebit = detail.lines.reduce((sum, l) => sum + l.debit, 0);
   const hasReference = detail.lines.some((l) => l.reference);
 
-  // Journal vouchers support file attachments (see the create form).
-  let attachmentItems: AttachmentItem[] = [];
-  if (voucherType === "journal_voucher") {
-    const { data: attachments } = await supabase
-      .schema("core")
-      .from("attachments")
-      .select("id, file_name, path, bucket")
-      .eq("entity_type", "journal_voucher")
-      .eq("entity_id", id)
-      .is("deleted_at", null);
-    attachmentItems = await Promise.all(
-      (attachments ?? []).map(async (a) => ({
-        id: a.id,
-        fileName: a.file_name,
-        url: await getSignedUrl(a.bucket, a.path),
-      })),
-    );
-  }
+  // Signing URLs is the one step that depends on the attachment rows; do it in
+  // parallel across whatever files exist.
+  const attachmentItems: AttachmentItem[] = await Promise.all(
+    attachments.map(async (a) => ({
+      id: a.id,
+      fileName: a.file_name,
+      url: await getSignedUrl(a.bucket, a.path),
+    })),
+  );
 
   return (
     <div className="space-y-6">

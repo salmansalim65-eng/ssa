@@ -257,7 +257,11 @@ export function AccountTree({
           key={account.id}
           className={cn(
             "group",
-            isGroup ? "bg-muted/40 hover:bg-muted/60" : "hover:bg-muted/30",
+            // Group rows carry a soft brand tint so the hierarchy reads at a
+            // glance; posting rows stay on the plain white card surface.
+            isGroup
+              ? "bg-primary/[0.08] hover:bg-primary/[0.12]"
+              : "hover:bg-muted/30",
             !account.is_active && "opacity-70",
           )}
         >
@@ -297,7 +301,7 @@ export function AccountTree({
               <span
                 className={cn(
                   "font-mono text-xs",
-                  isGroup ? "font-semibold text-foreground" : "text-muted-foreground",
+                  isGroup ? "font-bold text-foreground" : "text-muted-foreground",
                 )}
               >
                 {account.account_code}
@@ -308,7 +312,7 @@ export function AccountTree({
           {/* Account name */}
           <td className="p-3 align-middle">
             <div className="flex items-center gap-2">
-              <span className={cn("truncate", isGroup ? "font-semibold" : "font-medium")}>
+              <span className={cn("truncate", isGroup ? "font-bold text-foreground" : "font-medium")}>
                 {account.account_name}
               </span>
               {isGroup && (

@@ -33,7 +33,7 @@ export function KpiCard({
       <CardContent>
         <p
           className={cn(
-            "text-2xl font-semibold tracking-tight",
+            "text-2xl font-semibold tracking-tight tabular-nums",
             tone === "success" && "text-success",
             tone === "destructive" && "text-destructive",
             tone === "warning" && "text-warning",

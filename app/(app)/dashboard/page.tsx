@@ -20,8 +20,10 @@ import {
 } from "@/components/ui/table";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { SimpleBarChart } from "@/components/dashboard/simple-bar-chart";
+import { PageHeader } from "@/components/ui/page-header";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { createClient } from "@/lib/supabase/server";
+import { formatDate, formatMoney } from "@/lib/format";
 import { VOUCHER_TYPE_LABELS, voucherHref } from "@/lib/vouchers/meta";
 import type { VoucherType } from "@/types/database.types";
 
@@ -136,34 +138,35 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">A snapshot of assets, rental income, and pending work.</p>
-      </div>
+      <PageHeader
+        eyebrow="Overview"
+        title="Dashboard"
+        description="A snapshot of assets, rental income, and pending work."
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard label="Total assets" value={totalAssets.toLocaleString()} icon={HomeIcon} href="/assets" />
         <KpiCard
           label="Total property value"
-          value={totalPropertyValue.toLocaleString()}
+          value={formatMoney(totalPropertyValue)}
           icon={BuildingIcon}
           href="/reports/asset-register"
         />
         <KpiCard
           label="Rental income (month)"
-          value={monthlyRentalIncome.toLocaleString()}
+          value={formatMoney(monthlyRentalIncome)}
           icon={TrendingUpIcon}
           href="/reports/rental-income"
         />
         <KpiCard
           label="Rental income (year)"
-          value={yearlyRentalIncome.toLocaleString()}
+          value={formatMoney(yearlyRentalIncome)}
           icon={TrendingUpIcon}
           href="/reports/rental-income"
         />
         <KpiCard
           label="Outstanding rent"
-          value={totalOutstandingRent.toLocaleString()}
+          value={formatMoney(totalOutstandingRent)}
           icon={WalletIcon}
           tone={totalOutstandingRent > 0 ? "warning" : undefined}
           href="/reports/outstanding-rent"
@@ -239,12 +242,12 @@ export default async function DashboardPage() {
         <CardContent>
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableHead>Voucher No</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead className="w-36">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -253,22 +256,22 @@ export default async function DashboardPage() {
                   <TableCell>
                     <Link
                       href={voucherHref(row.voucher_type as VoucherType, row.voucher_id)}
-                      className="font-mono font-medium hover:underline"
+                      className="font-mono font-medium text-primary hover:underline"
                     >
                       {row.voucher_no ?? "Draft"}
                     </Link>
                   </TableCell>
                   <TableCell>{VOUCHER_TYPE_LABELS[row.voucher_type as VoucherType]}</TableCell>
-                  <TableCell>{row.entry_date}</TableCell>
-                  <TableCell className="text-right">{row.amount.toLocaleString()}</TableCell>
+                  <TableCell className="text-muted-foreground">{formatDate(row.entry_date)}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">{formatMoney(row.amount)}</TableCell>
                   <TableCell>
                     <VoucherStatusBadge status={row.status} />
                   </TableCell>
                 </TableRow>
               ))}
               {(recentVouchers ?? []).length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
                     No transactions yet.
                   </TableCell>
                 </TableRow>

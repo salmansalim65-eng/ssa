@@ -1,4 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import { hasPermission } from "@/lib/auth/permissions";
 import { requireUser } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
@@ -29,14 +30,12 @@ export default async function CompaniesPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Company</h1>
-        <p className="text-sm text-muted-foreground">
-          Company code <span className="font-mono">{company.code}</span> — code is
-          fixed at creation time.
-        </p>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Administration"
+        title="Company"
+        description={`Company code ${company.code} — code is fixed at creation time.`}
+      />
       <Card>
         <CardHeader>
           <CardTitle>Company details</CardTitle>

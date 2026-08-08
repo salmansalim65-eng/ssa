@@ -1,4 +1,8 @@
-import { Badge } from "@/components/ui/badge";
+import { UsersIcon } from "lucide-react";
+
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   Table,
   TableBody,
@@ -52,64 +56,74 @@ export default async function UsersPage() {
     } | null;
   };
 
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
-          <p className="text-sm text-muted-foreground">
-            Everyone with access to this company.
-          </p>
-        </div>
-        {canCreate && <InviteUserDialog roles={roles ?? []} />}
-      </div>
+  const rows = (memberships as unknown as MembershipRow[] | null) ?? [];
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Username</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Role</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="w-10" />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {(memberships as unknown as MembershipRow[] | null)?.map((m) => {
-            const profile = m.user_profiles;
-            if (!profile) return null;
-            const roleId = roleByUser.get(profile.id) ?? null;
-            return (
-              <TableRow key={profile.id}>
-                <TableCell className="font-medium">{profile.full_name}</TableCell>
-                <TableCell className="font-mono text-sm">{profile.username ?? "—"}</TableCell>
-                <TableCell>{profile.email}</TableCell>
-                <TableCell>{roleId ? roleNameById.get(roleId) : "—"}</TableCell>
-                <TableCell>
-                  <Badge variant={profile.is_active ? "success" : "secondary"}>
-                    {profile.is_active ? "Active" : "Disabled"}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <UserRowActions
-                    userId={profile.id}
-                    email={profile.email}
-                    fullName={profile.full_name}
-                    username={profile.username}
-                    phone={profile.phone}
-                    isActive={profile.is_active}
-                    currentRoleId={roleId}
-                    roles={roles ?? []}
-                    canEdit={canEdit}
-                    canDelete={canDelete}
-                  />
-                </TableCell>
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Administration"
+        title="Users"
+        description="Everyone with access to this company."
+        actions={canCreate && <InviteUserDialog roles={roles ?? []} />}
+      />
+
+      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        {rows.length === 0 ? (
+          <EmptyState
+            icon={UsersIcon}
+            title="No users yet"
+            description="Invite teammates to give them access to this company."
+            action={canCreate && <InviteUserDialog roles={roles ?? []} />}
+          />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Name</TableHead>
+                <TableHead>Username</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-10" />
               </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+            </TableHeader>
+            <TableBody>
+              {rows.map((m) => {
+                const profile = m.user_profiles;
+                if (!profile) return null;
+                const roleId = roleByUser.get(profile.id) ?? null;
+                return (
+                  <TableRow key={profile.id}>
+                    <TableCell className="font-medium">{profile.full_name}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {profile.username ?? "—"}
+                    </TableCell>
+                    <TableCell>{profile.email}</TableCell>
+                    <TableCell>{roleId ? roleNameById.get(roleId) : "—"}</TableCell>
+                    <TableCell>
+                      <StatusBadge active={profile.is_active} />
+                    </TableCell>
+                    <TableCell>
+                      <UserRowActions
+                        userId={profile.id}
+                        email={profile.email}
+                        fullName={profile.full_name}
+                        username={profile.username}
+                        phone={profile.phone}
+                        isActive={profile.is_active}
+                        currentRoleId={roleId}
+                        roles={roles ?? []}
+                        canEdit={canEdit}
+                        canDelete={canDelete}
+                      />
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </div>
     </div>
   );
 }

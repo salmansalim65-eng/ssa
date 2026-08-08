@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/ui/page-header";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { RolesManager } from "./roles-manager";
@@ -39,22 +40,22 @@ export default async function RolesPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Roles &amp; Permissions</h1>
-        <p className="text-sm text-muted-foreground">
-          Configure what each role can view, create, edit, delete, print, export,
-          approve, reject, and post across every module.
-        </p>
-      </div>
-      <RolesManager
-        roles={roles ?? []}
-        permissions={permissions ?? []}
-        grantsByRole={grantsByRole}
-        canCreate={canCreate}
-        canEdit={canEdit}
-        canDelete={canDelete}
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Administration"
+        title="Roles & Permissions"
+        description="Configure what each role can view, create, edit, delete, print, export, approve, reject, and post across every module."
       />
+      <div className="rounded-xl border bg-card p-4 shadow-sm">
+        <RolesManager
+          roles={roles ?? []}
+          permissions={permissions ?? []}
+          grantsByRole={grantsByRole}
+          canCreate={canCreate}
+          canEdit={canEdit}
+          canDelete={canDelete}
+        />
+      </div>
     </div>
   );
 }

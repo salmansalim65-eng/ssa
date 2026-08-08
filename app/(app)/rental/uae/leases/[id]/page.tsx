@@ -23,6 +23,7 @@ import { PencilIcon } from "lucide-react";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
+import { formatDate, formatMoney } from "@/lib/format";
 import type { JournalEntryStatus } from "@/types/database.types";
 
 const leaseStatusVariant = { active: "success", expired: "secondary", terminated: "destructive" } as const;
@@ -79,6 +80,7 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
     tenants: (lease as unknown as { tenants: Refs["tenants"] }).tenants,
     currencies: currenciesById.get(lease.currency_id) ?? null,
   };
+  const assetLabel = refs.assets ? `${refs.assets.asset_code} — ${refs.assets.asset_name}` : "—";
 
   const [{ data: schedules }, { data: invoices }] = await Promise.all([
     supabase
@@ -112,14 +114,12 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between print:hidden">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">UAE Lease</h1>
-          <p className="text-sm text-muted-foreground">
-            {refs.assets ? `${refs.assets.asset_code} — ${refs.assets.asset_name}` : "—"}
-          </p>
+      <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between print:hidden">
+        <div className="space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary">Lease</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{assetLabel}</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Badge variant={leaseStatusVariant[lease.status as keyof typeof leaseStatusVariant]}>{lease.status}</Badge>
           <PrintButton />
           {canEdit && (
@@ -139,63 +139,61 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
 
       <div className="hidden print:block">
         <h1 className="text-xl font-semibold">UAE Lease</h1>
-        <p className="text-sm">
-          {refs.assets ? `${refs.assets.asset_code} — ${refs.assets.asset_name}` : "—"}
-        </p>
+        <p className="text-sm">{assetLabel}</p>
       </div>
 
-      <div className="grid gap-x-8 gap-y-2 rounded-md border p-4 sm:grid-cols-2">
+      <div className="grid gap-x-8 gap-y-4 rounded-xl border bg-card p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-3">
         <div>
-          <p className="text-xs text-muted-foreground">Tenant</p>
-          <p>{refs.tenants?.name ?? "—"}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Tenant</p>
+          <p className="mt-0.5">{refs.tenants?.name ?? "—"}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Contact</p>
-          <p>{[refs.tenants?.phone, refs.tenants?.email].filter(Boolean).join(" · ") || "—"}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Contact</p>
+          <p className="mt-0.5">{[refs.tenants?.phone, refs.tenants?.email].filter(Boolean).join(" · ") || "—"}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Term</p>
-          <p>
-            {lease.lease_start} – {lease.lease_end}
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Term</p>
+          <p className="mt-0.5">
+            {formatDate(lease.lease_start)} – {formatDate(lease.lease_end)}
           </p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Rent cycle</p>
-          <p className="capitalize">{lease.rent_cycle}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Rent cycle</p>
+          <p className="mt-0.5 capitalize">{lease.rent_cycle}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Rental amount</p>
-          <p>
-            {lease.rental_amount.toLocaleString()} {refs.currencies?.code}
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Rental amount</p>
+          <p className="mt-0.5 font-mono tabular-nums">
+            {formatMoney(lease.rental_amount)} {refs.currencies?.code}
           </p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Security deposit</p>
-          <p>
-            {lease.security_deposit.toLocaleString()} {refs.currencies?.code}
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Security deposit</p>
+          <p className="mt-0.5 font-mono tabular-nums">
+            {formatMoney(lease.security_deposit)} {refs.currencies?.code}
           </p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Due date</p>
-          <p>{lease.due_date ?? "—"}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Due date</p>
+          <p className="mt-0.5">{lease.due_date ? formatDate(lease.due_date) : "—"}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Rent month</p>
-          <p>{lease.rent_month ?? "—"}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Rent month</p>
+          <p className="mt-0.5">{lease.rent_month ?? "—"}</p>
         </div>
         {lease.document_no && (
           <div>
-            <p className="text-xs text-muted-foreground">HH Lease voucher</p>
-            <p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">HH Lease voucher</p>
+            <p className="mt-0.5">
               {lease.document_no}
-              {lease.document_date ? ` · ${lease.document_date}` : ""}
+              {lease.document_date ? ` · ${formatDate(lease.document_date)}` : ""}
             </p>
           </div>
         )}
         {lease.remarks && (
-          <div className="sm:col-span-2">
-            <p className="text-xs text-muted-foreground">Remarks</p>
-            <p>{lease.remarks}</p>
+          <div className="sm:col-span-2 lg:col-span-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Remarks</p>
+            <p className="mt-0.5">{lease.remarks}</p>
           </div>
         )}
       </div>
@@ -207,76 +205,83 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
             <GenerateAllInvoicesButton leaseId={lease.id} country="uae" pendingCount={pendingScheduleCount} />
           )}
         </div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Due date</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Action</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {(schedules ?? []).map((s) => (
-              <TableRow key={s.id}>
-                <TableCell>{s.due_date}</TableCell>
-                <TableCell className="text-right">{s.amount.toLocaleString()}</TableCell>
-                <TableCell>
-                  <Badge variant={scheduleStatusVariant[s.status as keyof typeof scheduleStatusVariant]}>{s.status}</Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  {s.status === "pending" && canCreate && <GenerateInvoiceButton scheduleId={s.id} />}
-                </TableCell>
+        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Due date</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Action</TableHead>
               </TableRow>
-            ))}
-            {(schedules ?? []).length === 0 && (
-              <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground">
-                  No scheduled periods.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {(schedules ?? []).map((s) => (
+                <TableRow key={s.id}>
+                  <TableCell className="text-muted-foreground">{formatDate(s.due_date)}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">{formatMoney(s.amount)}</TableCell>
+                  <TableCell>
+                    <Badge variant={scheduleStatusVariant[s.status as keyof typeof scheduleStatusVariant]}>{s.status}</Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {s.status === "pending" && canCreate && <GenerateInvoiceButton scheduleId={s.id} />}
+                  </TableCell>
+                </TableRow>
+              ))}
+              {(schedules ?? []).length === 0 && (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
+                    No scheduled periods.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       <div className="space-y-2">
         <h2 className="text-lg font-medium">Invoices</h2>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Voucher #</TableHead>
-              <TableHead>Invoice date</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-              <TableHead className="text-right">Outstanding</TableHead>
-              <TableHead>Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {invoiceRows.map((inv) => (
-              <TableRow key={inv.id}>
-                <TableCell>
-                  <Link href={`/rental/uae/invoices/${inv.id}`} className="font-medium hover:underline">
-                    {inv.voucher_no ?? "Draft"}
-                  </Link>
-                </TableCell>
-                <TableCell>{inv.invoice_date}</TableCell>
-                <TableCell className="text-right">{inv.amount.toLocaleString()}</TableCell>
-                <TableCell className="text-right">{inv.outstanding_balance.toLocaleString()}</TableCell>
-                <TableCell>
-                  <VoucherStatusBadge status={invoiceStatusById.get(inv.journal_entry_id ?? "")?.status ?? "draft"} />
-                </TableCell>
+        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Voucher #</TableHead>
+                <TableHead>Invoice date</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+                <TableHead className="text-right">Outstanding</TableHead>
+                <TableHead>Status</TableHead>
               </TableRow>
-            ))}
-            {invoiceRows.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground">
-                  No invoices generated yet.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {invoiceRows.map((inv) => (
+                <TableRow key={inv.id}>
+                  <TableCell>
+                    <Link
+                      href={`/rental/uae/invoices/${inv.id}`}
+                      className="font-mono font-medium text-primary hover:underline"
+                    >
+                      {inv.voucher_no ?? "Draft"}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{formatDate(inv.invoice_date)}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">{formatMoney(inv.amount)}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">{formatMoney(inv.outstanding_balance)}</TableCell>
+                  <TableCell>
+                    <VoucherStatusBadge status={invoiceStatusById.get(inv.journal_entry_id ?? "")?.status ?? "draft"} />
+                  </TableCell>
+                </TableRow>
+              ))}
+              {invoiceRows.length === 0 && (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                    No invoices generated yet.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
     </div>
   );

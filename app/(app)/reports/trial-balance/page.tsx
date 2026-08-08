@@ -8,11 +8,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageHeader } from "@/components/ui/page-header";
 import { AsOfDateFilter } from "@/components/reports/as-of-date-filter";
 import { CsvExportButton } from "@/components/reports/csv-export-button";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { aggregateByAccount } from "@/lib/reports/account-aggregation";
 import { createClient } from "@/lib/supabase/server";
+import { formatDate, formatMoney } from "@/lib/format";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -56,70 +58,82 @@ export default async function TrialBalancePage({
   const totalCredit = rows.reduce((sum, r) => sum + r.credit, 0);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-start justify-between gap-4 print:hidden">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Trial Balance</h1>
-          <p className="text-sm text-muted-foreground">Net debit/credit position per account as of {asOf}.</p>
-        </div>
-        <div className="flex gap-2">
-          <CsvExportButton
-            filename={`trial-balance-${asOf}.csv`}
-            headers={["Code", "Name", "Type", "Debit", "Credit"]}
-            rows={rows.map((r) => [r.account_code, r.account_name, r.account_type, r.debit, r.credit])}
-          />
-          <PrintButton />
-        </div>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Reports"
+        title="Trial Balance"
+        description={`Net debit/credit position per account as of ${formatDate(asOf)}.`}
+        className="print:hidden"
+        actions={
+          <>
+            <CsvExportButton
+              filename={`trial-balance-${asOf}.csv`}
+              headers={["Code", "Name", "Type", "Debit", "Credit"]}
+              rows={rows.map((r) => [r.account_code, r.account_name, r.account_type, r.debit, r.credit])}
+            />
+            <PrintButton />
+          </>
+        }
+      />
 
       <Suspense>
         <AsOfDateFilter defaultAsOf={asOf} />
       </Suspense>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Code</TableHead>
-            <TableHead>Name</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead className="text-right">Debit</TableHead>
-            <TableHead className="text-right">Credit</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((r) => (
-            <TableRow key={r.account_code}>
-              <TableCell className="font-mono">{r.account_code}</TableCell>
-              <TableCell>{r.account_name}</TableCell>
-              <TableCell className="capitalize">{r.account_type}</TableCell>
-              <TableCell className="text-right">{r.debit ? r.debit.toLocaleString() : ""}</TableCell>
-              <TableCell className="text-right">{r.credit ? r.credit.toLocaleString() : ""}</TableCell>
+      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>Code</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead className="text-right">Debit</TableHead>
+              <TableHead className="text-right">Credit</TableHead>
             </TableRow>
-          ))}
-          {rows.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={5} className="text-center text-muted-foreground">
-                No posted transactions as of this date.
-              </TableCell>
-            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((r) => (
+              <TableRow key={r.account_code}>
+                <TableCell className="font-mono text-xs text-muted-foreground">{r.account_code}</TableCell>
+                <TableCell className="font-medium">{r.account_name}</TableCell>
+                <TableCell className="capitalize">{r.account_type}</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">
+                  {r.debit ? formatMoney(r.debit) : ""}
+                </TableCell>
+                <TableCell className="text-right font-mono tabular-nums">
+                  {r.credit ? formatMoney(r.credit) : ""}
+                </TableCell>
+              </TableRow>
+            ))}
+            {rows.length === 0 && (
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                  No posted transactions as of this date.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+          {rows.length > 0 && (
+            <tfoot className="border-t bg-muted/40">
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={3} className="font-medium">
+                  Total
+                </TableCell>
+                <TableCell
+                  className={`text-right font-mono font-medium tabular-nums ${totalDebit !== totalCredit ? "text-destructive" : ""}`}
+                >
+                  {formatMoney(totalDebit)}
+                </TableCell>
+                <TableCell
+                  className={`text-right font-mono font-medium tabular-nums ${totalDebit !== totalCredit ? "text-destructive" : ""}`}
+                >
+                  {formatMoney(totalCredit)}
+                </TableCell>
+              </TableRow>
+            </tfoot>
           )}
-        </TableBody>
-        {rows.length > 0 && (
-          <tfoot>
-            <TableRow>
-              <TableCell colSpan={3} className="font-medium">
-                Total
-              </TableCell>
-              <TableCell className={`text-right font-medium ${totalDebit !== totalCredit ? "text-destructive" : ""}`}>
-                {totalDebit.toLocaleString()}
-              </TableCell>
-              <TableCell className={`text-right font-medium ${totalDebit !== totalCredit ? "text-destructive" : ""}`}>
-                {totalCredit.toLocaleString()}
-              </TableCell>
-            </TableRow>
-          </tfoot>
-        )}
-      </Table>
+        </Table>
+      </div>
     </div>
   );
 }

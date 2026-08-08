@@ -8,11 +8,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageHeader } from "@/components/ui/page-header";
 import { CsvExportButton } from "@/components/reports/csv-export-button";
 import { GeneralLedgerFilters } from "@/components/reports/general-ledger-filters";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { computeRunningBalances } from "@/lib/reports/ledger-balance";
 import { createClient } from "@/lib/supabase/server";
+import { formatDate, formatMoney } from "@/lib/format";
 import type { AccountType } from "@/types/database.types";
 
 function startOfYear() {
@@ -197,24 +199,23 @@ export default async function GeneralLedgerPage({
   );
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-start justify-between gap-4 print:hidden">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">General Ledger</h1>
-          <p className="text-sm text-muted-foreground">
-            Posted transactions with running balances. Select one or more accounts; amounts default to each account&apos;s
-            currency.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <CsvExportButton
-            filename={`general-ledger-${from}-to-${to}.csv`}
-            headers={["Date", "Due Date", "Voucher No", "Account", "Currency", "Narration", "Debit", "Credit", "Balance"]}
-            rows={csvRows}
-          />
-          <PrintButton />
-        </div>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Reports"
+        title="General Ledger"
+        description="Posted transactions with running balances. Select one or more accounts; amounts default to each account's currency."
+        className="print:hidden"
+        actions={
+          <>
+            <CsvExportButton
+              filename={`general-ledger-${from}-to-${to}.csv`}
+              headers={["Date", "Due Date", "Voucher No", "Account", "Currency", "Narration", "Debit", "Credit", "Balance"]}
+              rows={csvRows}
+            />
+            <PrintButton />
+          </>
+        }
+      />
 
       <Suspense>
         <GeneralLedgerFilters
@@ -235,10 +236,10 @@ export default async function GeneralLedgerPage({
       {selectedAccounts.length === 0 ? (
         <p className="text-sm text-muted-foreground">Select one or more accounts to view their ledger.</p>
       ) : (
-        <div className="overflow-x-auto rounded-md border">
+        <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
           <Table className="min-w-[1000px]">
             <TableHeader>
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableHead>Date</TableHead>
                 <TableHead>Due Date</TableHead>
                 <TableHead>Voucher No</TableHead>
@@ -254,33 +255,36 @@ export default async function GeneralLedgerPage({
                 <Fragment key={s.account.id}>
                   <TableRow className="bg-muted/50">
                     <TableCell colSpan={3} className="font-medium">
-                      {s.account.account_code} — {s.account.account_name}{" "}
+                      <span className="font-mono text-xs text-muted-foreground">{s.account.account_code}</span>{" "}
+                      <span className="font-medium">{s.account.account_name}</span>{" "}
                       <span className="font-normal text-muted-foreground">({s.currencyCode})</span>
                     </TableCell>
                     <TableCell colSpan={4} className="text-right font-medium text-muted-foreground">
                       Opening balance
                     </TableCell>
-                    <TableCell className="text-right font-medium">{s.opening.toLocaleString()}</TableCell>
+                    <TableCell className="text-right font-mono font-medium tabular-nums">
+                      {formatMoney(s.opening)}
+                    </TableCell>
                   </TableRow>
                   {s.rows.map((r) => (
                     <TableRow key={`${r.journal_entry_id}-${r.entry_date}-${r.voucher_no ?? ""}`}>
-                      <TableCell>{r.entry_date}</TableCell>
-                      <TableCell>{r.due_date ?? "—"}</TableCell>
+                      <TableCell>{formatDate(r.entry_date)}</TableCell>
+                      <TableCell>{r.due_date ? formatDate(r.due_date) : "—"}</TableCell>
                       <TableCell>{r.voucher_no ?? "Draft"}</TableCell>
-                      <TableCell>{s.account.account_name}</TableCell>
+                      <TableCell className="font-medium">{s.account.account_name}</TableCell>
                       <TableCell>{r.description || r.narration || "—"}</TableCell>
-                      <TableCell className="text-right">
-                        {r.debit_amount ? r.debit_amount.toLocaleString() : ""}
+                      <TableCell className="text-right font-mono tabular-nums">
+                        {r.debit_amount ? formatMoney(r.debit_amount) : ""}
                       </TableCell>
-                      <TableCell className="text-right">
-                        {r.credit_amount ? r.credit_amount.toLocaleString() : ""}
+                      <TableCell className="text-right font-mono tabular-nums">
+                        {r.credit_amount ? formatMoney(r.credit_amount) : ""}
                       </TableCell>
-                      <TableCell className="text-right">{r.balance.toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-mono tabular-nums">{formatMoney(r.balance)}</TableCell>
                     </TableRow>
                   ))}
                   {s.rows.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center text-muted-foreground">
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                         No transactions match the filters in this period.
                       </TableCell>
                     </TableRow>

@@ -9,10 +9,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageHeader } from "@/components/ui/page-header";
 import { CsvExportButton } from "@/components/reports/csv-export-button";
 import { DateRangeFilter } from "@/components/reports/date-range-filter";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { createClient } from "@/lib/supabase/server";
+import { formatDate, formatMoney } from "@/lib/format";
 
 function startOfYear() {
   const now = new Date();
@@ -46,87 +48,90 @@ export default async function RentalIncomePage({
   const totalAmount = (rows ?? []).reduce((sum, r) => sum + r.amount, 0);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-start justify-between gap-4 print:hidden">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Rental Income</h1>
-          <p className="text-sm text-muted-foreground">
-            Posted UAE and Pakistan rent invoices from {from} to {to}.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <CsvExportButton
-            filename={`rental-income-${from}-to-${to}.csv`}
-            headers={["Country", "Voucher No", "Date", "Asset", "Tenant", "Amount", "Outstanding", "Currency"]}
-            rows={(rows ?? []).map((r) => [
-              r.country,
-              r.voucher_no ?? "",
-              r.invoice_date,
-              `${r.asset_code} - ${r.asset_name}`,
-              r.tenant_name,
-              r.amount,
-              r.outstanding_balance,
-              r.currency_code,
-            ])}
-          />
-          <PrintButton />
-        </div>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Reports"
+        title="Rental Income"
+        description={`Posted UAE and Pakistan rent invoices from ${formatDate(from)} to ${formatDate(to)}.`}
+        className="print:hidden"
+        actions={
+          <>
+            <CsvExportButton
+              filename={`rental-income-${from}-to-${to}.csv`}
+              headers={["Country", "Voucher No", "Date", "Asset", "Tenant", "Amount", "Outstanding", "Currency"]}
+              rows={(rows ?? []).map((r) => [
+                r.country,
+                r.voucher_no ?? "",
+                r.invoice_date,
+                `${r.asset_code} - ${r.asset_name}`,
+                r.tenant_name,
+                r.amount,
+                r.outstanding_balance,
+                r.currency_code,
+              ])}
+            />
+            <PrintButton />
+          </>
+        }
+      />
 
       <Suspense>
         <DateRangeFilter defaultFrom={from} defaultTo={to} />
       </Suspense>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Country</TableHead>
-            <TableHead>Voucher No</TableHead>
-            <TableHead>Date</TableHead>
-            <TableHead>Asset</TableHead>
-            <TableHead>Tenant</TableHead>
-            <TableHead className="text-right">Amount</TableHead>
-            <TableHead className="text-right">Outstanding</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {(rows ?? []).map((r) => (
-            <TableRow key={r.invoice_id}>
-              <TableCell>
-                <Badge variant="outline">{r.country}</Badge>
-              </TableCell>
-              <TableCell>{r.voucher_no ?? "Draft"}</TableCell>
-              <TableCell>{r.invoice_date}</TableCell>
-              <TableCell>
-                {r.asset_code} — {r.asset_name}
-              </TableCell>
-              <TableCell>{r.tenant_name}</TableCell>
-              <TableCell className="text-right">
-                {r.amount.toLocaleString()} {r.currency_code}
-              </TableCell>
-              <TableCell className="text-right">{r.outstanding_balance.toLocaleString()}</TableCell>
+      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>Country</TableHead>
+              <TableHead>Voucher No</TableHead>
+              <TableHead>Date</TableHead>
+              <TableHead>Asset</TableHead>
+              <TableHead>Tenant</TableHead>
+              <TableHead className="text-right">Amount</TableHead>
+              <TableHead className="text-right">Outstanding</TableHead>
             </TableRow>
-          ))}
-          {(rows ?? []).length === 0 && (
-            <TableRow>
-              <TableCell colSpan={7} className="text-center text-muted-foreground">
-                No rental income in this period.
-              </TableCell>
-            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {(rows ?? []).map((r) => (
+              <TableRow key={r.invoice_id}>
+                <TableCell>
+                  <Badge variant="outline">{r.country}</Badge>
+                </TableCell>
+                <TableCell>{r.voucher_no ?? "Draft"}</TableCell>
+                <TableCell>{formatDate(r.invoice_date)}</TableCell>
+                <TableCell>
+                  <span className="font-mono text-xs text-muted-foreground">{r.asset_code}</span> —{" "}
+                  <span className="font-medium">{r.asset_name}</span>
+                </TableCell>
+                <TableCell>{r.tenant_name}</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">
+                  {formatMoney(r.amount)} {r.currency_code}
+                </TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{formatMoney(r.outstanding_balance)}</TableCell>
+              </TableRow>
+            ))}
+            {(rows ?? []).length === 0 && (
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                  No rental income in this period.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+          {(rows ?? []).length > 0 && (
+            <tfoot className="border-t bg-muted/40">
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={5} className="font-medium">
+                  Total
+                </TableCell>
+                <TableCell className="text-right font-mono font-medium tabular-nums">{formatMoney(totalAmount)}</TableCell>
+                <TableCell />
+              </TableRow>
+            </tfoot>
           )}
-        </TableBody>
-        {(rows ?? []).length > 0 && (
-          <tfoot>
-            <TableRow>
-              <TableCell colSpan={5} className="font-medium">
-                Total
-              </TableCell>
-              <TableCell className="text-right font-medium">{totalAmount.toLocaleString()}</TableCell>
-              <TableCell />
-            </TableRow>
-          </tfoot>
-        )}
-      </Table>
+        </Table>
+      </div>
     </div>
   );
 }

@@ -6,7 +6,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageHeader } from "@/components/ui/page-header";
 import { createClient } from "@/lib/supabase/server";
+import { formatDate, formatMoney } from "@/lib/format";
 
 export default async function AssetValuationReportPage() {
   const supabase = await createClient();
@@ -25,70 +27,71 @@ export default async function AssetValuationReportPage() {
   const totalCurrent = (rows ?? []).reduce((sum, r) => sum + (r.current_value ?? 0), 0);
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Asset Valuation Report</h1>
-        <p className="text-sm text-muted-foreground">
-          Purchase value vs. current value (latest recorded valuation) per
-          asset. Reporting only — no accounting impact.
-        </p>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Reports"
+        title="Asset Valuation Report"
+        description="Purchase value vs. current value (latest recorded valuation) per asset. Reporting only — no accounting impact."
+        className="print:hidden"
+      />
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Code</TableHead>
-            <TableHead>Name</TableHead>
-            <TableHead>Location</TableHead>
-            <TableHead className="text-right">Purchase value</TableHead>
-            <TableHead className="text-right">Current value</TableHead>
-            <TableHead className="text-right">Variance</TableHead>
-            <TableHead>Latest valuation</TableHead>
-            <TableHead>Valuer</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {(rows ?? []).map((row) => (
-            <TableRow key={row.asset_id}>
-              <TableCell className="font-mono">{row.asset_code}</TableCell>
-              <TableCell>{row.asset_name}</TableCell>
-              <TableCell>
-                {row.city ? `${row.city}, ` : ""}
-                {row.country}
-              </TableCell>
-              <TableCell className="text-right">{(row.purchase_value ?? 0).toLocaleString()}</TableCell>
-              <TableCell className="text-right">{(row.current_value ?? 0).toLocaleString()}</TableCell>
-              <TableCell
-                className={`text-right ${(row.variance ?? 0) < 0 ? "text-destructive" : (row.variance ?? 0) > 0 ? "text-success" : ""}`}
-              >
-                {(row.variance ?? 0).toLocaleString()}
-              </TableCell>
-              <TableCell>{row.latest_valuation_date ?? "—"}</TableCell>
-              <TableCell>{row.latest_valuer ?? "—"}</TableCell>
+      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>Code</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Location</TableHead>
+              <TableHead className="text-right">Purchase value</TableHead>
+              <TableHead className="text-right">Current value</TableHead>
+              <TableHead className="text-right">Variance</TableHead>
+              <TableHead>Latest valuation</TableHead>
+              <TableHead>Valuer</TableHead>
             </TableRow>
-          ))}
-          {(rows ?? []).length === 0 && (
-            <TableRow>
-              <TableCell colSpan={8} className="text-center text-muted-foreground">
-                No assets registered yet.
-              </TableCell>
-            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {(rows ?? []).map((row) => (
+              <TableRow key={row.asset_id}>
+                <TableCell className="font-mono text-xs text-muted-foreground">{row.asset_code}</TableCell>
+                <TableCell className="font-medium">{row.asset_name}</TableCell>
+                <TableCell>
+                  {row.city ? `${row.city}, ` : ""}
+                  {row.country}
+                </TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{formatMoney(row.purchase_value ?? 0)}</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{formatMoney(row.current_value ?? 0)}</TableCell>
+                <TableCell
+                  className={`text-right font-mono tabular-nums ${(row.variance ?? 0) < 0 ? "text-destructive" : (row.variance ?? 0) > 0 ? "text-success" : ""}`}
+                >
+                  {formatMoney(row.variance ?? 0)}
+                </TableCell>
+                <TableCell>{row.latest_valuation_date ? formatDate(row.latest_valuation_date) : "—"}</TableCell>
+                <TableCell>{row.latest_valuer ?? "—"}</TableCell>
+              </TableRow>
+            ))}
+            {(rows ?? []).length === 0 && (
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                  No assets registered yet.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+          {(rows ?? []).length > 0 && (
+            <tfoot className="border-t bg-muted/40">
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={3} className="font-medium">
+                  Total
+                </TableCell>
+                <TableCell className="text-right font-mono font-medium tabular-nums">{formatMoney(totalPurchase)}</TableCell>
+                <TableCell className="text-right font-mono font-medium tabular-nums">{formatMoney(totalCurrent)}</TableCell>
+                <TableCell className="text-right font-mono font-medium tabular-nums">{formatMoney(totalCurrent - totalPurchase)}</TableCell>
+                <TableCell colSpan={2} />
+              </TableRow>
+            </tfoot>
           )}
-        </TableBody>
-        {(rows ?? []).length > 0 && (
-          <tfoot>
-            <TableRow>
-              <TableCell colSpan={3} className="font-medium">
-                Total
-              </TableCell>
-              <TableCell className="text-right font-medium">{totalPurchase.toLocaleString()}</TableCell>
-              <TableCell className="text-right font-medium">{totalCurrent.toLocaleString()}</TableCell>
-              <TableCell className="text-right font-medium">{(totalCurrent - totalPurchase).toLocaleString()}</TableCell>
-              <TableCell colSpan={2} />
-            </TableRow>
-          </tfoot>
-        )}
-      </Table>
+        </Table>
+      </div>
     </div>
   );
 }

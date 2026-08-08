@@ -72,22 +72,12 @@ export default async function ChartOfAccountsPage() {
     .map((cc) => ({ id: cc.currencies!.id, code: cc.currencies!.code }));
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Chart of Accounts</h1>
-        <p className="text-sm text-muted-foreground">
-          Unlimited-level account tree. Group accounts organize the hierarchy;
-          only non-group accounts can be posted to once vouchers ship in
-          Phase 5.
-        </p>
-      </div>
-      <AccountTree
-        accounts={accountRows}
-        currencies={currencyOptions}
-        canCreate={canCreate}
-        canEdit={canEdit}
-        canDelete={canDelete}
-      />
-    </div>
+    <AccountTree
+      accounts={accountRows}
+      currencies={currencyOptions}
+      canCreate={canCreate}
+      canEdit={canEdit}
+      canDelete={canDelete}
+    />
   );
 }

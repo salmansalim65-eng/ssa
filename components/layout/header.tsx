@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MenuIcon } from "lucide-react";
+import { Building2Icon, MenuIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -22,7 +22,7 @@ export function Header({
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b bg-background px-4 print:hidden">
+    <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70 print:hidden">
       <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
         <Button
           variant="ghost"
@@ -44,9 +44,12 @@ export function Header({
       <Breadcrumbs />
 
       <div className="ml-auto flex items-center gap-2">
-        <span className="hidden rounded-md border px-2 py-1 text-xs font-medium text-muted-foreground sm:inline">
-          {companyName}
-        </span>
+        {companyName && (
+          <span className="hidden items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-xs font-medium text-foreground shadow-sm sm:inline-flex">
+            <Building2Icon className="size-3.5 text-muted-foreground" />
+            {companyName}
+          </span>
+        )}
         <ThemeToggle />
         <UserMenu fullName={fullName} email={email} />
       </div>

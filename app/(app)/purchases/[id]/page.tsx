@@ -28,15 +28,14 @@ import { hasPermission } from "@/lib/auth/permissions";
 import { fetchRefs } from "@/lib/supabase/hydrate";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, formatMoney } from "@/lib/format";
-import { getVoucherApproval } from "@/lib/vouchers/engine";
+import { getCurrentCompanyId, getVoucherApproval } from "@/lib/vouchers/engine";
 import type { JournalEntryStatus } from "@/types/database.types";
 
 export default async function PurchaseVoucherDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
 
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   const [{ data: voucher }, canSubmit, canApprove, canReject, canPost] = await Promise.all([
     supabase
@@ -104,15 +103,16 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
     ? accountsById.get(voucher.vendor_account_id)?.account_name ?? "—"
     : "—";
 
-  const approval = await getVoucherApproval("purchase_voucher", id);
-
-  const { data: attachments } = await supabase
-    .schema("core")
-    .from("attachments")
-    .select("id, file_name, path, bucket")
-    .eq("entity_type", "purchase_voucher")
-    .eq("entity_id", id)
-    .is("deleted_at", null);
+  const [approval, { data: attachments }] = await Promise.all([
+    getVoucherApproval("purchase_voucher", id),
+    supabase
+      .schema("core")
+      .from("attachments")
+      .select("id, file_name, path, bucket")
+      .eq("entity_type", "purchase_voucher")
+      .eq("entity_id", id)
+      .is("deleted_at", null),
+  ]);
 
   const attachmentItems: AttachmentItem[] = await Promise.all(
     (attachments ?? []).map(async (a) => ({

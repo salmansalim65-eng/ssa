@@ -16,6 +16,7 @@ import {
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { formatMoney } from "@/lib/format";
+import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 
 const statusVariant = {
   active: "success",
@@ -26,8 +27,7 @@ const statusVariant = {
 export default async function AssetsPage() {
   const supabase = await createClient();
 
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   const [{ data: assetRows }, canCreate] = await Promise.all([
     supabase

@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { PkLeaseForm } from "@/components/rental/pk-lease-form";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 
 export default async function EditPkLeasePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -16,8 +17,7 @@ export default async function EditPkLeasePage({ params }: { params: Promise<{ id
   if (!canEdit) redirect(detailHref);
 
   const supabase = await createClient();
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   const [{ data: assets }, { data: tenants }, { data: companyCurrencies }, { data: lease }] = await Promise.all([
     supabase

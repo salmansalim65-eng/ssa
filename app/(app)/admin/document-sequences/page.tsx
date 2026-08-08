@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/table";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import {
   VOUCHER_TYPES,
   VOUCHER_TYPE_DEFAULT_PREFIX,
@@ -20,8 +21,7 @@ import { DocumentSequenceDialog } from "./document-sequence-dialog";
 export default async function DocumentSequencesPage() {
   const supabase = await createClient();
 
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   const [{ data: sequences }, canEdit] = await Promise.all([
     supabase.schema("core").from("document_sequences").select("*").eq("company_id", companyId),

@@ -15,13 +15,13 @@ import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
 import { formatDate, formatMoney } from "@/lib/format";
+import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import type { JournalEntryStatus } from "@/types/database.types";
 
 export default async function PkRentInvoicesPage() {
   const supabase = await createClient();
 
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   // `pk_leases:lease_id` and its nested `tenants:tenant_id` are same-schema
   // (rental) embeds and work; the asset (assets schema) and journal entry

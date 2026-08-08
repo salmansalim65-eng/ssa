@@ -13,6 +13,7 @@ import { PdcReceiptVoucherForm } from "@/components/vouchers/forms/pdc-receipt-v
 import { ReceiptVoucherForm } from "@/components/vouchers/forms/receipt-voucher-form";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { isPhase5VoucherType, VOUCHER_TYPE_LABELS } from "@/lib/vouchers/meta";
 import type { JournalEntryStatus } from "@/types/database.types";
 
@@ -48,8 +49,7 @@ export default async function EditVoucherPage({
   if (!canEdit) redirect(detailHref);
 
   const supabase = await createClient();
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   const [{ data: accounts }, { data: companyCurrencies }] = await Promise.all([
     supabase

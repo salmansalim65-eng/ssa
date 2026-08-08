@@ -13,14 +13,14 @@ import {
 } from "@/components/ui/table";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { InviteUserDialog } from "./invite-user-dialog";
 import { UserRowActions } from "./user-row-actions";
 
 export default async function UsersPage() {
   const supabase = await createClient();
 
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   const [{ data: memberships }, { data: roles }, canCreate, canEdit, canDelete] =
     await Promise.all([

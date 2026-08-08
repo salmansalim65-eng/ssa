@@ -24,6 +24,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, formatMoney } from "@/lib/format";
+import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { VOUCHER_TYPE_LABELS, voucherHref } from "@/lib/vouchers/meta";
 import type { VoucherType } from "@/types/database.types";
 
@@ -42,8 +43,7 @@ function yearStart() {
 
 export default async function DashboardPage() {
   const supabase = await createClient();
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   const [
     { data: assets },

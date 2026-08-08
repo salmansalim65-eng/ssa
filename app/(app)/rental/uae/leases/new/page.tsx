@@ -7,14 +7,14 @@ import { PageHeader } from "@/components/ui/page-header";
 import { UaeLeaseForm } from "@/components/rental/uae-lease-form";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 
 export default async function NewUaeLeasePage() {
   const canCreate = await hasPermission("uae_rent_invoice", "create");
   if (!canCreate) redirect("/rental/uae/leases");
 
   const supabase = await createClient();
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   const [{ data: assets }, { data: tenants }, { data: companyCurrencies }] = await Promise.all([
     supabase

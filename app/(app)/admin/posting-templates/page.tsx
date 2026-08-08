@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { POSTING_TEMPLATE_ROLES } from "@/lib/vouchers/posting-templates";
 import { VOUCHER_TYPE_LABELS } from "@/lib/vouchers/meta";
 import { PostingTemplateSelect } from "./posting-template-select";
@@ -10,8 +11,7 @@ import { PostingTemplateSelect } from "./posting-template-select";
 export default async function PostingTemplatesPage() {
   const supabase = await createClient();
 
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   const [{ data: accounts }, { data: templates }, canEdit] = await Promise.all([
     supabase

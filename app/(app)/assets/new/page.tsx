@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { NewAssetForm } from "./new-asset-form";
 
 export default async function NewAssetPage() {
@@ -13,8 +14,7 @@ export default async function NewAssetPage() {
   if (!canCreate) redirect("/assets");
 
   const supabase = await createClient();
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   const [{ data: companyCurrencies }, { data: costCenters }] = await Promise.all([
     supabase

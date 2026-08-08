@@ -11,6 +11,7 @@ import { getSignedUrl } from "@/features/attachments/actions";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
+import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import type { AssetInput } from "@/features/assets/schemas";
 import { EditAssetForm } from "./edit-asset-form";
 
@@ -18,8 +19,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
   const { id } = await params;
   const supabase = await createClient();
 
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   const [{ data: asset }, canEdit, canCreateValuation, canDeleteValuation, canSell] = await Promise.all([
     supabase
@@ -37,14 +37,19 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
 
   if (!asset) notFound();
 
-  const { data: costCenter } = await supabase
-    .schema("accounting")
-    .from("cost_centers")
-    .select("code, name")
-    .eq("asset_id", id)
-    .maybeSingle();
-
-  const [{ data: companyCurrencies }, { data: allCostCenters }] = await Promise.all([
+  const [
+    { data: costCenter },
+    { data: companyCurrencies },
+    { data: allCostCenters },
+    { data: images },
+    { data: valuations },
+  ] = await Promise.all([
+    supabase
+      .schema("accounting")
+      .from("cost_centers")
+      .select("code, name")
+      .eq("asset_id", id)
+      .maybeSingle(),
     supabase
       .schema("core")
       .from("company_currencies")
@@ -58,6 +63,17 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
       .eq("company_id", companyId)
       .is("deleted_at", null)
       .order("code"),
+    supabase
+      .schema("assets")
+      .from("asset_images")
+      .select("id, is_primary, attachment_id")
+      .eq("asset_id", id),
+    supabase
+      .schema("assets")
+      .from("asset_valuations")
+      .select("id, valuation_date, market_value, valuer, notes")
+      .eq("asset_id", id)
+      .order("valuation_date", { ascending: false }),
   ]);
 
   type RawCompanyCurrency = { currencies: { id: string; code: string } | null };
@@ -70,12 +86,6 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
   const costCenterOptions = (allCostCenters ?? [])
     .filter((cc) => cc.asset_id !== id)
     .map((cc) => ({ id: cc.id, code: cc.code, name: cc.name }));
-
-  const { data: images } = await supabase
-    .schema("assets")
-    .from("asset_images")
-    .select("id, is_primary, attachment_id")
-    .eq("asset_id", id);
 
   type RawImage = { id: string; is_primary: boolean; attachment_id: string | null };
   const imageRows = (images as unknown as RawImage[]) ?? [];
@@ -110,13 +120,6 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
     ? attachmentsById.get(asset.title_deed_attachment_id) ?? null
     : null;
   const titleDeedUrl = titleDeed ? await getSignedUrl(titleDeed.bucket, titleDeed.path) : null;
-
-  const { data: valuations } = await supabase
-    .schema("assets")
-    .from("asset_valuations")
-    .select("id, valuation_date, market_value, valuer, notes")
-    .eq("asset_id", id)
-    .order("valuation_date", { ascending: false });
 
   const valuationRows: ValuationRow[] = (valuations ?? []).map((v) => ({
     id: v.id,

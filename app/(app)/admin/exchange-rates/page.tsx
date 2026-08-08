@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { deleteExchangeRate } from "@/features/admin/exchange-rates/actions";
 import { ExchangeRateForm, type RateableCurrency } from "./exchange-rate-form";
 import { ExchangeRateHistory, type RateHistoryRow } from "./exchange-rate-history";
@@ -9,8 +10,7 @@ import { ExchangeRateHistory, type RateHistoryRow } from "./exchange-rate-histor
 export default async function ExchangeRatesPage() {
   const supabase = await createClient();
 
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   const [{ data: companyCurrencies }, canEdit] = await Promise.all([
     supabase

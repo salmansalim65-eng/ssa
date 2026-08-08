@@ -10,6 +10,7 @@ import {
 import { PageHeader } from "@/components/ui/page-header";
 import { CsvExportButton } from "@/components/reports/csv-export-button";
 import { PrintButton } from "@/components/vouchers/print-button";
+import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
 import { formatMoney } from "@/lib/format";
 
@@ -18,8 +19,7 @@ const statusVariant = { active: "success", inactive: "secondary", sold: "outline
 export default async function AssetRegisterPage() {
   const supabase = await createClient();
 
-  const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
-  const companyId = companyIdData as string;
+  const companyId = await getCurrentCompanyId();
 
   const { data: rows } = await supabase
     .schema("reporting")

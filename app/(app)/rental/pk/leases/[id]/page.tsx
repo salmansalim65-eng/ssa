@@ -10,7 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { PageNav } from "@/components/ui/page-nav";
+import { PageHeader } from "@/components/ui/page-header";
 import { GeneratePkInvoiceDialog } from "@/components/rental/generate-pk-invoice-dialog";
 import { GenerateAllInvoicesButton } from "@/components/rental/generate-all-invoices-button";
 import { PostAllInvoicesButton } from "@/components/rental/post-all-invoices-button";
@@ -124,34 +124,29 @@ export default async function PkLeaseDetailPage({ params }: { params: Promise<{ 
 
   return (
     <div className="space-y-6">
-      <PageNav backHref="/rental/pk/leases" />
-      <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between print:hidden">
-        <div className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-primary">Lease</p>
-          <h1 className="text-2xl font-semibold tracking-tight">{assetLabel}</h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={leaseStatusVariant[lease.status as keyof typeof leaseStatusVariant]}>{lease.status}</Badge>
-          <PrintButton />
-          {canEdit && (
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/rental/pk/leases/${lease.id}/edit`}>
-                <PencilIcon /> Edit
-              </Link>
-            </Button>
-          )}
-          {canCreate && (
-            <CopyVoucherButton id={lease.id} onCopy={copyPkLease} hrefBase="/rental/pk/leases" label="Lease" />
-          )}
-          {canCreate && <PkLeaseStatusMenu leaseId={lease.id} status={lease.status} />}
-          {canDelete && <LeaseDeleteButton leaseId={lease.id} country="pk" />}
-        </div>
-      </div>
-
-      <div className="hidden print:block">
-        <h1 className="text-xl font-semibold">Pakistan Lease</h1>
-        <p className="text-sm">{assetLabel}</p>
-      </div>
+      <PageHeader
+        eyebrow="Lease"
+        title={assetLabel}
+        backHref="/rental/pk/leases"
+        actions={
+          <>
+            <Badge variant={leaseStatusVariant[lease.status as keyof typeof leaseStatusVariant]}>{lease.status}</Badge>
+            <PrintButton />
+            {canEdit && (
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/rental/pk/leases/${lease.id}/edit`}>
+                  <PencilIcon /> Edit
+                </Link>
+              </Button>
+            )}
+            {canCreate && (
+              <CopyVoucherButton id={lease.id} onCopy={copyPkLease} hrefBase="/rental/pk/leases" label="Lease" />
+            )}
+            {canCreate && <PkLeaseStatusMenu leaseId={lease.id} status={lease.status} />}
+            {canDelete && <LeaseDeleteButton leaseId={lease.id} country="pk" />}
+          </>
+        }
+      />
 
       <div className="grid gap-x-8 gap-y-4 rounded-xl border bg-card p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-3">
         <div>

@@ -4,7 +4,7 @@ import { PencilIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PageNav } from "@/components/ui/page-nav";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   Table,
   TableBody,
@@ -125,45 +125,40 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
 
   return (
     <div className="space-y-6">
-      <PageNav backHref="/purchases" />
-      <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between print:hidden">
-        <div className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-primary">Purchase Voucher</p>
-          <h1 className="font-mono text-2xl font-semibold tracking-tight">{voucher.voucher_no ?? "Draft"}</h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <VoucherStatusBadge status={status} />
-          <PrintButton />
-          {status === "draft" && canSubmit && (
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/purchases/${voucher.id}/edit`}>
-                <PencilIcon /> Edit
-              </Link>
-            </Button>
-          )}
-          {canCreate && (
-            <CopyVoucherButton
-              id={voucher.id}
-              onCopy={copyPurchaseVoucher}
-              hrefBase="/purchases"
-              label="Purchase voucher"
-            />
-          )}
-          {status === "draft" && canDelete && (
-            <VoucherDeleteButton
-              id={voucher.id}
-              onDelete={deletePurchaseVoucher}
-              listHref="/purchases"
-              label="purchase voucher"
-            />
-          )}
-        </div>
-      </div>
-
-      <div className="hidden print:block">
-        <h1 className="text-xl font-semibold">Purchase Voucher</h1>
-        <p className="font-mono text-sm">{voucher.voucher_no ?? "Draft"}</p>
-      </div>
+      <PageHeader
+        eyebrow="Purchase Voucher"
+        title={voucher.voucher_no ?? "Draft"}
+        backHref="/purchases"
+        actions={
+          <>
+            <VoucherStatusBadge status={status} />
+            <PrintButton />
+            {status === "draft" && canSubmit && (
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/purchases/${voucher.id}/edit`}>
+                  <PencilIcon /> Edit
+                </Link>
+              </Button>
+            )}
+            {canCreate && (
+              <CopyVoucherButton
+                id={voucher.id}
+                onCopy={copyPurchaseVoucher}
+                hrefBase="/purchases"
+                label="Purchase voucher"
+              />
+            )}
+            {status === "draft" && canDelete && (
+              <VoucherDeleteButton
+                id={voucher.id}
+                onDelete={deletePurchaseVoucher}
+                listHref="/purchases"
+                label="purchase voucher"
+              />
+            )}
+          </>
+        }
+      />
 
       <div className="grid gap-x-8 gap-y-4 rounded-xl border bg-card p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-3">
         <div>

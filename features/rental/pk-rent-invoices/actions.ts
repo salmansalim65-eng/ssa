@@ -176,24 +176,30 @@ export async function postAllPkRentInvoices(leaseId: string) {
   const { data: invoices, error } = await supabase
     .schema("rental")
     .from("pk_rent_invoices")
-    .select("id, journal_entry_id, due_date, voucher_no, journal_entries:journal_entry_id(status)")
+    .select("id, journal_entry_id, due_date, voucher_no")
     .eq("lease_id", leaseId)
     .order("due_date");
   if (error) return { posted: 0, failed: [{ label: "—", reason: error.message }] };
 
-  type Row = {
-    id: string;
-    journal_entry_id: string | null;
-    due_date: string;
-    voucher_no: string | null;
-    journal_entries: { status: string } | null;
-  };
-  const rows = (invoices as unknown as Row[]) ?? [];
+  const rows = invoices ?? [];
+
+  // Fetch each invoice's posting status separately — journal_entries lives in
+  // the accounting schema and PostgREST can't embed it across schemas here.
+  const jeIds = rows.map((r) => r.journal_entry_id).filter((v): v is string => Boolean(v));
+  const statusById = new Map<string, string>();
+  if (jeIds.length > 0) {
+    const { data: jes } = await supabase
+      .schema("accounting")
+      .from("journal_entries")
+      .select("id, status")
+      .in("id", jeIds);
+    for (const je of jes ?? []) statusById.set(je.id, je.status);
+  }
 
   let posted = 0;
   const failed: { label: string; reason: string }[] = [];
   for (const inv of rows) {
-    if (inv.journal_entries?.status === "posted") continue; // already posted — skip
+    if (inv.journal_entry_id && statusById.get(inv.journal_entry_id) === "posted") continue; // already posted — skip
     const label = inv.voucher_no ?? formatDate(inv.due_date);
     if (!inv.journal_entry_id) {
       failed.push({ label, reason: "Missing journal entry" });

@@ -56,7 +56,7 @@ export default async function CurrencyExchangePage({
             <CsvExportButton
               filename={`currency-exchange-${from}-to-${to}.csv`}
               headers={["Currency", "Date", "Rate to base", "Source"]}
-              rows={(rows ?? []).map((r) => [r.currency_code, r.rate_date, r.rate_to_base, r.source])}
+              rows={(rows ?? []).map((r) => [r.currency_code, formatDate(r.rate_date), r.rate_to_base, r.source])}
             />
             <PrintButton />
           </>

@@ -132,7 +132,22 @@ export default async function GeneralLedgerPage({
 
   for (const acc of selectedAccounts) {
     const isDebitNormal = DEBIT_NORMAL.includes(acc.account_type);
-    const targetCurrencyId = reportingCurrency || acc.currency_id || baseCurrency?.id || null;
+    // Show each account in its true currency: the report-wide reporting currency
+    // if chosen, else the account's own configured currency, else — when the
+    // account has no currency set — the currency its own transactions were
+    // booked in (so a PKR/SAR/USD account shows PKR/SAR/USD, not base AED).
+    let resolvedCurrencyId: string | null = reportingCurrency || acc.currency_id || null;
+    if (!resolvedCurrencyId) {
+      const { data: txCurrencies } = await supabase
+        .schema("accounting")
+        .from("journal_entry_lines")
+        .select("currency_id")
+        .eq("account_id", acc.id)
+        .limit(500);
+      const distinct = [...new Set((txCurrencies ?? []).map((l) => l.currency_id).filter(Boolean))];
+      if (distinct.length === 1) resolvedCurrencyId = distinct[0] as string;
+    }
+    const targetCurrencyId = resolvedCurrencyId || baseCurrency?.id || null;
     const factor = await factorFor(targetCurrencyId);
     const currencyCode = (targetCurrencyId ? codeById.get(targetCurrencyId) : baseCurrency?.code) ?? "";
     const symbol = (targetCurrencyId ? symbolById.get(targetCurrencyId) : baseCurrency?.symbol) ?? currencyCode;
@@ -225,8 +240,8 @@ export default async function GeneralLedgerPage({
 
   const csvRows = sections.flatMap((s) =>
     s.rows.map((r) => [
-      r.entry_date,
-      r.due_date ?? "",
+      formatDate(r.entry_date),
+      r.due_date ? formatDate(r.due_date) : "",
       r.voucher_no ?? "",
       `${s.account.account_code} - ${s.account.account_name}`,
       s.currencyCode,
@@ -256,18 +271,8 @@ export default async function GeneralLedgerPage({
         }
       />
 
-      {selectedAccounts.length > 0 && (
-        <div className="rounded-lg border border-ledger/30 bg-ledger/10 px-4 py-3 print:border print:bg-transparent">
-          <p className="text-xs font-semibold uppercase tracking-wide text-ledger">General Ledger</p>
-          <p className="mt-0.5 text-lg font-semibold text-foreground">
-            {selectedAccounts.map((a) => `${a.account_code} — ${a.account_name}`).join("  •  ")}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Period: {formatDate(from)} — {formatDate(to)}
-          </p>
-        </div>
-      )}
-
+      {/* Filters lead the page: account search, dates and currency sit above the
+          results, always visible, so a new search never hides below the ledger. */}
       <Suspense>
         <GeneralLedgerFilters
           accounts={accounts ?? []}
@@ -280,9 +285,21 @@ export default async function GeneralLedgerPage({
           defaultQuery={sp.q ?? ""}
           defaultMin={sp.min ?? ""}
           defaultMax={sp.max ?? ""}
-          collapsedByDefault={selectedAccounts.length > 0}
+          collapsedByDefault={false}
         />
       </Suspense>
+
+      {selectedAccounts.length > 0 && (
+        <div className="rounded-lg border border-ledger/30 bg-ledger/10 px-4 py-3 print:border print:bg-transparent">
+          <p className="text-xs font-semibold uppercase tracking-wide text-ledger">General Ledger</p>
+          <p className="mt-0.5 text-lg font-semibold text-foreground">
+            {selectedAccounts.map((a) => `${a.account_code} — ${a.account_name}`).join("  •  ")}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Period: {formatDate(from)} — {formatDate(to)}
+          </p>
+        </div>
+      )}
 
       {selectedAccounts.length === 0 ? (
         <p className="text-sm text-muted-foreground">Select one or more accounts to view their ledger.</p>

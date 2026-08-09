@@ -24,7 +24,7 @@ import { SimpleBarChart } from "@/components/dashboard/simple-bar-chart";
 import { PageHeader } from "@/components/ui/page-header";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { createClient } from "@/lib/supabase/server";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatMoney, formatRate } from "@/lib/format";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { VOUCHER_TYPE_LABELS, voucherHref } from "@/lib/vouchers/meta";
 import type { VoucherType } from "@/types/database.types";
@@ -204,7 +204,11 @@ export default async function DashboardPage() {
                     )}
                   </span>
                   <span className="text-muted-foreground">
-                    {c.isBase ? "1.000000" : c.rate ? `${c.rate.rate_to_base} (${c.rate.rate_date})` : "No rate yet"}
+                    {c.isBase
+                      ? "1.000000"
+                      : c.rate
+                        ? `${formatRate(c.rate.rate_to_base)} (${formatDate(c.rate.rate_date)})`
+                        : "No rate yet"}
                   </span>
                 </div>
               ))}

@@ -18,32 +18,48 @@ export default async function NewAssetSalePage() {
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
 
-  const [{ data: accounts }, { data: companyCurrencies }, { data: costCenters }] = await Promise.all([
-    // Postable (non-group) accounts, offered as searchable pickers by name.
-    supabase
-      .schema("accounting")
-      .from("chart_of_accounts")
-      .select("id, account_name")
-      .eq("company_id", companyId)
-      .eq("is_group", false)
-      .eq("is_active", true)
-      .is("deleted_at", null)
-      .order("account_name"),
-    supabase
-      .schema("core")
-      .from("company_currencies")
-      .select("currencies:currency_id(id, code)")
-      .eq("company_id", companyId)
-      .eq("is_active", true),
-    supabase
-      .schema("accounting")
-      .from("cost_centers")
-      .select("id, name")
-      .eq("company_id", companyId)
-      .eq("is_active", true)
-      .is("deleted_at", null)
-      .order("name"),
-  ]);
+  const [{ data: accounts }, { data: assetRows }, { data: companyCurrencies }, { data: costCenters }] =
+    await Promise.all([
+      // Postable (non-group) accounts, offered as searchable pickers by name.
+      supabase
+        .schema("accounting")
+        .from("chart_of_accounts")
+        .select("id, account_name")
+        .eq("company_id", companyId)
+        .eq("is_group", false)
+        .eq("is_active", true)
+        .is("deleted_at", null)
+        .order("account_name"),
+      // Real fixed assets/properties from the Asset Register — the Fixed Asset
+      // picker offers these only (label = asset name, value = its ledger account).
+      supabase
+        .schema("assets")
+        .from("assets")
+        .select("asset_name, account_id")
+        .eq("company_id", companyId)
+        .not("account_id", "is", null)
+        .is("deleted_at", null)
+        .order("asset_name"),
+      supabase
+        .schema("core")
+        .from("company_currencies")
+        .select("currencies:currency_id(id, code)")
+        .eq("company_id", companyId)
+        .eq("is_active", true),
+      supabase
+        .schema("accounting")
+        .from("cost_centers")
+        .select("id, name")
+        .eq("company_id", companyId)
+        .eq("is_active", true)
+        .is("deleted_at", null)
+        .order("name"),
+    ]);
+
+  const assetAccounts = ((assetRows as { asset_name: string; account_id: string }[]) ?? []).map((a) => ({
+    id: a.account_id,
+    account_name: a.asset_name,
+  }));
 
   type RawCurrency = { currencies: { id: string; code: string } | null };
   const saleDay = new Date().toISOString().slice(0, 10);
@@ -76,7 +92,12 @@ export default async function NewAssetSalePage() {
         }
       />
       <Suspense>
-        <AssetSaleForm accounts={accounts ?? []} currencies={currencyOptions} costCenters={costCenters ?? []} />
+        <AssetSaleForm
+          accounts={accounts ?? []}
+          assetAccounts={assetAccounts}
+          currencies={currencyOptions}
+          costCenters={costCenters ?? []}
+        />
       </Suspense>
     </div>
   );

@@ -1078,6 +1078,8 @@ export interface Database {
           asset_id: string | null;
           customer_account_id: string | null;
           sale_date: string;
+          payment_terms: string | null;
+          due_date: string | null;
           currency_id: string;
           exchange_rate: number;
           pak_exch: number;
@@ -1470,6 +1472,8 @@ export interface Database {
           purchase_date: string | null;
           purchase_value: number | null;
           current_value: number | null;
+          cost_center_code: string | null;
+          cost_center_name: string | null;
         };
       };
       v_purchase_report: {

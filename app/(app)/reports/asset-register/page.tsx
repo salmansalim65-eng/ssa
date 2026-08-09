@@ -45,6 +45,7 @@ export default async function AssetRegisterPage() {
                 "Type",
                 "Country",
                 "City",
+                "Cost Center",
                 "Owner",
                 "Purchase Date",
                 "Purchase Value",
@@ -57,6 +58,7 @@ export default async function AssetRegisterPage() {
                 r.property_type,
                 r.country,
                 r.city ?? "",
+                r.cost_center_name ?? "None",
                 r.owner ?? "",
                 r.purchase_date ?? "",
                 r.purchase_value ?? 0,
@@ -77,6 +79,7 @@ export default async function AssetRegisterPage() {
               <TableHead>Name</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Location</TableHead>
+              <TableHead>Cost Center</TableHead>
               <TableHead>Owner</TableHead>
               <TableHead className="text-right">Purchase value</TableHead>
               <TableHead className="text-right">Current value</TableHead>
@@ -93,6 +96,7 @@ export default async function AssetRegisterPage() {
                   {r.city ? `${r.city}, ` : ""}
                   {r.country}
                 </TableCell>
+                <TableCell>{r.cost_center_name ?? "None"}</TableCell>
                 <TableCell>{r.owner ?? "—"}</TableCell>
                 <TableCell className="text-right font-mono tabular-nums">{formatMoney(r.purchase_value ?? 0)}</TableCell>
                 <TableCell className="text-right font-mono tabular-nums">{formatMoney(r.current_value ?? 0)}</TableCell>
@@ -103,7 +107,7 @@ export default async function AssetRegisterPage() {
             ))}
             {(rows ?? []).length === 0 && (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
                   No assets registered yet.
                 </TableCell>
               </TableRow>

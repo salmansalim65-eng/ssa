@@ -89,6 +89,8 @@ export async function createAssetSale(input: AssetSaleInput) {
     asset_id: assetId,
     customer_account_id: parsed.data.customerAccountId,
     sale_date: parsed.data.saleDate,
+    payment_terms: parsed.data.paymentTerms || null,
+    due_date: parsed.data.dueDate || null,
     currency_id: parsed.data.currencyId,
     exchange_rate: je.exchangeRate,
     pak_exch: parsed.data.pakExch,
@@ -222,6 +224,8 @@ export async function updateAssetSale(id: string, input: AssetSaleInput) {
     .update({
       customer_account_id: parsed.data.customerAccountId,
       sale_date: parsed.data.saleDate,
+      payment_terms: parsed.data.paymentTerms || null,
+      due_date: parsed.data.dueDate || null,
       currency_id: parsed.data.currencyId,
       exchange_rate: rate,
       pak_exch: parsed.data.pakExch,
@@ -247,7 +251,7 @@ export async function copyAssetSale(id: string) {
   const { data: src } = await supabase
     .schema("assets")
     .from("asset_sales")
-    .select("customer_account_id, currency_id, exchange_rate, pak_exch, narration")
+    .select("customer_account_id, currency_id, exchange_rate, pak_exch, narration, payment_terms, due_date")
     .eq("company_id", companyId)
     .eq("id", id)
     .maybeSingle();
@@ -263,6 +267,8 @@ export async function copyAssetSale(id: string) {
   return createAssetSale({
     customerAccountId: src.customer_account_id ?? "",
     saleDate: new Date().toISOString().slice(0, 10),
+    paymentTerms: src.payment_terms ?? "",
+    dueDate: src.due_date ?? "",
     currencyId: src.currency_id,
     exchangeRate: src.exchange_rate,
     pakExch: src.pak_exch ?? 0,

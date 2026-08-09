@@ -45,12 +45,16 @@ function emptyLine() {
 
 export function AssetSaleForm({
   accounts,
+  assetAccounts,
   currencies,
   costCenters,
   voucherId,
   initialValues,
 }: {
   accounts: AccountOption[];
+  // Real fixed assets/properties only (each option's id is the asset's ledger
+  // account, its label the asset name) — used for the Fixed Asset picker.
+  assetAccounts: AccountOption[];
   currencies: CurrencyOption[];
   costCenters: CostCenterOption[];
   voucherId?: string;
@@ -68,6 +72,8 @@ export function AssetSaleForm({
     defaultValues: initialValues ?? {
       customerAccountId: "",
       saleDate: today(),
+      paymentTerms: "",
+      dueDate: "",
       currencyId: currencies[0]?.id ?? "",
       exchangeRate: currencies[0]?.rate ?? 1,
       pakExch: 0,
@@ -119,11 +125,37 @@ export function AssetSaleForm({
           />
           <FormField
             control={form.control}
+            name="dueDate"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Due Date</FormLabel>
+                <FormControl>
+                  <DateInput {...field} value={(field.value as string) ?? ""} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
             name="customerAccountId"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Customer (Dr)</FormLabel>
                 <AccountCombobox accounts={accounts} value={field.value} onValueChange={field.onChange} />
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="paymentTerms"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Payment Terms</FormLabel>
+                <FormControl>
+                  <Input placeholder="e.g. 30 days, 3 installments" {...field} value={(field.value as string) ?? ""} />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -247,7 +279,12 @@ export function AssetSaleForm({
                         name={`lines.${index}.fixedAssetAccountId`}
                         render={({ field }) => (
                           <FormItem>
-                            <AccountCombobox accounts={accounts} value={field.value} onValueChange={field.onChange} />
+                            <AccountCombobox
+                              accounts={assetAccounts}
+                              value={field.value}
+                              onValueChange={field.onChange}
+                              placeholder="Select a property/asset"
+                            />
                             <FormMessage />
                           </FormItem>
                         )}

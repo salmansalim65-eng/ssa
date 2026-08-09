@@ -24,17 +24,19 @@ import {
   updateCostCenter,
 } from "@/features/accounting/cost-centers/actions";
 import type { CostCenterInput } from "@/features/accounting/cost-centers/schemas";
-import { CostCenterForm } from "./cost-center-form";
+import { CostCenterForm, type CostCenterParentOption } from "./cost-center-form";
 
 export function CostCenterRowActions({
   costCenterId,
   defaultValues,
+  parentOptions,
   isActive,
   canEdit,
   canDelete,
 }: {
   costCenterId: string;
   defaultValues: CostCenterInput;
+  parentOptions: CostCenterParentOption[];
   isActive: boolean;
   canEdit: boolean;
   canDelete: boolean;
@@ -97,6 +99,7 @@ export function CostCenterRowActions({
           </DialogHeader>
           <CostCenterForm
             defaultValues={defaultValues}
+            parentOptions={parentOptions}
             submitLabel="Save changes"
             onSubmit={async (values) => {
               const result = await updateCostCenter(costCenterId, values);

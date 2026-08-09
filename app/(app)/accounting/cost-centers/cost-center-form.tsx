@@ -34,12 +34,20 @@ const statusLabels: Record<(typeof RENTAL_STATUSES)[number], string> = {
   not_applicable: "Not applicable",
 };
 
+export interface CostCenterParentOption {
+  id: string;
+  code: string;
+  name: string;
+}
+
 export function CostCenterForm({
   defaultValues,
+  parentOptions,
   onSubmit,
   submitLabel,
 }: {
   defaultValues: CostCenterInput;
+  parentOptions: CostCenterParentOption[];
   onSubmit: (values: CostCenterInput) => Promise<{ error?: string } | undefined>;
   submitLabel: string;
 }) {
@@ -71,6 +79,34 @@ export function CostCenterForm({
               <FormControl>
                 <Input {...field} />
               </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="parentId"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Parent cost center</FormLabel>
+              <Select
+                onValueChange={(value) => field.onChange(value === "none" ? "" : value)}
+                defaultValue={field.value || "none"}
+              >
+                <FormControl>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="none">— None (top level) —</SelectItem>
+                  {parentOptions.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.code} — {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <FormMessage />
             </FormItem>
           )}

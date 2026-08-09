@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { MoreHorizontalIcon } from "lucide-react";
@@ -69,6 +70,7 @@ export function UserRowActions({
   canEdit: boolean;
   canDelete: boolean;
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [pendingRoleId, setPendingRoleId] = useState(currentRoleId ?? "");
@@ -123,6 +125,13 @@ export function UserRowActions({
           {canEdit && (
             <DropdownMenuItem onSelect={() => setRoleDialogOpen(true)}>
               Change role
+            </DropdownMenuItem>
+          )}
+          {canEdit && (
+            <DropdownMenuItem
+              onSelect={() => router.push(`/admin/users/${userId}/permissions`)}
+            >
+              Permissions
             </DropdownMenuItem>
           )}
           {canEdit && (

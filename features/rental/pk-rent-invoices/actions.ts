@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { requirePermission } from "@/lib/auth/permissions";
+import { formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { createJournalEntry, getCurrentCompanyId, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { generatePkInvoiceSchema, type GeneratePkInvoiceInput } from "./schemas";
@@ -166,6 +167,49 @@ export async function generateAllPkRentInvoices(leaseId: string) {
   revalidatePath(`/rental/pk/leases/${leaseId}`);
   if (generated === 0 && firstError) return { error: firstError };
   return { success: true, generated, error: firstError };
+}
+
+export async function postAllPkRentInvoices(leaseId: string) {
+  await requirePermission("pk_rent_invoice", "post");
+  const supabase = await createClient();
+
+  const { data: invoices, error } = await supabase
+    .schema("rental")
+    .from("pk_rent_invoices")
+    .select("id, journal_entry_id, due_date, voucher_no, journal_entries:journal_entry_id(status)")
+    .eq("lease_id", leaseId)
+    .order("due_date");
+  if (error) return { posted: 0, failed: [{ label: "—", reason: error.message }] };
+
+  type Row = {
+    id: string;
+    journal_entry_id: string | null;
+    due_date: string;
+    voucher_no: string | null;
+    journal_entries: { status: string } | null;
+  };
+  const rows = (invoices as unknown as Row[]) ?? [];
+
+  let posted = 0;
+  const failed: { label: string; reason: string }[] = [];
+  for (const inv of rows) {
+    if (inv.journal_entries?.status === "posted") continue; // already posted — skip
+    const label = inv.voucher_no ?? formatDate(inv.due_date);
+    if (!inv.journal_entry_id) {
+      failed.push({ label, reason: "Missing journal entry" });
+      continue;
+    }
+    const result = await postPkRentInvoice(inv.id, inv.journal_entry_id);
+    if ("error" in result) {
+      failed.push({ label, reason: result.error ?? "Failed to post" });
+      continue;
+    }
+    posted += 1;
+  }
+
+  revalidatePath(`/rental/pk/leases/${leaseId}`);
+  revalidatePath("/rental/pk/invoices");
+  return { posted, failed };
 }
 
 export async function deletePkRentInvoice(id: string) {

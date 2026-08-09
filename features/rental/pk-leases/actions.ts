@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 
-import { requirePermission } from "@/lib/auth/permissions";
+import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { generateAllPkRentInvoices, postAllPkRentInvoices } from "@/features/rental/pk-rent-invoices/actions";
 import { pkLeaseSchema, type PkLeaseInput } from "./schemas";
 
 async function getCurrentCompanyId() {
@@ -42,6 +43,17 @@ export async function createPkLease(input: PkLeaseInput) {
     .single();
 
   if (error || !lease) return { error: error?.message ?? "Failed to create lease" };
+
+  // Admins get invoices generated + posted automatically; best-effort so a
+  // failure here leaves drafts for manual posting rather than failing the create.
+  if (await isCurrentUserAdmin()) {
+    try {
+      await generateAllPkRentInvoices(lease.id);
+      await postAllPkRentInvoices(lease.id);
+    } catch {
+      /* best-effort; drafts remain for manual posting */
+    }
+  }
 
   revalidatePath("/rental/pk/leases");
   return { success: true, id: lease.id };

@@ -13,6 +13,7 @@ import {
 import { PageNav } from "@/components/ui/page-nav";
 import { GenerateInvoiceButton } from "@/components/rental/generate-invoice-button";
 import { GenerateAllInvoicesButton } from "@/components/rental/generate-all-invoices-button";
+import { PostAllInvoicesButton } from "@/components/rental/post-all-invoices-button";
 import { LeaseDeleteButton } from "@/components/rental/lease-delete-button";
 import { LeaseStatusMenu } from "@/components/rental/lease-status-menu";
 import { Button } from "@/components/ui/button";
@@ -55,9 +56,10 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
 
   if (!lease) notFound();
 
-  const [canDelete, canEdit] = await Promise.all([
+  const [canDelete, canEdit, canPost] = await Promise.all([
     hasPermission("uae_rent_invoice", "delete"),
     hasPermission("uae_rent_invoice", "edit"),
+    hasPermission("uae_rent_invoice", "post"),
   ]);
 
   const [assetsById, currenciesById] = await Promise.all([
@@ -199,9 +201,12 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-medium">Payment schedule</h2>
-          {canCreate && pendingScheduleCount > 0 && (
-            <GenerateAllInvoicesButton leaseId={lease.id} country="uae" pendingCount={pendingScheduleCount} />
-          )}
+          <div className="flex items-center gap-2">
+            {canCreate && pendingScheduleCount > 0 && (
+              <GenerateAllInvoicesButton leaseId={lease.id} country="uae" pendingCount={pendingScheduleCount} />
+            )}
+            {canPost && <PostAllInvoicesButton leaseId={lease.id} country="uae" />}
+          </div>
         </div>
         <div className="overflow-hidden rounded-lg border bg-card shadow-xs">
           <Table>

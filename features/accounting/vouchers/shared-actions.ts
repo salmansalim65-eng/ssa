@@ -53,23 +53,6 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
   const acc = supabase.schema("accounting");
   const today = new Date().toISOString().slice(0, 10);
 
-  // Rebuild the journal lines from the source entry (for the multi-line types).
-  const loadLines = async (journalEntryId: string) => {
-    const { data } = await acc
-      .from("journal_entry_lines")
-      .select("account_id, cost_center_id, debit_amount, credit_amount, reference, description")
-      .eq("journal_entry_id", journalEntryId)
-      .order("line_no");
-    return (data ?? []).map((l) => ({
-      accountId: l.account_id,
-      costCenterId: l.cost_center_id ?? "",
-      debit: l.debit_amount,
-      credit: l.credit_amount,
-      reference: l.reference ?? "",
-      remarks: l.description ?? "",
-    }));
-  };
-
   switch (voucherType) {
     case "receipt_voucher": {
       const { data: v } = await acc
@@ -203,18 +186,28 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
         .eq("id", v.journal_entry_id)
         .single();
       if (!je) return { error: "Voucher not found" };
+      const { data: journalLines } = await acc
+        .from("journal_voucher_lines")
+        .select("cost_center_id, debit_account_id, credit_account_id, amount")
+        .eq("voucher_id", id)
+        .order("line_no");
       return createJournalVoucher({
         entryDate: today,
         currencyId: je.currency_id,
         exchangeRate: je.exchange_rate ?? 1,
         narration: v.narration ?? "",
-        lines: await loadLines(v.journal_entry_id),
+        lines: (journalLines ?? []).map((l) => ({
+          costCenterId: l.cost_center_id ?? "",
+          debitAccountId: l.debit_account_id,
+          creditAccountId: l.credit_account_id,
+          amount: l.amount,
+        })),
       }, { autoPostIfAdmin: false });
     }
     case "jv_maintenance_voucher": {
       const { data: v } = await acc
         .from("jv_maintenance_vouchers")
-        .select("journal_entry_id, narration, period_from, period_till")
+        .select("journal_entry_id, narration")
         .eq("company_id", companyId)
         .eq("id", id)
         .maybeSingle();
@@ -227,13 +220,11 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
       if (!je) return { error: "Voucher not found" };
       const { data: jvLines } = await acc
         .from("jv_maintenance_voucher_lines")
-        .select("cost_center_id, debit_account_id, credit_account_id, amount")
+        .select("cost_center_id, debit_account_id, credit_account_id, amount, period_from, period_till, remarks")
         .eq("voucher_id", id)
         .order("line_no");
       return createJvMaintenanceVoucher({
         entryDate: today,
-        periodFrom: v.period_from ?? "",
-        periodTill: v.period_till ?? "",
         currencyId: je.currency_id,
         exchangeRate: je.exchange_rate ?? 1,
         narration: v.narration ?? "",
@@ -242,6 +233,9 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
           debitAccountId: l.debit_account_id,
           creditAccountId: l.credit_account_id,
           amount: l.amount,
+          periodFrom: l.period_from ?? "",
+          periodTill: l.period_till ?? "",
+          remarks: l.remarks ?? "",
         })),
       }, { autoPostIfAdmin: false });
     }

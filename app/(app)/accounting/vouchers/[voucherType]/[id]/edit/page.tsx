@@ -95,44 +95,46 @@ export default async function EditVoucherPage({
   // journal entry's lines and take the currency from the entry header.
   const isMultiLine = MULTI_LINE_TYPES.includes(voucherType);
   const isJvMaintenance = voucherType === "jv_maintenance_voucher";
-  let jvLines: {
-    accountId: string;
-    costCenterId: string;
-    debit: number;
-    credit: number;
-    reference: string;
-    remarks: string;
-  }[] = [];
-  if (isMultiLine) {
-    const { data: lines } = await supabase
-      .schema("accounting")
-      .from("journal_entry_lines")
-      .select("account_id, cost_center_id, debit_amount, credit_amount, reference, description")
-      .eq("journal_entry_id", v.journal_entry_id as string)
-      .order("line_no");
-    jvLines = (lines ?? []).map((l) => ({
-      accountId: l.account_id,
-      costCenterId: l.cost_center_id ?? "",
-      debit: l.debit_amount,
-      credit: l.credit_amount,
-      reference: l.reference ?? "",
-      remarks: l.description ?? "",
-    }));
-  }
-
-  // JV Maintenance keeps its own line grid (one balanced Dr/Cr pair per row) in
-  // its dedicated line table, rebuilt from cost_center/debit/credit/amount.
-  let jvMaintLines: {
+  // The Journal Voucher keeps its own line grid (cost centre + debit account +
+  // credit account + amount) in its dedicated line table; each row expands into
+  // a balanced Dr/Cr pair of journal_entry_lines at post time.
+  let journalLines: {
     costCenterId: string;
     debitAccountId: string;
     creditAccountId: string;
     amount: number;
   }[] = [];
+  if (isMultiLine) {
+    const { data: lines } = await supabase
+      .schema("accounting")
+      .from("journal_voucher_lines")
+      .select("cost_center_id, debit_account_id, credit_account_id, amount")
+      .eq("voucher_id", id)
+      .order("line_no");
+    journalLines = (lines ?? []).map((l) => ({
+      costCenterId: l.cost_center_id ?? "",
+      debitAccountId: l.debit_account_id,
+      creditAccountId: l.credit_account_id,
+      amount: l.amount,
+    }));
+  }
+
+  // JV Maintenance keeps its own line grid (one balanced Dr/Cr pair per row) in
+  // its dedicated line table, with a per-row billing period and remarks.
+  let jvMaintLines: {
+    costCenterId: string;
+    debitAccountId: string;
+    creditAccountId: string;
+    amount: number;
+    periodFrom: string;
+    periodTill: string;
+    remarks: string;
+  }[] = [];
   if (isJvMaintenance) {
     const { data: lines } = await supabase
       .schema("accounting")
       .from("jv_maintenance_voucher_lines")
-      .select("cost_center_id, debit_account_id, credit_account_id, amount")
+      .select("cost_center_id, debit_account_id, credit_account_id, amount, period_from, period_till, remarks")
       .eq("voucher_id", id)
       .order("line_no");
     jvMaintLines = (lines ?? []).map((l) => ({
@@ -140,6 +142,9 @@ export default async function EditVoucherPage({
       debitAccountId: l.debit_account_id,
       creditAccountId: l.credit_account_id,
       amount: l.amount,
+      periodFrom: l.period_from ?? "",
+      periodTill: l.period_till ?? "",
+      remarks: l.remarks ?? "",
     }));
   }
 
@@ -337,7 +342,9 @@ export default async function EditVoucherPage({
             currencyId: jeCurrency,
             exchangeRate: jeExchangeRate,
             narration: (v.narration as string | null) ?? "",
-            lines: jvLines,
+            lines: journalLines.length
+              ? journalLines
+              : [{ costCenterId: "", debitAccountId: "", creditAccountId: "", amount: 0 }],
           }}
         />
       )}
@@ -349,14 +356,22 @@ export default async function EditVoucherPage({
           voucherId={id}
           initialValues={{
             entryDate: v.entry_date as string,
-            periodFrom: (v.period_from as string | null) ?? "",
-            periodTill: (v.period_till as string | null) ?? "",
             currencyId: jeCurrency,
             exchangeRate: jeExchangeRate,
             narration: (v.narration as string | null) ?? "",
             lines: jvMaintLines.length
               ? jvMaintLines
-              : [{ costCenterId: "", debitAccountId: "", creditAccountId: "", amount: 0 }],
+              : [
+                  {
+                    costCenterId: "",
+                    debitAccountId: "",
+                    creditAccountId: "",
+                    amount: 0,
+                    periodFrom: "",
+                    periodTill: "",
+                    remarks: "",
+                  },
+                ],
           }}
         />
       )}

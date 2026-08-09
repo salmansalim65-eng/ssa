@@ -13,9 +13,35 @@ function round2(n: number) {
 
 function toEntryLines(lines: JvMaintenanceVoucherInput["lines"]): EntryLineInput[] {
   return lines.flatMap((l) => [
-    { accountId: l.debitAccountId, costCenterId: l.costCenterId || null, debit: l.amount, credit: 0, description: null },
-    { accountId: l.creditAccountId, costCenterId: l.costCenterId || null, debit: 0, credit: l.amount, description: null },
+    {
+      accountId: l.debitAccountId,
+      costCenterId: l.costCenterId || null,
+      debit: l.amount,
+      credit: 0,
+      description: l.remarks || null,
+    },
+    {
+      accountId: l.creditAccountId,
+      costCenterId: l.costCenterId || null,
+      debit: 0,
+      credit: l.amount,
+      description: l.remarks || null,
+    },
   ]);
+}
+
+function toMaintenanceLines(voucherId: string, lines: JvMaintenanceVoucherInput["lines"]) {
+  return lines.map((l, index) => ({
+    voucher_id: voucherId,
+    line_no: index + 1,
+    cost_center_id: l.costCenterId || null,
+    debit_account_id: l.debitAccountId,
+    credit_account_id: l.creditAccountId,
+    amount: l.amount,
+    period_from: l.periodFrom || null,
+    period_till: l.periodTill || null,
+    remarks: l.remarks || null,
+  }));
 }
 
 export async function createJvMaintenanceVoucher(input: JvMaintenanceVoucherInput, options?: { autoPostIfAdmin?: boolean }) {
@@ -47,25 +73,15 @@ export async function createJvMaintenanceVoucher(input: JvMaintenanceVoucherInpu
     company_id: companyId,
     journal_entry_id: je.journalEntryId,
     entry_date: parsed.data.entryDate,
-    period_from: parsed.data.periodFrom || null,
-    period_till: parsed.data.periodTill || null,
     narration: parsed.data.narration || null,
     created_by: createdBy,
   });
   if (error) return { error: error.message };
 
-  const maintenanceLines = parsed.data.lines.map((l, index) => ({
-    voucher_id: voucherId,
-    line_no: index + 1,
-    cost_center_id: l.costCenterId || null,
-    debit_account_id: l.debitAccountId,
-    credit_account_id: l.creditAccountId,
-    amount: l.amount,
-  }));
   const { error: linesErr } = await supabase
     .schema("accounting")
     .from("jv_maintenance_voucher_lines")
-    .insert(maintenanceLines);
+    .insert(toMaintenanceLines(voucherId, parsed.data.lines));
   if (linesErr) return { error: linesErr.message };
 
   revalidatePath("/accounting/vouchers/jv_maintenance_voucher");
@@ -149,8 +165,6 @@ export async function updateJvMaintenanceVoucher(id: string, input: JvMaintenanc
     .from("jv_maintenance_vouchers")
     .update({
       entry_date: parsed.data.entryDate,
-      period_from: parsed.data.periodFrom || null,
-      period_till: parsed.data.periodTill || null,
       narration: parsed.data.narration || null,
     })
     .eq("id", id);
@@ -163,18 +177,10 @@ export async function updateJvMaintenanceVoucher(id: string, input: JvMaintenanc
     .eq("voucher_id", id);
   if (delLinesErr) return { error: delLinesErr.message };
 
-  const maintenanceLines = parsed.data.lines.map((l, index) => ({
-    voucher_id: id,
-    line_no: index + 1,
-    cost_center_id: l.costCenterId || null,
-    debit_account_id: l.debitAccountId,
-    credit_account_id: l.creditAccountId,
-    amount: l.amount,
-  }));
   const { error: insLinesErr } = await supabase
     .schema("accounting")
     .from("jv_maintenance_voucher_lines")
-    .insert(maintenanceLines);
+    .insert(toMaintenanceLines(id, parsed.data.lines));
   if (insLinesErr) return { error: insLinesErr.message };
 
   revalidatePath("/accounting/vouchers/jv_maintenance_voucher");

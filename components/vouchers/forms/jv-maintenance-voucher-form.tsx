@@ -50,7 +50,15 @@ function today() {
 }
 
 function emptyLine() {
-  return { costCenterId: "", debitAccountId: "", creditAccountId: "", amount: blankAmount };
+  return {
+    costCenterId: "",
+    debitAccountId: "",
+    creditAccountId: "",
+    amount: blankAmount,
+    periodFrom: "",
+    periodTill: "",
+    remarks: "",
+  };
 }
 
 export function JvMaintenanceVoucherForm({
@@ -75,8 +83,6 @@ export function JvMaintenanceVoucherForm({
     resolver: zodResolver(jvMaintenanceVoucherSchema),
     defaultValues: initialValues ?? {
       entryDate: today(),
-      periodFrom: "",
-      periodTill: "",
       currencyId: currencies[0]?.id ?? "",
       exchangeRate: currencies[0]?.rate ?? 1,
       narration: "",
@@ -129,32 +135,6 @@ export function JvMaintenanceVoucherForm({
                   <FormLabel>Date</FormLabel>
                   <FormControl>
                     <DateInput {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="periodFrom"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Period From</FormLabel>
-                  <FormControl>
-                    <DateInput {...field} value={(field.value as string) ?? ""} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="periodTill"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Period Till</FormLabel>
-                  <FormControl>
-                    <DateInput {...field} value={(field.value as string) ?? ""} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -220,7 +200,7 @@ export function JvMaintenanceVoucherForm({
           }
         >
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-sm">
+            <table className="w-full min-w-[1300px] text-sm">
               <thead>
                 <tr className="border-b bg-muted/50 text-left [&_th]:px-3 [&_th]:py-2 [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground">
                   <th className="w-10">Sno</th>
@@ -228,6 +208,9 @@ export function JvMaintenanceVoucherForm({
                   <th className="min-w-[240px]">Debit Account</th>
                   <th className="min-w-[240px]">Credit Account</th>
                   <th className="w-40 text-right">Amount</th>
+                  <th className="min-w-[150px]">Period From</th>
+                  <th className="min-w-[150px]">Period Till</th>
+                  <th className="min-w-[180px]">Remarks</th>
                   <th className="w-10" />
                 </tr>
               </thead>
@@ -303,6 +286,48 @@ export function JvMaintenanceVoucherForm({
                                 {...field}
                                 value={amountValue(field.value)}
                               />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </td>
+                    <td>
+                      <FormField
+                        control={form.control}
+                        name={`lines.${index}.periodFrom`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <DateInput {...field} value={(field.value as string) ?? ""} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </td>
+                    <td>
+                      <FormField
+                        control={form.control}
+                        name={`lines.${index}.periodTill`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <DateInput {...field} value={(field.value as string) ?? ""} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </td>
+                    <td>
+                      <FormField
+                        control={form.control}
+                        name={`lines.${index}.remarks`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Input placeholder="Optional" {...field} value={(field.value as string) ?? ""} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>

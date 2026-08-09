@@ -46,8 +46,8 @@ export function NewAssetForm({
       onSubmit={async (values) => {
         const result = await createAsset(values);
         if (result?.error) return result;
-        toast.success("Asset created");
-        router.push(`/assets/${result.id}`);
+        toast.success("Asset created successfully.");
+        router.push("/assets");
         return undefined;
       }}
     />

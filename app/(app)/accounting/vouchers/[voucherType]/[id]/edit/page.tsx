@@ -198,6 +198,7 @@ export default async function EditVoucherPage({
         eyebrow="Vouchers"
         title={`Edit ${VOUCHER_TYPE_LABELS[voucherType]}`}
         description="Update this draft voucher. Posted vouchers can't be edited."
+        backHref={`/accounting/vouchers/${voucherType}`}
         actions={
           <Button asChild variant="outline">
             <Link href={`/accounting/vouchers/${voucherType}/${id}`}>

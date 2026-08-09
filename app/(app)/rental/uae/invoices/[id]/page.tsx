@@ -8,6 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageNav } from "@/components/ui/page-nav";
 import { RecordRentPaymentForm } from "@/components/rental/record-rent-payment-form";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { VoucherActions } from "@/components/vouchers/voucher-actions";
@@ -112,9 +113,10 @@ export default async function UaeRentInvoiceDetailPage({ params }: { params: Pro
 
   return (
     <div className="space-y-6">
+      <PageNav backHref="/rental/uae/invoices" />
       <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between print:hidden">
         <div className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-primary">Rent Invoice</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary">Lease Invoice</p>
           <h1 className="font-mono text-2xl font-semibold tracking-tight">{invoice.voucher_no ?? "Draft"}</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -132,7 +134,7 @@ export default async function UaeRentInvoiceDetailPage({ params }: { params: Pro
       </div>
 
       <div className="hidden print:block">
-        <h1 className="text-xl font-semibold">UAE Rent Invoice</h1>
+        <h1 className="text-xl font-semibold">UAE Lease Invoice</h1>
         <p className="font-mono text-sm">{invoice.voucher_no ?? "Draft"}</p>
       </div>
 

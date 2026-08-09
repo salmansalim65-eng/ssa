@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 
+import { PageNav } from "@/components/ui/page-nav";
 import { PurchaseVoucherForm } from "@/components/purchases/purchase-voucher-form";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
@@ -82,6 +83,7 @@ export default async function EditPurchaseVoucherPage({ params }: { params: Prom
 
   return (
     <div className="space-y-4">
+      <PageNav backHref="/purchases" />
       <h1 className="text-2xl font-semibold tracking-tight">Edit purchase voucher</h1>
       <PurchaseVoucherForm
         accounts={accounts ?? []}

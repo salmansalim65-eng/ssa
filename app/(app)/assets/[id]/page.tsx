@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageNav } from "@/components/ui/page-nav";
 import { AssetImagesManager, type AssetImageItem } from "@/components/assets/asset-images-manager";
 import { TitleDeedManager } from "@/components/assets/title-deed-manager";
 import { ValuationHistory, type ValuationRow } from "@/components/assets/valuation-history";
@@ -152,6 +153,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
 
   return (
     <div className="space-y-6">
+      <PageNav backHref="/assets" />
       <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           <p className="text-xs font-semibold uppercase tracking-wide text-primary">

@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 
+import { PageNav } from "@/components/ui/page-nav";
 import { AssetSaleForm } from "@/components/sales/asset-sale-form";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
@@ -88,6 +89,7 @@ export default async function EditAssetSalePage({ params }: { params: Promise<{ 
 
   return (
     <div className="space-y-4">
+      <PageNav backHref="/sales" />
       <h1 className="text-2xl font-semibold tracking-tight">Edit sale asset voucher</h1>
       <AssetSaleForm
         accounts={accounts ?? []}

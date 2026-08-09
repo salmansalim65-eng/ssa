@@ -52,6 +52,7 @@ export default async function NewPkLeasePage() {
         eyebrow="Rentals"
         title="New Pakistan lease"
         description="Set up a monthly rent cycle for a Pakistan property."
+        backHref="/rental/pk/leases"
         actions={
           <Button asChild variant="outline">
             <Link href="/rental/pk/leases">

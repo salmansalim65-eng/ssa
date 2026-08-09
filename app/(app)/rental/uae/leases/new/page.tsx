@@ -52,6 +52,7 @@ export default async function NewUaeLeasePage() {
         eyebrow="Rentals"
         title="New UAE lease"
         description="Create a monthly or yearly rent cycle for a UAE property."
+        backHref="/rental/uae/leases"
         actions={
           <Button asChild variant="outline">
             <Link href="/rental/uae/leases">

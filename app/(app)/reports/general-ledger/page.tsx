@@ -15,6 +15,7 @@ import { PrintButton } from "@/components/vouchers/print-button";
 import { computeRunningBalances } from "@/lib/reports/ledger-balance";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
+import { fetchRefs } from "@/lib/supabase/hydrate";
 import { formatDate, formatMoney } from "@/lib/format";
 import type { AccountType } from "@/types/database.types";
 
@@ -89,16 +90,17 @@ export default async function GeneralLedgerPage({
     supabase
       .schema("core")
       .from("company_currencies")
-      .select("is_base_currency, currencies:currency_id(id, code)")
+      .select("is_base_currency, currencies:currency_id(id, code, symbol)")
       .eq("company_id", companyId)
       .eq("is_active", true),
   ]);
 
-  type RawCurrency = { is_base_currency: boolean; currencies: { id: string; code: string } | null };
+  type RawCurrency = { is_base_currency: boolean; currencies: { id: string; code: string; symbol: string } | null };
   const currencyList = ((companyCurrencies as unknown as RawCurrency[]) ?? []).filter((cc) => cc.currencies);
   const baseCurrency = currencyList.find((cc) => cc.is_base_currency)?.currencies ?? null;
   const currencyOptions = currencyList.map((cc) => ({ id: cc.currencies!.id, code: cc.currencies!.code }));
   const codeById = new Map(currencyOptions.map((c) => [c.id, c.code] as const));
+  const symbolById = new Map(currencyList.map((cc) => [cc.currencies!.id, cc.currencies!.symbol] as const));
 
   // Conversion factor (base -> target currency) at the report's "to" date.
   const factorCache = new Map<string, number>();
@@ -121,7 +123,9 @@ export default async function GeneralLedgerPage({
   type Section = {
     account: { id: string; account_code: string; account_name: string };
     currencyCode: string;
+    symbol: string;
     opening: number;
+    counterpartByJe: Map<string, string>;
     rows: (LedgerRow & { balance: number })[];
   };
   const sections: Section[] = [];
@@ -131,6 +135,7 @@ export default async function GeneralLedgerPage({
     const targetCurrencyId = reportingCurrency || acc.currency_id || baseCurrency?.id || null;
     const factor = await factorFor(targetCurrencyId);
     const currencyCode = (targetCurrencyId ? codeById.get(targetCurrencyId) : baseCurrency?.code) ?? "";
+    const symbol = (targetCurrencyId ? symbolById.get(targetCurrencyId) : baseCurrency?.symbol) ?? currencyCode;
 
     const { data: priorLines } = await supabase
       .schema("reporting")
@@ -155,7 +160,39 @@ export default async function GeneralLedgerPage({
       .gte("entry_date", from)
       .lte("entry_date", to)
       .order("entry_date")
+      .order("voucher_no", { nullsFirst: false })
       .order("line_no");
+
+    // Resolve the counterpart (other side) account name for each journal entry.
+    const jeIds = [...new Set(((lineRows as unknown as LedgerRow[]) ?? []).map((r) => r.journal_entry_id))];
+    const counterpartByJe = new Map<string, string>();
+    if (jeIds.length > 0) {
+      const { data: cpLines } = await supabase
+        .schema("reporting")
+        .from("v_ledger_entries")
+        .select("journal_entry_id, account_id")
+        .eq("company_id", companyId)
+        .in("journal_entry_id", jeIds)
+        .neq("account_id", acc.id);
+      const cpRows = (cpLines as unknown as { journal_entry_id: string; account_id: string }[]) ?? [];
+      const nameById = await fetchRefs<{ id: string; account_name: string }>(
+        supabase,
+        "accounting",
+        "chart_of_accounts",
+        "account_name",
+        cpRows.map((r) => r.account_id),
+      );
+      const namesByJe = new Map<string, Set<string>>();
+      for (const r of cpRows) {
+        const name = nameById.get(r.account_id)?.account_name;
+        if (!name) continue;
+        if (!namesByJe.has(r.journal_entry_id)) namesByJe.set(r.journal_entry_id, new Set());
+        namesByJe.get(r.journal_entry_id)!.add(name);
+      }
+      for (const [je, names] of namesByJe) {
+        counterpartByJe.set(je, names.size === 1 ? [...names][0] : `Split (${names.size})`);
+      }
+    }
 
     let rows = ((lineRows as unknown as LedgerRow[]) ?? []).map((r) => ({
       ...r,
@@ -179,7 +216,9 @@ export default async function GeneralLedgerPage({
     sections.push({
       account: acc,
       currencyCode,
+      symbol,
       opening,
+      counterpartByJe,
       rows: computeRunningBalances(opening, isDebitNormal, rows),
     });
   }
@@ -217,6 +256,18 @@ export default async function GeneralLedgerPage({
         }
       />
 
+      {selectedAccounts.length > 0 && (
+        <div className="rounded-lg border border-ledger/30 bg-ledger/10 px-4 py-3 print:border print:bg-transparent">
+          <p className="text-xs font-semibold uppercase tracking-wide text-ledger">General Ledger</p>
+          <p className="mt-0.5 text-lg font-semibold text-foreground">
+            {selectedAccounts.map((a) => `${a.account_code} — ${a.account_name}`).join("  •  ")}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Period: {formatDate(from)} — {formatDate(to)}
+          </p>
+        </div>
+      )}
+
       <Suspense>
         <GeneralLedgerFilters
           accounts={accounts ?? []}
@@ -251,19 +302,21 @@ export default async function GeneralLedgerPage({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sections.map((s) => (
+              {sections.map((s) => {
+                const money = (n: number) => `${s.symbol} ${formatMoney(n)}`;
+                return (
                 <Fragment key={s.account.id}>
-                  <TableRow className="bg-muted/50">
+                  <TableRow className="bg-ledger/10">
                     <TableCell colSpan={3} className="font-medium">
                       <span className="font-mono text-xs text-muted-foreground">{s.account.account_code}</span>{" "}
-                      <span className="font-medium">{s.account.account_name}</span>{" "}
+                      <span className="font-semibold text-foreground">{s.account.account_name}</span>{" "}
                       <span className="font-normal text-muted-foreground">({s.currencyCode})</span>
                     </TableCell>
                     <TableCell colSpan={4} className="text-right font-medium text-muted-foreground">
                       Opening balance
                     </TableCell>
                     <TableCell className="text-right font-mono font-medium tabular-nums">
-                      {formatMoney(s.opening)}
+                      {money(s.opening)}
                     </TableCell>
                   </TableRow>
                   {s.rows.map((r) => (
@@ -271,15 +324,15 @@ export default async function GeneralLedgerPage({
                       <TableCell>{formatDate(r.entry_date)}</TableCell>
                       <TableCell>{r.due_date ? formatDate(r.due_date) : "—"}</TableCell>
                       <TableCell>{r.voucher_no ?? "Draft"}</TableCell>
-                      <TableCell className="font-medium">{s.account.account_name}</TableCell>
+                      <TableCell className="font-medium">{s.counterpartByJe.get(r.journal_entry_id) ?? "—"}</TableCell>
                       <TableCell>{r.description || r.narration || "—"}</TableCell>
                       <TableCell className="text-right font-mono tabular-nums">
-                        {r.debit_amount ? formatMoney(r.debit_amount) : ""}
+                        {r.debit_amount ? money(r.debit_amount) : ""}
                       </TableCell>
                       <TableCell className="text-right font-mono tabular-nums">
-                        {r.credit_amount ? formatMoney(r.credit_amount) : ""}
+                        {r.credit_amount ? money(r.credit_amount) : ""}
                       </TableCell>
-                      <TableCell className="text-right font-mono tabular-nums">{formatMoney(r.balance)}</TableCell>
+                      <TableCell className="text-right font-mono tabular-nums">{money(r.balance)}</TableCell>
                     </TableRow>
                   ))}
                   {s.rows.length === 0 && (
@@ -290,7 +343,8 @@ export default async function GeneralLedgerPage({
                     </TableRow>
                   )}
                 </Fragment>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </div>

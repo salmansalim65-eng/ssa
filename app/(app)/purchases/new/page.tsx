@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { PurchaseVoucherForm } from "@/components/purchases/purchase-voucher-form";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { mapVoucherCurrencies, type RawCompanyCurrency } from "@/lib/vouchers/currencies";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 
 export default async function NewPurchaseVoucherPage() {
@@ -30,7 +31,7 @@ export default async function NewPurchaseVoucherPage() {
     supabase
       .schema("core")
       .from("company_currencies")
-      .select("currencies:currency_id(id, code)")
+      .select("is_base_currency, currencies:currency_id(id, code)")
       .eq("company_id", companyId)
       .eq("is_active", true),
     supabase
@@ -43,20 +44,12 @@ export default async function NewPurchaseVoucherPage() {
       .order("name"),
   ]);
 
-  type RawCurrency = { currencies: { id: string; code: string } | null };
   const today = new Date().toISOString().slice(0, 10);
-  const currencyOptions = await Promise.all(
-    ((companyCurrencies as unknown as RawCurrency[]) ?? [])
-      .filter((cc) => cc.currencies)
-      .map(async (cc) => {
-        // Seed Currency Conv. from the exchange-rate table (base currency = 1).
-        const { data: rate } = await supabase.schema("core").rpc("fn_exchange_rate_to_base", {
-          p_company_id: companyId,
-          p_currency_id: cc.currencies!.id,
-          p_as_of_date: today,
-        });
-        return { id: cc.currencies!.id, code: cc.currencies!.code, rate: (rate as number | null) ?? 1 };
-      }),
+  // Base-currency-first so the form defaults to the system base currency.
+  const currencyOptions = await mapVoucherCurrencies(
+    companyId,
+    today,
+    companyCurrencies as unknown as RawCompanyCurrency[],
   );
 
   return (

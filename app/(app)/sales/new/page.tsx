@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { AssetSaleForm } from "@/components/sales/asset-sale-form";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { mapVoucherCurrencies, type RawCompanyCurrency } from "@/lib/vouchers/currencies";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 
 export default async function NewAssetSalePage() {
@@ -43,7 +44,7 @@ export default async function NewAssetSalePage() {
       supabase
         .schema("core")
         .from("company_currencies")
-        .select("currencies:currency_id(id, code)")
+        .select("is_base_currency, currencies:currency_id(id, code)")
         .eq("company_id", companyId)
         .eq("is_active", true),
       supabase
@@ -61,19 +62,12 @@ export default async function NewAssetSalePage() {
     account_name: a.asset_name,
   }));
 
-  type RawCurrency = { currencies: { id: string; code: string } | null };
   const saleDay = new Date().toISOString().slice(0, 10);
-  const currencyOptions = await Promise.all(
-    ((companyCurrencies as unknown as RawCurrency[]) ?? [])
-      .filter((cc) => cc.currencies)
-      .map(async (cc) => {
-        const { data: rate } = await supabase.schema("core").rpc("fn_exchange_rate_to_base", {
-          p_company_id: companyId,
-          p_currency_id: cc.currencies!.id,
-          p_as_of_date: saleDay,
-        });
-        return { id: cc.currencies!.id, code: cc.currencies!.code, rate: (rate as number | null) ?? 1 };
-      }),
+  // Base-currency-first so the form defaults to the system base currency.
+  const currencyOptions = await mapVoucherCurrencies(
+    companyId,
+    saleDay,
+    companyCurrencies as unknown as RawCompanyCurrency[],
   );
 
   return (

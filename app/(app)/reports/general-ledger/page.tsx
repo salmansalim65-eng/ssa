@@ -1,5 +1,7 @@
 import { Fragment, Suspense } from "react";
 
+import Link from "next/link";
+
 import {
   Table,
   TableBody,
@@ -17,7 +19,8 @@ import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
 import { formatDate, formatMoney } from "@/lib/format";
-import type { AccountType } from "@/types/database.types";
+import { voucherHref } from "@/lib/vouchers/meta";
+import type { AccountType, VoucherType } from "@/types/database.types";
 
 function startOfYear() {
   const now = new Date();
@@ -39,6 +42,7 @@ interface LedgerRow {
   entry_date: string;
   due_date: string | null;
   voucher_type: string;
+  voucher_id: string;
   voucher_no: string | null;
   debit_amount: number;
   credit_amount: number;
@@ -168,7 +172,7 @@ export default async function GeneralLedgerPage({
       .schema("reporting")
       .from("v_ledger_entries")
       .select(
-        "journal_entry_id, entry_date, due_date, voucher_type, voucher_no, debit_amount, credit_amount, description, narration",
+        "journal_entry_id, entry_date, due_date, voucher_type, voucher_id, voucher_no, debit_amount, credit_amount, description, narration",
       )
       .eq("company_id", companyId)
       .eq("account_id", acc.id)
@@ -340,7 +344,18 @@ export default async function GeneralLedgerPage({
                     <TableRow key={`${r.journal_entry_id}-${r.entry_date}-${r.voucher_no ?? ""}`}>
                       <TableCell>{formatDate(r.entry_date)}</TableCell>
                       <TableCell>{r.due_date ? formatDate(r.due_date) : "—"}</TableCell>
-                      <TableCell>{r.voucher_no ?? "Draft"}</TableCell>
+                      <TableCell>
+                        {r.voucher_no ? (
+                          <Link
+                            href={voucherHref(r.voucher_type as VoucherType, r.voucher_id)}
+                            className="font-medium text-primary hover:underline"
+                          >
+                            {r.voucher_no}
+                          </Link>
+                        ) : (
+                          "Draft"
+                        )}
+                      </TableCell>
                       <TableCell className="font-medium">{s.counterpartByJe.get(r.journal_entry_id) ?? "—"}</TableCell>
                       <TableCell>{r.description || r.narration || "—"}</TableCell>
                       <TableCell className="text-right font-mono tabular-nums">

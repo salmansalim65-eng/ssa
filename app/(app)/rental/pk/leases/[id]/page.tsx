@@ -188,10 +188,6 @@ export default async function PkLeaseDetailPage({ params }: { params: Promise<{ 
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Due date</p>
           <p className="mt-0.5">{lease.due_date ?? "—"}</p>
         </div>
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Rent month</p>
-          <p className="mt-0.5">{lease.rent_month ?? "—"}</p>
-        </div>
       </div>
 
       <div className="space-y-2">

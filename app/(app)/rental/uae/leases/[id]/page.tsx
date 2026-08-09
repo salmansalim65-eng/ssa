@@ -179,10 +179,6 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Due date</p>
           <p className="mt-0.5">{lease.due_date ? formatDate(lease.due_date) : "—"}</p>
         </div>
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Rent month</p>
-          <p className="mt-0.5">{lease.rent_month ?? "—"}</p>
-        </div>
         {lease.document_no && (
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">HH Lease voucher</p>

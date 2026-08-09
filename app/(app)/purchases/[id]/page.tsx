@@ -28,7 +28,7 @@ import { getSignedUrl } from "@/features/attachments/actions";
 import { hasPermission } from "@/lib/auth/permissions";
 import { fetchRefs } from "@/lib/supabase/hydrate";
 import { createClient } from "@/lib/supabase/server";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatMoney, formatRate } from "@/lib/format";
 import { getCurrentCompanyId, getVoucherApproval } from "@/lib/vouchers/engine";
 import type { JournalEntryStatus } from "@/types/database.types";
 
@@ -177,7 +177,7 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Currency</p>
           <p className="mt-0.5">
-            {currencyCode} @ {voucher.exchange_rate.toLocaleString()}
+            {currencyCode} @ {formatRate(voucher.exchange_rate)}
           </p>
         </div>
         <div>

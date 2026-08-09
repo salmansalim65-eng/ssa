@@ -11,7 +11,6 @@ export const pkLeaseSchema = z
     securityDeposit: z.coerce.number().nonnegative(),
     currencyId: z.string().uuid("Select a currency"),
     dueDate: z.string().date("Enter a valid date").optional().or(z.literal("")),
-    rentMonth: z.string().trim().max(50, "Keep it under 50 characters").optional().or(z.literal("")),
   })
   .refine((d) => d.leaseEnd > d.leaseStart, {
     message: "Lease end must be after lease start",

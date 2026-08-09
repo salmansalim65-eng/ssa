@@ -234,13 +234,14 @@ export default async function EditVoucherPage({
           voucherId={id}
           initialValues={{
             paymentDate: v.payment_date as string,
-            dueDate: (v.due_date as string | null) ?? "",
             creditAccountId: v.credit_account_id as string,
             costCenterId: (v.cost_center_id as string | null) ?? "",
             currencyId: v.currency_id as string,
             exchangeRate: v.exchange_rate as number,
             narration: (v.narration as string | null) ?? "",
-            lines: docLines.length ? docLines : [{ accountId: "", amount: 0, rentMonth: "", remarks: "" }],
+            lines: docLines.length
+              ? docLines.map((l) => ({ accountId: l.accountId, amount: l.amount, remarks: l.remarks }))
+              : [{ accountId: "", amount: 0, remarks: "" }],
           }}
         />
       )}
@@ -309,8 +310,6 @@ export default async function EditVoucherPage({
           voucherId={id}
           initialValues={{
             entryDate: v.entry_date as string,
-            dueDate: (v.due_date as string | null) ?? "",
-            refNo: (v.ref_no as string | null) ?? "",
             currencyId: jeCurrency,
             exchangeRate: jeExchangeRate,
             narration: (v.narration as string | null) ?? "",
@@ -326,8 +325,6 @@ export default async function EditVoucherPage({
           voucherId={id}
           initialValues={{
             entryDate: v.entry_date as string,
-            dueDate: (v.due_date as string | null) ?? "",
-            refNo: "",
             currencyId: jeCurrency,
             exchangeRate: jeExchangeRate,
             narration: (v.narration as string | null) ?? "",

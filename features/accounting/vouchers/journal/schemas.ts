@@ -17,12 +17,10 @@ export const journalLineSchema = z
   });
 
 // Shared header + grid schema for the Journal Voucher and (identically) the JV
-// Maintenance Voucher. REF_NO is optional and simply not shown on JV Maintenance.
+// Maintenance Voucher.
 export const journalVoucherSchema = z
   .object({
     entryDate: z.string().date("Enter a valid date"),
-    dueDate: z.string().date("Enter a valid date").optional().or(z.literal("")),
-    refNo: z.string().trim().max(100, "Keep it under 100 characters").optional().or(z.literal("")),
     currencyId: z.string().uuid("Select a currency"),
     exchangeRate: z.coerce.number().positive("Currency conversion is required"),
     narration: z.string().trim().max(500, "Keep it under 500 characters").optional().or(z.literal("")),

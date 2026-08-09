@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
+import { formatRate } from "@/lib/format";
 import type { JournalEntryStatus } from "@/types/database.types";
 import type { Phase5VoucherType } from "./meta";
 
@@ -271,7 +272,7 @@ export async function getVoucherDetail(
           { label: "Debit account (Cash/Bank)", value: debit ? `${debit.account_code} — ${debit.account_name}` : "—" },
           { label: "Due date", value: v.due_date ?? "—" },
           { label: "Cost center", value: costCenter?.name ?? "—" },
-          { label: "Currency conv.", value: v.exchange_rate.toLocaleString() },
+          { label: "Currency conv.", value: formatRate(v.exchange_rate) },
           { label: "Total", value: v.total_amount.toLocaleString() },
         ],
         lines: je.lines,
@@ -299,9 +300,8 @@ export async function getVoucherDetail(
         currencyCode: je.currencyCode,
         fields: [
           { label: "Credit account (Cash/Bank)", value: credit ? `${credit.account_code} — ${credit.account_name}` : "—" },
-          { label: "Due date", value: v.due_date ?? "—" },
           { label: "Cost center", value: costCenter?.name ?? "—" },
-          { label: "Currency conv.", value: v.exchange_rate.toLocaleString() },
+          { label: "Currency conv.", value: formatRate(v.exchange_rate) },
           { label: "Total", value: v.total_amount.toLocaleString() },
         ],
         lines: je.lines,
@@ -334,7 +334,7 @@ export async function getVoucherDetail(
           { label: "Due date", value: v.due_date ?? "—" },
           { label: "Cheque status", value: v.pdc_status },
           { label: "Cost center", value: costCenter?.name ?? "—" },
-          { label: "Currency conv.", value: v.exchange_rate.toLocaleString() },
+          { label: "Currency conv.", value: formatRate(v.exchange_rate) },
           { label: "Total", value: v.total_amount.toLocaleString() },
         ],
         lines: je.lines,
@@ -367,7 +367,7 @@ export async function getVoucherDetail(
           { label: "Due date", value: v.due_date ?? "—" },
           { label: "Cheque status", value: v.pdc_status },
           { label: "Cost center", value: costCenter?.name ?? "—" },
-          { label: "Currency conv.", value: v.exchange_rate.toLocaleString() },
+          { label: "Currency conv.", value: formatRate(v.exchange_rate) },
           { label: "Total", value: v.total_amount.toLocaleString() },
         ],
         lines: je.lines,
@@ -418,9 +418,7 @@ export async function getVoucherDetail(
         status: je.status,
         currencyCode: je.currencyCode,
         fields: [
-          { label: "Due date", value: v.due_date ?? "—" },
-          { label: "REF No.", value: v.ref_no ?? "—" },
-          { label: "Currency conv.", value: je.exchangeRate.toLocaleString() },
+          { label: "Currency conv.", value: formatRate(je.exchangeRate) },
         ],
         lines: je.lines,
       };
@@ -444,8 +442,7 @@ export async function getVoucherDetail(
         status: je.status,
         currencyCode: je.currencyCode,
         fields: [
-          { label: "Due date", value: v.due_date ?? "—" },
-          { label: "Currency conv.", value: je.exchangeRate.toLocaleString() },
+          { label: "Currency conv.", value: formatRate(je.exchangeRate) },
         ],
         lines: je.lines,
       };
@@ -473,7 +470,7 @@ export async function getVoucherDetail(
         fields: [
           { label: "Contra account (Opening Balance Equity)", value: contra ? `${contra.account_code} — ${contra.account_name}` : "—" },
           { label: "Cost center", value: costCenter?.name ?? "—" },
-          { label: "Currency conv.", value: v.exchange_rate.toLocaleString() },
+          { label: "Currency conv.", value: formatRate(v.exchange_rate) },
           { label: "Total", value: v.total_amount.toLocaleString() },
         ],
         lines: je.lines,

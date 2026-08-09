@@ -44,17 +44,19 @@ function today() {
 }
 
 function emptyLine() {
-  return { assetId: "", rentalAmount: 0, leaseStart: today(), leaseEnd: today(), rentMonth: "", remarks: "" };
+  return { assetId: "", rentalAmount: 0, leaseStart: today(), leaseEnd: today(), remarks: "" };
 }
 
 export function HhLeaseForm({
   assets,
   tenants,
   currencies,
+  defaultCurrencyId,
 }: {
   assets: AssetOption[];
   tenants: TenantOption[];
   currencies: CurrencyOption[];
+  defaultCurrencyId?: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -65,7 +67,7 @@ export function HhLeaseForm({
     defaultValues: {
       tenantId: "",
       documentDate: today(),
-      currencyId: currencies[0]?.id ?? "",
+      currencyId: defaultCurrencyId ?? currencies[0]?.id ?? "",
       rentCycle: "monthly",
       lines: [emptyLine()],
     },
@@ -184,7 +186,6 @@ export function HhLeaseForm({
                   <th className="w-32">Rent</th>
                   <th className="w-40">Lease Start</th>
                   <th className="w-40">Lease End</th>
-                  <th className="w-32">Rent Month</th>
                   <th className="min-w-[160px]">Remarks</th>
                   <th className="w-10" />
                 </tr>
@@ -254,20 +255,6 @@ export function HhLeaseForm({
                           <FormItem>
                             <FormControl>
                               <Input type="date" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </td>
-                    <td>
-                      <FormField
-                        control={form.control}
-                        name={`lines.${index}.rentMonth`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormControl>
-                              <Input placeholder="Aug-2026" {...field} value={(field.value as string) ?? ""} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>

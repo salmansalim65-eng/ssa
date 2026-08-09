@@ -8,7 +8,6 @@ export const hhLeaseLineSchema = z
     rentalAmount: z.coerce.number().positive("Must be greater than zero"),
     leaseStart: z.string().date("Enter a valid date"),
     leaseEnd: z.string().date("Enter a valid date"),
-    rentMonth: z.string().trim().max(50, "Keep it under 50 characters").optional().or(z.literal("")),
     remarks: z.string().trim().max(200, "Keep it under 200 characters").optional().or(z.literal("")),
   })
   .refine((d) => d.leaseEnd > d.leaseStart, {

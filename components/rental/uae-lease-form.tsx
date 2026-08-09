@@ -50,12 +50,14 @@ export function UaeLeaseForm({
   assets,
   tenants,
   currencies,
+  defaultCurrencyId,
   leaseId,
   initialValues,
 }: {
   assets: AssetOption[];
   tenants: TenantOption[];
   currencies: CurrencyOption[];
+  defaultCurrencyId?: string;
   leaseId?: string;
   initialValues?: UaeLeaseFormValues;
 }) {
@@ -74,9 +76,8 @@ export function UaeLeaseForm({
       rentalAmount: 0,
       rentCycle: "monthly",
       securityDeposit: 0,
-      currencyId: currencies[0]?.id ?? "",
+      currencyId: defaultCurrencyId ?? currencies[0]?.id ?? "",
       dueDate: "",
-      rentMonth: "",
     },
   });
 
@@ -247,21 +248,8 @@ export function UaeLeaseForm({
             </FormItem>
           )}
         />
-        <FormField
-          control={form.control}
-          name="rentMonth"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Rent month (optional)</FormLabel>
-              <FormControl>
-                <Input placeholder="e.g. Aug-2026" {...field} value={(field.value as string) ?? ""} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
 
-        {formError && <p className="text-sm text-destructive sm:col-span-2">{formError}</p>}
+        {formError &&<p className="text-sm text-destructive sm:col-span-2">{formError}</p>}
         <Button type="submit" disabled={isPending} className="sm:col-span-2 sm:w-fit">
           {isPending ? (isEdit ? "Saving…" : "Creating…") : isEdit ? "Save changes" : "Create lease"}
         </Button>

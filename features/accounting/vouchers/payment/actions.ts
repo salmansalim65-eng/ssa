@@ -11,8 +11,8 @@ function round2(n: number) {
   return Math.round(n * 100) / 100;
 }
 
-function lineDescription(rentMonth?: string, remarks?: string) {
-  const parts = [rentMonth || "", remarks || ""].filter(Boolean);
+function lineDescription(remarks?: string) {
+  const parts = [remarks || ""].filter(Boolean);
   return parts.length ? parts.join(" — ") : "Payment";
 }
 
@@ -39,7 +39,7 @@ export async function createPaymentVoucher(input: PaymentVoucherInput) {
       costCenterId,
       debit: l.amount,
       credit: 0,
-      description: lineDescription(l.rentMonth, l.remarks),
+      description: lineDescription(l.remarks),
     })),
     {
       accountId: parsed.data.creditAccountId,
@@ -68,7 +68,6 @@ export async function createPaymentVoucher(input: PaymentVoucherInput) {
     company_id: companyId,
     journal_entry_id: je.journalEntryId,
     payment_date: parsed.data.paymentDate,
-    due_date: parsed.data.dueDate || null,
     credit_account_id: parsed.data.creditAccountId,
     cost_center_id: costCenterId,
     currency_id: parsed.data.currencyId,
@@ -84,7 +83,6 @@ export async function createPaymentVoucher(input: PaymentVoucherInput) {
     line_no: index + 1,
     account_id: l.accountId,
     amount: l.amount,
-    rent_month: l.rentMonth || null,
     remarks: l.remarks || null,
   }));
   const { error: linesError } = await supabase
@@ -162,7 +160,7 @@ export async function updatePaymentVoucher(id: string, input: PaymentVoucherInpu
       exchange_rate: rate,
       base_debit_amount: round2(l.amount * rate),
       base_credit_amount: 0,
-      description: lineDescription(l.rentMonth, l.remarks),
+      description: lineDescription(l.remarks),
     })),
     {
       journal_entry_id: jeId,
@@ -193,7 +191,6 @@ export async function updatePaymentVoucher(id: string, input: PaymentVoucherInpu
     line_no: index + 1,
     account_id: l.accountId,
     amount: l.amount,
-    rent_month: l.rentMonth || null,
     remarks: l.remarks || null,
   }));
   const { error: insLines } = await supabase
@@ -207,7 +204,6 @@ export async function updatePaymentVoucher(id: string, input: PaymentVoucherInpu
     .from("payment_vouchers")
     .update({
       payment_date: parsed.data.paymentDate,
-      due_date: parsed.data.dueDate || null,
       credit_account_id: parsed.data.creditAccountId,
       cost_center_id: costCenterId,
       currency_id: parsed.data.currencyId,

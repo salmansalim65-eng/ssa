@@ -371,7 +371,7 @@ export function PdcPaymentVoucherForm({
             <span className="text-sm font-medium text-muted-foreground">Total Payment Amount</span>
             <span className="text-xl font-semibold tabular-nums text-foreground">
               {currencyCode && <span className="mr-1 text-sm font-medium text-muted-foreground">{currencyCode}</span>}
-              {total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {total.toLocaleString(undefined, { maximumFractionDigits: 0 })}
             </span>
           </div>
         </FormSection>

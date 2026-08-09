@@ -89,7 +89,6 @@ export default async function EditUaeLeasePage({ params }: { params: Promise<{ i
           securityDeposit: lease.security_deposit,
           currencyId: lease.currency_id,
           dueDate: lease.due_date ?? "",
-          rentMonth: lease.rent_month ?? "",
         }}
       />
     </div>

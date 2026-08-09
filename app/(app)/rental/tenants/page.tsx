@@ -22,7 +22,7 @@ export default async function TenantsPage() {
 
   const companyId = await getCurrentCompanyId();
 
-  const [{ data: tenants }, canCreate, canEdit] = await Promise.all([
+  const [{ data: tenants }, canCreate, canEdit, canDelete] = await Promise.all([
     supabase
       .schema("rental")
       .from("tenants")
@@ -32,6 +32,7 @@ export default async function TenantsPage() {
       .order("name"),
     hasPermission("tenants", "create"),
     hasPermission("tenants", "edit"),
+    hasPermission("tenants", "delete"),
   ]);
 
   return (
@@ -75,8 +76,10 @@ export default async function TenantsPage() {
                   <TableCell>
                     <TenantRowActions
                       tenantId={t.id}
+                      tenantName={t.name}
                       isActive={t.is_active}
                       canEdit={canEdit}
+                      canDelete={canDelete}
                       defaultValues={{
                         name: t.name,
                         idNumber: t.id_number ?? "",

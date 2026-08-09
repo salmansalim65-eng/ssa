@@ -38,6 +38,10 @@ export async function createAccount(input: AccountInput) {
   const companyId = await getCurrentCompanyId();
   const currencyId = parsed.data.currencyId || null;
 
+  if (await isDuplicateAccountName(companyId, parsed.data.accountName)) {
+    return { error: "An account with this name already exists." };
+  }
+
   const supabase = await createClient();
   const { data: user } = await supabase.auth.getUser();
 
@@ -79,6 +83,10 @@ export async function updateAccount(accountId: string, input: AccountInput) {
   await requirePermission("chart_of_accounts", "edit");
   const companyId = await getCurrentCompanyId();
   const currencyId = parsed.data.currencyId || null;
+
+  if (await isDuplicateAccountName(companyId, parsed.data.accountName, accountId)) {
+    return { error: "An account with this name already exists." };
+  }
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -124,14 +132,25 @@ export async function deleteAccount(accountId: string) {
   await requirePermission("chart_of_accounts", "delete");
 
   const supabase = await createClient();
-  const { error } = await supabase
-    .schema("accounting")
-    .from("chart_of_accounts")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("id", accountId);
-
+  // Definer guard: blocks accounts with active children or transaction history,
+  // otherwise soft-deletes. Surfaces a clear message on refusal.
+  const { error } = await supabase.schema("accounting").rpc("fn_soft_delete_account", { p_id: accountId });
   if (error) return { error: error.message };
 
   revalidatePath("/accounting/chart-of-accounts");
   return { success: true };
+}
+
+// Rejects a name that already belongs to another non-deleted account in the
+// same company (case-insensitive). excludeId skips the account being edited.
+async function isDuplicateAccountName(companyId: string, name: string, excludeId?: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .schema("accounting")
+    .from("chart_of_accounts")
+    .select("id, account_name")
+    .eq("company_id", companyId)
+    .is("deleted_at", null);
+  const target = name.trim().toLowerCase();
+  return (data ?? []).some((a) => a.id !== excludeId && a.account_name.trim().toLowerCase() === target);
 }

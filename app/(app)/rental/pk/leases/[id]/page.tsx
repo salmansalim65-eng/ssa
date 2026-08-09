@@ -188,7 +188,7 @@ export default async function PkLeaseDetailPage({ params }: { params: Promise<{ 
         </div>
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Due date</p>
-          <p className="mt-0.5">{lease.due_date ?? "—"}</p>
+          <p className="mt-0.5">{lease.due_date ? formatDate(lease.due_date) : "—"}</p>
         </div>
       </div>
 

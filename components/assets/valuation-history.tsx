@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { PlusIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 
+import { formatDate, formatMoney } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -102,8 +103,8 @@ export function ValuationHistory({
         <TableBody>
           {valuations.map((v) => (
             <TableRow key={v.id}>
-              <TableCell>{v.valuationDate}</TableCell>
-              <TableCell>{v.marketValue.toLocaleString()}</TableCell>
+              <TableCell>{formatDate(v.valuationDate)}</TableCell>
+              <TableCell>{formatMoney(v.marketValue)}</TableCell>
               <TableCell>{v.valuer ?? "—"}</TableCell>
               <TableCell className="max-w-xs truncate">{v.notes ?? "—"}</TableCell>
               <TableCell>

@@ -33,7 +33,7 @@ export function CashBankBookView({
   const exportRows = sections.flatMap((s) =>
     s.rows.map((r) => [
       `${s.account_code} - ${s.account_name}`,
-      r.entry_date,
+      formatDate(r.entry_date),
       r.voucher_no ?? "",
       r.description || r.narration || "",
       r.debit_amount,

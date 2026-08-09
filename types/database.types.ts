@@ -803,6 +803,8 @@ export interface Database {
           adjustment_reason: string | null;
           entry_date: string;
           due_date: string | null;
+          period_from: string | null;
+          period_till: string | null;
           narration: string | null;
           created_by: string;
           created_at: string;
@@ -814,6 +816,26 @@ export interface Database {
           created_by: string;
         };
         Update: Partial<Database["accounting"]["Tables"]["jv_maintenance_vouchers"]["Row"]>;
+      };
+      jv_maintenance_voucher_lines: {
+        Row: {
+          id: string;
+          voucher_id: string;
+          line_no: number;
+          cost_center_id: string | null;
+          debit_account_id: string;
+          credit_account_id: string;
+          amount: number;
+          created_at: string;
+        };
+        Insert: Partial<Database["accounting"]["Tables"]["jv_maintenance_voucher_lines"]["Row"]> & {
+          voucher_id: string;
+          line_no: number;
+          debit_account_id: string;
+          credit_account_id: string;
+          amount: number;
+        };
+        Update: Partial<Database["accounting"]["Tables"]["jv_maintenance_voucher_lines"]["Row"]>;
       };
       opening_balance_vouchers: {
         Row: {

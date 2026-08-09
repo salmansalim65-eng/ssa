@@ -2,7 +2,7 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
-import { formatRate } from "@/lib/format";
+import { formatDate, formatRate } from "@/lib/format";
 import type { JournalEntryStatus } from "@/types/database.types";
 import type { Phase5VoucherType } from "./meta";
 
@@ -427,7 +427,7 @@ export async function getVoucherDetail(
       const { data: v } = await supabase
         .schema("accounting")
         .from("jv_maintenance_vouchers")
-        .select("*")
+        .select("*, period_from, period_till")
         .eq("company_id", companyId)
         .eq("id", id)
         .maybeSingle();
@@ -442,6 +442,8 @@ export async function getVoucherDetail(
         status: je.status,
         currencyCode: je.currencyCode,
         fields: [
+          ...(v.period_from ? [{ label: "Period from", value: formatDate(v.period_from) }] : []),
+          ...(v.period_till ? [{ label: "Period till", value: formatDate(v.period_till) }] : []),
           { label: "Currency conv.", value: formatRate(je.exchangeRate) },
         ],
         lines: je.lines,

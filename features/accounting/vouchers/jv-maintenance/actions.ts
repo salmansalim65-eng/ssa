@@ -12,14 +12,10 @@ function round2(n: number) {
 }
 
 function toEntryLines(lines: JvMaintenanceVoucherInput["lines"]): EntryLineInput[] {
-  return lines.map((l) => ({
-    accountId: l.accountId,
-    costCenterId: l.costCenterId || null,
-    debit: l.debit,
-    credit: l.credit,
-    description: l.remarks || null,
-    reference: l.reference || null,
-  }));
+  return lines.flatMap((l) => [
+    { accountId: l.debitAccountId, costCenterId: l.costCenterId || null, debit: l.amount, credit: 0, description: null },
+    { accountId: l.creditAccountId, costCenterId: l.costCenterId || null, debit: 0, credit: l.amount, description: null },
+  ]);
 }
 
 export async function createJvMaintenanceVoucher(input: JvMaintenanceVoucherInput) {
@@ -51,10 +47,26 @@ export async function createJvMaintenanceVoucher(input: JvMaintenanceVoucherInpu
     company_id: companyId,
     journal_entry_id: je.journalEntryId,
     entry_date: parsed.data.entryDate,
+    period_from: parsed.data.periodFrom || null,
+    period_till: parsed.data.periodTill || null,
     narration: parsed.data.narration || null,
     created_by: createdBy,
   });
   if (error) return { error: error.message };
+
+  const maintenanceLines = parsed.data.lines.map((l, index) => ({
+    voucher_id: voucherId,
+    line_no: index + 1,
+    cost_center_id: l.costCenterId || null,
+    debit_account_id: l.debitAccountId,
+    credit_account_id: l.creditAccountId,
+    amount: l.amount,
+  }));
+  const { error: linesErr } = await supabase
+    .schema("accounting")
+    .from("jv_maintenance_voucher_lines")
+    .insert(maintenanceLines);
+  if (linesErr) return { error: linesErr.message };
 
   revalidatePath("/accounting/vouchers/jv_maintenance_voucher");
   return { success: true, id: voucherId };
@@ -130,10 +142,33 @@ export async function updateJvMaintenanceVoucher(id: string, input: JvMaintenanc
     .from("jv_maintenance_vouchers")
     .update({
       entry_date: parsed.data.entryDate,
+      period_from: parsed.data.periodFrom || null,
+      period_till: parsed.data.periodTill || null,
       narration: parsed.data.narration || null,
     })
     .eq("id", id);
   if (vErr) return { error: vErr.message };
+
+  const { error: delLinesErr } = await supabase
+    .schema("accounting")
+    .from("jv_maintenance_voucher_lines")
+    .delete()
+    .eq("voucher_id", id);
+  if (delLinesErr) return { error: delLinesErr.message };
+
+  const maintenanceLines = parsed.data.lines.map((l, index) => ({
+    voucher_id: id,
+    line_no: index + 1,
+    cost_center_id: l.costCenterId || null,
+    debit_account_id: l.debitAccountId,
+    credit_account_id: l.creditAccountId,
+    amount: l.amount,
+  }));
+  const { error: insLinesErr } = await supabase
+    .schema("accounting")
+    .from("jv_maintenance_voucher_lines")
+    .insert(maintenanceLines);
+  if (insLinesErr) return { error: insLinesErr.message };
 
   revalidatePath("/accounting/vouchers/jv_maintenance_voucher");
   revalidatePath(`/accounting/vouchers/jv_maintenance_voucher/${id}`);

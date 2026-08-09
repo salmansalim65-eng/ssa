@@ -31,7 +31,7 @@ const EDITABLE_TABLE = {
 } as const;
 type EditableVoucherType = keyof typeof EDITABLE_TABLE;
 
-const MULTI_LINE_TYPES: readonly string[] = ["journal_voucher", "jv_maintenance_voucher"];
+const MULTI_LINE_TYPES: readonly string[] = ["journal_voucher"];
 
 export default async function EditVoucherPage({
   params,
@@ -94,6 +94,7 @@ export default async function EditVoucherPage({
   // Multi-line vouchers (Journal / JV Maintenance) rebuild their grid from the
   // journal entry's lines and take the currency from the entry header.
   const isMultiLine = MULTI_LINE_TYPES.includes(voucherType);
+  const isJvMaintenance = voucherType === "jv_maintenance_voucher";
   let jvLines: {
     accountId: string;
     costCenterId: string;
@@ -119,6 +120,29 @@ export default async function EditVoucherPage({
     }));
   }
 
+  // JV Maintenance keeps its own line grid (one balanced Dr/Cr pair per row) in
+  // its dedicated line table, rebuilt from cost_center/debit/credit/amount.
+  let jvMaintLines: {
+    costCenterId: string;
+    debitAccountId: string;
+    creditAccountId: string;
+    amount: number;
+  }[] = [];
+  if (isJvMaintenance) {
+    const { data: lines } = await supabase
+      .schema("accounting")
+      .from("jv_maintenance_voucher_lines")
+      .select("cost_center_id, debit_account_id, credit_account_id, amount")
+      .eq("voucher_id", id)
+      .order("line_no");
+    jvMaintLines = (lines ?? []).map((l) => ({
+      costCenterId: l.cost_center_id ?? "",
+      debitAccountId: l.debit_account_id,
+      creditAccountId: l.credit_account_id,
+      amount: l.amount,
+    }));
+  }
+
   const jeCurrency = jeEmbed?.currency_id ?? "";
   const jeExchangeRate = jeEmbed?.exchange_rate ?? 1;
 
@@ -136,7 +160,7 @@ export default async function EditVoucherPage({
   let docCurrencies: { id: string; code: string; rate: number }[] = [];
   let docLines: { accountId: string; amount: number; rentMonth: string; remarks: string }[] = [];
   let obLines: { accountId: string; debit: number; credit: number; remarks: string }[] = [];
-  if (isHeaderDoc || isOpeningBalance || isMultiLine) {
+  if (isHeaderDoc || isOpeningBalance || isMultiLine || isJvMaintenance) {
     const today = new Date().toISOString().slice(0, 10);
     const [{ data: ccs }, rates] = await Promise.all([
       supabase
@@ -325,10 +349,14 @@ export default async function EditVoucherPage({
           voucherId={id}
           initialValues={{
             entryDate: v.entry_date as string,
+            periodFrom: (v.period_from as string | null) ?? "",
+            periodTill: (v.period_till as string | null) ?? "",
             currencyId: jeCurrency,
             exchangeRate: jeExchangeRate,
             narration: (v.narration as string | null) ?? "",
-            lines: jvLines,
+            lines: jvMaintLines.length
+              ? jvMaintLines
+              : [{ costCenterId: "", debitAccountId: "", creditAccountId: "", amount: 0 }],
           }}
         />
       )}

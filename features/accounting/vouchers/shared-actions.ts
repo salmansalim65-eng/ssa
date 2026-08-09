@@ -214,7 +214,7 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
     case "jv_maintenance_voucher": {
       const { data: v } = await acc
         .from("jv_maintenance_vouchers")
-        .select("journal_entry_id, narration")
+        .select("journal_entry_id, narration, period_from, period_till")
         .eq("company_id", companyId)
         .eq("id", id)
         .maybeSingle();
@@ -225,12 +225,24 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
         .eq("id", v.journal_entry_id)
         .single();
       if (!je) return { error: "Voucher not found" };
+      const { data: jvLines } = await acc
+        .from("jv_maintenance_voucher_lines")
+        .select("cost_center_id, debit_account_id, credit_account_id, amount")
+        .eq("voucher_id", id)
+        .order("line_no");
       return createJvMaintenanceVoucher({
         entryDate: today,
+        periodFrom: v.period_from ?? "",
+        periodTill: v.period_till ?? "",
         currencyId: je.currency_id,
         exchangeRate: je.exchange_rate ?? 1,
         narration: v.narration ?? "",
-        lines: await loadLines(v.journal_entry_id),
+        lines: (jvLines ?? []).map((l) => ({
+          costCenterId: l.cost_center_id ?? "",
+          debitAccountId: l.debit_account_id,
+          creditAccountId: l.credit_account_id,
+          amount: l.amount,
+        })),
       });
     }
     case "opening_balance_voucher": {

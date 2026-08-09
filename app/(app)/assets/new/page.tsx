@@ -1,8 +1,5 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeftIcon } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
@@ -44,13 +41,6 @@ export default async function NewAssetPage() {
         title="New Asset"
         description="Register a rental property or other asset."
         backHref="/assets"
-        actions={
-          <Button asChild variant="outline">
-            <Link href="/assets">
-              <ArrowLeftIcon /> Back to register
-            </Link>
-          </Button>
-        }
       />
       <NewAssetForm currencies={currencyOptions} costCenters={costCenters ?? []} />
     </div>

@@ -85,6 +85,8 @@ export function HhLeaseForm({
         return;
       }
       toast.success(`HH Lease ${result.documentNo} created (${result.count} lease line(s))`);
+      if (result && "invoiceWarning" in result && result.invoiceWarning)
+        toast.warning(result.invoiceWarning as string);
       router.push("/rental/uae/leases");
     });
   }

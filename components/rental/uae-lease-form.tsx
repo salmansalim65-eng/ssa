@@ -91,6 +91,8 @@ export function UaeLeaseForm({
         return;
       }
       toast.success(isEdit ? "Lease updated" : "Lease created");
+      if (!isEdit && result && "invoiceWarning" in result && result.invoiceWarning)
+        toast.warning(result.invoiceWarning as string);
       router.push(`/rental/uae/leases/${isEdit ? leaseId : result.id}`);
     });
   }

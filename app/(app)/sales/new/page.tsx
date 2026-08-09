@@ -1,10 +1,7 @@
 import { Suspense } from "react";
 
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeftIcon } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { AssetSaleForm } from "@/components/sales/asset-sale-form";
 import { hasPermission } from "@/lib/auth/permissions";
@@ -77,13 +74,6 @@ export default async function NewAssetSalePage() {
         title="New Sale Asset Voucher"
         description="Record a property disposal and its accounting entries."
         backHref="/sales"
-        actions={
-          <Button asChild variant="outline">
-            <Link href="/sales">
-              <ArrowLeftIcon /> Back to list
-            </Link>
-          </Button>
-        }
       />
       <Suspense>
         <AssetSaleForm

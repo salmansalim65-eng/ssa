@@ -91,6 +91,8 @@ export function PkLeaseForm({
         return;
       }
       toast.success(isEdit ? "Lease updated" : "Lease created");
+      if (!isEdit && result && "invoiceWarning" in result && result.invoiceWarning)
+        toast.warning(result.invoiceWarning as string);
       router.push(`/rental/pk/leases/${isEdit ? leaseId : result.id}`);
     });
   }

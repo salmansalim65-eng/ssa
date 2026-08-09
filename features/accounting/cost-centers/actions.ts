@@ -16,6 +16,7 @@ async function getCurrentCompanyId() {
 function toRow(input: CostCenterInput) {
   return {
     name: input.name,
+    parent_id: input.parentId || null,
     country: input.country || null,
     city: input.city || null,
     property_type: input.propertyType || null,

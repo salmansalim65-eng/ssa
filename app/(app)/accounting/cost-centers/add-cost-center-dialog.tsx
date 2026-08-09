@@ -14,10 +14,11 @@ import {
 } from "@/components/ui/dialog";
 import { createCostCenter } from "@/features/accounting/cost-centers/actions";
 import type { CostCenterInput } from "@/features/accounting/cost-centers/schemas";
-import { CostCenterForm } from "./cost-center-form";
+import { CostCenterForm, type CostCenterParentOption } from "./cost-center-form";
 
 const emptyValues: CostCenterInput = {
   name: "",
+  parentId: "",
   country: "",
   city: "",
   propertyType: "",
@@ -27,7 +28,11 @@ const emptyValues: CostCenterInput = {
   rentalStatus: "vacant",
 };
 
-export function AddCostCenterDialog() {
+export function AddCostCenterDialog({
+  parentOptions,
+}: {
+  parentOptions: CostCenterParentOption[];
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -43,6 +48,7 @@ export function AddCostCenterDialog() {
         </DialogHeader>
         <CostCenterForm
           defaultValues={emptyValues}
+          parentOptions={parentOptions}
           submitLabel="Add cost center"
           onSubmit={async (values) => {
             const result = await createCostCenter(values);

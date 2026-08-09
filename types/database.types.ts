@@ -375,6 +375,7 @@ export interface Database {
           company_id: string;
           code: string;
           name: string;
+          parent_id: string | null;
           asset_id: string | null;
           country: string | null;
           city: string | null;

@@ -14,11 +14,12 @@ import {
 } from "@/components/ui/table";
 import { CopyVoucherButton } from "@/components/vouchers/copy-voucher-button";
 import { PrintButton } from "@/components/vouchers/print-button";
+import { ReversePostedButton } from "@/components/vouchers/reverse-posted-button";
 import { VoucherActions } from "@/components/vouchers/voucher-actions";
 import { VoucherDeleteButton } from "@/components/vouchers/voucher-delete-button";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { copyAssetSale, deleteAssetSale, postAssetSale } from "@/features/assets/sale/actions";
-import { hasPermission } from "@/lib/auth/permissions";
+import { hasPermission, isCurrentUserAdmin } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
 import { formatDate, formatMoney, formatRate } from "@/lib/format";
@@ -47,9 +48,10 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
 
   if (!sale) notFound();
 
-  const [canDelete, canCreate] = await Promise.all([
+  const [canDelete, canCreate, isAdmin] = await Promise.all([
     hasPermission("asset_sales", "delete"),
     hasPermission("asset_sales", "create"),
+    isCurrentUserAdmin(),
   ]);
 
   const { data: lines } = await supabase
@@ -135,6 +137,13 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
                 onDelete={deleteAssetSale}
                 listHref="/sales"
                 label="sale asset voucher"
+              />
+            )}
+            {isAdmin && status === "posted" && (
+              <ReversePostedButton
+                journalEntryId={sale.journal_entry_id}
+                revalidate={["/sales", `/sales/${sale.id}`]}
+                redirectTo="/sales"
               />
             )}
           </>

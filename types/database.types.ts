@@ -440,6 +440,7 @@ export interface Database {
           approved_at: string | null;
           posted_by: string | null;
           posted_at: string | null;
+          reversal_of: string | null;
         };
         Insert: Partial<Database["accounting"]["Tables"]["journal_entries"]["Row"]> & {
           company_id: string;
@@ -1026,6 +1027,10 @@ export interface Database {
           p_comment?: string;
         };
         Returns: Database["accounting"]["Tables"]["voucher_approvals"]["Row"];
+      };
+      fn_admin_reverse_voucher: {
+        Args: { p_journal_entry_id: string };
+        Returns: string;
       };
     };
   };

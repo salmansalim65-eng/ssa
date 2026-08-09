@@ -17,10 +17,11 @@ import {
 } from "@/components/ui/table";
 import { CopyVoucherButton } from "@/components/vouchers/copy-voucher-button";
 import { PrintButton } from "@/components/vouchers/print-button";
+import { ReversePostedButton } from "@/components/vouchers/reverse-posted-button";
 import { VoucherActions } from "@/components/vouchers/voucher-actions";
 import { VoucherDeleteButton } from "@/components/vouchers/voucher-delete-button";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
-import { getModulePermissions } from "@/lib/auth/permissions";
+import { getModulePermissions, isCurrentUserAdmin } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, formatMoney } from "@/lib/format";
 import { getCurrentCompanyId, getVoucherApproval } from "@/lib/vouchers/engine";
@@ -74,7 +75,7 @@ export default async function VoucherDetailPage({
   // Everything below is independent, so fetch it concurrently instead of in a
   // waterfall: the voucher detail, its approval row, the caller's permissions
   // (one batched lookup), and — for journal vouchers — the attachment rows.
-  const [detail, approval, perms, attachments] = await Promise.all([
+  const [detail, approval, perms, attachments, isAdmin] = await Promise.all([
     getVoucherDetail(companyId, voucherType, id),
     getVoucherApproval(voucherType, id),
     getModulePermissions(voucherType),
@@ -88,6 +89,7 @@ export default async function VoucherDetailPage({
           .is("deleted_at", null)
           .then((r) => r.data ?? [])
       : Promise.resolve([] as { id: string; file_name: string; path: string; bucket: string }[]),
+    isCurrentUserAdmin(),
   ]);
 
   if (!detail) notFound();
@@ -145,6 +147,13 @@ export default async function VoucherDetailPage({
                 onDelete={deleteAccountingVoucher.bind(null, voucherType)}
                 listHref={`/accounting/vouchers/${voucherType}`}
                 label="voucher"
+              />
+            )}
+            {isAdmin && detail.status === "posted" && (
+              <ReversePostedButton
+                journalEntryId={detail.journalEntryId}
+                revalidate={[`/accounting/vouchers/${voucherType}`, `/accounting/vouchers/${voucherType}/${id}`]}
+                redirectTo={`/accounting/vouchers/${voucherType}`}
               />
             )}
           </>

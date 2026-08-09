@@ -11,11 +11,12 @@ import {
 import { PageHeader } from "@/components/ui/page-header";
 import { RecordRentPaymentForm } from "@/components/rental/record-rent-payment-form";
 import { PrintButton } from "@/components/vouchers/print-button";
+import { ReversePostedButton } from "@/components/vouchers/reverse-posted-button";
 import { VoucherActions } from "@/components/vouchers/voucher-actions";
 import { VoucherDeleteButton } from "@/components/vouchers/voucher-delete-button";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { deleteUaeRentInvoice, postUaeRentInvoice } from "@/features/rental/uae-rent-invoices/actions";
-import { hasPermission } from "@/lib/auth/permissions";
+import { hasPermission, isCurrentUserAdmin } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
 import { formatDate, formatMoney } from "@/lib/format";
@@ -48,7 +49,10 @@ export default async function UaeRentInvoiceDetailPage({ params }: { params: Pro
 
   if (!invoice) notFound();
 
-  const canDelete = await hasPermission("uae_rent_invoice", "delete");
+  const [canDelete, isAdmin] = await Promise.all([
+    hasPermission("uae_rent_invoice", "delete"),
+    isCurrentUserAdmin(),
+  ]);
 
   type Refs = {
     uae_leases: {
@@ -127,6 +131,13 @@ export default async function UaeRentInvoiceDetailPage({ params }: { params: Pro
                 onDelete={deleteUaeRentInvoice}
                 listHref={`/rental/uae/leases/${invoice.lease_id}`}
                 label="rent invoice"
+              />
+            )}
+            {isAdmin && status === "posted" && (
+              <ReversePostedButton
+                journalEntryId={invoice.journal_entry_id}
+                revalidate={["/rental/uae/invoices", `/rental/uae/invoices/${invoice.id}`]}
+                redirectTo="/rental/uae/invoices"
               />
             )}
           </>

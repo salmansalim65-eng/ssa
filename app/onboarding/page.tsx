@@ -26,7 +26,7 @@ export default async function OnboardingPage() {
         <CardHeader>
           <CardTitle>Set up your company</CardTitle>
           <CardDescription>
-            You&apos;ll be the Administrator for this company and can invite more
+            You&apos;ll be the Administrator for this company and can add more
             users afterwards.
           </CardDescription>
         </CardHeader>

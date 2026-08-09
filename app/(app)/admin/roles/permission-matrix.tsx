@@ -81,7 +81,7 @@ export function PermissionMatrix({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="sticky left-0 bg-background">Module</TableHead>
+            <TableHead className="sticky left-0 bg-header">Module</TableHead>
             {ACTIONS.map((action) => (
               <TableHead key={action} className="text-center capitalize">
                 {action}

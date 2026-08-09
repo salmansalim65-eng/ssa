@@ -121,7 +121,7 @@ export function PermissionMatrix({
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="sticky left-0 z-10 bg-muted/50">Module</TableHead>
+              <TableHead className="sticky left-0 z-10 bg-header">Module</TableHead>
               {actions.map((action) => (
                 <TableHead key={action} className="text-center">
                   {capitalize(action)}

@@ -70,7 +70,7 @@ export default async function PkRentInvoicesPage() {
     <div className="space-y-5">
       <PageHeader
         eyebrow="Rentals"
-        title="Pakistan Rent Invoices"
+        title="PK Lease Invoices"
         description="Invoices generated from Pakistan lease payment schedules."
       />
 

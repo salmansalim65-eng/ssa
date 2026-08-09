@@ -52,6 +52,7 @@ export default async function NewHhLeasePage() {
         eyebrow="Rentals"
         title="HH Lease"
         description="Enter one tenant and many asset lines at once. Each line is saved as its own UAE lease under a shared document number."
+        backHref="/rental/uae/leases"
         actions={
           <Button asChild variant="outline">
             <Link href="/rental/uae/leases">

@@ -66,6 +66,7 @@ export default async function NewAssetSalePage() {
         eyebrow="Assets & Property"
         title="New Sale Asset Voucher"
         description="Record a property disposal and its accounting entries."
+        backHref="/sales"
         actions={
           <Button asChild variant="outline">
             <Link href="/sales">

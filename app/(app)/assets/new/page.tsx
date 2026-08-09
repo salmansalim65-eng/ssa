@@ -43,6 +43,7 @@ export default async function NewAssetPage() {
         eyebrow="Assets & Property"
         title="New Asset"
         description="Register a rental property or other asset."
+        backHref="/assets"
         actions={
           <Button asChild variant="outline">
             <Link href="/assets">

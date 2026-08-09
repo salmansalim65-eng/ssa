@@ -10,6 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageNav } from "@/components/ui/page-nav";
 import { GenerateInvoiceButton } from "@/components/rental/generate-invoice-button";
 import { GenerateAllInvoicesButton } from "@/components/rental/generate-all-invoices-button";
 import { LeaseDeleteButton } from "@/components/rental/lease-delete-button";
@@ -114,6 +115,7 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
 
   return (
     <div className="space-y-6">
+      <PageNav backHref="/rental/uae/leases" />
       <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between print:hidden">
         <div className="space-y-1">
           <p className="text-xs font-semibold uppercase tracking-wide text-primary">Lease</p>

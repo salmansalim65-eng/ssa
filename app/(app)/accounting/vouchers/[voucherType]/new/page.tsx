@@ -115,6 +115,7 @@ export default async function NewVoucherPage({
         eyebrow="Vouchers"
         title={`New ${VOUCHER_TYPE_LABELS[voucherType]}`}
         description="Fill in the header details and entry lines, then save as a draft."
+        backHref={`/accounting/vouchers/${voucherType}`}
         actions={
           <Button asChild variant="outline">
             <Link href={`/accounting/vouchers/${voucherType}`}>

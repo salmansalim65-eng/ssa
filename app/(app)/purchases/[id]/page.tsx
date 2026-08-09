@@ -4,6 +4,7 @@ import { PencilIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageNav } from "@/components/ui/page-nav";
 import {
   Table,
   TableBody,
@@ -124,6 +125,7 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
 
   return (
     <div className="space-y-6">
+      <PageNav backHref="/purchases" />
       <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between print:hidden">
         <div className="space-y-1">
           <p className="text-xs font-semibold uppercase tracking-wide text-primary">Purchase Voucher</p>

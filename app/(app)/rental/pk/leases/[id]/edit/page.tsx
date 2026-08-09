@@ -65,6 +65,7 @@ export default async function EditPkLeasePage({ params }: { params: Promise<{ id
         eyebrow="Rentals"
         title="Edit Pakistan lease"
         description="Update the terms of this Pakistan lease."
+        backHref="/rental/pk/leases"
         actions={
           <Button asChild variant="outline">
             <Link href="/rental/pk/leases">

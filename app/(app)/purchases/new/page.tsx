@@ -65,6 +65,7 @@ export default async function NewPurchaseVoucherPage() {
         eyebrow="Assets & Property"
         title="New Purchase Voucher"
         description="Record a property acquisition and its accounting entries."
+        backHref="/purchases"
         actions={
           <Button asChild variant="outline">
             <Link href="/purchases">

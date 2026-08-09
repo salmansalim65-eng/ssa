@@ -70,7 +70,7 @@ export default async function UaeRentInvoicesPage() {
     <div className="space-y-5">
       <PageHeader
         eyebrow="Rentals"
-        title="UAE Rent Invoices"
+        title="UAE Lease Invoices"
         description="Invoices generated from UAE lease payment schedules."
       />
 

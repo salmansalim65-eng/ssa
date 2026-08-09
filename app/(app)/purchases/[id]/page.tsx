@@ -16,6 +16,7 @@ import {
 import { AttachmentList, type AttachmentItem } from "@/components/attachments/attachment-list";
 import { CopyVoucherButton } from "@/components/vouchers/copy-voucher-button";
 import { PrintButton } from "@/components/vouchers/print-button";
+import { ReversePostedButton } from "@/components/vouchers/reverse-posted-button";
 import { VoucherActions } from "@/components/vouchers/voucher-actions";
 import { VoucherDeleteButton } from "@/components/vouchers/voucher-delete-button";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
@@ -25,7 +26,7 @@ import {
   postPurchaseVoucher,
 } from "@/features/accounting/purchase-voucher/actions";
 import { getSignedUrl } from "@/features/attachments/actions";
-import { hasPermission } from "@/lib/auth/permissions";
+import { hasPermission, isCurrentUserAdmin } from "@/lib/auth/permissions";
 import { fetchRefs } from "@/lib/supabase/hydrate";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, formatMoney, formatRate } from "@/lib/format";
@@ -54,9 +55,10 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
 
   if (!voucher) notFound();
 
-  const [canDelete, canCreate] = await Promise.all([
+  const [canDelete, canCreate, isAdmin] = await Promise.all([
     hasPermission("purchase_voucher", "delete"),
     hasPermission("purchase_voucher", "create"),
+    isCurrentUserAdmin(),
   ]);
 
   const { data: lines } = await supabase
@@ -154,6 +156,13 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
                 onDelete={deletePurchaseVoucher}
                 listHref="/purchases"
                 label="purchase voucher"
+              />
+            )}
+            {isAdmin && status === "posted" && (
+              <ReversePostedButton
+                journalEntryId={voucher.journal_entry_id}
+                revalidate={["/purchases", `/purchases/${voucher.id}`]}
+                redirectTo="/purchases"
               />
             )}
           </>

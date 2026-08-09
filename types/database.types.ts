@@ -157,6 +157,27 @@ export interface Database {
         };
         Update: Partial<Database["core"]["Tables"]["user_roles"]["Row"]>;
       };
+      user_permissions: {
+        Row: {
+          id: string;
+          user_id: string;
+          company_id: string;
+          module_key: string;
+          action: PermissionAction;
+          allowed: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_by: string | null;
+          updated_at: string | null;
+        };
+        Insert: Partial<Database["core"]["Tables"]["user_permissions"]["Row"]> & {
+          user_id: string;
+          company_id: string;
+          module_key: string;
+          action: PermissionAction;
+        };
+        Update: Partial<Database["core"]["Tables"]["user_permissions"]["Row"]>;
+      };
       document_sequences: {
         Row: {
           id: string;

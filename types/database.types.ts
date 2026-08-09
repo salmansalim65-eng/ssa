@@ -1213,6 +1213,14 @@ export interface Database {
         Args: { p_id: string };
         Returns: undefined;
       };
+      fn_soft_delete_asset: {
+        Args: { p_id: string };
+        Returns: undefined;
+      };
+      fn_soft_delete_supplier: {
+        Args: { p_id: string };
+        Returns: undefined;
+      };
     };
   };
   rental: {
@@ -1479,6 +1487,10 @@ export interface Database {
       };
       fn_delete_pk_lease: {
         Args: { p_lease_id: string };
+        Returns: undefined;
+      };
+      fn_soft_delete_tenant: {
+        Args: { p_id: string };
         Returns: undefined;
       };
     };

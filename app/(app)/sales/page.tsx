@@ -29,7 +29,7 @@ export default async function AssetSalesPage() {
     supabase
       .schema("assets")
       .from("asset_sales")
-      .select("id, voucher_no, sale_date, total_value, customer_account_id, journal_entry_id")
+      .select("id, voucher_no, sale_date, due_date, payment_terms, total_value, customer_account_id, journal_entry_id")
       .eq("company_id", companyId)
       .order("sale_date", { ascending: false }),
     hasPermission("asset_sales", "create"),
@@ -39,12 +39,39 @@ export default async function AssetSalesPage() {
     id: string;
     voucher_no: string | null;
     sale_date: string;
+    due_date: string | null;
+    payment_terms: string | null;
     total_value: number;
     customer_account_id: string | null;
     journal_entry_id: string | null;
   };
 
   const saleRows = (sales as unknown as SaleRow[]) ?? [];
+
+  // Resolve each sale's sold property/asset names from its lines (each line's
+  // fixed-asset account is an asset's ledger account).
+  const { data: saleLines } = await supabase
+    .schema("assets")
+    .from("asset_sale_lines")
+    .select("sale_id, fixed_asset_account_id")
+    .in("sale_id", saleRows.length ? saleRows.map((r) => r.id) : ["00000000-0000-0000-0000-000000000000"]);
+  const { data: assetNameRows } = await supabase
+    .schema("assets")
+    .from("assets")
+    .select("account_id, asset_name")
+    .eq("company_id", companyId)
+    .not("account_id", "is", null);
+  const assetNameByAccount = new Map(
+    ((assetNameRows as { account_id: string; asset_name: string }[]) ?? []).map((a) => [a.account_id, a.asset_name]),
+  );
+  const assetNamesBySale = new Map<string, string>();
+  for (const l of (saleLines as { sale_id: string; fixed_asset_account_id: string }[]) ?? []) {
+    const name = assetNameByAccount.get(l.fixed_asset_account_id);
+    if (!name) continue;
+    const existing = assetNamesBySale.get(l.sale_id);
+    if (!existing) assetNamesBySale.set(l.sale_id, name);
+    else if (!existing.split(", ").includes(name)) assetNamesBySale.set(l.sale_id, `${existing}, ${name}`);
+  }
 
   const [journalEntriesById, accountsById] = await Promise.all([
     fetchRefs<{ id: string; status: JournalEntryStatus }>(
@@ -101,8 +128,11 @@ export default async function AssetSalesPage() {
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead>Voucher No.</TableHead>
+                <TableHead>Asset Name</TableHead>
                 <TableHead>Date</TableHead>
+                <TableHead>Due Date</TableHead>
                 <TableHead>Customer</TableHead>
+                <TableHead>Payment Terms</TableHead>
                 <TableHead className="text-right">Total Value</TableHead>
                 <TableHead className="w-36">Status</TableHead>
               </TableRow>
@@ -118,8 +148,13 @@ export default async function AssetSalesPage() {
                       {sale.voucher_no ?? "Draft"}
                     </Link>
                   </TableCell>
+                  <TableCell className="font-medium">{assetNamesBySale.get(sale.id) ?? "—"}</TableCell>
                   <TableCell className="text-muted-foreground">{formatDate(sale.sale_date)}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {sale.due_date ? formatDate(sale.due_date) : "—"}
+                  </TableCell>
                   <TableCell>{accountsById.get(sale.customer_account_id ?? "")?.account_name ?? "—"}</TableCell>
+                  <TableCell className="text-muted-foreground">{sale.payment_terms ?? "—"}</TableCell>
                   <TableCell className="text-right font-mono tabular-nums">
                     {formatMoney(sale.total_value)}
                   </TableCell>

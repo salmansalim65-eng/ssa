@@ -12,6 +12,8 @@ export const assetSaleSchema = z.object({
   customerAccountId: z.string().uuid("Select the customer account"),
   assetId: z.string().uuid("Select an asset").optional().or(z.literal("")),
   saleDate: z.string().date("Enter a valid date"),
+  paymentTerms: z.string().trim().max(200, "Keep it under 200 characters").optional().or(z.literal("")),
+  dueDate: z.string().date("Enter a valid date").optional().or(z.literal("")),
   currencyId: z.string().uuid("Select a currency"),
   exchangeRate: z.coerce.number().positive("Currency conversion is required"),
   pakExch: z.coerce.number().nonnegative().default(0),

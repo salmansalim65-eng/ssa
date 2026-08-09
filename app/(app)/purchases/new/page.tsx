@@ -1,8 +1,5 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeftIcon } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { PurchaseVoucherForm } from "@/components/purchases/purchase-voucher-form";
 import { hasPermission } from "@/lib/auth/permissions";
@@ -59,13 +56,6 @@ export default async function NewPurchaseVoucherPage() {
         title="New Purchase Voucher"
         description="Record a property acquisition and its accounting entries."
         backHref="/purchases"
-        actions={
-          <Button asChild variant="outline">
-            <Link href="/purchases">
-              <ArrowLeftIcon /> Back to list
-            </Link>
-          </Button>
-        }
       />
       <PurchaseVoucherForm accounts={accounts ?? []} currencies={currencyOptions} costCenters={costCenters ?? []} />
     </div>

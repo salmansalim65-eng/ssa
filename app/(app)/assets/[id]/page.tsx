@@ -16,6 +16,7 @@ import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { blankAmount } from "@/lib/forms/amount";
 import type { AssetInput } from "@/features/assets/schemas";
 import { EditAssetForm } from "./edit-asset-form";
+import { DeleteAssetButton } from "./delete-asset-button";
 
 export default async function AssetDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -23,7 +24,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
 
   const companyId = await getCurrentCompanyId();
 
-  const [{ data: asset }, canEdit, canCreateValuation, canDeleteValuation, canSell] = await Promise.all([
+  const [{ data: asset }, canEdit, canCreateValuation, canDeleteValuation, canSell, canDelete] = await Promise.all([
     supabase
       .schema("assets")
       .from("assets")
@@ -35,6 +36,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
     hasPermission("asset_valuations", "create"),
     hasPermission("asset_valuations", "delete"),
     hasPermission("asset_sales", "create"),
+    hasPermission("assets", "delete"),
   ]);
 
   if (!asset) notFound();
@@ -169,6 +171,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
               <Link href={`/sales/new?assetId=${asset.id}`}>Sell asset</Link>
             </Button>
           )}
+          {canDelete && <DeleteAssetButton assetId={asset.id} assetName={asset.asset_name} />}
         </div>
       </div>
 

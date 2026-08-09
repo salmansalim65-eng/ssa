@@ -62,18 +62,24 @@ export async function createHhLease(input: HhLeaseInput) {
   if (error) return { error: error.message };
 
   // HH leases are uae_leases — admins get every created line's invoices
-  // generated + posted automatically; best-effort so drafts remain on failure.
+  // generated + posted automatically. Real failures are surfaced as a warning
+  // rather than silently swallowed.
+  let invoiceWarning: string | undefined;
   if (await isCurrentUserAdmin()) {
     for (const created of createdLeases ?? []) {
       try {
-        await generateAllUaeRentInvoices(created.id);
-        await postAllUaeRentInvoices(created.id);
-      } catch {
-        /* best-effort; drafts remain for manual posting */
+        const gen = await generateAllUaeRentInvoices(created.id);
+        if (gen.error && gen.error !== "No pending periods left to invoice.") invoiceWarning = gen.error;
+        const post = await postAllUaeRentInvoices(created.id);
+        if (post.failed.length > 0) {
+          invoiceWarning = `Some invoices could not be posted: ${post.failed.map((f) => f.reason).join("; ")}`;
+        }
+      } catch (e) {
+        invoiceWarning = e instanceof Error ? e.message : "Invoice generation failed";
       }
     }
   }
 
   revalidatePath("/rental/uae/leases");
-  return { success: true, documentNo: documentNo as string, count: rows.length };
+  return { success: true, documentNo: documentNo as string, count: rows.length, invoiceWarning };
 }

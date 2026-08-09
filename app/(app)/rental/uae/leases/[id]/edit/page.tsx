@@ -1,8 +1,5 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeftIcon } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { UaeLeaseForm } from "@/components/rental/uae-lease-form";
 import { hasPermission } from "@/lib/auth/permissions";
@@ -66,13 +63,6 @@ export default async function EditUaeLeasePage({ params }: { params: Promise<{ i
         title="Edit UAE lease"
         description="Update the terms of this UAE lease."
         backHref="/rental/uae/leases"
-        actions={
-          <Button asChild variant="outline">
-            <Link href={detailHref}>
-              <ArrowLeftIcon /> Back to lease
-            </Link>
-          </Button>
-        }
       />
       <UaeLeaseForm
         assets={assets ?? []}

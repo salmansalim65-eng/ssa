@@ -44,19 +44,25 @@ export async function createPkLease(input: PkLeaseInput) {
 
   if (error || !lease) return { error: error?.message ?? "Failed to create lease" };
 
-  // Admins get invoices generated + posted automatically; best-effort so a
-  // failure here leaves drafts for manual posting rather than failing the create.
+  // Admins get invoices generated + posted automatically. The lease is created
+  // regardless, but a real failure (e.g. missing posting template) is surfaced
+  // as a warning instead of being silently swallowed.
+  let invoiceWarning: string | undefined;
   if (await isCurrentUserAdmin()) {
     try {
-      await generateAllPkRentInvoices(lease.id);
-      await postAllPkRentInvoices(lease.id);
-    } catch {
-      /* best-effort; drafts remain for manual posting */
+      const gen = await generateAllPkRentInvoices(lease.id);
+      if (gen.error && gen.error !== "No pending periods left to invoice.") invoiceWarning = gen.error;
+      const post = await postAllPkRentInvoices(lease.id);
+      if (post.failed.length > 0) {
+        invoiceWarning = `Some invoices could not be posted: ${post.failed.map((f) => f.reason).join("; ")}`;
+      }
+    } catch (e) {
+      invoiceWarning = e instanceof Error ? e.message : "Invoice generation failed";
     }
   }
 
   revalidatePath("/rental/pk/leases");
-  return { success: true, id: lease.id };
+  return { success: true, id: lease.id, invoiceWarning };
 }
 
 export async function updatePkLease(id: string, input: PkLeaseInput) {

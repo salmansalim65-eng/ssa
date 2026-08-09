@@ -1,8 +1,5 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeftIcon } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { PkLeaseForm } from "@/components/rental/pk-lease-form";
 import { hasPermission } from "@/lib/auth/permissions";
@@ -66,13 +63,6 @@ export default async function EditPkLeasePage({ params }: { params: Promise<{ id
         title="Edit Pakistan lease"
         description="Update the terms of this Pakistan lease."
         backHref="/rental/pk/leases"
-        actions={
-          <Button asChild variant="outline">
-            <Link href="/rental/pk/leases">
-              <ArrowLeftIcon /> Back to list
-            </Link>
-          </Button>
-        }
       />
       <PkLeaseForm
         assets={assets ?? []}

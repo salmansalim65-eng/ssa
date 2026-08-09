@@ -1,8 +1,5 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeftIcon } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { ChequeReturnVoucherForm, type ReturnablePdcOption } from "@/components/vouchers/forms/cheque-return-voucher-form";
 import { JournalVoucherForm } from "@/components/vouchers/forms/journal-voucher-form";
@@ -109,13 +106,6 @@ export default async function NewVoucherPage({
         title={`New ${VOUCHER_TYPE_LABELS[voucherType]}`}
         description="Fill in the header details and entry lines, then save as a draft."
         backHref={`/accounting/vouchers/${voucherType}`}
-        actions={
-          <Button asChild variant="outline">
-            <Link href={`/accounting/vouchers/${voucherType}`}>
-              <ArrowLeftIcon /> Back to list
-            </Link>
-          </Button>
-        }
       />
 
       {voucherType === "receipt_voucher" && (

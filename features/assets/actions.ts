@@ -86,12 +86,53 @@ export async function deleteAsset(assetId: string) {
   const supabase = await createClient();
   const { data: user } = await supabase.auth.getUser();
 
+  // Refuse deletion when the asset is referenced by leases, sales or purchase
+  // lines, or when its (auto-created) cost centre already carries accounting
+  // entries — deleting would orphan financial history.
+  const rental = supabase.schema("rental");
+  const assetsSchema = supabase.schema("assets");
+  const acc = supabase.schema("accounting");
+
+  const { data: costCenter } = await acc
+    .from("cost_centers")
+    .select("id")
+    .eq("asset_id", assetId)
+    .maybeSingle();
+
+  const [{ count: uaeLeases }, { count: pkLeases }, { count: sales }, { count: purchaseLines }] = await Promise.all([
+    rental.from("uae_leases").select("id", { count: "exact", head: true }).eq("asset_id", assetId),
+    rental.from("pk_leases").select("id", { count: "exact", head: true }).eq("asset_id", assetId),
+    assetsSchema.from("asset_sales").select("id", { count: "exact", head: true }).eq("asset_id", assetId),
+    acc.from("purchase_voucher_lines").select("id", { count: "exact", head: true }).eq("asset_id", assetId),
+  ]);
+
+  let ccEntries = 0;
+  if (costCenter?.id) {
+    const { count } = await acc
+      .from("journal_entry_lines")
+      .select("id", { count: "exact", head: true })
+      .eq("cost_center_id", costCenter.id);
+    ccEntries = count ?? 0;
+  }
+
+  if ((uaeLeases ?? 0) + (pkLeases ?? 0) + (sales ?? 0) + (purchaseLines ?? 0) + ccEntries > 0) {
+    return {
+      error:
+        "This asset cannot be deleted because it is used by leases, sales, purchases or posted accounting entries.",
+    };
+  }
+
   const { error } = await supabase
     .schema("assets")
     .from("assets")
     .update({ deleted_at: new Date().toISOString(), deleted_by: user.user!.id })
     .eq("id", assetId);
   if (error) return { error: error.message };
+
+  // Deactivate the asset's now-unused cost centre so it drops out of pickers.
+  if (costCenter?.id) {
+    await acc.from("cost_centers").update({ is_active: false }).eq("id", costCenter.id);
+  }
 
   revalidatePath("/assets");
   return { success: true };

@@ -22,7 +22,7 @@ export default async function SuppliersPage() {
   const { data: companyIdData } = await supabase.schema("core").rpc("current_company_id");
   const companyId = companyIdData as string;
 
-  const [{ data: suppliers }, canCreate, canEdit] = await Promise.all([
+  const [{ data: suppliers }, canCreate, canEdit, canDelete] = await Promise.all([
     supabase
       .schema("assets")
       .from("suppliers")
@@ -32,6 +32,7 @@ export default async function SuppliersPage() {
       .order("name"),
     hasPermission("purchase_voucher", "create"),
     hasPermission("purchase_voucher", "edit"),
+    hasPermission("purchase_voucher", "delete"),
   ]);
 
   const rows = suppliers ?? [];
@@ -78,8 +79,10 @@ export default async function SuppliersPage() {
                   <TableCell>
                     <SupplierRowActions
                       supplierId={s.id}
+                      supplierName={s.name}
                       isActive={s.is_active}
                       canEdit={canEdit}
+                      canDelete={canDelete}
                       defaultValues={{
                         name: s.name,
                         contactPerson: s.contact_person ?? "",

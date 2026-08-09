@@ -1,8 +1,5 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeftIcon } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { HhLeaseForm } from "@/components/rental/hh-lease-form";
 import { hasPermission } from "@/lib/auth/permissions";
@@ -53,13 +50,6 @@ export default async function NewHhLeasePage() {
         title="HH Lease"
         description="Enter one tenant and many asset lines at once. Each line is saved as its own UAE lease under a shared document number."
         backHref="/rental/uae/leases"
-        actions={
-          <Button asChild variant="outline">
-            <Link href="/rental/uae/leases">
-              <ArrowLeftIcon /> Back to list
-            </Link>
-          </Button>
-        }
       />
       <HhLeaseForm
         assets={assets ?? []}

@@ -70,36 +70,12 @@ export async function setTenantActive(tenantId: string, isActive: boolean) {
 
 export async function deleteTenant(tenantId: string) {
   await requirePermission("tenants", "delete");
-  const companyId = await getCurrentCompanyId();
   const supabase = await createClient();
 
-  // Refuse deletion when the tenant is referenced by leases (which in turn own
-  // the invoices, receipts and accounting entries) — deleting would orphan
-  // financial history. Rent invoices/payments hang off leases, so a lease check
-  // is sufficient to protect the accounting trail.
-  const [{ count: uaeLeases }, { count: pkLeases }] = await Promise.all([
-    supabase
-      .schema("rental")
-      .from("uae_leases")
-      .select("id", { count: "exact", head: true })
-      .eq("company_id", companyId)
-      .eq("tenant_id", tenantId),
-    supabase
-      .schema("rental")
-      .from("pk_leases")
-      .select("id", { count: "exact", head: true })
-      .eq("company_id", companyId)
-      .eq("tenant_id", tenantId),
-  ]);
-  if ((uaeLeases ?? 0) + (pkLeases ?? 0) > 0) {
-    return { error: "This tenant cannot be deleted because it has linked leases (and their invoices/payments)." };
-  }
-
-  const { error } = await supabase
-    .schema("rental")
-    .from("tenants")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("id", tenantId);
+  // Definer function guards linked leases (which own the invoices/payments and
+  // accounting entries) and soft-deletes; stamping deleted_at through the
+  // RLS-scoped client is rejected by the `deleted_at IS NULL` select policy.
+  const { error } = await supabase.schema("rental").rpc("fn_soft_delete_tenant", { p_id: tenantId });
   if (error) return { error: error.message };
 
   revalidatePath("/rental/tenants");

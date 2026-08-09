@@ -74,26 +74,12 @@ export async function setSupplierActive(supplierId: string, isActive: boolean) {
 
 export async function deleteSupplier(supplierId: string) {
   await requirePermission("purchase_voucher", "delete");
-  const companyId = await getCurrentCompanyId();
   const supabase = await createClient();
 
-  // Refuse deletion when the supplier is referenced by purchase vouchers —
-  // deleting would orphan those vouchers and their accounting entries.
-  const { count: vouchers } = await supabase
-    .schema("accounting")
-    .from("purchase_vouchers")
-    .select("id", { count: "exact", head: true })
-    .eq("company_id", companyId)
-    .eq("supplier_id", supplierId);
-  if ((vouchers ?? 0) > 0) {
-    return { error: "This supplier cannot be deleted because it is used by purchase vouchers." };
-  }
-
-  const { error } = await supabase
-    .schema("assets")
-    .from("suppliers")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("id", supplierId);
+  // Definer function guards the purchase-voucher reference and soft-deletes;
+  // stamping deleted_at through the RLS-scoped client is rejected by the
+  // `deleted_at IS NULL` select policy.
+  const { error } = await supabase.schema("assets").rpc("fn_soft_delete_supplier", { p_id: supplierId });
   if (error) return { error: error.message };
 
   revalidatePath("/assets/suppliers");

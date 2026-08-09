@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { requirePermission } from "@/lib/auth/permissions";
+import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { createJournalEntry, getCurrentCompanyId, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { paymentVoucherSchema, type PaymentVoucherInput } from "./schemas";
@@ -16,7 +16,7 @@ function lineDescription(remarks?: string) {
   return parts.length ? parts.join(" — ") : "Payment";
 }
 
-export async function createPaymentVoucher(input: PaymentVoucherInput) {
+export async function createPaymentVoucher(input: PaymentVoucherInput, options?: { autoPostIfAdmin?: boolean }) {
   const parsed = paymentVoucherSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
 
@@ -92,6 +92,13 @@ export async function createPaymentVoucher(input: PaymentVoucherInput) {
   if (linesError) return { error: linesError.message };
 
   revalidatePath("/accounting/vouchers/payment_voucher");
+  if (options?.autoPostIfAdmin !== false && (await isCurrentUserAdmin())) {
+    try {
+      await postPaymentVoucher(voucherId, je.journalEntryId);
+    } catch {
+      // Auto-post is best-effort; the created draft remains for manual posting.
+    }
+  }
   return { success: true, id: voucherId };
 }
 

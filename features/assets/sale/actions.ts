@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { requirePermission } from "@/lib/auth/permissions";
+import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { createJournalEntry, getCurrentCompanyId, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { assetSaleSchema, type AssetSaleInput } from "./schemas";
@@ -11,7 +11,7 @@ function round2(n: number) {
   return Math.round(n * 100) / 100;
 }
 
-export async function createAssetSale(input: AssetSaleInput) {
+export async function createAssetSale(input: AssetSaleInput, options?: { autoPostIfAdmin?: boolean }) {
   const parsed = assetSaleSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
 
@@ -112,6 +112,13 @@ export async function createAssetSale(input: AssetSaleInput) {
   if (linesError) return { error: linesError.message };
 
   revalidatePath("/sales");
+  if (options?.autoPostIfAdmin !== false && (await isCurrentUserAdmin())) {
+    try {
+      await postAssetSale(saleId, je.journalEntryId);
+    } catch {
+      // Auto-post is best-effort; the created draft remains for manual posting.
+    }
+  }
   return { success: true, id: saleId };
 }
 
@@ -279,7 +286,7 @@ export async function copyAssetSale(id: string) {
       gross: l.gross,
       remarks: l.remarks ?? "",
     })),
-  });
+  }, { autoPostIfAdmin: false });
 }
 
 export async function deleteAssetSale(id: string) {

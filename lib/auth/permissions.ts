@@ -40,3 +40,15 @@ export async function requirePermission(moduleKey: string, action: PermissionAct
     throw new Error(`Not permitted: ${moduleKey}.${action}`);
   }
 }
+
+/**
+ * True when the current user is an Administrator (holds a system role) in the
+ * active company. Admins skip the approval step and auto-post on create; all
+ * posting validation still runs. Request-cached like the permission lookups.
+ */
+export const isCurrentUserAdmin = cache(async (): Promise<boolean> => {
+  const supabase = await createClient();
+  const { data, error } = await supabase.schema("core").rpc("is_admin");
+  if (error) return false;
+  return data === true;
+});

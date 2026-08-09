@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { requirePermission } from "@/lib/auth/permissions";
+import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { createJournalEntry, getCurrentCompanyId, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { receiptVoucherSchema, type ReceiptVoucherInput } from "./schemas";
@@ -18,7 +18,7 @@ function lineDescription(rentMonth?: string, remarks?: string) {
   return parts.length ? parts.join(" — ") : "Receipt";
 }
 
-export async function createReceiptVoucher(input: ReceiptVoucherInput) {
+export async function createReceiptVoucher(input: ReceiptVoucherInput, options?: { autoPostIfAdmin?: boolean }) {
   const parsed = receiptVoucherSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
 
@@ -96,6 +96,13 @@ export async function createReceiptVoucher(input: ReceiptVoucherInput) {
   if (linesError) return { error: linesError.message };
 
   revalidatePath("/accounting/vouchers/receipt_voucher");
+  if (options?.autoPostIfAdmin !== false && (await isCurrentUserAdmin())) {
+    try {
+      await postReceiptVoucher(voucherId, je.journalEntryId);
+    } catch {
+      // Auto-post is best-effort; the created draft remains for manual posting.
+    }
+  }
   return { success: true, id: voucherId };
 }
 

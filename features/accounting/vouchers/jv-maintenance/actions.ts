@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { requirePermission } from "@/lib/auth/permissions";
+import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { createJournalEntry, getCurrentCompanyId, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { jvMaintenanceVoucherSchema, type JvMaintenanceVoucherInput } from "./schemas";
@@ -18,7 +18,7 @@ function toEntryLines(lines: JvMaintenanceVoucherInput["lines"]): EntryLineInput
   ]);
 }
 
-export async function createJvMaintenanceVoucher(input: JvMaintenanceVoucherInput) {
+export async function createJvMaintenanceVoucher(input: JvMaintenanceVoucherInput, options?: { autoPostIfAdmin?: boolean }) {
   const parsed = jvMaintenanceVoucherSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
 
@@ -69,6 +69,13 @@ export async function createJvMaintenanceVoucher(input: JvMaintenanceVoucherInpu
   if (linesErr) return { error: linesErr.message };
 
   revalidatePath("/accounting/vouchers/jv_maintenance_voucher");
+  if (options?.autoPostIfAdmin !== false && (await isCurrentUserAdmin())) {
+    try {
+      await postJvMaintenanceVoucher(voucherId, je.journalEntryId);
+    } catch {
+      // Auto-post is best-effort; the created draft remains for manual posting.
+    }
+  }
   return { success: true, id: voucherId };
 }
 

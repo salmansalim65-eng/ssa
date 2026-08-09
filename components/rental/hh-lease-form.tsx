@@ -9,6 +9,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { blankAmount, amountValue } from "@/lib/forms/amount";
 import {
   Form,
   FormControl,
@@ -44,7 +45,7 @@ function today() {
 }
 
 function emptyLine() {
-  return { assetId: "", rentalAmount: 0, leaseStart: today(), leaseEnd: today(), remarks: "" };
+  return { assetId: "", rentalAmount: blankAmount, leaseStart: today(), leaseEnd: today(), remarks: "" };
 }
 
 export function HhLeaseForm({
@@ -226,7 +227,7 @@ export function HhLeaseForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormControl>
-                              <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
+                              <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>

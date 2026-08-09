@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { blankAmount, amountValue } from "@/lib/forms/amount";
 import {
   Form,
   FormControl,
@@ -73,9 +74,9 @@ export function PkLeaseForm({
       tenantId: "",
       leaseStart: today(),
       leaseEnd: today(),
-      monthlyRent: 0,
-      advanceRent: 0,
-      securityDeposit: 0,
+      monthlyRent: blankAmount,
+      advanceRent: blankAmount,
+      securityDeposit: blankAmount,
       currencyId: defaultCurrencyId ?? currencies[0]?.id ?? "",
       dueDate: "",
     },
@@ -195,7 +196,7 @@ export function PkLeaseForm({
             <FormItem>
               <FormLabel>Monthly rent</FormLabel>
               <FormControl>
-                <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
+                <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -208,7 +209,7 @@ export function PkLeaseForm({
             <FormItem>
               <FormLabel>Advance rent</FormLabel>
               <FormControl>
-                <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
+                <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -221,7 +222,7 @@ export function PkLeaseForm({
             <FormItem>
               <FormLabel>Security deposit</FormLabel>
               <FormControl>
-                <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
+                <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
               </FormControl>
               <FormMessage />
             </FormItem>

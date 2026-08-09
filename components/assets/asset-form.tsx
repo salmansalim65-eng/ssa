@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { assetSchema, type AssetFormValues, type AssetInput } from "@/features/assets/schemas";
+import { amountValue } from "@/lib/forms/amount";
 
 // A newly-picked country pre-selects its currency (if the company has it).
 const COUNTRY_CURRENCY: Record<string, string> = { PK: "PKR", AE: "AED" };
@@ -231,7 +232,7 @@ export function AssetForm({
             <FormItem>
               <FormLabel>Purchase value</FormLabel>
               <FormControl>
-                <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
+                <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -244,7 +245,7 @@ export function AssetForm({
             <FormItem>
               <FormLabel>Current value</FormLabel>
               <FormControl>
-                <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
+                <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -285,7 +286,7 @@ export function AssetForm({
             <FormItem>
               <FormLabel>Title deed value</FormLabel>
               <FormControl>
-                <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
+                <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -311,7 +312,7 @@ export function AssetForm({
             <FormItem>
               <FormLabel>Estimated rent</FormLabel>
               <FormControl>
-                <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
+                <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
               </FormControl>
               <FormMessage />
             </FormItem>

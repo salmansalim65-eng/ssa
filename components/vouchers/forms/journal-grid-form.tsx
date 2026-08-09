@@ -28,6 +28,7 @@ import {
 import { AccountCombobox, type AccountOption } from "@/components/vouchers/account-combobox";
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
 import { DateInput } from "@/components/vouchers/date-input";
+import { blankAmount, amountValue } from "@/lib/forms/amount";
 import { uploadAttachment } from "@/features/attachments/actions";
 import {
   journalVoucherSchema,
@@ -47,7 +48,7 @@ function today() {
 }
 
 function emptyLine() {
-  return { accountId: "", costCenterId: "", debit: 0, credit: 0, reference: "", remarks: "" };
+  return { accountId: "", costCenterId: "", debit: blankAmount, credit: blankAmount, reference: "", remarks: "" };
 }
 
 export function JournalGridForm({
@@ -284,7 +285,7 @@ export function JournalGridForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormControl>
-                              <Input type="number" step="0.01" min="0" className="text-right tabular-nums" {...field} value={field.value as number} />
+                              <Input type="number" step="0.01" min="0" className="text-right tabular-nums" {...field} value={amountValue(field.value)} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -298,7 +299,7 @@ export function JournalGridForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormControl>
-                              <Input type="number" step="0.01" min="0" className="text-right tabular-nums" {...field} value={field.value as number} />
+                              <Input type="number" step="0.01" min="0" className="text-right tabular-nums" {...field} value={amountValue(field.value)} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>

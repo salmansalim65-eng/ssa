@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { AssetForm, type CostCenterOption, type CurrencyOption } from "@/components/assets/asset-form";
 import { createAsset } from "@/features/assets/actions";
 import type { AssetFormValues } from "@/features/assets/schemas";
+import { blankAmount } from "@/lib/forms/amount";
 
 const emptyValues: AssetFormValues = {
   assetName: "",
@@ -16,12 +17,12 @@ const emptyValues: AssetFormValues = {
   areaSqft: 0,
   address: "",
   purchaseDate: "",
-  purchaseValue: 0,
-  currentValue: 0,
+  purchaseValue: blankAmount,
+  currentValue: blankAmount,
   currencyId: "",
   serviceChargesRate: 0,
-  titleDeedValue: 0,
-  estimatedRent: 0,
+  titleDeedValue: blankAmount,
+  estimatedRent: blankAmount,
   status: "active",
   owner: "",
   groupCostCenterId: "",

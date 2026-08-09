@@ -13,6 +13,7 @@ import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
+import { blankAmount } from "@/lib/forms/amount";
 import type { AssetInput } from "@/features/assets/schemas";
 import { EditAssetForm } from "./edit-asset-form";
 
@@ -139,12 +140,12 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
     areaSqft: asset.area_sqft ?? 0,
     address: asset.address ?? "",
     purchaseDate: asset.purchase_date ?? "",
-    purchaseValue: asset.purchase_value ?? 0,
-    currentValue: asset.current_value ?? 0,
+    purchaseValue: asset.purchase_value ?? blankAmount,
+    currentValue: asset.current_value ?? blankAmount,
     currencyId: asset.currency_id ?? "",
     serviceChargesRate: asset.service_charges_rate ?? 0,
-    titleDeedValue: asset.title_deed_value ?? 0,
-    estimatedRent: asset.estimated_rent ?? 0,
+    titleDeedValue: asset.title_deed_value ?? blankAmount,
+    estimatedRent: asset.estimated_rent ?? blankAmount,
     status: asset.status,
     owner: asset.owner ?? "",
     groupCostCenterId: asset.group_cost_center_id ?? "",

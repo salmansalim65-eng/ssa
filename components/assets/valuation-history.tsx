@@ -39,6 +39,7 @@ import {
   type ValuationFormValues,
   type ValuationInput,
 } from "@/features/assets/valuations/schemas";
+import { blankAmount, amountValue } from "@/lib/forms/amount";
 
 export interface ValuationRow {
   id: string;
@@ -69,7 +70,7 @@ export function ValuationHistory({
 
   const form = useForm<ValuationFormValues, unknown, ValuationInput>({
     resolver: zodResolver(valuationSchema),
-    defaultValues: { valuationDate: today(), marketValue: 0, valuer: "", notes: "" },
+    defaultValues: { valuationDate: today(), marketValue: blankAmount, valuer: "", notes: "" },
   });
 
   function onSubmit(values: ValuationInput) {
@@ -80,7 +81,7 @@ export function ValuationHistory({
         return;
       }
       toast.success("Valuation recorded");
-      form.reset({ valuationDate: today(), marketValue: 0, valuer: "", notes: "" });
+      form.reset({ valuationDate: today(), marketValue: blankAmount, valuer: "", notes: "" });
       setOpen(false);
       router.refresh();
     });
@@ -169,7 +170,7 @@ export function ValuationHistory({
                     <FormItem>
                       <FormLabel>Market value</FormLabel>
                       <FormControl>
-                        <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
+                        <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

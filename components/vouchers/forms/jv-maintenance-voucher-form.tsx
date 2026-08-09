@@ -29,6 +29,7 @@ import {
 import { AccountCombobox, type AccountOption } from "@/components/vouchers/account-combobox";
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
 import { DateInput } from "@/components/vouchers/date-input";
+import { blankAmount, amountValue } from "@/lib/forms/amount";
 import {
   createJvMaintenanceVoucher,
   updateJvMaintenanceVoucher,
@@ -49,7 +50,7 @@ function today() {
 }
 
 function emptyLine() {
-  return { costCenterId: "", debitAccountId: "", creditAccountId: "", amount: 0 };
+  return { costCenterId: "", debitAccountId: "", creditAccountId: "", amount: blankAmount };
 }
 
 export function JvMaintenanceVoucherForm({
@@ -300,7 +301,7 @@ export function JvMaintenanceVoucherForm({
                                 min="0"
                                 className="text-right tabular-nums"
                                 {...field}
-                                value={field.value as number}
+                                value={amountValue(field.value)}
                               />
                             </FormControl>
                             <FormMessage />

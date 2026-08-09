@@ -5,6 +5,7 @@ import { PencilIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
+import { EscToBack } from "@/components/vouchers/esc-to-back";
 import { AttachmentList, type AttachmentItem } from "@/components/attachments/attachment-list";
 import {
   Table,
@@ -116,6 +117,7 @@ export default async function VoucherDetailPage({
 
   return (
     <div className="space-y-6">
+      <EscToBack />
       <PageHeader
         eyebrow={VOUCHER_TYPE_LABELS[voucherType]}
         title={detail.voucherNo ?? "Draft"}

@@ -9,10 +9,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import { navSections } from "./nav-items";
 
-// Collapsed section headings, persisted in localStorage and read through
-// useSyncExternalStore so the server snapshot (nothing collapsed) matches
-// hydration and the stored preference applies on the first client tick.
-const SECTIONS_KEY = "ssa-sidebar-sections";
+// Which section headings the user has EXPANDED, persisted in localStorage and
+// read through useSyncExternalStore so the server snapshot (nothing expanded)
+// matches hydration. Sections are collapsed by default; the section holding the
+// active page still opens automatically.
+const SECTIONS_KEY = "ssa-sidebar-expanded";
 const EMPTY_SECTIONS: readonly string[] = [];
 const sectionListeners = new Set<() => void>();
 let cachedRaw = "";
@@ -22,7 +23,7 @@ function subscribeSections(cb: () => void) {
   sectionListeners.add(cb);
   return () => sectionListeners.delete(cb);
 }
-function getSectionsSnapshot(): readonly string[] {
+function getExpandedSnapshot(): readonly string[] {
   const raw = typeof window !== "undefined" ? window.localStorage.getItem(SECTIONS_KEY) ?? "" : "";
   if (raw !== cachedRaw) {
     cachedRaw = raw;
@@ -34,11 +35,11 @@ function getSectionsSnapshot(): readonly string[] {
   }
   return cachedValue;
 }
-function getSectionsServerSnapshot(): readonly string[] {
+function getExpandedServerSnapshot(): readonly string[] {
   return EMPTY_SECTIONS;
 }
 function toggleSectionPref(label: string) {
-  const current = new Set(getSectionsSnapshot());
+  const current = new Set(getExpandedSnapshot());
   if (current.has(label)) current.delete(label);
   else current.add(label);
   if (typeof window !== "undefined") window.localStorage.setItem(SECTIONS_KEY, JSON.stringify([...current]));
@@ -53,8 +54,8 @@ export function SidebarNav({
   collapsed?: boolean;
 }) {
   const pathname = usePathname();
-  const collapsedList = useSyncExternalStore(subscribeSections, getSectionsSnapshot, getSectionsServerSnapshot);
-  const collapsedSections = new Set(collapsedList);
+  const expandedList = useSyncExternalStore(subscribeSections, getExpandedSnapshot, getExpandedServerSnapshot);
+  const expandedSections = new Set(expandedList);
 
   function isActive(href: string) {
     return pathname === href || pathname.startsWith(href + "/");
@@ -122,7 +123,7 @@ export function SidebarNav({
         }
 
         const sectionActive = section.items.some((i) => isActive(i.href));
-        const open = sectionActive || !collapsedSections.has(section.label);
+        const open = sectionActive || expandedSections.has(section.label);
 
         return (
           <div key={section.label} className="mb-1">
@@ -131,11 +132,11 @@ export function SidebarNav({
               onClick={() => toggleSectionPref(section.label!)}
               aria-expanded={open}
               className={cn(
-                "group flex w-full items-center gap-1.5 rounded-md px-3 py-1.5",
+                "group flex w-full items-center gap-1.5 rounded-md border border-sidebar-border/60 px-3 py-1.5",
                 "text-[0.68rem] font-semibold uppercase tracking-[0.12em] transition-colors",
                 sectionActive
-                  ? "text-group"
-                  : "text-muted-foreground/80 hover:text-foreground",
+                  ? "bg-accent text-group"
+                  : "bg-muted/60 text-muted-foreground/90 hover:bg-muted hover:text-foreground",
               )}
             >
               <ChevronDownIcon

@@ -29,6 +29,7 @@ import {
 import { AccountCombobox, type AccountOption } from "@/components/vouchers/account-combobox";
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
 import { DateInput } from "@/components/vouchers/date-input";
+import { blankAmount, amountValue } from "@/lib/forms/amount";
 import { createPdcReceiptVoucher, updatePdcReceiptVoucher } from "@/features/accounting/vouchers/pdc-receipt/actions";
 import {
   pdcReceiptVoucherSchema,
@@ -46,7 +47,7 @@ function today() {
 }
 
 function emptyLine() {
-  return { accountId: "", amount: 0, rentMonth: "", remarks: "" };
+  return { accountId: "", amount: blankAmount, rentMonth: "", remarks: "" };
 }
 
 export function PdcReceiptVoucherForm({
@@ -311,7 +312,7 @@ export function PdcReceiptVoucherForm({
                                 min="0"
                                 className="text-right tabular-nums"
                                 {...field}
-                                value={field.value as number}
+                                value={amountValue(field.value)}
                               />
                             </FormControl>
                             <FormMessage />

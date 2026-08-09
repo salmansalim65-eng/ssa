@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AccountSelect, type AccountOption } from "@/components/vouchers/account-select";
+import { blankAmount, amountValue } from "@/lib/forms/amount";
 import { createChequeReturnVoucher } from "@/features/accounting/vouchers/cheque-return/actions";
 import {
   chequeReturnVoucherSchema,
@@ -63,7 +64,7 @@ export function ChequeReturnVoucherForm({
       originalPdcId: "",
       returnDate: today(),
       returnReason: "",
-      penaltyAmount: 0,
+      penaltyAmount: blankAmount,
       penaltyAccountId: "",
     },
   });
@@ -158,7 +159,7 @@ export function ChequeReturnVoucherForm({
             <FormItem>
               <FormLabel>Penalty amount</FormLabel>
               <FormControl>
-                <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
+                <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
               </FormControl>
               <FormMessage />
             </FormItem>

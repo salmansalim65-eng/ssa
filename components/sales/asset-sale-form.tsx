@@ -29,6 +29,7 @@ import { AccountCombobox, type AccountOption } from "@/components/vouchers/accou
 import { DateInput } from "@/components/vouchers/date-input";
 import { createAssetSale, updateAssetSale } from "@/features/assets/sale/actions";
 import { assetSaleSchema, type AssetSaleFormValues, type AssetSaleInput } from "@/features/assets/sale/schemas";
+import { blankAmount, amountValue } from "@/lib/forms/amount";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -40,7 +41,7 @@ export interface CostCenterOption {
 }
 
 function emptyLine() {
-  return { costCenterId: "", fixedAssetAccountId: "", gross: 0, remarks: "" };
+  return { costCenterId: "", fixedAssetAccountId: "", gross: blankAmount, remarks: "" };
 }
 
 export function AssetSaleForm({
@@ -297,7 +298,7 @@ export function AssetSaleForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormControl>
-                              <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
+                              <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>

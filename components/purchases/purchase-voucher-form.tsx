@@ -33,6 +33,7 @@ import {
   type PurchaseVoucherFormValues,
   type PurchaseVoucherInput,
 } from "@/features/accounting/purchase-voucher/schemas";
+import { blankAmount, amountValue } from "@/lib/forms/amount";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -44,7 +45,7 @@ export interface CostCenterOption {
 }
 
 function emptyLine() {
-  return { costCenterId: "", fixedAssetAccountId: "", gross: 0, dueDate: "", installmentMonth: "", remarks: "" };
+  return { costCenterId: "", fixedAssetAccountId: "", gross: blankAmount, dueDate: "", installmentMonth: "", remarks: "" };
 }
 
 export function PurchaseVoucherForm({
@@ -280,7 +281,7 @@ export function PurchaseVoucherForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormControl>
-                              <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
+                              <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>

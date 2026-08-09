@@ -30,6 +30,7 @@ import {
   type AccountFormValues,
   type AccountInput,
 } from "@/features/accounting/chart-of-accounts/schemas";
+import { amountValue } from "@/lib/forms/amount";
 
 const typeLabels: Record<(typeof ACCOUNT_TYPES)[number], string> = {
   asset: "Asset",
@@ -237,7 +238,7 @@ export function AccountForm({
                     step="0.01"
                     disabled={isGroup}
                     {...field}
-                    value={field.value as number}
+                    value={amountValue(field.value)}
                   />
                 </FormControl>
                 <FormMessage />

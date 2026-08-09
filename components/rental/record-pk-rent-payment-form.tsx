@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { AccountSelect, type AccountOption } from "@/components/vouchers/account-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { blankAmount, amountValue } from "@/lib/forms/amount";
 import {
   Form,
   FormControl,
@@ -35,7 +36,7 @@ export function RecordPkRentPaymentForm({ invoiceId, accounts }: { invoiceId: st
 
   const form = useForm<RecordPkPaymentFormValues, unknown, RecordPkPaymentInput>({
     resolver: zodResolver(recordPkPaymentSchema),
-    defaultValues: { paymentDate: today(), amount: 0, cashBankAccountId: "" },
+    defaultValues: { paymentDate: today(), amount: blankAmount, cashBankAccountId: "" },
   });
 
   function onSubmit(values: RecordPkPaymentInput) {
@@ -47,7 +48,7 @@ export function RecordPkRentPaymentForm({ invoiceId, accounts }: { invoiceId: st
         return;
       }
       toast.success("Payment recorded");
-      form.reset({ paymentDate: today(), amount: 0, cashBankAccountId: values.cashBankAccountId });
+      form.reset({ paymentDate: today(), amount: blankAmount, cashBankAccountId: values.cashBankAccountId });
       router.refresh();
     });
   }
@@ -86,7 +87,7 @@ export function RecordPkRentPaymentForm({ invoiceId, accounts }: { invoiceId: st
             <FormItem>
               <FormLabel>Amount</FormLabel>
               <FormControl>
-                <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
+                <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
               </FormControl>
               <FormMessage />
             </FormItem>

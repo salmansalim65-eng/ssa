@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { blankAmount, amountValue } from "@/lib/forms/amount";
 import {
   Form,
   FormControl,
@@ -73,9 +74,9 @@ export function UaeLeaseForm({
       tenantId: "",
       leaseStart: today(),
       leaseEnd: today(),
-      rentalAmount: 0,
+      rentalAmount: blankAmount,
       rentCycle: "monthly",
-      securityDeposit: 0,
+      securityDeposit: blankAmount,
       currencyId: defaultCurrencyId ?? currencies[0]?.id ?? "",
       dueDate: "",
     },
@@ -216,7 +217,7 @@ export function UaeLeaseForm({
             <FormItem>
               <FormLabel>Rental amount (per cycle)</FormLabel>
               <FormControl>
-                <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
+                <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -229,7 +230,7 @@ export function UaeLeaseForm({
             <FormItem>
               <FormLabel>Security deposit</FormLabel>
               <FormControl>
-                <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
+                <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
               </FormControl>
               <FormMessage />
             </FormItem>

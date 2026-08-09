@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/format";
+import { blankAmount } from "@/lib/forms/amount";
 import {
   createAccount,
   deleteAccount,
@@ -85,7 +86,7 @@ const emptyValues: AccountInput = {
   accountType: "asset",
   currencyId: "",
   isGroup: false,
-  openingBalance: 0,
+  openingBalance: blankAmount,
   isCash: false,
   isBank: false,
 };

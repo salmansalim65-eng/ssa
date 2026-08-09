@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { blankAmount, amountValue } from "@/lib/forms/amount";
 import {
   Form,
   FormControl,
@@ -56,7 +57,7 @@ export function GeneratePkInvoiceDialog({
 
   const form = useForm<GeneratePkInvoiceFormValues, unknown, GeneratePkInvoiceFormInput>({
     resolver: zodResolver(generatePkInvoiceFormSchema),
-    defaultValues: { utilityCharges: [], advanceAdjusted: 0 },
+    defaultValues: { utilityCharges: [], advanceAdjusted: blankAmount },
   });
 
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "utilityCharges" });
@@ -125,7 +126,7 @@ export function GeneratePkInvoiceDialog({
                     render={({ field }) => (
                       <FormItem className="w-28">
                         <FormControl>
-                          <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
+                          <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -151,7 +152,7 @@ export function GeneratePkInvoiceDialog({
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => append({ utilityType: "electricity", amount: 0, description: "" })}
+                onClick={() => append({ utilityType: "electricity", amount: blankAmount, description: "" })}
               >
                 <PlusIcon /> Add utility charge
               </Button>
@@ -164,7 +165,7 @@ export function GeneratePkInvoiceDialog({
                 <FormItem>
                   <FormLabel>Advance rent to adjust (remaining: {remainingAdvance.toLocaleString()})</FormLabel>
                   <FormControl>
-                    <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
+                    <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

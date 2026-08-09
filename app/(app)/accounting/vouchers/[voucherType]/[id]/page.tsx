@@ -4,7 +4,7 @@ import { PencilIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PageNav } from "@/components/ui/page-nav";
+import { PageHeader } from "@/components/ui/page-header";
 import { AttachmentList, type AttachmentItem } from "@/components/attachments/attachment-list";
 import {
   Table,
@@ -114,49 +114,42 @@ export default async function VoucherDetailPage({
 
   return (
     <div className="space-y-6">
-      <PageNav backHref={`/accounting/vouchers/${voucherType}`} />
-      <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between print:hidden">
-        <div className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-primary">
-            {VOUCHER_TYPE_LABELS[voucherType]}
-          </p>
-          <h1 className="font-mono text-2xl font-semibold tracking-tight">{detail.voucherNo ?? "Draft"}</h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <VoucherStatusBadge status={detail.status} />
-          <PrintButton />
-          {detail.status === "draft" &&
-            canSubmit &&
-            (EDITABLE_VOUCHER_TYPES as readonly string[]).includes(voucherType) && (
-              <Button asChild variant="outline" size="sm">
-                <Link href={`/accounting/vouchers/${voucherType}/${detail.id}/edit`}>
-                  <PencilIcon /> Edit
-                </Link>
-              </Button>
+      <PageHeader
+        eyebrow={VOUCHER_TYPE_LABELS[voucherType]}
+        title={detail.voucherNo ?? "Draft"}
+        backHref={`/accounting/vouchers/${voucherType}`}
+        actions={
+          <>
+            <VoucherStatusBadge status={detail.status} />
+            <PrintButton />
+            {detail.status === "draft" &&
+              canSubmit &&
+              (EDITABLE_VOUCHER_TYPES as readonly string[]).includes(voucherType) && (
+                <Button asChild variant="outline" size="sm">
+                  <Link href={`/accounting/vouchers/${voucherType}/${detail.id}/edit`}>
+                    <PencilIcon /> Edit
+                  </Link>
+                </Button>
+              )}
+            {canCreate && voucherType !== "cheque_return_voucher" && (
+              <CopyVoucherButton
+                id={detail.id}
+                onCopy={copyAccountingVoucher.bind(null, voucherType)}
+                hrefBase={`/accounting/vouchers/${voucherType}`}
+                label="Voucher"
+              />
             )}
-          {canCreate && voucherType !== "cheque_return_voucher" && (
-            <CopyVoucherButton
-              id={detail.id}
-              onCopy={copyAccountingVoucher.bind(null, voucherType)}
-              hrefBase={`/accounting/vouchers/${voucherType}`}
-              label="Voucher"
-            />
-          )}
-          {detail.status === "draft" && canDelete && (
-            <VoucherDeleteButton
-              id={detail.id}
-              onDelete={deleteAccountingVoucher.bind(null, voucherType)}
-              listHref={`/accounting/vouchers/${voucherType}`}
-              label="voucher"
-            />
-          )}
-        </div>
-      </div>
-
-      <div className="hidden print:block">
-        <h1 className="text-xl font-semibold">{VOUCHER_TYPE_LABELS[voucherType]}</h1>
-        <p className="font-mono text-sm">{detail.voucherNo ?? "Draft"}</p>
-      </div>
+            {detail.status === "draft" && canDelete && (
+              <VoucherDeleteButton
+                id={detail.id}
+                onDelete={deleteAccountingVoucher.bind(null, voucherType)}
+                listHref={`/accounting/vouchers/${voucherType}`}
+                label="voucher"
+              />
+            )}
+          </>
+        }
+      />
 
       <div className="grid gap-x-8 gap-y-4 rounded-xl border bg-card p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-3">
         <div>

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { PencilIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { PageNav } from "@/components/ui/page-nav";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   Table,
   TableBody,
@@ -106,45 +106,40 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
 
   return (
     <div className="space-y-6">
-      <PageNav backHref="/sales" />
-      <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between print:hidden">
-        <div className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-primary">Sale Asset Voucher</p>
-          <h1 className="font-mono text-2xl font-semibold tracking-tight">{sale.voucher_no ?? "Draft"}</h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <VoucherStatusBadge status={status} />
-          <PrintButton />
-          {status === "draft" && canSubmit && (
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/sales/${sale.id}/edit`}>
-                <PencilIcon /> Edit
-              </Link>
-            </Button>
-          )}
-          {canCreate && (
-            <CopyVoucherButton
-              id={sale.id}
-              onCopy={copyAssetSale}
-              hrefBase="/sales"
-              label="Sale asset voucher"
-            />
-          )}
-          {status === "draft" && canDelete && (
-            <VoucherDeleteButton
-              id={sale.id}
-              onDelete={deleteAssetSale}
-              listHref="/sales"
-              label="sale asset voucher"
-            />
-          )}
-        </div>
-      </div>
-
-      <div className="hidden print:block">
-        <h1 className="text-xl font-semibold">Sale Asset Voucher</h1>
-        <p className="font-mono text-sm">{sale.voucher_no ?? "Draft"}</p>
-      </div>
+      <PageHeader
+        eyebrow="Sale Asset Voucher"
+        title={sale.voucher_no ?? "Draft"}
+        backHref="/sales"
+        actions={
+          <>
+            <VoucherStatusBadge status={status} />
+            <PrintButton />
+            {status === "draft" && canSubmit && (
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/sales/${sale.id}/edit`}>
+                  <PencilIcon /> Edit
+                </Link>
+              </Button>
+            )}
+            {canCreate && (
+              <CopyVoucherButton
+                id={sale.id}
+                onCopy={copyAssetSale}
+                hrefBase="/sales"
+                label="Sale asset voucher"
+              />
+            )}
+            {status === "draft" && canDelete && (
+              <VoucherDeleteButton
+                id={sale.id}
+                onDelete={deleteAssetSale}
+                listHref="/sales"
+                label="sale asset voucher"
+              />
+            )}
+          </>
+        }
+      />
 
       <div className="grid gap-x-8 gap-y-4 rounded-xl border bg-card p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-3">
         <div>

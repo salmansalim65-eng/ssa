@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { requirePermission } from "@/lib/auth/permissions";
+import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { createJournalEntry, getCurrentCompanyId, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { openingBalanceVoucherSchema, type OpeningBalanceVoucherInput } from "./schemas";
@@ -39,7 +39,7 @@ function buildEntryLines(
   return { jeLines, total: Math.max(sumD, sumC) };
 }
 
-export async function createOpeningBalanceVoucher(input: OpeningBalanceVoucherInput) {
+export async function createOpeningBalanceVoucher(input: OpeningBalanceVoucherInput, options?: { autoPostIfAdmin?: boolean }) {
   const parsed = openingBalanceVoucherSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
 
@@ -97,6 +97,13 @@ export async function createOpeningBalanceVoucher(input: OpeningBalanceVoucherIn
   if (linesError) return { error: linesError.message };
 
   revalidatePath("/accounting/vouchers/opening_balance_voucher");
+  if (options?.autoPostIfAdmin !== false && (await isCurrentUserAdmin())) {
+    try {
+      await postOpeningBalanceVoucher(voucherId, je.journalEntryId);
+    } catch {
+      // Auto-post is best-effort; the created draft remains for manual posting.
+    }
+  }
   return { success: true, id: voucherId };
 }
 

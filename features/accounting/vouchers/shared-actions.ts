@@ -98,7 +98,7 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
           rentMonth: l.rent_month ?? "",
           remarks: l.remarks ?? "",
         })),
-      });
+      }, { autoPostIfAdmin: false });
     }
     case "payment_voucher": {
       const { data: v } = await acc
@@ -125,7 +125,7 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
           amount: l.amount,
           remarks: l.remarks ?? "",
         })),
-      });
+      }, { autoPostIfAdmin: false });
     }
     case "pdc_payment_voucher": {
       const { data: v } = await acc
@@ -156,7 +156,7 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
           rentMonth: l.rent_month ?? "",
           remarks: l.remarks ?? "",
         })),
-      });
+      }, { autoPostIfAdmin: false });
     }
     case "pdc_receipt_voucher": {
       const { data: v } = await acc
@@ -187,7 +187,7 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
           rentMonth: l.rent_month ?? "",
           remarks: l.remarks ?? "",
         })),
-      });
+      }, { autoPostIfAdmin: false });
     }
     case "journal_voucher": {
       const { data: v } = await acc
@@ -209,7 +209,7 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
         exchangeRate: je.exchange_rate ?? 1,
         narration: v.narration ?? "",
         lines: await loadLines(v.journal_entry_id),
-      });
+      }, { autoPostIfAdmin: false });
     }
     case "jv_maintenance_voucher": {
       const { data: v } = await acc
@@ -243,7 +243,7 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
           creditAccountId: l.credit_account_id,
           amount: l.amount,
         })),
-      });
+      }, { autoPostIfAdmin: false });
     }
     case "opening_balance_voucher": {
       const { data: v } = await acc
@@ -271,7 +271,7 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
           credit: l.credit,
           remarks: l.remarks ?? "",
         })),
-      });
+      }, { autoPostIfAdmin: false });
     }
     default:
       return { error: "Copy isn't available for this voucher type." };

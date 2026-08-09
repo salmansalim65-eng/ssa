@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { requirePermission } from "@/lib/auth/permissions";
+import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { createJournalEntry, getCurrentCompanyId, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { pdcPaymentVoucherSchema, type PdcPaymentVoucherInput } from "./schemas";
@@ -16,7 +16,7 @@ function lineDescription(chequeNo: string, rentMonth?: string, remarks?: string)
   return parts.length ? parts.join(" — ") : `PDC ${chequeNo}`;
 }
 
-export async function createPdcPaymentVoucher(input: PdcPaymentVoucherInput) {
+export async function createPdcPaymentVoucher(input: PdcPaymentVoucherInput, options?: { autoPostIfAdmin?: boolean }) {
   const parsed = pdcPaymentVoucherSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
 
@@ -96,6 +96,13 @@ export async function createPdcPaymentVoucher(input: PdcPaymentVoucherInput) {
   if (linesError) return { error: linesError.message };
 
   revalidatePath("/accounting/vouchers/pdc_payment_voucher");
+  if (options?.autoPostIfAdmin !== false && (await isCurrentUserAdmin())) {
+    try {
+      await postPdcPaymentVoucher(voucherId, je.journalEntryId);
+    } catch {
+      // Auto-post is best-effort; the created draft remains for manual posting.
+    }
+  }
   return { success: true, id: voucherId };
 }
 

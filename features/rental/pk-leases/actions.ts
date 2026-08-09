@@ -36,7 +36,6 @@ export async function createPkLease(input: PkLeaseInput) {
       security_deposit: parsed.data.securityDeposit,
       currency_id: parsed.data.currencyId,
       due_date: parsed.data.dueDate || null,
-      rent_month: parsed.data.rentMonth || null,
       created_by: user.user!.id,
     })
     .select("id")
@@ -68,7 +67,7 @@ export async function updatePkLease(id: string, input: PkLeaseInput) {
     p_security_deposit: parsed.data.securityDeposit,
     p_currency_id: parsed.data.currencyId,
     p_due_date: parsed.data.dueDate || null,
-    p_rent_month: parsed.data.rentMonth || null,
+    p_rent_month: null,
   });
   if (error) return { error: error.message };
 
@@ -86,7 +85,7 @@ export async function copyPkLease(id: string) {
     .schema("rental")
     .from("pk_leases")
     .select(
-      "asset_id, tenant_id, lease_start, lease_end, monthly_rent, advance_rent, security_deposit, currency_id, due_date, rent_month",
+      "asset_id, tenant_id, lease_start, lease_end, monthly_rent, advance_rent, security_deposit, currency_id, due_date",
     )
     .eq("company_id", companyId)
     .eq("id", id)
@@ -105,7 +104,6 @@ export async function copyPkLease(id: string) {
     securityDeposit: src.security_deposit,
     currencyId: src.currency_id,
     dueDate: src.due_date ?? "",
-    rentMonth: src.rent_month ?? "",
   });
 }
 

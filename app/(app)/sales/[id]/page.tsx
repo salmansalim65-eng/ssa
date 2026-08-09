@@ -21,7 +21,7 @@ import { copyAssetSale, deleteAssetSale, postAssetSale } from "@/features/assets
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatMoney, formatRate } from "@/lib/format";
 import { getCurrentCompanyId, getVoucherApproval } from "@/lib/vouchers/engine";
 import type { JournalEntryStatus } from "@/types/database.types";
 
@@ -162,7 +162,7 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Currency</p>
           <p className="mt-0.5">
-            {currencyCode} @ {sale.exchange_rate.toLocaleString()}
+            {currencyCode} @ {formatRate(sale.exchange_rate)}
           </p>
         </div>
         <div>

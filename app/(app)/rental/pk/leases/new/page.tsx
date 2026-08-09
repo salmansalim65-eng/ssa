@@ -36,15 +36,15 @@ export default async function NewPkLeasePage() {
     supabase
       .schema("core")
       .from("company_currencies")
-      .select("currencies:currency_id(id, code)")
+      .select("is_base_currency, currencies:currency_id(id, code)")
       .eq("company_id", companyId)
       .eq("is_active", true),
   ]);
 
-  type RawCurrency = { currencies: { id: string; code: string } | null };
-  const currencyOptions = ((companyCurrencies as unknown as RawCurrency[]) ?? [])
-    .filter((cc) => cc.currencies)
-    .map((cc) => ({ id: cc.currencies!.id, code: cc.currencies!.code }));
+  type RawCurrency = { is_base_currency: boolean; currencies: { id: string; code: string } | null };
+  const rawCurrencies = ((companyCurrencies as unknown as RawCurrency[]) ?? []).filter((cc) => cc.currencies);
+  const currencyOptions = rawCurrencies.map((cc) => ({ id: cc.currencies!.id, code: cc.currencies!.code }));
+  const defaultCurrencyId = rawCurrencies.find((cc) => cc.is_base_currency)?.currencies!.id;
 
   return (
     <div className="space-y-5">
@@ -61,7 +61,12 @@ export default async function NewPkLeasePage() {
           </Button>
         }
       />
-      <PkLeaseForm assets={assets ?? []} tenants={tenants ?? []} currencies={currencyOptions} />
+      <PkLeaseForm
+        assets={assets ?? []}
+        tenants={tenants ?? []}
+        currencies={currencyOptions}
+        defaultCurrencyId={defaultCurrencyId}
+      />
     </div>
   );
 }

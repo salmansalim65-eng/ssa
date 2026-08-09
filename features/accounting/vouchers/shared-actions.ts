@@ -103,19 +103,18 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
     case "payment_voucher": {
       const { data: v } = await acc
         .from("payment_vouchers")
-        .select("due_date, credit_account_id, cost_center_id, currency_id, exchange_rate, narration")
+        .select("credit_account_id, cost_center_id, currency_id, exchange_rate, narration")
         .eq("company_id", companyId)
         .eq("id", id)
         .maybeSingle();
       if (!v) return { error: "Voucher not found" };
       const { data: plines } = await acc
         .from("payment_voucher_lines")
-        .select("account_id, amount, rent_month, remarks")
+        .select("account_id, amount, remarks")
         .eq("voucher_id", id)
         .order("line_no");
       return createPaymentVoucher({
         paymentDate: today,
-        dueDate: v.due_date ?? "",
         creditAccountId: v.credit_account_id ?? "",
         costCenterId: v.cost_center_id ?? "",
         currencyId: v.currency_id,
@@ -124,7 +123,6 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
         lines: (plines ?? []).map((l) => ({
           accountId: l.account_id,
           amount: l.amount,
-          rentMonth: l.rent_month ?? "",
           remarks: l.remarks ?? "",
         })),
       });
@@ -194,7 +192,7 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
     case "journal_voucher": {
       const { data: v } = await acc
         .from("journal_vouchers")
-        .select("journal_entry_id, due_date, ref_no, narration")
+        .select("journal_entry_id, narration")
         .eq("company_id", companyId)
         .eq("id", id)
         .maybeSingle();
@@ -207,8 +205,6 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
       if (!je) return { error: "Voucher not found" };
       return createJournalVoucher({
         entryDate: today,
-        dueDate: v.due_date ?? "",
-        refNo: v.ref_no ?? "",
         currencyId: je.currency_id,
         exchangeRate: je.exchange_rate ?? 1,
         narration: v.narration ?? "",
@@ -218,7 +214,7 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
     case "jv_maintenance_voucher": {
       const { data: v } = await acc
         .from("jv_maintenance_vouchers")
-        .select("journal_entry_id, due_date, narration")
+        .select("journal_entry_id, narration")
         .eq("company_id", companyId)
         .eq("id", id)
         .maybeSingle();
@@ -231,8 +227,6 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
       if (!je) return { error: "Voucher not found" };
       return createJvMaintenanceVoucher({
         entryDate: today,
-        dueDate: v.due_date ?? "",
-        refNo: "",
         currencyId: je.currency_id,
         exchangeRate: je.exchange_rate ?? 1,
         narration: v.narration ?? "",

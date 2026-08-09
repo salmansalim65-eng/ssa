@@ -83,8 +83,6 @@ export function JournalGridForm({
     resolver: zodResolver(journalVoucherSchema),
     defaultValues: initialValues ?? {
       entryDate: today(),
-      dueDate: "",
-      refNo: "",
       currencyId: currencies[0]?.id ?? "",
       exchangeRate: currencies[0]?.rate ?? 1,
       narration: "",
@@ -151,19 +149,6 @@ export function JournalGridForm({
           />
           <FormField
             control={form.control}
-            name="dueDate"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Due Date</FormLabel>
-                <FormControl>
-                  <DateInput {...field} value={(field.value as string) ?? ""} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
             name="narration"
             render={({ field }) => (
               <FormItem>
@@ -175,21 +160,6 @@ export function JournalGridForm({
               </FormItem>
             )}
           />
-          {showHeaderExtras && (
-            <FormField
-              control={form.control}
-              name="refNo"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>REF No.</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Optional" {...field} value={(field.value as string) ?? ""} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
           {showHeaderExtras && (
             <FormItem>
               <FormLabel>Attachment</FormLabel>
@@ -385,11 +355,11 @@ export function JournalGridForm({
           <div className="flex flex-wrap items-center justify-end gap-x-8 gap-y-2 border-t bg-muted/30 px-4 py-3">
             <div className="flex items-center gap-2 text-sm">
               <span className="font-medium text-muted-foreground">Total Debit</span>
-              <span className="text-base font-semibold tabular-nums text-foreground">{totalDebit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              <span className="text-base font-semibold tabular-nums text-foreground">{totalDebit.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
             </div>
             <div className="flex items-center gap-2 text-sm">
               <span className="font-medium text-muted-foreground">Total Credit</span>
-              <span className="text-base font-semibold tabular-nums text-foreground">{totalCredit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              <span className="text-base font-semibold tabular-nums text-foreground">{totalCredit.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
             </div>
             <span className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold ${balanced ? "bg-success/12 text-success" : "bg-destructive/10 text-destructive"}`}>
               <span className={`size-1.5 rounded-full ${balanced ? "bg-success" : "bg-destructive"}`} aria-hidden />

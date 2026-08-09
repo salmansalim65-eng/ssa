@@ -51,8 +51,6 @@ export async function createJournalVoucher(input: JournalVoucherInput) {
     company_id: companyId,
     journal_entry_id: je.journalEntryId,
     entry_date: parsed.data.entryDate,
-    due_date: parsed.data.dueDate || null,
-    ref_no: parsed.data.refNo || null,
     narration: parsed.data.narration || null,
     created_by: createdBy,
   });
@@ -132,8 +130,6 @@ export async function updateJournalVoucher(id: string, input: JournalVoucherInpu
     .from("journal_vouchers")
     .update({
       entry_date: parsed.data.entryDate,
-      due_date: parsed.data.dueDate || null,
-      ref_no: parsed.data.refNo || null,
       narration: parsed.data.narration || null,
     })
     .eq("id", id);

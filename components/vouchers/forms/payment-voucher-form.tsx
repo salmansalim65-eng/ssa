@@ -46,7 +46,7 @@ function today() {
 }
 
 function emptyLine() {
-  return { accountId: "", amount: 0, rentMonth: "", remarks: "" };
+  return { accountId: "", amount: 0, remarks: "" };
 }
 
 export function PaymentVoucherForm({
@@ -71,7 +71,6 @@ export function PaymentVoucherForm({
     resolver: zodResolver(paymentVoucherSchema),
     defaultValues: initialValues ?? {
       paymentDate: today(),
-      dueDate: "",
       creditAccountId: "",
       costCenterId: "",
       currencyId: currencies[0]?.id ?? "",
@@ -126,19 +125,6 @@ export function PaymentVoucherForm({
                 <FormLabel>Date</FormLabel>
                 <FormControl>
                   <DateInput {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="dueDate"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Due Date</FormLabel>
-                <FormControl>
-                  <DateInput {...field} value={(field.value as string) ?? ""} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -249,7 +235,6 @@ export function PaymentVoucherForm({
                   <th className="w-10">Sno</th>
                   <th className="min-w-[240px]">Account (Dr)</th>
                   <th className="w-40 text-right">Amount</th>
-                  <th className="w-40">Rent Month</th>
                   <th className="min-w-[150px]">Remarks</th>
                   <th className="w-10" />
                 </tr>
@@ -294,20 +279,6 @@ export function PaymentVoucherForm({
                     <td>
                       <FormField
                         control={form.control}
-                        name={`lines.${index}.rentMonth`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormControl>
-                              <DateInput {...field} value={(field.value as string) ?? ""} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </td>
-                    <td>
-                      <FormField
-                        control={form.control}
                         name={`lines.${index}.remarks`}
                         render={({ field }) => (
                           <FormItem>
@@ -343,7 +314,7 @@ export function PaymentVoucherForm({
             <span className="text-sm font-medium text-muted-foreground">Total Payment Amount</span>
             <span className="text-xl font-semibold tabular-nums text-foreground">
               {currencyCode && <span className="mr-1 text-sm font-medium text-muted-foreground">{currencyCode}</span>}
-              {total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {total.toLocaleString(undefined, { maximumFractionDigits: 0 })}
             </span>
           </div>
         </FormSection>

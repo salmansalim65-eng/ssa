@@ -51,7 +51,6 @@ export async function createJvMaintenanceVoucher(input: JvMaintenanceVoucherInpu
     company_id: companyId,
     journal_entry_id: je.journalEntryId,
     entry_date: parsed.data.entryDate,
-    due_date: parsed.data.dueDate || null,
     narration: parsed.data.narration || null,
     created_by: createdBy,
   });
@@ -131,7 +130,6 @@ export async function updateJvMaintenanceVoucher(id: string, input: JvMaintenanc
     .from("jv_maintenance_vouchers")
     .update({
       entry_date: parsed.data.entryDate,
-      due_date: parsed.data.dueDate || null,
       narration: parsed.data.narration || null,
     })
     .eq("id", id);

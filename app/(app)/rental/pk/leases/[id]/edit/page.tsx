@@ -89,7 +89,6 @@ export default async function EditPkLeasePage({ params }: { params: Promise<{ id
           securityDeposit: lease.security_deposit,
           currencyId: lease.currency_id,
           dueDate: lease.due_date ?? "",
-          rentMonth: lease.rent_month ?? "",
         }}
       />
     </div>

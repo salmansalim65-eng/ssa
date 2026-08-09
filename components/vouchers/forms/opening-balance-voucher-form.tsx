@@ -320,11 +320,11 @@ export function OpeningBalanceVoucherForm({
           <div className="flex flex-wrap items-center justify-end gap-x-8 gap-y-2 border-t bg-muted/30 px-4 py-3">
             <div className="flex items-center gap-2 text-sm">
               <span className="font-medium text-muted-foreground">Total Debit</span>
-              <span className="text-base font-semibold tabular-nums text-foreground">{sumDebit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              <span className="text-base font-semibold tabular-nums text-foreground">{sumDebit.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
             </div>
             <div className="flex items-center gap-2 text-sm">
               <span className="font-medium text-muted-foreground">Total Credit</span>
-              <span className="text-base font-semibold tabular-nums text-foreground">{sumCredit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              <span className="text-base font-semibold tabular-nums text-foreground">{sumCredit.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
             </div>
             {net === 0 ? (
               <span className="inline-flex items-center gap-1.5 rounded-md bg-success/12 px-2.5 py-1 text-xs font-semibold text-success">

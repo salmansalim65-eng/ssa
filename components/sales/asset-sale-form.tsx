@@ -186,7 +186,7 @@ export function AssetSaleForm({
               <FormItem>
                 <FormLabel>Currency Conv.</FormLabel>
                 <FormControl>
-                  <Input type="number" step="0.0001" min="0" {...field} value={field.value as number} />
+                  <Input type="number" step="0.000001" min="0" {...field} value={field.value as number} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -199,7 +199,7 @@ export function AssetSaleForm({
               <FormItem>
                 <FormLabel>Pak. Exch</FormLabel>
                 <FormControl>
-                  <Input type="number" step="0.0001" min="0" {...field} value={field.value as number} />
+                  <Input type="number" step="0.000001" min="0" {...field} value={field.value as number} />
                 </FormControl>
                 <FormMessage />
               </FormItem>

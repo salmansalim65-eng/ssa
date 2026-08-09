@@ -1493,6 +1493,10 @@ export interface Database {
         Args: { p_id: string };
         Returns: undefined;
       };
+      fn_admin_delete_rent_invoice: {
+        Args: { p_invoice_id: string; p_country: string };
+        Returns: undefined;
+      };
     };
   };
   audit: {

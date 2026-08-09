@@ -9,9 +9,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PageHeader } from "@/components/ui/page-header";
+import { EscToBack } from "@/components/vouchers/esc-to-back";
 import { RecordRentPaymentForm } from "@/components/rental/record-rent-payment-form";
 import { PrintButton } from "@/components/vouchers/print-button";
-import { ReversePostedButton } from "@/components/vouchers/reverse-posted-button";
+import { DeletePostedInvoiceButton } from "@/components/rental/delete-posted-invoice-button";
 import { VoucherActions } from "@/components/vouchers/voucher-actions";
 import { VoucherDeleteButton } from "@/components/vouchers/voucher-delete-button";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
@@ -117,6 +118,7 @@ export default async function UaeRentInvoiceDetailPage({ params }: { params: Pro
 
   return (
     <div className="space-y-6">
+      <EscToBack />
       <PageHeader
         eyebrow="Lease Invoice"
         title={invoice.voucher_no ?? "Draft"}
@@ -134,11 +136,7 @@ export default async function UaeRentInvoiceDetailPage({ params }: { params: Pro
               />
             )}
             {isAdmin && status === "posted" && (
-              <ReversePostedButton
-                journalEntryId={invoice.journal_entry_id}
-                revalidate={["/rental/uae/invoices", `/rental/uae/invoices/${invoice.id}`]}
-                redirectTo="/rental/uae/invoices"
-              />
+              <DeletePostedInvoiceButton invoiceId={invoice.id} country="uae" />
             )}
           </>
         }

@@ -4,6 +4,7 @@ import { PencilIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
+import { EscToBack } from "@/components/vouchers/esc-to-back";
 import {
   Table,
   TableBody,
@@ -108,6 +109,7 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
 
   return (
     <div className="space-y-6">
+      <EscToBack />
       <PageHeader
         eyebrow="Sale Asset Voucher"
         title={sale.voucher_no ?? "Draft"}

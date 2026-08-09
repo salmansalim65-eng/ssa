@@ -827,6 +827,9 @@ export interface Database {
           debit_account_id: string;
           credit_account_id: string;
           amount: number;
+          period_from: string | null;
+          period_till: string | null;
+          remarks: string | null;
           created_at: string;
         };
         Insert: Partial<Database["accounting"]["Tables"]["jv_maintenance_voucher_lines"]["Row"]> & {
@@ -837,6 +840,27 @@ export interface Database {
           amount: number;
         };
         Update: Partial<Database["accounting"]["Tables"]["jv_maintenance_voucher_lines"]["Row"]>;
+      };
+      journal_voucher_lines: {
+        Row: {
+          id: string;
+          voucher_id: string;
+          line_no: number;
+          cost_center_id: string | null;
+          debit_account_id: string;
+          credit_account_id: string;
+          amount: number;
+          remarks: string | null;
+          created_at: string;
+        };
+        Insert: Partial<Database["accounting"]["Tables"]["journal_voucher_lines"]["Row"]> & {
+          voucher_id: string;
+          line_no: number;
+          debit_account_id: string;
+          credit_account_id: string;
+          amount: number;
+        };
+        Update: Partial<Database["accounting"]["Tables"]["journal_voucher_lines"]["Row"]>;
       };
       opening_balance_vouchers: {
         Row: {

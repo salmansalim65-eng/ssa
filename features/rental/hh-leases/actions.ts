@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 
-import { requirePermission } from "@/lib/auth/permissions";
+import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { generateAllUaeRentInvoices, postAllUaeRentInvoices } from "@/features/rental/uae-rent-invoices/actions";
 import { hhLeaseSchema, type HhLeaseInput } from "./schemas";
 
 async function getCurrentCompanyId() {
@@ -53,8 +54,25 @@ export async function createHhLease(input: HhLeaseInput) {
     created_by: createdBy,
   }));
 
-  const { error } = await supabase.schema("rental").from("uae_leases").insert(rows);
+  const { data: createdLeases, error } = await supabase
+    .schema("rental")
+    .from("uae_leases")
+    .insert(rows)
+    .select("id");
   if (error) return { error: error.message };
+
+  // HH leases are uae_leases — admins get every created line's invoices
+  // generated + posted automatically; best-effort so drafts remain on failure.
+  if (await isCurrentUserAdmin()) {
+    for (const created of createdLeases ?? []) {
+      try {
+        await generateAllUaeRentInvoices(created.id);
+        await postAllUaeRentInvoices(created.id);
+      } catch {
+        /* best-effort; drafts remain for manual posting */
+      }
+    }
+  }
 
   revalidatePath("/rental/uae/leases");
   return { success: true, documentNo: documentNo as string, count: rows.length };

@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 
-import { requirePermission } from "@/lib/auth/permissions";
+import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { generateAllUaeRentInvoices, postAllUaeRentInvoices } from "@/features/rental/uae-rent-invoices/actions";
 import { uaeLeaseSchema, type UaeLeaseInput } from "./schemas";
 
 async function getCurrentCompanyId() {
@@ -42,6 +43,17 @@ export async function createUaeLease(input: UaeLeaseInput) {
     .single();
 
   if (error || !lease) return { error: error?.message ?? "Failed to create lease" };
+
+  // Admins get invoices generated + posted automatically; best-effort so a
+  // failure here leaves drafts for manual posting rather than failing the create.
+  if (await isCurrentUserAdmin()) {
+    try {
+      await generateAllUaeRentInvoices(lease.id);
+      await postAllUaeRentInvoices(lease.id);
+    } catch {
+      /* best-effort; drafts remain for manual posting */
+    }
+  }
 
   revalidatePath("/rental/uae/leases");
   return { success: true, id: lease.id };

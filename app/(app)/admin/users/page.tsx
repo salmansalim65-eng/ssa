@@ -14,7 +14,7 @@ import {
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
-import { InviteUserDialog } from "./invite-user-dialog";
+import { AddUserDialog } from "./add-user-dialog";
 import { UserRowActions } from "./user-row-actions";
 
 export default async function UsersPage() {
@@ -64,7 +64,7 @@ export default async function UsersPage() {
         eyebrow="Administration"
         title="Users"
         description="Everyone with access to this company."
-        actions={canCreate && <InviteUserDialog roles={roles ?? []} />}
+        actions={canCreate && <AddUserDialog roles={roles ?? []} />}
       />
 
       <div className="overflow-hidden rounded-lg border bg-card shadow-xs">
@@ -72,8 +72,8 @@ export default async function UsersPage() {
           <EmptyState
             icon={UsersIcon}
             title="No users yet"
-            description="Invite teammates to give them access to this company."
-            action={canCreate && <InviteUserDialog roles={roles ?? []} />}
+            description="Add users to give them access to this company."
+            action={canCreate && <AddUserDialog roles={roles ?? []} />}
           />
         ) : (
           <Table>

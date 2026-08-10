@@ -12,9 +12,11 @@ import {
 import { PageHeader } from "@/components/ui/page-header";
 import { CsvExportButton } from "@/components/reports/csv-export-button";
 import { DateRangeFilter } from "@/components/reports/date-range-filter";
+import { ReportSelectFilter } from "@/components/reports/report-select-filter";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
+import { resolveRentalReportCurrency } from "@/lib/reports/report-currency";
 import { formatDate, formatMoney } from "@/lib/format";
 
 function startOfYear() {
@@ -29,30 +31,39 @@ function today() {
 export default async function RentalIncomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; cur?: string }>;
 }) {
-  const { from = startOfYear(), to = today() } = await searchParams;
+  const { from = startOfYear(), to = today(), cur = "" } = await searchParams;
 
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
 
-  const { data: rows } = await supabase
-    .schema("reporting")
-    .from("v_rental_income")
-    .select("*")
-    .eq("company_id", companyId)
-    .gte("invoice_date", from)
-    .lte("invoice_date", to)
-    .order("invoice_date", { ascending: false });
+  const [{ data: rows }, currency] = await Promise.all([
+    supabase
+      .schema("reporting")
+      .from("v_rental_income")
+      .select("*")
+      .eq("company_id", companyId)
+      .gte("invoice_date", from)
+      .lte("invoice_date", to)
+      .order("invoice_date", { ascending: false }),
+    resolveRentalReportCurrency(companyId, cur, to),
+  ]);
 
-  const totalAmount = (rows ?? []).reduce((sum, r) => sum + r.amount, 0);
+  // Convert every row's document-currency amount to the selected report currency.
+  const { convert, symbol } = currency;
+  const money = (n: number) => (symbol ? `${symbol} ${formatMoney(n)}` : formatMoney(n));
+  const totalAmount = (rows ?? []).reduce((sum, r) => sum + convert(r.amount, r.currency_code), 0);
+  const totalOutstanding = (rows ?? []).reduce((sum, r) => sum + convert(r.outstanding_balance, r.currency_code), 0);
 
   return (
     <div className="space-y-5">
       <PageHeader
         eyebrow="Reports"
         title="Rental Income"
-        description={`Posted UAE and Pakistan rent invoices from ${formatDate(from)} to ${formatDate(to)}.`}
+        description={`Posted UAE and Pakistan rent invoices from ${formatDate(from)} to ${formatDate(to)}. Amounts in ${
+          currency.selectedCode || "base currency"
+        }.`}
         className="print:hidden"
         actions={
           <>
@@ -65,9 +76,9 @@ export default async function RentalIncomePage({
                 r.invoice_date,
                 `${r.asset_code} - ${r.asset_name}`,
                 r.tenant_name,
-                r.amount,
-                r.outstanding_balance,
-                r.currency_code,
+                convert(r.amount, r.currency_code),
+                convert(r.outstanding_balance, r.currency_code),
+                currency.selectedCode,
               ])}
             />
             <PrintButton />
@@ -75,9 +86,21 @@ export default async function RentalIncomePage({
         }
       />
 
-      <Suspense>
-        <DateRangeFilter defaultFrom={from} defaultTo={to} />
-      </Suspense>
+      <div className="flex flex-wrap items-end gap-3">
+        <Suspense>
+          <DateRangeFilter defaultFrom={from} defaultTo={to} />
+        </Suspense>
+        <Suspense>
+          <ReportSelectFilter
+            label="Currency"
+            param="cur"
+            allLabel={currency.baseCode ? `Base (${currency.baseCode})` : "Base"}
+            options={currency.options}
+            selected={cur}
+            width="w-40"
+          />
+        </Suspense>
+      </div>
 
       <div className="overflow-hidden rounded-lg border bg-card shadow-xs">
         <Table>
@@ -106,9 +129,11 @@ export default async function RentalIncomePage({
                 </TableCell>
                 <TableCell>{r.tenant_name}</TableCell>
                 <TableCell className="text-right font-mono tabular-nums">
-                  {formatMoney(r.amount)} {r.currency_code}
+                  {money(convert(r.amount, r.currency_code))}
                 </TableCell>
-                <TableCell className="text-right font-mono tabular-nums">{formatMoney(r.outstanding_balance)}</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">
+                  {money(convert(r.outstanding_balance, r.currency_code))}
+                </TableCell>
               </TableRow>
             ))}
             {(rows ?? []).length === 0 && (
@@ -125,8 +150,8 @@ export default async function RentalIncomePage({
                 <TableCell colSpan={5} className="font-medium">
                   Total
                 </TableCell>
-                <TableCell className="text-right font-mono font-medium tabular-nums">{formatMoney(totalAmount)}</TableCell>
-                <TableCell />
+                <TableCell className="text-right font-mono font-medium tabular-nums">{money(totalAmount)}</TableCell>
+                <TableCell className="text-right font-mono font-medium tabular-nums">{money(totalOutstanding)}</TableCell>
               </TableRow>
             </tfoot>
           )}

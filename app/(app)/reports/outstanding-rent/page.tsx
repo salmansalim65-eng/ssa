@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -9,31 +11,51 @@ import {
 } from "@/components/ui/table";
 import { PageHeader } from "@/components/ui/page-header";
 import { CsvExportButton } from "@/components/reports/csv-export-button";
+import { ReportSelectFilter } from "@/components/reports/report-select-filter";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
+import { resolveRentalReportCurrency } from "@/lib/reports/report-currency";
 import { formatDate, formatMoney } from "@/lib/format";
 
-export default async function OutstandingRentPage() {
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+export default async function OutstandingRentPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ cur?: string }>;
+}) {
+  const { cur = "" } = await searchParams;
+
   const supabase = await createClient();
 
   const companyId = await getCurrentCompanyId();
 
-  const { data: rows } = await supabase
-    .schema("reporting")
-    .from("v_outstanding_rent")
-    .select("*")
-    .eq("company_id", companyId)
-    .order("due_date");
+  const [{ data: rows }, currency] = await Promise.all([
+    supabase
+      .schema("reporting")
+      .from("v_outstanding_rent")
+      .select("*")
+      .eq("company_id", companyId)
+      .order("due_date"),
+    resolveRentalReportCurrency(companyId, cur, today()),
+  ]);
 
-  const totalOutstanding = (rows ?? []).reduce((sum, r) => sum + r.outstanding_balance, 0);
+  // Convert every row's document-currency balance to the selected report currency.
+  const { convert, symbol } = currency;
+  const money = (n: number) => (symbol ? `${symbol} ${formatMoney(n)}` : formatMoney(n));
+  const totalOutstanding = (rows ?? []).reduce((sum, r) => sum + convert(r.outstanding_balance, r.currency_code), 0);
 
   return (
     <div className="space-y-5">
       <PageHeader
         eyebrow="Reports"
         title="Outstanding Rent"
-        description="Posted invoices with a balance still due, oldest first."
+        description={`Posted invoices with a balance still due, oldest first. Amounts in ${
+          currency.selectedCode || "base currency"
+        }.`}
         className="print:hidden"
         actions={
           <>
@@ -46,8 +68,8 @@ export default async function OutstandingRentPage() {
                 r.due_date,
                 `${r.asset_code} - ${r.asset_name}`,
                 r.tenant_name,
-                r.outstanding_balance,
-                r.currency_code,
+                convert(r.outstanding_balance, r.currency_code),
+                currency.selectedCode,
                 r.days_overdue,
               ])}
             />
@@ -55,6 +77,19 @@ export default async function OutstandingRentPage() {
           </>
         }
       />
+
+      <div className="flex flex-wrap items-end gap-3">
+        <Suspense>
+          <ReportSelectFilter
+            label="Currency"
+            param="cur"
+            allLabel={currency.baseCode ? `Base (${currency.baseCode})` : "Base"}
+            options={currency.options}
+            selected={cur}
+            width="w-40"
+          />
+        </Suspense>
+      </div>
 
       <div className="overflow-hidden rounded-lg border bg-card shadow-xs">
         <Table>
@@ -83,7 +118,7 @@ export default async function OutstandingRentPage() {
                 </TableCell>
                 <TableCell>{r.tenant_name}</TableCell>
                 <TableCell className="text-right font-mono tabular-nums">
-                  {formatMoney(r.outstanding_balance)} {r.currency_code}
+                  {money(convert(r.outstanding_balance, r.currency_code))}
                 </TableCell>
                 <TableCell className={`text-right tabular-nums ${r.days_overdue > 0 ? "text-destructive" : ""}`}>
                   {r.days_overdue > 0 ? r.days_overdue : 0}
@@ -104,7 +139,7 @@ export default async function OutstandingRentPage() {
                 <TableCell colSpan={5} className="font-medium">
                   Total
                 </TableCell>
-                <TableCell className="text-right font-mono font-medium tabular-nums">{formatMoney(totalOutstanding)}</TableCell>
+                <TableCell className="text-right font-mono font-medium tabular-nums">{money(totalOutstanding)}</TableCell>
                 <TableCell />
               </TableRow>
             </tfoot>

@@ -16,7 +16,7 @@ import { ReportSelectFilter } from "@/components/reports/report-select-filter";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
-import { resolveRentalReportCurrency } from "@/lib/reports/report-currency";
+import { convertAtBookingRate, resolveReportCurrency } from "@/lib/reports/report-currency";
 import { formatDate, formatMoney } from "@/lib/format";
 
 function startOfYear() {
@@ -47,14 +47,17 @@ export default async function RentalIncomePage({
       .gte("invoice_date", from)
       .lte("invoice_date", to)
       .order("invoice_date", { ascending: false }),
-    resolveRentalReportCurrency(companyId, cur, to),
+    resolveReportCurrency(companyId, cur, to),
   ]);
 
-  // Convert every row's document-currency amount to the selected report currency.
-  const { convert, symbol } = currency;
+  // Convert each invoice with its OWN booking rate for the document→base leg, then
+  // base→selected at the report-date factor. So the base view shows the exact
+  // posted base amounts.
+  const { factor, symbol } = currency;
   const money = (n: number) => (symbol ? `${symbol} ${formatMoney(n)}` : formatMoney(n));
-  const totalAmount = (rows ?? []).reduce((sum, r) => sum + convert(r.amount, r.currency_code), 0);
-  const totalOutstanding = (rows ?? []).reduce((sum, r) => sum + convert(r.outstanding_balance, r.currency_code), 0);
+  const convert = (amount: number, rate: number) => convertAtBookingRate(amount, rate, factor);
+  const totalAmount = (rows ?? []).reduce((sum, r) => sum + convert(r.amount, r.exchange_rate), 0);
+  const totalOutstanding = (rows ?? []).reduce((sum, r) => sum + convert(r.outstanding_balance, r.exchange_rate), 0);
 
   return (
     <div className="space-y-5">
@@ -76,8 +79,8 @@ export default async function RentalIncomePage({
                 r.invoice_date,
                 `${r.asset_code} - ${r.asset_name}`,
                 r.tenant_name,
-                convert(r.amount, r.currency_code),
-                convert(r.outstanding_balance, r.currency_code),
+                convert(r.amount, r.exchange_rate),
+                convert(r.outstanding_balance, r.exchange_rate),
                 currency.selectedCode,
               ])}
             />
@@ -129,10 +132,10 @@ export default async function RentalIncomePage({
                 </TableCell>
                 <TableCell>{r.tenant_name}</TableCell>
                 <TableCell className="text-right font-mono tabular-nums">
-                  {money(convert(r.amount, r.currency_code))}
+                  {money(convert(r.amount, r.exchange_rate))}
                 </TableCell>
                 <TableCell className="text-right font-mono tabular-nums">
-                  {money(convert(r.outstanding_balance, r.currency_code))}
+                  {money(convert(r.outstanding_balance, r.exchange_rate))}
                 </TableCell>
               </TableRow>
             ))}

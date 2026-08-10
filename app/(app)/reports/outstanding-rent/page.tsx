@@ -15,7 +15,7 @@ import { ReportSelectFilter } from "@/components/reports/report-select-filter";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
-import { resolveRentalReportCurrency } from "@/lib/reports/report-currency";
+import { convertAtBookingRate, resolveReportCurrency } from "@/lib/reports/report-currency";
 import { formatDate, formatMoney } from "@/lib/format";
 
 function today() {
@@ -40,13 +40,15 @@ export default async function OutstandingRentPage({
       .select("*")
       .eq("company_id", companyId)
       .order("due_date"),
-    resolveRentalReportCurrency(companyId, cur, today()),
+    resolveReportCurrency(companyId, cur, today()),
   ]);
 
-  // Convert every row's document-currency balance to the selected report currency.
-  const { convert, symbol } = currency;
+  // Convert each invoice with its OWN booking rate for the document→base leg, then
+  // base→selected at the report-date factor.
+  const { factor, symbol } = currency;
   const money = (n: number) => (symbol ? `${symbol} ${formatMoney(n)}` : formatMoney(n));
-  const totalOutstanding = (rows ?? []).reduce((sum, r) => sum + convert(r.outstanding_balance, r.currency_code), 0);
+  const convert = (amount: number, rate: number) => convertAtBookingRate(amount, rate, factor);
+  const totalOutstanding = (rows ?? []).reduce((sum, r) => sum + convert(r.outstanding_balance, r.exchange_rate), 0);
 
   return (
     <div className="space-y-5">
@@ -68,7 +70,7 @@ export default async function OutstandingRentPage({
                 r.due_date,
                 `${r.asset_code} - ${r.asset_name}`,
                 r.tenant_name,
-                convert(r.outstanding_balance, r.currency_code),
+                convert(r.outstanding_balance, r.exchange_rate),
                 currency.selectedCode,
                 r.days_overdue,
               ])}
@@ -118,7 +120,7 @@ export default async function OutstandingRentPage({
                 </TableCell>
                 <TableCell>{r.tenant_name}</TableCell>
                 <TableCell className="text-right font-mono tabular-nums">
-                  {money(convert(r.outstanding_balance, r.currency_code))}
+                  {money(convert(r.outstanding_balance, r.exchange_rate))}
                 </TableCell>
                 <TableCell className={`text-right tabular-nums ${r.days_overdue > 0 ? "text-destructive" : ""}`}>
                   {r.days_overdue > 0 ? r.days_overdue : 0}

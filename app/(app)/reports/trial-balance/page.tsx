@@ -159,25 +159,6 @@ export default async function TrialBalancePage({
             width="w-40"
           />
         </Suspense>
-        <Suspense>
-          <ReportSelectFilter
-            label="Cost centre"
-            param="cc"
-            allLabel="All cost centres"
-            options={costCenterOptions}
-            selected={cc}
-          />
-        </Suspense>
-        <Suspense>
-          <ReportSelectFilter
-            label="Currency"
-            param="cur"
-            allLabel={baseCurrency ? `Base (${baseCurrency.code})` : "Base"}
-            options={currencyOptions}
-            selected={cur}
-            width="w-40"
-          />
-        </Suspense>
       </div>
 
       <div className="overflow-hidden rounded-lg border bg-card shadow-xs">

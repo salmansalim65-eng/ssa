@@ -97,16 +97,6 @@ export function CashBankBookView({
             width="w-40"
           />
         </Suspense>
-        <Suspense>
-          <ReportSelectFilter
-            label="Currency"
-            param="cur"
-            allLabel={currency.baseCode ? `Base (${currency.baseCode})` : "Base"}
-            options={currency.options}
-            selected={selectedCurrency}
-            width="w-40"
-          />
-        </Suspense>
       </div>
 
       {sections.length === 0 && (

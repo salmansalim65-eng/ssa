@@ -37,7 +37,7 @@ export function AssetFilters({
   }
 
   return (
-    <div className="flex flex-wrap items-end gap-3">
+    <div className="flex flex-wrap items-end gap-3 print:hidden">
       <div className="w-56 space-y-1">
         <Label>Country</Label>
         <Select value={selectedCountry || ALL} onValueChange={setCountry}>

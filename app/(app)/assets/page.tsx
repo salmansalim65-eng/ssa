@@ -15,10 +15,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AssetFilters } from "@/components/assets/asset-filters";
+import { CsvExportButton } from "@/components/reports/csv-export-button";
+import { PrintButton } from "@/components/vouchers/print-button";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { formatMoney } from "@/lib/format";
-import { formatArea } from "@/lib/assets/area-units";
+import { formatArea, areaUnitLabel } from "@/lib/assets/area-units";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 
 const statusVariant = {
@@ -65,8 +67,9 @@ export default async function AssetsPage({
   const nameByCode = new Map(countryList.map((c) => [c.code, c.name] as const));
   const countryName = (code: string) => nameByCode.get(code) ?? code;
 
-  // Currency symbol per asset so amounts read e.g. "Rs 200,000,000" / "SR 4,000,000".
+  // Currency symbol/code per asset so amounts read e.g. "Rs 200,000,000" / "SR 4,000,000".
   const symbolById = new Map((currencyRows ?? []).map((c) => [c.id, c.symbol || c.code] as const));
+  const codeById = new Map((currencyRows ?? []).map((c) => [c.id, c.code] as const));
   const money = (value: number, currencyId: string | null | undefined) => {
     const sym = currencyId ? symbolById.get(currencyId) : undefined;
     return `${sym ? `${sym} ` : ""}${formatMoney(value)}`;
@@ -89,22 +92,67 @@ export default async function AssetsPage({
     return ids.size === 1 ? ([...ids][0] as string) : null;
   };
 
+  // CSV export mirrors the on-screen data (in country-group order), with an
+  // explicit Country column since a flat file has no group headings.
+  const csvRows = groupKeys.flatMap((code) =>
+    groups.get(code)!.map((a) => [
+      countryName(code),
+      a.asset_code,
+      a.asset_name,
+      a.official_owner ?? "",
+      a.area_sqft ?? "",
+      areaUnitLabel(a.area_unit),
+      a.current_value ?? "",
+      a.currency_id ? codeById.get(a.currency_id) ?? "" : "",
+      a.status,
+    ]),
+  );
+
   return (
     <div className="space-y-5">
       <PageHeader
         eyebrow="Assets & Property"
         title="Asset Register"
         description="Registered rental properties and other assets, grouped by country."
+        className="print:hidden"
         actions={
-          canCreate && (
-            <Button asChild>
-              <Link href="/assets/new">
-                <PlusIcon /> New asset
-              </Link>
-            </Button>
-          )
+          <>
+            {rows.length > 0 && (
+              <CsvExportButton
+                filename={`asset-register${countryFilter ? `-${countryFilter}` : ""}.csv`}
+                headers={[
+                  "Country",
+                  "Code",
+                  "Name",
+                  "Official Owner",
+                  "Area",
+                  "Area Unit",
+                  "Current Value",
+                  "Currency",
+                  "Status",
+                ]}
+                rows={csvRows}
+              />
+            )}
+            <PrintButton />
+            {canCreate && (
+              <Button asChild>
+                <Link href="/assets/new">
+                  <PlusIcon /> New asset
+                </Link>
+              </Button>
+            )}
+          </>
         }
       />
+
+      {/* Title shown only on the printout / PDF (the page header is hidden then). */}
+      <div className="hidden print:block">
+        <h1 className="text-xl font-semibold">Asset Register</h1>
+        <p className="text-sm text-muted-foreground">
+          {countryFilter ? countryName(countryFilter) : "All countries"}
+        </p>
+      </div>
 
       <AssetFilters countries={countryList} selectedCountry={countryFilter} />
 

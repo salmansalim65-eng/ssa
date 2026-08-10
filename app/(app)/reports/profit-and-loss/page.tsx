@@ -199,7 +199,7 @@ export default async function ProfitAndLossPage({
           <DateRangeFilter defaultFrom={from} defaultTo={to} />
         </Suspense>
         <Suspense>
-          <ReportCountryFilter countries={countries} selected={country} />
+          <ReportCountryFilter countries={countries} selected={country} currencyOptions={currencyOptions} />
         </Suspense>
         <Suspense>
           <ReportSelectFilter

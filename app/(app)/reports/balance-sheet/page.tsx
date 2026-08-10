@@ -238,7 +238,7 @@ export default async function BalanceSheetPage({
           <AsOfDateFilter defaultAsOf={asOf} />
         </Suspense>
         <Suspense>
-          <ReportCountryFilter countries={countries} selected={country} />
+          <ReportCountryFilter countries={countries} selected={country} currencyOptions={currencyOptions} />
         </Suspense>
         <Suspense>
           <ReportSelectFilter

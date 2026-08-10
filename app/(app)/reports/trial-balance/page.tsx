@@ -138,7 +138,7 @@ export default async function TrialBalancePage({
           <AsOfDateFilter defaultAsOf={asOf} />
         </Suspense>
         <Suspense>
-          <ReportCountryFilter countries={countries} selected={country} />
+          <ReportCountryFilter countries={countries} selected={country} currencyOptions={currencyOptions} />
         </Suspense>
         <Suspense>
           <ReportSelectFilter

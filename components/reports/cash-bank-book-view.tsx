@@ -85,7 +85,7 @@ export function CashBankBookView({
           <DateRangeFilter defaultFrom={from} defaultTo={to} />
         </Suspense>
         <Suspense>
-          <ReportCountryFilter countries={countries} selected={country} />
+          <ReportCountryFilter countries={countries} selected={country} currencyOptions={currency.options} />
         </Suspense>
         <Suspense>
           <ReportSelectFilter

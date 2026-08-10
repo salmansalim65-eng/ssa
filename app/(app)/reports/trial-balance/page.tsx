@@ -40,8 +40,28 @@ export default async function TrialBalancePage({
     .eq("company_id", companyId)
     .lte("entry_date", asOf);
   if (country) linesQuery = linesQuery.eq("cost_center_country", country);
-  const [{ data: lines }, countries] = await Promise.all([linesQuery, loadReportCountries(companyId)]);
+  const [{ data: lines }, countries, { data: companyCurrencies }] = await Promise.all([
+    linesQuery,
+    loadReportCountries(companyId),
+    supabase
+      .schema("core")
+      .from("company_currencies")
+      .select("is_base_currency, currencies:currency_id(code, symbol)")
+      .eq("company_id", companyId)
+      .eq("is_active", true)
+      .eq("is_base_currency", true)
+      .maybeSingle(),
+  ]);
   const countryName = country ? countries.find((c) => c.code === country)?.name ?? country : "";
+
+  // Ledger amounts are already stored in base currency (v_ledger_entries uses
+  // base_debit_amount/base_credit_amount), so every figure below reads in the
+  // company's base currency.
+  const baseCurrency = (companyCurrencies as unknown as { currencies: { code: string; symbol: string } | null } | null)
+    ?.currencies;
+  const symbol = baseCurrency?.symbol ?? baseCurrency?.code ?? "";
+  // `SYMBOL 1,234` — currency symbol before a thousands-separated amount.
+  const money = (n: number) => (symbol ? `${symbol} ${formatMoney(n)}` : formatMoney(n));
 
   const byAccount = aggregateByAccount(lines ?? []);
 
@@ -69,7 +89,7 @@ export default async function TrialBalancePage({
         title="Trial Balance"
         description={`Net debit/credit position per account as of ${formatDate(asOf)}${
           countryName ? ` · ${countryName}` : ""
-        }.`}
+        }. Amounts in base currency${baseCurrency?.code ? ` (${baseCurrency.code})` : ""}.`}
         className="print:hidden"
         actions={
           <>
@@ -110,10 +130,10 @@ export default async function TrialBalancePage({
                 <TableCell className="font-medium">{r.account_name}</TableCell>
                 <TableCell className="capitalize">{r.account_type}</TableCell>
                 <TableCell className="text-right font-mono tabular-nums">
-                  {r.debit ? formatMoney(r.debit) : ""}
+                  {r.debit ? money(r.debit) : ""}
                 </TableCell>
                 <TableCell className="text-right font-mono tabular-nums">
-                  {r.credit ? formatMoney(r.credit) : ""}
+                  {r.credit ? money(r.credit) : ""}
                 </TableCell>
               </TableRow>
             ))}
@@ -126,20 +146,22 @@ export default async function TrialBalancePage({
             )}
           </TableBody>
           {rows.length > 0 && (
-            <tfoot className="border-t bg-muted/40">
-              <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={3} className="font-medium">
+            <tfoot>
+              {/* Dark navy treatment (same tokens as the column headers) so the
+                  totals stand out from the account rows. */}
+              <TableRow className="bg-header text-header-foreground hover:bg-header [&>td]:border-header-border">
+                <TableCell colSpan={3} className="font-semibold">
                   Total
                 </TableCell>
                 <TableCell
-                  className={`text-right font-mono font-medium tabular-nums ${totalDebit !== totalCredit ? "text-destructive" : ""}`}
+                  className={`text-right font-mono font-semibold tabular-nums ${totalDebit !== totalCredit ? "text-destructive" : ""}`}
                 >
-                  {formatMoney(totalDebit)}
+                  {money(totalDebit)}
                 </TableCell>
                 <TableCell
-                  className={`text-right font-mono font-medium tabular-nums ${totalDebit !== totalCredit ? "text-destructive" : ""}`}
+                  className={`text-right font-mono font-semibold tabular-nums ${totalDebit !== totalCredit ? "text-destructive" : ""}`}
                 >
-                  {formatMoney(totalCredit)}
+                  {money(totalCredit)}
                 </TableCell>
               </TableRow>
             </tfoot>

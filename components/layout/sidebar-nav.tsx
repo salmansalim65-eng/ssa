@@ -132,11 +132,11 @@ export function SidebarNav({
               onClick={() => toggleSectionPref(section.label!)}
               aria-expanded={open}
               className={cn(
-                "group flex w-full items-center gap-1.5 rounded-md border border-ledger/30 px-3 py-1.5",
-                "text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-ledger transition-colors",
-                // Logo-green heading band — a soft tint, deepening a little for the
-                // active section and on hover.
-                sectionActive ? "bg-ledger/25" : "bg-ledger/10 hover:bg-ledger/20",
+                "group flex w-full items-center gap-1.5 rounded-md border border-ledger-dark px-3 py-1.5",
+                "text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-white transition-colors",
+                // Deep logo-green heading band with light text; the active section
+                // is the fullest green, others a touch lighter and darken on hover.
+                sectionActive ? "bg-ledger-dark" : "bg-ledger-dark/90 hover:bg-ledger-dark",
               )}
             >
               <ChevronDownIcon

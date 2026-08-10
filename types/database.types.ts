@@ -1337,6 +1337,7 @@ export interface Database {
           remarks: string | null;
           document_no: string | null;
           document_date: string | null;
+          lease_type: "standard" | "hh";
           created_by: string;
           created_at: string;
           updated_by: string | null;
@@ -1385,6 +1386,7 @@ export interface Database {
           currency_id: string;
           exchange_rate: number;
           outstanding_balance: number;
+          invoice_type: "UAE" | "HH";
           created_by: string;
           created_at: string;
         };
@@ -1489,6 +1491,7 @@ export interface Database {
           currency_id: string;
           exchange_rate: number;
           outstanding_amount: number;
+          invoice_type: "PK";
           created_by: string;
           created_at: string;
         };
@@ -1543,6 +1546,36 @@ export interface Database {
           created_by: string;
         };
         Update: Partial<Database["rental"]["Tables"]["pk_rent_payments"]["Row"]>;
+      };
+    };
+    Views: {
+      v_rent_invoices: {
+        Row: {
+          invoice_id: string;
+          company_id: string;
+          invoice_type: "PK" | "HH" | "UAE";
+          source: "uae" | "pk";
+          voucher_no: string | null;
+          lease_id: string;
+          tenant_id: string;
+          asset_id: string;
+          tenant_name: string;
+          asset_code: string;
+          asset_name: string;
+          invoice_date: string;
+          due_date: string;
+          period_start: string | null;
+          period_end: string | null;
+          rent_amount: number;
+          other_charges: number;
+          total_amount: number;
+          outstanding_amount: number;
+          currency_id: string;
+          currency_code: string;
+          currency_symbol: string | null;
+          status: JournalEntryStatus;
+          created_at: string;
+        };
       };
     };
     Functions: {

@@ -76,7 +76,7 @@ export default async function VoucherDetailPage({
   // Everything below is independent, so fetch it concurrently instead of in a
   // waterfall: the voucher detail, its approval row, the caller's permissions
   // (one batched lookup), and — for journal vouchers — the attachment rows.
-  const [detail, approval, perms, attachments, isAdmin] = await Promise.all([
+  const [detail, approval, perms, attachments, isAdmin, { data: baseCurrency }] = await Promise.all([
     getVoucherDetail(companyId, voucherType, id),
     getVoucherApproval(voucherType, id),
     getModulePermissions(voucherType),
@@ -91,6 +91,14 @@ export default async function VoucherDetailPage({
           .then((r) => r.data ?? [])
       : Promise.resolve([] as { id: string; file_name: string; path: string; bucket: string }[]),
     isCurrentUserAdmin(),
+    supabase
+      .schema("core")
+      .from("company_currencies")
+      .select("currencies:currency_id(symbol)")
+      .eq("company_id", companyId)
+      .eq("is_active", true)
+      .eq("is_base_currency", true)
+      .maybeSingle(),
   ]);
 
   if (!detail) notFound();
@@ -107,6 +115,12 @@ export default async function VoucherDetailPage({
   // Prefix line amounts with the voucher's transaction-currency symbol (e.g.
   // "Rs 200,000,000"); fall back to a bare number when none is set.
   const money = (n: number) => (detail.currencySymbol ? `${detail.currencySymbol} ${formatMoney(n)}` : formatMoney(n));
+  // Base-currency equivalent of the total, shown only for non-base vouchers.
+  const baseCurrencySymbol =
+    (baseCurrency as unknown as { currencies: { symbol: string } | null } | null)?.currencies?.symbol ?? null;
+  const baseTotal = totalDebit * detail.exchangeRate;
+  const showBaseTotal = Math.round(baseTotal) !== Math.round(totalDebit);
+  const baseMoney = (n: number) => (baseCurrencySymbol ? `${baseCurrencySymbol} ${formatMoney(n)}` : formatMoney(n));
 
   // Signing URLs is the one step that depends on the attachment rows; do it in
   // parallel across whatever files exist.
@@ -226,6 +240,19 @@ export default async function VoucherDetailPage({
               <TableCell className="text-right font-mono tabular-nums">{money(totalDebit)}</TableCell>
               <TableCell className="text-right font-mono tabular-nums">{money(totalDebit)}</TableCell>
             </TableRow>
+            {showBaseTotal && (
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={hasReference ? 4 : 3} className="text-xs font-normal text-muted-foreground">
+                  Total in base currency
+                </TableCell>
+                <TableCell className="text-right font-mono text-xs font-normal tabular-nums text-muted-foreground">
+                  ≈ {baseMoney(baseTotal)}
+                </TableCell>
+                <TableCell className="text-right font-mono text-xs font-normal tabular-nums text-muted-foreground">
+                  ≈ {baseMoney(baseTotal)}
+                </TableCell>
+              </TableRow>
+            )}
           </TableFooter>
         </Table>
       </div>

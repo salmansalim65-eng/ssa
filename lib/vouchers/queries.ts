@@ -35,6 +35,9 @@ export interface VoucherDetail {
   status: JournalEntryStatus;
   currencyCode: string;
   currencySymbol: string | null;
+  /** Conversion factor from the transaction currency to the base currency
+   * (base = amount × exchangeRate); 1 when the voucher is already in base. */
+  exchangeRate: number;
   fields: VoucherDetailField[];
   lines: {
     accountCode: string;
@@ -295,6 +298,7 @@ export async function getVoucherDetail(
         status: je.status,
         currencyCode: je.currencyCode,
         currencySymbol: je.currencySymbol,
+        exchangeRate: je.exchangeRate,
         fields: [
           { label: "Debit account (Cash/Bank)", value: debit ? `${debit.account_code} — ${debit.account_name}` : "—" },
           { label: "Due date", value: v.due_date ?? "—" },
@@ -326,6 +330,7 @@ export async function getVoucherDetail(
         status: je.status,
         currencyCode: je.currencyCode,
         currencySymbol: je.currencySymbol,
+        exchangeRate: je.exchangeRate,
         fields: [
           { label: "Credit account (Cash/Bank)", value: credit ? `${credit.account_code} — ${credit.account_name}` : "—" },
           { label: "Cost center", value: costCenter?.name ?? "—" },
@@ -356,6 +361,7 @@ export async function getVoucherDetail(
         status: je.status,
         currencyCode: je.currencyCode,
         currencySymbol: je.currencySymbol,
+        exchangeRate: je.exchangeRate,
         fields: [
           { label: "Credit account (PDC liability)", value: credit ? `${credit.account_code} — ${credit.account_name}` : "—" },
           { label: "Payee", value: v.payee },
@@ -390,6 +396,7 @@ export async function getVoucherDetail(
         status: je.status,
         currencyCode: je.currencyCode,
         currencySymbol: je.currencySymbol,
+        exchangeRate: je.exchangeRate,
         fields: [
           { label: "Debit account (PDC asset)", value: debit ? `${debit.account_code} — ${debit.account_name}` : "—" },
           { label: "Payer", value: v.payer },
@@ -422,6 +429,7 @@ export async function getVoucherDetail(
         status: je.status,
         currencyCode: je.currencyCode,
         currencySymbol: je.currencySymbol,
+        exchangeRate: je.exchangeRate,
         fields: [
           { label: "Original PDC type", value: v.original_pdc_type },
           { label: "Return reason", value: v.return_reason },
@@ -449,6 +457,7 @@ export async function getVoucherDetail(
         status: je.status,
         currencyCode: je.currencyCode,
         currencySymbol: je.currencySymbol,
+        exchangeRate: je.exchangeRate,
         fields: [
           { label: "Currency conv.", value: formatRate(je.exchangeRate) },
         ],
@@ -474,6 +483,7 @@ export async function getVoucherDetail(
         status: je.status,
         currencyCode: je.currencyCode,
         currencySymbol: je.currencySymbol,
+        exchangeRate: je.exchangeRate,
         fields: [
           ...(v.period_from ? [{ label: "Period from", value: formatDate(v.period_from) }] : []),
           ...(v.period_till ? [{ label: "Period till", value: formatDate(v.period_till) }] : []),
@@ -503,6 +513,7 @@ export async function getVoucherDetail(
         status: je.status,
         currencyCode: je.currencyCode,
         currencySymbol: je.currencySymbol,
+        exchangeRate: je.exchangeRate,
         fields: [
           { label: "Contra account (Opening Balance Equity)", value: contra ? `${contra.account_code} — ${contra.account_name}` : "—" },
           { label: "Cost center", value: costCenter?.name ?? "—" },

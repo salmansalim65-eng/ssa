@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/table";
 import { CopyVoucherButton } from "@/components/vouchers/copy-voucher-button";
 import { PrintButton } from "@/components/vouchers/print-button";
-import { ReversePostedButton } from "@/components/vouchers/reverse-posted-button";
+import { DeletePostedVoucherButton } from "@/components/vouchers/delete-posted-voucher-button";
 import { VoucherActions } from "@/components/vouchers/voucher-actions";
 import { VoucherDeleteButton } from "@/components/vouchers/voucher-delete-button";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
@@ -152,10 +152,11 @@ export default async function VoucherDetailPage({
               />
             )}
             {isAdmin && detail.status === "posted" && (
-              <ReversePostedButton
-                journalEntryId={detail.journalEntryId}
-                revalidate={[`/accounting/vouchers/${voucherType}`, `/accounting/vouchers/${voucherType}/${id}`]}
+              <DeletePostedVoucherButton
+                voucherType={voucherType}
+                voucherId={detail.id}
                 redirectTo={`/accounting/vouchers/${voucherType}`}
+                label="voucher"
               />
             )}
           </>

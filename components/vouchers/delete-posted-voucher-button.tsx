@@ -16,20 +16,21 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { reversePostedDocument } from "@/features/accounting/vouchers/reversal-actions";
+import { deletePostedVoucher } from "@/features/accounting/vouchers/shared-actions";
+import type { VoucherType } from "@/types/database.types";
 
-// Admin-only "Delete" for a POSTED voucher/invoice. It reverses the accounting
-// effect (a balanced reversing entry) rather than physically deleting ledger
-// history. Render only when the document is posted and the user is an admin.
-export function ReversePostedButton({
-  journalEntryId,
-  revalidate = [],
+// Admin-only "Delete" for a POSTED accounting voucher. Physically removes the
+// voucher and its journal entry rather than leaving a reversed document behind.
+// Render only when the voucher is posted and the user is an admin.
+export function DeletePostedVoucherButton({
+  voucherType,
+  voucherId,
   redirectTo,
-  label = "Delete",
+  label = "voucher",
 }: {
-  journalEntryId: string;
-  revalidate?: string[];
-  redirectTo?: string;
+  voucherType: VoucherType;
+  voucherId: string;
+  redirectTo: string;
   label?: string;
 }) {
   const router = useRouter();
@@ -38,15 +39,14 @@ export function ReversePostedButton({
 
   function onConfirm() {
     startTransition(async () => {
-      const result = await reversePostedDocument(journalEntryId, revalidate);
+      const result = await deletePostedVoucher(voucherType, voucherId);
       if (result?.error) {
         toast.error(result.error);
         return;
       }
-      toast.success("Posted document reversed");
+      toast.success("Posted voucher deleted");
       setOpen(false);
-      if (redirectTo) router.push(redirectTo);
-      else router.refresh();
+      router.push(redirectTo);
     });
   }
 
@@ -54,14 +54,14 @@ export function ReversePostedButton({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="destructive" size="sm">
-          <Trash2Icon className="size-4" /> {label}
+          <Trash2Icon className="size-4" /> Delete
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Delete posted document</DialogTitle>
+          <DialogTitle>Delete posted {label}</DialogTitle>
           <DialogDescription>
-            Are you sure you want to delete this posted document? This action will reverse its accounting effect.
+            This permanently deletes the {label} and its accounting entry. This cannot be undone.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -71,7 +71,7 @@ export function ReversePostedButton({
             </Button>
           </DialogClose>
           <Button variant="destructive" onClick={onConfirm} disabled={isPending}>
-            {isPending ? "Reversing…" : "Delete & reverse"}
+            {isPending ? "Deleting…" : `Delete ${label}`}
           </Button>
         </DialogFooter>
       </DialogContent>

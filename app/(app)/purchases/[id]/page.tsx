@@ -17,7 +17,7 @@ import {
 import { AttachmentList, type AttachmentItem } from "@/components/attachments/attachment-list";
 import { CopyVoucherButton } from "@/components/vouchers/copy-voucher-button";
 import { PrintButton } from "@/components/vouchers/print-button";
-import { ReversePostedButton } from "@/components/vouchers/reverse-posted-button";
+import { DeletePostedVoucherButton } from "@/components/vouchers/delete-posted-voucher-button";
 import { VoucherActions } from "@/components/vouchers/voucher-actions";
 import { VoucherDeleteButton } from "@/components/vouchers/voucher-delete-button";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
@@ -161,10 +161,11 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
               />
             )}
             {isAdmin && status === "posted" && (
-              <ReversePostedButton
-                journalEntryId={voucher.journal_entry_id}
-                revalidate={["/purchases", `/purchases/${voucher.id}`]}
+              <DeletePostedVoucherButton
+                voucherType="purchase_voucher"
+                voucherId={voucher.id}
                 redirectTo="/purchases"
+                label="purchase voucher"
               />
             )}
           </>

@@ -104,6 +104,9 @@ export default async function VoucherDetailPage({
 
   const totalDebit = detail.lines.reduce((sum, l) => sum + l.debit, 0);
   const hasReference = detail.lines.some((l) => l.reference);
+  // Prefix line amounts with the voucher's transaction-currency symbol (e.g.
+  // "Rs 200,000,000"); fall back to a bare number when none is set.
+  const money = (n: number) => (detail.currencySymbol ? `${detail.currencySymbol} ${formatMoney(n)}` : formatMoney(n));
 
   // Signing URLs is the one step that depends on the attachment rows; do it in
   // parallel across whatever files exist.
@@ -209,10 +212,10 @@ export default async function VoucherDetailPage({
                 {hasReference && <TableCell>{line.reference ?? "—"}</TableCell>}
                 <TableCell>{line.description ?? "—"}</TableCell>
                 <TableCell className="text-right font-mono tabular-nums">
-                  {line.debit ? formatMoney(line.debit) : ""}
+                  {line.debit ? money(line.debit) : ""}
                 </TableCell>
                 <TableCell className="text-right font-mono tabular-nums">
-                  {line.credit ? formatMoney(line.credit) : ""}
+                  {line.credit ? money(line.credit) : ""}
                 </TableCell>
               </TableRow>
             ))}
@@ -220,8 +223,8 @@ export default async function VoucherDetailPage({
           <TableFooter>
             <TableRow className="hover:bg-transparent">
               <TableCell colSpan={hasReference ? 4 : 3}>Total</TableCell>
-              <TableCell className="text-right font-mono tabular-nums">{formatMoney(totalDebit)}</TableCell>
-              <TableCell className="text-right font-mono tabular-nums">{formatMoney(totalDebit)}</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">{money(totalDebit)}</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">{money(totalDebit)}</TableCell>
             </TableRow>
           </TableFooter>
         </Table>

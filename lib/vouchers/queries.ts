@@ -1,7 +1,6 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
-import { fetchRefs } from "@/lib/supabase/hydrate";
 import { formatDate, formatRate } from "@/lib/format";
 import type { JournalEntryStatus } from "@/types/database.types";
 import type { Phase5VoucherType } from "./meta";
@@ -32,6 +31,7 @@ export interface VoucherDetail {
   journalEntryId: string;
   status: JournalEntryStatus;
   currencyCode: string;
+  currencySymbol: string | null;
   fields: VoucherDetailField[];
   lines: {
     accountCode: string;
@@ -55,7 +55,7 @@ export async function getVoucherListRows(
       const { data } = await supabase
         .schema("accounting")
         .from("receipt_vouchers")
-        .select("id, voucher_no, receipt_date, total_amount, journal_entry_id, journal_entries:journal_entry_id(status), debit:debit_account_id(account_name)")
+        .select("id, voucher_no, receipt_date, total_amount, journal_entry_id, journal_entries:journal_entry_id(status), currencies:currency_id(symbol), debit:debit_account_id(account_name)")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false });
       return (data ?? []).map((r) => ({
@@ -64,6 +64,7 @@ export async function getVoucherListRows(
         date: r.receipt_date,
         party: (r.debit as unknown as { account_name: string } | null)?.account_name ?? "—",
         amount: r.total_amount,
+        currencySymbol: (r.currencies as unknown as { symbol: string } | null)?.symbol ?? null,
         journalEntryId: r.journal_entry_id,
         status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
       }));
@@ -72,7 +73,7 @@ export async function getVoucherListRows(
       const { data } = await supabase
         .schema("accounting")
         .from("payment_vouchers")
-        .select("id, voucher_no, payment_date, total_amount, journal_entry_id, journal_entries:journal_entry_id(status), credit:credit_account_id(account_name)")
+        .select("id, voucher_no, payment_date, total_amount, journal_entry_id, journal_entries:journal_entry_id(status), currencies:currency_id(symbol), credit:credit_account_id(account_name)")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false });
       return (data ?? []).map((r) => ({
@@ -81,6 +82,7 @@ export async function getVoucherListRows(
         date: r.payment_date,
         party: (r.credit as unknown as { account_name: string } | null)?.account_name ?? "—",
         amount: r.total_amount,
+        currencySymbol: (r.currencies as unknown as { symbol: string } | null)?.symbol ?? null,
         journalEntryId: r.journal_entry_id,
         status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
       }));
@@ -89,7 +91,7 @@ export async function getVoucherListRows(
       const { data } = await supabase
         .schema("accounting")
         .from("pdc_payment_vouchers")
-        .select("id, voucher_no, cheque_date, payee, total_amount, journal_entry_id, journal_entries:journal_entry_id(status)")
+        .select("id, voucher_no, cheque_date, payee, total_amount, journal_entry_id, journal_entries:journal_entry_id(status), currencies:currency_id(symbol)")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false });
       return (data ?? []).map((r) => ({
@@ -98,6 +100,7 @@ export async function getVoucherListRows(
         date: r.cheque_date,
         party: r.payee,
         amount: r.total_amount,
+        currencySymbol: (r.currencies as unknown as { symbol: string } | null)?.symbol ?? null,
         journalEntryId: r.journal_entry_id,
         status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
       }));
@@ -106,7 +109,7 @@ export async function getVoucherListRows(
       const { data } = await supabase
         .schema("accounting")
         .from("pdc_receipt_vouchers")
-        .select("id, voucher_no, cheque_date, payer, total_amount, journal_entry_id, journal_entries:journal_entry_id(status)")
+        .select("id, voucher_no, cheque_date, payer, total_amount, journal_entry_id, journal_entries:journal_entry_id(status), currencies:currency_id(symbol)")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false });
       return (data ?? []).map((r) => ({
@@ -115,6 +118,7 @@ export async function getVoucherListRows(
         date: r.cheque_date,
         party: r.payer,
         amount: r.total_amount,
+        currencySymbol: (r.currencies as unknown as { symbol: string } | null)?.symbol ?? null,
         journalEntryId: r.journal_entry_id,
         status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
       }));
@@ -123,7 +127,7 @@ export async function getVoucherListRows(
       const { data } = await supabase
         .schema("accounting")
         .from("cheque_return_vouchers")
-        .select("id, voucher_no, return_date, return_reason, penalty_amount, journal_entry_id, journal_entries:journal_entry_id(status)")
+        .select("id, voucher_no, return_date, return_reason, penalty_amount, journal_entry_id, journal_entries:journal_entry_id(status), currencies:currency_id(symbol)")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false });
       return (data ?? []).map((r) => ({
@@ -132,6 +136,7 @@ export async function getVoucherListRows(
         date: r.return_date,
         party: r.return_reason,
         amount: r.penalty_amount,
+        currencySymbol: (r.currencies as unknown as { symbol: string } | null)?.symbol ?? null,
         journalEntryId: r.journal_entry_id,
         status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
       }));
@@ -225,19 +230,17 @@ async function getJournalEntryWithLines(journalEntryId: string) {
       .order("line_no"),
   ]);
 
-  const currenciesById = await fetchRefs<{ id: string; code: string }>(
-    supabase,
-    "core",
-    "currencies",
-    "code",
-    [je?.currency_id],
-  );
+  const { data: currency } = je?.currency_id
+    ? await supabase.schema("core").from("currencies").select("code, symbol").eq("id", je.currency_id).maybeSingle()
+    : { data: null };
+  const cur = currency as { code: string; symbol: string } | null;
 
   return {
     status: (je?.status ?? "draft") as JournalEntryStatus,
     narration: je?.narration ?? null,
     exchangeRate: (je?.exchange_rate as number | null) ?? 1,
-    currencyCode: (je?.currency_id ? currenciesById.get(je.currency_id)?.code : undefined) ?? "",
+    currencyCode: cur?.code ?? "",
+    currencySymbol: cur?.symbol ?? null,
     lines: (lines ?? []).map((l) => {
       const account = l.chart_of_accounts as unknown as { account_code: string; account_name: string } | null;
       const costCenter = l.cost_centers as unknown as { name: string } | null;
@@ -282,6 +285,7 @@ export async function getVoucherDetail(
         journalEntryId: v.journal_entry_id,
         status: je.status,
         currencyCode: je.currencyCode,
+        currencySymbol: je.currencySymbol,
         fields: [
           { label: "Debit account (Cash/Bank)", value: debit ? `${debit.account_code} — ${debit.account_name}` : "—" },
           { label: "Due date", value: v.due_date ?? "—" },
@@ -312,6 +316,7 @@ export async function getVoucherDetail(
         journalEntryId: v.journal_entry_id,
         status: je.status,
         currencyCode: je.currencyCode,
+        currencySymbol: je.currencySymbol,
         fields: [
           { label: "Credit account (Cash/Bank)", value: credit ? `${credit.account_code} — ${credit.account_name}` : "—" },
           { label: "Cost center", value: costCenter?.name ?? "—" },
@@ -341,6 +346,7 @@ export async function getVoucherDetail(
         journalEntryId: v.journal_entry_id,
         status: je.status,
         currencyCode: je.currencyCode,
+        currencySymbol: je.currencySymbol,
         fields: [
           { label: "Credit account (PDC liability)", value: credit ? `${credit.account_code} — ${credit.account_name}` : "—" },
           { label: "Payee", value: v.payee },
@@ -374,6 +380,7 @@ export async function getVoucherDetail(
         journalEntryId: v.journal_entry_id,
         status: je.status,
         currencyCode: je.currencyCode,
+        currencySymbol: je.currencySymbol,
         fields: [
           { label: "Debit account (PDC asset)", value: debit ? `${debit.account_code} — ${debit.account_name}` : "—" },
           { label: "Payer", value: v.payer },
@@ -405,6 +412,7 @@ export async function getVoucherDetail(
         journalEntryId: v.journal_entry_id,
         status: je.status,
         currencyCode: je.currencyCode,
+        currencySymbol: je.currencySymbol,
         fields: [
           { label: "Original PDC type", value: v.original_pdc_type },
           { label: "Return reason", value: v.return_reason },
@@ -431,6 +439,7 @@ export async function getVoucherDetail(
         journalEntryId: v.journal_entry_id,
         status: je.status,
         currencyCode: je.currencyCode,
+        currencySymbol: je.currencySymbol,
         fields: [
           { label: "Currency conv.", value: formatRate(je.exchangeRate) },
         ],
@@ -455,6 +464,7 @@ export async function getVoucherDetail(
         journalEntryId: v.journal_entry_id,
         status: je.status,
         currencyCode: je.currencyCode,
+        currencySymbol: je.currencySymbol,
         fields: [
           ...(v.period_from ? [{ label: "Period from", value: formatDate(v.period_from) }] : []),
           ...(v.period_till ? [{ label: "Period till", value: formatDate(v.period_till) }] : []),
@@ -483,6 +493,7 @@ export async function getVoucherDetail(
         journalEntryId: v.journal_entry_id,
         status: je.status,
         currencyCode: je.currencyCode,
+        currencySymbol: je.currencySymbol,
         fields: [
           { label: "Contra account (Opening Balance Equity)", value: contra ? `${contra.account_code} — ${contra.account_name}` : "—" },
           { label: "Cost center", value: costCenter?.name ?? "—" },

@@ -19,6 +19,19 @@ async function getPostingAccount(companyId: string, accountRole: string) {
   return data as string | null;
 }
 
+// The cost centre tied to a leased asset carries the country attribution used
+// by the financial reports. Returns null when the asset has no cost centre.
+async function getAssetCostCenterId(assetId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .schema("accounting")
+    .from("cost_centers")
+    .select("id")
+    .eq("asset_id", assetId)
+    .maybeSingle();
+  return (data?.id as string | undefined) ?? null;
+}
+
 export async function generatePkRentInvoice(scheduleId: string, input: GeneratePkInvoiceInput) {
   const parsed = generatePkInvoiceSchema.safeParse({ ...input, scheduleId });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -41,10 +54,15 @@ export async function generatePkRentInvoice(scheduleId: string, input: GenerateP
   const { data: lease, error: leaseError } = await supabase
     .schema("rental")
     .from("pk_leases")
-    .select("currency_id")
+    .select("currency_id, asset_id")
     .eq("id", schedule.lease_id)
     .single();
   if (leaseError || !lease) return { error: "Lease not found" };
+
+  // Stamp the leased asset's cost centre on every journal line so rental
+  // income / receivables attribute to the asset's country (e.g. Pakistan) and
+  // show up in country-filtered reports (Trial Balance, Balance Sheet, P&L).
+  const costCenterId = lease.asset_id ? await getAssetCostCenterId(lease.asset_id) : null;
 
   const utilityTotal = parsed.data.utilityCharges.reduce((sum, u) => sum + u.amount, 0);
   const advanceAdjusted = parsed.data.advanceAdjusted;
@@ -76,14 +94,14 @@ export async function generatePkRentInvoice(scheduleId: string, input: GenerateP
 
   const lines: EntryLineInput[] = [];
   if (netReceivable > 0) {
-    lines.push({ accountId: tenantReceivableId, debit: netReceivable, credit: 0, description: "Pakistan rent invoice" });
+    lines.push({ accountId: tenantReceivableId, costCenterId, debit: netReceivable, credit: 0, description: "Pakistan rent invoice" });
   }
   if (advanceAdjusted > 0) {
-    lines.push({ accountId: advanceLiabilityId!, debit: advanceAdjusted, credit: 0, description: "Advance rent adjusted" });
+    lines.push({ accountId: advanceLiabilityId!, costCenterId, debit: advanceAdjusted, credit: 0, description: "Advance rent adjusted" });
   }
-  lines.push({ accountId: rentalIncomeId, debit: 0, credit: schedule.amount, description: "Pakistan rent invoice" });
+  lines.push({ accountId: rentalIncomeId, costCenterId, debit: 0, credit: schedule.amount, description: "Pakistan rent invoice" });
   if (utilityTotal > 0) {
-    lines.push({ accountId: utilityIncomeId!, debit: 0, credit: utilityTotal, description: "Utility recovery" });
+    lines.push({ accountId: utilityIncomeId!, costCenterId, debit: 0, credit: utilityTotal, description: "Utility recovery" });
   }
 
   const je = await createJournalEntry({

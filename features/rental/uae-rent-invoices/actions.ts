@@ -18,6 +18,19 @@ async function getPostingAccount(companyId: string, accountRole: string) {
   return data as string | null;
 }
 
+// The cost centre tied to a leased asset carries the country attribution used
+// by the financial reports. Returns null when the asset has no cost centre.
+async function getAssetCostCenterId(assetId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .schema("accounting")
+    .from("cost_centers")
+    .select("id")
+    .eq("asset_id", assetId)
+    .maybeSingle();
+  return (data?.id as string | undefined) ?? null;
+}
+
 function addPeriod(date: string, cycle: "monthly" | "yearly") {
   const d = new Date(date);
   if (cycle === "monthly") d.setMonth(d.getMonth() + 1);
@@ -45,12 +58,17 @@ export async function generateUaeRentInvoice(scheduleId: string) {
   const { data: lease, error: leaseError } = await supabase
     .schema("rental")
     .from("uae_leases")
-    .select("currency_id, rent_cycle, lease_type")
+    .select("currency_id, rent_cycle, lease_type, asset_id")
     .eq("id", schedule.lease_id)
     .single();
   if (leaseError || !lease) return { error: "Lease not found" };
   // HH leases are uae_leases; their invoices inherit invoice_type = 'HH'.
   const invoiceType = lease.lease_type === "hh" ? "HH" : "UAE";
+
+  // Stamp the leased asset's cost centre on every journal line so rental income
+  // / receivables attribute to the asset's country and show up in
+  // country-filtered reports (Trial Balance, Balance Sheet, P&L).
+  const costCenterId = lease.asset_id ? await getAssetCostCenterId(lease.asset_id) : null;
 
   const [tenantReceivableId, rentalIncomeId] = await Promise.all([
     getPostingAccount(companyId, "tenant_receivable"),
@@ -73,8 +91,8 @@ export async function generateUaeRentInvoice(scheduleId: string) {
     narration: "UAE rent invoice",
     createdBy,
     lines: [
-      { accountId: tenantReceivableId, debit: schedule.amount, credit: 0, description: "UAE rent invoice" },
-      { accountId: rentalIncomeId, debit: 0, credit: schedule.amount, description: "UAE rent invoice" },
+      { accountId: tenantReceivableId, costCenterId, debit: schedule.amount, credit: 0, description: "UAE rent invoice" },
+      { accountId: rentalIncomeId, costCenterId, debit: 0, credit: schedule.amount, description: "UAE rent invoice" },
     ],
   });
   if ("error" in je) return { error: je.error };

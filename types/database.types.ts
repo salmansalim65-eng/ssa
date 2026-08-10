@@ -62,6 +62,25 @@ export interface Database {
         };
         Update: Partial<Database["core"]["Tables"]["companies"]["Row"]>;
       };
+      countries: {
+        Row: {
+          id: string;
+          company_id: string;
+          code: string;
+          name: string;
+          is_active: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_by: string | null;
+          updated_at: string | null;
+        };
+        Insert: Partial<Database["core"]["Tables"]["countries"]["Row"]> & {
+          company_id: string;
+          code: string;
+          name: string;
+        };
+        Update: Partial<Database["core"]["Tables"]["countries"]["Row"]>;
+      };
       user_profiles: {
         Row: {
           id: string;
@@ -1047,10 +1066,11 @@ export interface Database {
           asset_code: string;
           asset_name: string;
           property_type: string;
-          country: "PK" | "AE";
+          country: string;
           city: string | null;
           area: string | null;
           area_sqft: number | null;
+          area_unit: string | null;
           address: string | null;
           purchase_date: string | null;
           purchase_value: number | null;
@@ -1058,9 +1078,12 @@ export interface Database {
           currency_id: string | null;
           service_charges_rate: number | null;
           title_deed_value: number | null;
+          other_charges: number | null;
+          total_property_value: number | null;
           estimated_rent: number | null;
           status: "active" | "sold" | "inactive";
           owner: string | null;
+          official_owner: string | null;
           group_cost_center_id: string | null;
           title_deed_attachment_id: string | null;
           notes: string | null;
@@ -1077,10 +1100,30 @@ export interface Database {
           asset_code: string;
           asset_name: string;
           property_type: string;
-          country: "PK" | "AE";
+          country: string;
           created_by: string;
         };
         Update: Partial<Database["assets"]["Tables"]["assets"]["Row"]>;
+      };
+      asset_value_history: {
+        Row: {
+          id: string;
+          company_id: string;
+          asset_id: string;
+          effective_date: string;
+          previous_value: number | null;
+          new_value: number;
+          changed_by: string | null;
+          remarks: string | null;
+          created_at: string;
+        };
+        Insert: Partial<Database["assets"]["Tables"]["asset_value_history"]["Row"]> & {
+          company_id: string;
+          asset_id: string;
+          effective_date: string;
+          new_value: number;
+        };
+        Update: Partial<Database["assets"]["Tables"]["asset_value_history"]["Row"]>;
       };
       asset_images: {
         Row: {
@@ -1226,6 +1269,24 @@ export interface Database {
         Returns: undefined;
       };
       fn_admin_delete_posted_asset_sale: {
+        Args: { p_id: string };
+        Returns: undefined;
+      };
+      fn_log_value_change: {
+        Args: {
+          p_asset_id: string;
+          p_previous: number | null;
+          p_new: number;
+          p_effective_date: string | null;
+          p_remarks: string | null;
+        };
+        Returns: undefined;
+      };
+      fn_recompute_current_value: {
+        Args: { p_asset_id: string };
+        Returns: undefined;
+      };
+      fn_delete_value_history: {
         Args: { p_id: string };
         Returns: undefined;
       };

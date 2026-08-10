@@ -22,6 +22,7 @@ function toRow(input: AssetInput) {
     city: input.city || null,
     area: input.area || null,
     area_sqft: input.areaSqft,
+    area_unit: input.areaUnit || null,
     address: input.address || null,
     purchase_date: input.purchaseDate || null,
     purchase_value: input.purchaseValue,
@@ -29,9 +30,11 @@ function toRow(input: AssetInput) {
     currency_id: input.currencyId || null,
     service_charges_rate: input.serviceChargesRate,
     title_deed_value: input.titleDeedValue,
+    other_charges: input.otherCharges,
     estimated_rent: input.estimatedRent,
     status: input.status,
     owner: input.owner || null,
+    official_owner: input.officialOwner || null,
     group_cost_center_id: input.groupCostCenterId || null,
     notes: input.notes || null,
   };
@@ -63,6 +66,19 @@ export async function createAsset(input: AssetInput) {
 
   if (error || !asset) return { error: error?.message ?? "Failed to create asset" };
 
+  // Seed the first Value History record (previous is null — this is the
+  // starting value). Effective date defaults to the value-effective date, then
+  // the purchase date, then today.
+  if (parsed.data.currentValue != null) {
+    await supabase.schema("assets").rpc("fn_log_value_change", {
+      p_asset_id: asset.id,
+      p_previous: null,
+      p_new: parsed.data.currentValue,
+      p_effective_date: parsed.data.valueEffectiveDate || parsed.data.purchaseDate || null,
+      p_remarks: parsed.data.valueRemarks || null,
+    });
+  }
+
   revalidatePath("/assets");
   return { success: true, id: asset.id };
 }
@@ -73,8 +89,31 @@ export async function updateAsset(assetId: string, input: AssetInput) {
 
   await requirePermission("assets", "edit");
   const supabase = await createClient();
+
+  // Read the stored value first so we can tell whether Current Value changed.
+  const { data: existing } = await supabase
+    .schema("assets")
+    .from("assets")
+    .select("current_value")
+    .eq("id", assetId)
+    .maybeSingle();
+
   const { error } = await supabase.schema("assets").from("assets").update(toRow(parsed.data)).eq("id", assetId);
   if (error) return { error: error.message };
+
+  // Log a Value History record only when the value truly changed — saving the
+  // same value again must not create a duplicate record.
+  const previous = existing?.current_value ?? null;
+  const next = parsed.data.currentValue;
+  if (next != null && Number(previous ?? NaN) !== Number(next)) {
+    await supabase.schema("assets").rpc("fn_log_value_change", {
+      p_asset_id: assetId,
+      p_previous: previous,
+      p_new: next,
+      p_effective_date: parsed.data.valueEffectiveDate || null,
+      p_remarks: parsed.data.valueRemarks || null,
+    });
+  }
 
   revalidatePath("/assets");
   revalidatePath(`/assets/${assetId}`);
@@ -94,6 +133,19 @@ export async function deleteAsset(assetId: string) {
   if (error) return { error: error.message };
 
   revalidatePath("/assets");
+  return { success: true };
+}
+
+export async function deleteValueHistory(historyId: string, assetId: string) {
+  await requirePermission("asset_value_history", "delete");
+  const supabase = await createClient();
+
+  // Definer RPC validates the permission, deletes the record, and recomputes
+  // current_value from the latest remaining history row so it stays consistent.
+  const { error } = await supabase.schema("assets").rpc("fn_delete_value_history", { p_id: historyId });
+  if (error) return { error: error.message };
+
+  revalidatePath(`/assets/${assetId}`);
   return { success: true };
 }
 

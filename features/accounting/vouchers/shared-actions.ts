@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { requirePermission } from "@/lib/auth/permissions";
+import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { actOnApproval, getCurrentCompanyId, submitForApproval } from "@/lib/vouchers/engine";
 import type { VoucherType } from "@/types/database.types";
@@ -40,6 +40,26 @@ export async function deleteAccountingVoucher(voucherType: VoucherType, id: stri
   if (error) return { error: error.message };
 
   revalidatePath(`/accounting/vouchers/${voucherType}`);
+  return { success: true };
+}
+
+// Admin-only delete of a POSTED accounting voucher: physically removes the
+// voucher, its lines and its journal entry (and any reversal that pointed at it)
+// rather than leaving a reversed document behind.
+export async function deletePostedVoucher(voucherType: VoucherType, id: string) {
+  if (!(await isCurrentUserAdmin())) {
+    return { error: "Only administrators can delete posted vouchers." };
+  }
+  const supabase = await createClient();
+  const { error } = await supabase
+    .schema("accounting")
+    .rpc("fn_admin_delete_posted_voucher", { p_voucher_type: voucherType, p_id: id });
+  if (error) return { error: error.message };
+
+  revalidatePath(`/accounting/vouchers/${voucherType}`);
+  revalidatePath(`/accounting/vouchers/${voucherType}/${id}`);
+  revalidatePath("/purchases");
+  revalidatePath(`/purchases/${id}`);
   return { success: true };
 }
 

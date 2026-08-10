@@ -1032,6 +1032,10 @@ export interface Database {
         Args: { p_journal_entry_id: string };
         Returns: string;
       };
+      fn_admin_delete_posted_voucher: {
+        Args: { p_voucher_type: string; p_id: string };
+        Returns: undefined;
+      };
     };
   };
   assets: {

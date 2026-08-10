@@ -129,7 +129,9 @@ export default async function VoucherDetailPage({
           <>
             <VoucherStatusBadge status={detail.status} />
             <PrintButton />
-            {detail.status === "draft" &&
+            {/* Opening balances are corrections you make after posting, so they
+                stay editable even when posted; everything else is draft-only. */}
+            {(detail.status === "draft" || voucherType === "opening_balance_voucher") &&
               canSubmit &&
               (EDITABLE_VOUCHER_TYPES as readonly string[]).includes(voucherType) && (
                 <Button asChild variant="outline" size="sm">

@@ -132,7 +132,9 @@ export async function updateOpeningBalanceVoucher(id: string, input: OpeningBala
     .eq("id", jeId)
     .single();
   if (!je) return { error: "Voucher not found" };
-  if (je.status !== "draft") return { error: "Only draft vouchers can be edited" };
+  // Opening balances stay editable after posting (they're corrections to the
+  // opening figures, with no downstream vouchers referencing them); the JE lines
+  // and base amounts below are simply rewritten in place, keeping it posted.
 
   const costCenterId = parsed.data.costCenterId || null;
   const rate = parsed.data.exchangeRate;

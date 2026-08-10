@@ -187,22 +187,51 @@ export async function getVoucherListRows(
       }));
     }
     case "opening_balance_voucher": {
-      // Show the property/asset account(s) the opening balance was booked to —
-      // not the CAPITAL contra — and the amount in its own transaction currency.
       const { data } = await supabase
         .schema("accounting")
         .from("opening_balance_vouchers")
         .select(
-          "id, voucher_no, as_of_date, total_amount, exchange_rate, journal_entry_id, journal_entries:journal_entry_id(status), currencies:currency_id(symbol), lines:opening_balance_voucher_lines(debit, credit, account:account_id(account_name))",
+          "id, voucher_no, as_of_date, total_amount, exchange_rate, journal_entry_id, journal_entries:journal_entry_id(status), currencies:currency_id(symbol)",
         )
         .eq("company_id", companyId)
         .order("created_at", { ascending: false });
-      return (data ?? []).map((r) => {
-        const lines =
-          (r.lines as unknown as { debit: number; credit: number; account: { account_name: string } | null }[]) ?? [];
-        // The debit side holds the asset; fall back to any line if none is a debit.
-        const source = lines.filter((l) => Number(l.debit) > 0);
-        const names = [...new Set((source.length ? source : lines).map((l) => l.account?.account_name).filter(Boolean))];
+      const vouchers = data ?? [];
+
+      // Resolve each voucher's property/asset account(s) from its lines, fetched
+      // separately — a nested embed here proved fragile and could blank the list.
+      const voucherIds = vouchers.map((v) => v.id);
+      const linesByVoucher = new Map<string, { debit: number; account_id: string }[]>();
+      const accountNameById = new Map<string, string>();
+      if (voucherIds.length) {
+        const { data: obLines } = await supabase
+          .schema("accounting")
+          .from("opening_balance_voucher_lines")
+          .select("voucher_id, debit, account_id")
+          .in("voucher_id", voucherIds);
+        for (const l of obLines ?? []) {
+          const arr = linesByVoucher.get(l.voucher_id) ?? [];
+          arr.push({ debit: Number(l.debit), account_id: l.account_id });
+          linesByVoucher.set(l.voucher_id, arr);
+        }
+        const accountIds = [...new Set((obLines ?? []).map((l) => l.account_id))];
+        if (accountIds.length) {
+          const { data: accts } = await supabase
+            .schema("accounting")
+            .from("chart_of_accounts")
+            .select("id, account_name")
+            .in("id", accountIds);
+          for (const a of accts ?? []) accountNameById.set(a.id, a.account_name);
+        }
+      }
+
+      // Show the property/asset account(s) the opening balance was booked to —
+      // not the CAPITAL contra — and the amount in its own transaction currency.
+      return vouchers.map((r) => {
+        const lines = linesByVoucher.get(r.id) ?? [];
+        const source = lines.filter((l) => l.debit > 0); // debit side holds the asset
+        const names = [
+          ...new Set((source.length ? source : lines).map((l) => accountNameById.get(l.account_id)).filter(Boolean)),
+        ];
         const party = names.length === 1 ? (names[0] as string) : names.length > 1 ? `Split (${names.length})` : "—";
         return {
           id: r.id,

@@ -22,8 +22,10 @@ export function KpiCard({
   const card = (
     <Card
       className={cn(
-        "h-full gap-0 py-0",
-        href && "transition-colors hover:border-ring/50 hover:bg-accent/30",
+        // Soft light tint so the stat cards read as gentle light panels rather
+        // than plain white.
+        "h-full gap-0 border-primary/10 bg-primary/[0.04] py-0",
+        href && "transition-colors hover:border-ring/50 hover:bg-primary/[0.07]",
       )}
     >
       <CardContent className="flex items-start justify-between gap-3 p-5">

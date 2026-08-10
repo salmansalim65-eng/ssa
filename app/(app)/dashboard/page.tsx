@@ -184,7 +184,7 @@ export default async function DashboardPage() {
           href="/accounting/voucher-register"
         />
         <Link href="/admin/exchange-rates" className="block rounded-lg">
-          <Card className="h-full transition-colors hover:border-ring hover:bg-accent/40">
+          <Card className="h-full border-primary/10 bg-primary/[0.04] transition-colors hover:border-ring/50 hover:bg-primary/[0.07]">
             <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Currency summary</CardTitle>
               <ClockIcon className="size-4 text-muted-foreground" />
@@ -219,7 +219,7 @@ export default async function DashboardPage() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Link href="/reports/asset-register" className="block rounded-lg">
-          <Card className="h-full transition-colors hover:border-ring hover:bg-accent/40">
+          <Card className="h-full border-primary/10 bg-primary/[0.04] transition-colors hover:border-ring/50 hover:bg-primary/[0.07]">
             <CardHeader>
               <CardTitle>Assets by country</CardTitle>
             </CardHeader>
@@ -229,7 +229,7 @@ export default async function DashboardPage() {
           </Card>
         </Link>
         <Link href="/reports/asset-register" className="block rounded-lg">
-          <Card className="h-full transition-colors hover:border-ring hover:bg-accent/40">
+          <Card className="h-full border-primary/10 bg-primary/[0.04] transition-colors hover:border-ring/50 hover:bg-primary/[0.07]">
             <CardHeader>
               <CardTitle>Assets by property type</CardTitle>
             </CardHeader>
@@ -240,7 +240,7 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      <Card>
+      <Card className="border-primary/10 bg-primary/[0.04]">
         <CardHeader className="border-b pb-4">
           <CardTitle>Recent transactions</CardTitle>
           <CardAction>

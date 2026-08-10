@@ -227,9 +227,15 @@ export default async function VoucherDetailPage({
                 <TableCell>{line.description ?? "—"}</TableCell>
                 <TableCell className="text-right font-mono tabular-nums">
                   {line.debit ? money(line.debit) : ""}
+                  {line.debit && showBaseTotal && (
+                    <div className="text-xs font-normal text-muted-foreground">≈ {baseMoney(line.debit * detail.exchangeRate)}</div>
+                  )}
                 </TableCell>
                 <TableCell className="text-right font-mono tabular-nums">
                   {line.credit ? money(line.credit) : ""}
+                  {line.credit && showBaseTotal && (
+                    <div className="text-xs font-normal text-muted-foreground">≈ {baseMoney(line.credit * detail.exchangeRate)}</div>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

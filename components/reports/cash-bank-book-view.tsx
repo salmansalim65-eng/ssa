@@ -15,9 +15,11 @@ import {
   ReportCountryFilter,
   type ReportCountryOption,
 } from "@/components/reports/report-country-filter";
+import { ReportSelectFilter } from "@/components/reports/report-select-filter";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { formatDate, formatMoney } from "@/lib/format";
 import type { CashBankAccountSection } from "@/lib/reports/cash-bank-book";
+import type { ResolvedReportCurrency } from "@/lib/reports/report-currency";
 
 export function CashBankBookView({
   title,
@@ -28,6 +30,8 @@ export function CashBankBookView({
   filenamePrefix,
   countries,
   country,
+  currency,
+  selectedCurrency,
 }: {
   title: string;
   description: string;
@@ -37,16 +41,23 @@ export function CashBankBookView({
   filenamePrefix: string;
   countries: ReportCountryOption[];
   country: string;
+  currency: ResolvedReportCurrency;
+  selectedCurrency: string;
 }) {
+  // Ledger amounts are stored in base currency; convert every displayed figure
+  // to the selected currency and prefix its symbol.
+  const { factor, symbol } = currency;
+  const money = (n: number) => (symbol ? `${symbol} ${formatMoney(n * factor)}` : formatMoney(n * factor));
+
   const exportRows = sections.flatMap((s) =>
     s.rows.map((r) => [
       `${s.account_code} - ${s.account_name}`,
       formatDate(r.entry_date),
       r.voucher_no ?? "",
       r.description || r.narration || "",
-      r.debit_amount,
-      r.credit_amount,
-      r.balance,
+      r.debit_amount * factor,
+      r.credit_amount * factor,
+      r.balance * factor,
     ]),
   );
 
@@ -55,7 +66,7 @@ export function CashBankBookView({
       <PageHeader
         eyebrow="Reports"
         title={title}
-        description={description}
+        description={`${description} Amounts in ${currency.selectedCode || "base currency"}.`}
         className="print:hidden"
         actions={
           <>
@@ -75,6 +86,16 @@ export function CashBankBookView({
         </Suspense>
         <Suspense>
           <ReportCountryFilter countries={countries} selected={country} />
+        </Suspense>
+        <Suspense>
+          <ReportSelectFilter
+            label="Currency"
+            param="cur"
+            allLabel={currency.baseCode ? `Base (${currency.baseCode})` : "Base"}
+            options={currency.options}
+            selected={selectedCurrency}
+            width="w-40"
+          />
         </Suspense>
       </div>
 
@@ -108,7 +129,7 @@ export function CashBankBookView({
                     Opening balance
                   </TableCell>
                   <TableCell className="text-right font-mono font-medium tabular-nums">
-                    {formatMoney(section.openingBalance)}
+                    {money(section.openingBalance)}
                   </TableCell>
                 </TableRow>
                 {section.rows.map((r) => (
@@ -117,12 +138,12 @@ export function CashBankBookView({
                     <TableCell>{r.voucher_no ?? "Draft"}</TableCell>
                     <TableCell>{r.description || r.narration || "—"}</TableCell>
                     <TableCell className="text-right font-mono tabular-nums">
-                      {r.debit_amount ? formatMoney(r.debit_amount) : ""}
+                      {r.debit_amount ? money(r.debit_amount) : ""}
                     </TableCell>
                     <TableCell className="text-right font-mono tabular-nums">
-                      {r.credit_amount ? formatMoney(r.credit_amount) : ""}
+                      {r.credit_amount ? money(r.credit_amount) : ""}
                     </TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">{formatMoney(r.balance)}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{money(r.balance)}</TableCell>
                   </TableRow>
                 ))}
                 <TableRow>
@@ -130,7 +151,7 @@ export function CashBankBookView({
                     Closing balance
                   </TableCell>
                   <TableCell className="text-right font-mono font-medium tabular-nums">
-                    {formatMoney(section.closingBalance)}
+                    {money(section.closingBalance)}
                   </TableCell>
                 </TableRow>
               </TableBody>

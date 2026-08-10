@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { AsOfDateFilter } from "@/components/reports/as-of-date-filter";
 import { CsvExportButton } from "@/components/reports/csv-export-button";
 import { ReportCountryFilter } from "@/components/reports/report-country-filter";
+import { ReportSelectFilter } from "@/components/reports/report-select-filter";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { aggregateByAccount } from "@/lib/reports/account-aggregation";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
@@ -41,9 +42,9 @@ function netOf(r: { debit: number; credit: number }) {
 export default async function BalanceSheetPage({
   searchParams,
 }: {
-  searchParams: Promise<{ asOf?: string; country?: string }>;
+  searchParams: Promise<{ asOf?: string; country?: string; cc?: string }>;
 }) {
-  const { asOf = today(), country = "" } = await searchParams;
+  const { asOf = today(), country = "", cc = "" } = await searchParams;
 
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
@@ -55,7 +56,8 @@ export default async function BalanceSheetPage({
     .eq("company_id", companyId)
     .lte("entry_date", asOf);
   if (country) linesQuery = linesQuery.eq("cost_center_country", country);
-  const [{ data: lines }, countries, { data: companyCurrencies }] = await Promise.all([
+  if (cc) linesQuery = linesQuery.eq("cost_center_id", cc);
+  const [{ data: lines }, countries, { data: companyCurrencies }, { data: costCenters }] = await Promise.all([
     linesQuery,
     loadReportCountries(companyId),
     supabase
@@ -66,8 +68,17 @@ export default async function BalanceSheetPage({
       .eq("is_active", true)
       .eq("is_base_currency", true)
       .maybeSingle(),
+    supabase
+      .schema("accounting")
+      .from("cost_centers")
+      .select("id, name")
+      .eq("company_id", companyId)
+      .eq("is_active", true)
+      .is("deleted_at", null)
+      .order("name"),
   ]);
   const countryName = country ? countries.find((c) => c.code === country)?.name ?? country : "";
+  const costCenterOptions = (costCenters ?? []).map((c) => ({ value: c.id, label: c.name }));
 
   // Ledger amounts are already stored in base currency (v_ledger_entries uses
   // base_debit_amount/base_credit_amount), so every figure below — and the
@@ -211,6 +222,15 @@ export default async function BalanceSheetPage({
         </Suspense>
         <Suspense>
           <ReportCountryFilter countries={countries} selected={country} />
+        </Suspense>
+        <Suspense>
+          <ReportSelectFilter
+            label="Cost centre"
+            param="cc"
+            allLabel="All cost centres"
+            options={costCenterOptions}
+            selected={cc}
+          />
         </Suspense>
       </div>
 

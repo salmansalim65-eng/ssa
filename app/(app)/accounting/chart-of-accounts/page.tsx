@@ -1,6 +1,7 @@
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
+import { loadReportCountries } from "@/lib/reports/countries";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { AccountTree, type AccountRow } from "./account-tree";
 
@@ -14,7 +15,7 @@ export default async function ChartOfAccountsPage() {
       supabase
         .schema("accounting")
         .from("chart_of_accounts")
-        .select("id, account_code, account_name, parent_id, account_type, currency_id, opening_balance, is_group, is_active, is_cash, is_bank")
+        .select("id, account_code, account_name, parent_id, account_type, currency_id, opening_balance, is_group, is_active, is_cash, is_bank, is_tenant_group, id_number, phone, email, country")
         .eq("company_id", companyId)
         .is("deleted_at", null),
       supabase
@@ -40,6 +41,11 @@ export default async function ChartOfAccountsPage() {
     is_active: boolean;
     is_cash: boolean;
     is_bank: boolean;
+    is_tenant_group: boolean;
+    id_number: string | null;
+    phone: string | null;
+    email: string | null;
+    country: string | null;
   };
 
   const rows = (accounts as unknown as RawAccount[]) ?? [];
@@ -64,6 +70,11 @@ export default async function ChartOfAccountsPage() {
     is_active: a.is_active,
     is_cash: a.is_cash,
     is_bank: a.is_bank,
+    is_tenant_group: a.is_tenant_group,
+    id_number: a.id_number,
+    phone: a.phone,
+    email: a.email,
+    country: a.country,
   }));
 
   type RawCompanyCurrency = { is_base_currency: boolean; currencies: { id: string; code: string } | null };
@@ -71,10 +82,13 @@ export default async function ChartOfAccountsPage() {
     .filter((cc) => !cc.is_base_currency && cc.currencies)
     .map((cc) => ({ id: cc.currencies!.id, code: cc.currencies!.code }));
 
+  const countries = await loadReportCountries(companyId);
+
   return (
     <AccountTree
       accounts={accountRows}
       currencies={currencyOptions}
+      countries={countries}
       canCreate={canCreate}
       canEdit={canEdit}
       canDelete={canDelete}

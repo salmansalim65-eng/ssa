@@ -23,6 +23,9 @@ export const assetSchema = z.object({
   status: z.enum(["active", "sold", "inactive"]),
   owner: z.string().optional().or(z.literal("")),
   officialOwner: z.string().optional().or(z.literal("")),
+  // Cost-center handling: 'new' auto-creates a dedicated cost center, 'none'
+  // links nothing, 'existing' links the cost center in groupCostCenterId.
+  costCenterMode: z.enum(["new", "none", "existing"]).default("new"),
   groupCostCenterId: z.string().uuid().optional().or(z.literal("")),
   notes: z.string().optional().or(z.literal("")),
   // Value-history metadata — applied only when currentValue actually changes.

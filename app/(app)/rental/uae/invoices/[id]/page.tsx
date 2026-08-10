@@ -181,6 +181,14 @@ export default async function UaeRentInvoiceDetailPage({ params }: { params: Pro
         </div>
       </div>
 
+      {/* Invoice total */}
+      <div className="flex items-center justify-between rounded-xl border-2 border-ledger/40 bg-ledger/10 px-5 py-3">
+        <span className="text-sm font-semibold uppercase tracking-wide text-ledger">Total</span>
+        <span className="font-mono text-lg font-bold tabular-nums text-foreground">
+          {formatMoney(invoice.amount)} {refs.currencies?.code}
+        </span>
+      </div>
+
       <div className="print:hidden">
         <VoucherActions
           status={status}

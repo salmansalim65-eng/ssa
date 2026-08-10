@@ -70,6 +70,11 @@ export interface AccountRow {
   is_active: boolean;
   is_cash: boolean;
   is_bank: boolean;
+  is_tenant_group: boolean;
+  id_number: string | null;
+  phone: string | null;
+  email: string | null;
+  country: string | null;
 }
 
 type DialogState =
@@ -89,6 +94,11 @@ const emptyValues: AccountInput = {
   openingBalance: blankAmount,
   isCash: false,
   isBank: false,
+  isTenantGroup: false,
+  idNumber: "",
+  phone: "",
+  email: "",
+  country: "",
 };
 
 const typeBadgeClass: Record<AccountRow["account_type"], string> = {
@@ -123,12 +133,14 @@ function descendantIds(accounts: AccountRow[], rootId: string): Set<string> {
 export function AccountTree({
   accounts,
   currencies,
+  countries,
   canCreate,
   canEdit,
   canDelete,
 }: {
   accounts: AccountRow[];
   currencies: CurrencyOption[];
+  countries: { code: string; name: string }[];
   canCreate: boolean;
   canEdit: boolean;
   canDelete: boolean;
@@ -561,6 +573,7 @@ export function AccountTree({
           {dialog && (
             <AccountForm
               currencies={currencies}
+              countries={countries}
               parentOptions={
                 dialog.mode === "edit"
                   ? groupOptions.filter(
@@ -579,6 +592,11 @@ export function AccountTree({
                       openingBalance: dialog.account.opening_balance,
                       isCash: dialog.account.is_cash,
                       isBank: dialog.account.is_bank,
+                      isTenantGroup: dialog.account.is_tenant_group,
+                      idNumber: dialog.account.id_number ?? "",
+                      phone: dialog.account.phone ?? "",
+                      email: dialog.account.email ?? "",
+                      country: dialog.account.country ?? "",
                     }
                   : {
                       ...emptyValues,

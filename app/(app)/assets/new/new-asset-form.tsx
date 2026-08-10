@@ -37,6 +37,7 @@ const emptyValues: AssetFormValues = {
   status: "active",
   owner: "",
   officialOwner: "",
+  costCenterMode: "new",
   groupCostCenterId: "",
   notes: "",
   valueEffectiveDate: today(),

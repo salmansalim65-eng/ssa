@@ -209,6 +209,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
     status: asset.status,
     owner: asset.owner ?? "",
     officialOwner: asset.official_owner ?? "",
+    costCenterMode: (asset.cost_center_mode ?? "new") as "new" | "none" | "existing",
     groupCostCenterId: asset.group_cost_center_id ?? "",
     notes: asset.notes ?? "",
     valueEffectiveDate: today,

@@ -65,6 +65,11 @@ export async function createAccount(input: AccountInput) {
     is_group: parsed.data.isGroup,
     is_cash: parsed.data.isCash,
     is_bank: parsed.data.isBank,
+    is_tenant_group: parsed.data.isGroup ? parsed.data.isTenantGroup : false,
+    id_number: parsed.data.idNumber || null,
+    phone: parsed.data.phone || null,
+    email: parsed.data.email || null,
+    country: parsed.data.country || null,
     created_by: user.user!.id,
   });
 
@@ -103,6 +108,11 @@ export async function updateAccount(accountId: string, input: AccountInput) {
       is_group: parsed.data.isGroup,
       is_cash: parsed.data.isCash,
       is_bank: parsed.data.isBank,
+      is_tenant_group: parsed.data.isGroup ? parsed.data.isTenantGroup : false,
+      id_number: parsed.data.idNumber || null,
+      phone: parsed.data.phone || null,
+      email: parsed.data.email || null,
+      country: parsed.data.country || null,
     })
     .eq("id", accountId);
 

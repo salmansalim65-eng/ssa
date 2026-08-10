@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { resolveTenantId } from "@/lib/rental/tenant-accounts";
 import { generateAllPkRentInvoices, postAllPkRentInvoices } from "@/features/rental/pk-rent-invoices/actions";
 import { pkLeaseSchema, type PkLeaseInput } from "./schemas";
 
@@ -22,6 +23,7 @@ export async function createPkLease(input: PkLeaseInput) {
   const companyId = await getCurrentCompanyId();
   const supabase = await createClient();
   const { data: user } = await supabase.auth.getUser();
+  const tenantId = await resolveTenantId(companyId, parsed.data.tenantId, user.user!.id);
 
   const { data: lease, error } = await supabase
     .schema("rental")
@@ -29,7 +31,7 @@ export async function createPkLease(input: PkLeaseInput) {
     .insert({
       company_id: companyId,
       asset_id: parsed.data.assetId,
-      tenant_id: parsed.data.tenantId,
+      tenant_id: tenantId,
       lease_start: parsed.data.leaseStart,
       lease_end: parsed.data.leaseEnd,
       monthly_rent: parsed.data.monthlyRent,
@@ -70,14 +72,17 @@ export async function updatePkLease(id: string, input: PkLeaseInput) {
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
 
   await requirePermission("pk_rent_invoice", "edit");
+  const companyId = await getCurrentCompanyId();
   const supabase = await createClient();
+  const { data: user } = await supabase.auth.getUser();
+  const tenantId = await resolveTenantId(companyId, parsed.data.tenantId, user.user!.id);
 
   // Definer applies the new terms, wipes + regenerates the payment schedule, and
   // removes any unposted invoices; it refuses the edit if any invoice is posted.
   const { error } = await supabase.schema("rental").rpc("fn_update_pk_lease", {
     p_lease_id: id,
     p_asset_id: parsed.data.assetId,
-    p_tenant_id: parsed.data.tenantId,
+    p_tenant_id: tenantId,
     p_lease_start: parsed.data.leaseStart,
     p_lease_end: parsed.data.leaseEnd,
     p_monthly_rent: parsed.data.monthlyRent,

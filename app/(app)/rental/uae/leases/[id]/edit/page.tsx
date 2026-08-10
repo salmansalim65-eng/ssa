@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { UaeLeaseForm } from "@/components/rental/uae-lease-form";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { accountIdForTenant, loadTenantAccounts } from "@/lib/rental/tenant-accounts";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 
 export default async function EditUaeLeasePage({ params }: { params: Promise<{ id: string }> }) {
@@ -16,7 +17,7 @@ export default async function EditUaeLeasePage({ params }: { params: Promise<{ i
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
 
-  const [{ data: assets }, { data: tenants }, { data: companyCurrencies }, { data: lease }] = await Promise.all([
+  const [{ data: assets }, tenants, { data: companyCurrencies }, { data: lease }] = await Promise.all([
     supabase
       .schema("assets")
       .from("assets")
@@ -25,14 +26,7 @@ export default async function EditUaeLeasePage({ params }: { params: Promise<{ i
       .eq("country", "AE")
       .is("deleted_at", null)
       .order("asset_code"),
-    supabase
-      .schema("rental")
-      .from("tenants")
-      .select("id, name")
-      .eq("company_id", companyId)
-      .eq("is_active", true)
-      .is("deleted_at", null)
-      .order("name"),
+    loadTenantAccounts(companyId, "AE"),
     supabase
       .schema("core")
       .from("company_currencies")
@@ -51,6 +45,10 @@ export default async function EditUaeLeasePage({ params }: { params: Promise<{ i
 
   if (!lease) notFound();
 
+  // The tenant dropdown lists COA account ids; map the lease's stored tenant
+  // back to its account id so it preselects.
+  const tenantAccountId = await accountIdForTenant(companyId, lease.tenant_id);
+
   type RawCurrency = { currencies: { id: string; code: string } | null };
   const currencyOptions = ((companyCurrencies as unknown as RawCurrency[]) ?? [])
     .filter((cc) => cc.currencies)
@@ -66,12 +64,12 @@ export default async function EditUaeLeasePage({ params }: { params: Promise<{ i
       />
       <UaeLeaseForm
         assets={assets ?? []}
-        tenants={tenants ?? []}
+        tenants={tenants}
         currencies={currencyOptions}
         leaseId={id}
         initialValues={{
           assetId: lease.asset_id,
-          tenantId: lease.tenant_id,
+          tenantId: tenantAccountId,
           leaseStart: lease.lease_start,
           leaseEnd: lease.lease_end,
           rentalAmount: lease.rental_amount,

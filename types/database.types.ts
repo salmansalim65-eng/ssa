@@ -393,6 +393,11 @@ export interface Database {
           is_active: boolean;
           is_cash: boolean;
           is_bank: boolean;
+          is_tenant_group: boolean;
+          id_number: string | null;
+          phone: string | null;
+          email: string | null;
+          country: string | null;
           created_by: string;
           created_at: string;
           updated_by: string | null;

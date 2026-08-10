@@ -52,16 +52,23 @@ export interface CurrencyOption {
   code: string;
 }
 
+export interface CountryOption {
+  code: string;
+  name: string;
+}
+
 export function AccountForm({
   defaultValues,
   parentOptions,
   currencies,
+  countries,
   onSubmit,
   submitLabel,
 }: {
   defaultValues: AccountInput;
   parentOptions: ParentOption[];
   currencies: CurrencyOption[];
+  countries: CountryOption[];
   onSubmit: (values: AccountInput) => Promise<{ error?: string } | undefined>;
   submitLabel: string;
 }) {
@@ -223,7 +230,101 @@ export function AccountForm({
               </FormItem>
             )}
           />
+          {isGroup && (
+            <FormField
+              control={form.control}
+              name="isTenantGroup"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start gap-2.5 rounded-lg border p-3">
+                  <FormControl>
+                    <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>Tenant group</FormLabel>
+                    <FormDescription>
+                      Accounts under this group are the tenant master that leases pick tenants from.
+                    </FormDescription>
+                  </div>
+                </FormItem>
+              )}
+            />
+          )}
         </FormSection>
+
+        {!isGroup && (
+          <FormSection title="Details">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="idNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>ID number</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Passport / Emirates ID / CNIC" {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Phone</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input type="email" {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="country"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Country</FormLabel>
+                    <Select
+                      onValueChange={(v) => field.onChange(v === "none" ? "" : v)}
+                      value={field.value || "none"}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">Not set</SelectItem>
+                        {countries.map((c) => (
+                          <SelectItem key={c.code} value={c.code}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>Used to filter tenants by country in leases.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </FormSection>
+        )}
 
         <FormSection title="Balances &amp; reporting">
           <FormField

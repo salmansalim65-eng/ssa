@@ -13,6 +13,13 @@ export const accountSchema = z.object({
   openingBalance: z.coerce.number(),
   isCash: z.boolean(),
   isBank: z.boolean(),
+  // Marks a group account as THE tenant group leases pick tenants from.
+  isTenantGroup: z.boolean().default(false),
+  // Details tab — party info, most relevant to tenant/party accounts.
+  idNumber: z.string().max(100).optional().or(z.literal("")),
+  phone: z.string().max(50).optional().or(z.literal("")),
+  email: z.string().max(200).optional().or(z.literal("")),
+  country: z.string().max(10).optional().or(z.literal("")),
 });
 
 export type AccountInput = z.output<typeof accountSchema>;

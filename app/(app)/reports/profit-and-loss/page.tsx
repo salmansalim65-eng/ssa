@@ -11,9 +11,11 @@ import {
 import { PageHeader } from "@/components/ui/page-header";
 import { CsvExportButton } from "@/components/reports/csv-export-button";
 import { DateRangeFilter } from "@/components/reports/date-range-filter";
+import { ReportCountryFilter } from "@/components/reports/report-country-filter";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
+import { loadReportCountries } from "@/lib/reports/countries";
 import { formatDate, formatMoney } from "@/lib/format";
 
 function startOfYear() {
@@ -34,14 +36,14 @@ interface AccountBalance {
 export default async function ProfitAndLossPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; country?: string }>;
 }) {
-  const { from = startOfYear(), to = today() } = await searchParams;
+  const { from = startOfYear(), to = today(), country = "" } = await searchParams;
 
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
 
-  const { data: lines } = await supabase
+  let linesQuery = supabase
     .schema("reporting")
     .from("v_ledger_entries")
     .select("account_id, account_code, account_name, account_type, debit_amount, credit_amount")
@@ -49,6 +51,9 @@ export default async function ProfitAndLossPage({
     .in("account_type", ["income", "expense"])
     .gte("entry_date", from)
     .lte("entry_date", to);
+  if (country) linesQuery = linesQuery.eq("cost_center_country", country);
+  const [{ data: lines }, countries] = await Promise.all([linesQuery, loadReportCountries(companyId)]);
+  const countryName = country ? countries.find((c) => c.code === country)?.name ?? country : "";
 
   const byAccount = new Map<
     string,
@@ -95,7 +100,9 @@ export default async function ProfitAndLossPage({
       <PageHeader
         eyebrow="Reports"
         title="Profit & Loss"
-        description={`Income vs. expense for ${formatDate(from)} to ${formatDate(to)}.`}
+        description={`Income vs. expense for ${formatDate(from)} to ${formatDate(to)}${
+          countryName ? ` · ${countryName}` : ""
+        }.`}
         className="print:hidden"
         actions={
           <>
@@ -109,9 +116,14 @@ export default async function ProfitAndLossPage({
         }
       />
 
-      <Suspense>
-        <DateRangeFilter defaultFrom={from} defaultTo={to} />
-      </Suspense>
+      <div className="flex flex-wrap items-end gap-3">
+        <Suspense>
+          <DateRangeFilter defaultFrom={from} defaultTo={to} />
+        </Suspense>
+        <Suspense>
+          <ReportCountryFilter countries={countries} selected={country} />
+        </Suspense>
+      </div>
 
       <div className="overflow-hidden rounded-lg border bg-card shadow-xs">
         <Table>

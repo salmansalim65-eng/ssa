@@ -11,6 +11,10 @@ import {
 import { PageHeader } from "@/components/ui/page-header";
 import { CsvExportButton } from "@/components/reports/csv-export-button";
 import { DateRangeFilter } from "@/components/reports/date-range-filter";
+import {
+  ReportCountryFilter,
+  type ReportCountryOption,
+} from "@/components/reports/report-country-filter";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { formatDate, formatMoney } from "@/lib/format";
 import type { CashBankAccountSection } from "@/lib/reports/cash-bank-book";
@@ -22,6 +26,8 @@ export function CashBankBookView({
   from,
   to,
   filenamePrefix,
+  countries,
+  country,
 }: {
   title: string;
   description: string;
@@ -29,6 +35,8 @@ export function CashBankBookView({
   from: string;
   to: string;
   filenamePrefix: string;
+  countries: ReportCountryOption[];
+  country: string;
 }) {
   const exportRows = sections.flatMap((s) =>
     s.rows.map((r) => [
@@ -61,9 +69,14 @@ export function CashBankBookView({
         }
       />
 
-      <Suspense>
-        <DateRangeFilter defaultFrom={from} defaultTo={to} />
-      </Suspense>
+      <div className="flex flex-wrap items-end gap-3">
+        <Suspense>
+          <DateRangeFilter defaultFrom={from} defaultTo={to} />
+        </Suspense>
+        <Suspense>
+          <ReportCountryFilter countries={countries} selected={country} />
+        </Suspense>
+      </div>
 
       {sections.length === 0 && (
         <p className="text-sm text-muted-foreground">

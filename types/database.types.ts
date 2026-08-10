@@ -1613,6 +1613,7 @@ export interface Database {
           narration: string | null;
           status: JournalEntryStatus;
           due_date: string | null;
+          cost_center_country: string | null;
         };
       };
       v_asset_register: {

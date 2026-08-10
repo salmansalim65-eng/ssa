@@ -11,10 +11,12 @@ import {
 import { PageHeader } from "@/components/ui/page-header";
 import { AsOfDateFilter } from "@/components/reports/as-of-date-filter";
 import { CsvExportButton } from "@/components/reports/csv-export-button";
+import { ReportCountryFilter } from "@/components/reports/report-country-filter";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { aggregateByAccount } from "@/lib/reports/account-aggregation";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
+import { loadReportCountries } from "@/lib/reports/countries";
 import { formatDate, formatMoney } from "@/lib/format";
 
 function today() {
@@ -24,19 +26,22 @@ function today() {
 export default async function TrialBalancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ asOf?: string }>;
+  searchParams: Promise<{ asOf?: string; country?: string }>;
 }) {
-  const { asOf = today() } = await searchParams;
+  const { asOf = today(), country = "" } = await searchParams;
 
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
 
-  const { data: lines } = await supabase
+  let linesQuery = supabase
     .schema("reporting")
     .from("v_ledger_entries")
     .select("account_id, account_code, account_name, account_type, debit_amount, credit_amount")
     .eq("company_id", companyId)
     .lte("entry_date", asOf);
+  if (country) linesQuery = linesQuery.eq("cost_center_country", country);
+  const [{ data: lines }, countries] = await Promise.all([linesQuery, loadReportCountries(companyId)]);
+  const countryName = country ? countries.find((c) => c.code === country)?.name ?? country : "";
 
   const byAccount = aggregateByAccount(lines ?? []);
 
@@ -62,7 +67,9 @@ export default async function TrialBalancePage({
       <PageHeader
         eyebrow="Reports"
         title="Trial Balance"
-        description={`Net debit/credit position per account as of ${formatDate(asOf)}.`}
+        description={`Net debit/credit position per account as of ${formatDate(asOf)}${
+          countryName ? ` · ${countryName}` : ""
+        }.`}
         className="print:hidden"
         actions={
           <>
@@ -76,9 +83,14 @@ export default async function TrialBalancePage({
         }
       />
 
-      <Suspense>
-        <AsOfDateFilter defaultAsOf={asOf} />
-      </Suspense>
+      <div className="flex flex-wrap items-end gap-3">
+        <Suspense>
+          <AsOfDateFilter defaultAsOf={asOf} />
+        </Suspense>
+        <Suspense>
+          <ReportCountryFilter countries={countries} selected={country} />
+        </Suspense>
+      </div>
 
       <div className="overflow-hidden rounded-lg border bg-card shadow-xs">
         <Table>

@@ -301,6 +301,21 @@ export async function deleteAssetSale(id: string) {
   return { success: true };
 }
 
+// Admin-only delete of a POSTED asset sale: reverts the sold asset to active and
+// removes the sale and its journal entry (rather than leaving a reversed
+// document behind).
+export async function deletePostedAssetSale(id: string) {
+  if (!(await isCurrentUserAdmin())) {
+    return { error: "Only administrators can delete posted asset sales." };
+  }
+  const supabase = await createClient();
+  const { error } = await supabase.schema("assets").rpc("fn_admin_delete_posted_asset_sale", { p_id: id });
+  if (error) return { error: error.message };
+
+  revalidatePath("/sales");
+  return { success: true };
+}
+
 export async function postAssetSale(id: string, journalEntryId: string) {
   await requirePermission("asset_sales", "post");
   const companyId = await getCurrentCompanyId();

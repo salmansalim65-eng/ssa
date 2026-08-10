@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/table";
 import { CopyVoucherButton } from "@/components/vouchers/copy-voucher-button";
 import { PrintButton } from "@/components/vouchers/print-button";
-import { ReversePostedButton } from "@/components/vouchers/reverse-posted-button";
+import { DeletePostedSaleButton } from "@/components/sales/delete-posted-sale-button";
 import { VoucherActions } from "@/components/vouchers/voucher-actions";
 import { VoucherDeleteButton } from "@/components/vouchers/voucher-delete-button";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
@@ -141,13 +141,7 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
                 label="sale asset voucher"
               />
             )}
-            {isAdmin && status === "posted" && (
-              <ReversePostedButton
-                journalEntryId={sale.journal_entry_id}
-                revalidate={["/sales", `/sales/${sale.id}`]}
-                redirectTo="/sales"
-              />
-            )}
+            {isAdmin && status === "posted" && <DeletePostedSaleButton saleId={sale.id} />}
           </>
         }
       />

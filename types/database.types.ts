@@ -1221,6 +1221,10 @@ export interface Database {
         Args: { p_id: string };
         Returns: undefined;
       };
+      fn_admin_delete_posted_asset_sale: {
+        Args: { p_id: string };
+        Returns: undefined;
+      };
     };
   };
   rental: {

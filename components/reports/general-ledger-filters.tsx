@@ -28,7 +28,13 @@ export interface CurrencyChoice {
   code: string;
 }
 
+export interface CostCenterChoice {
+  id: string;
+  name: string;
+}
+
 const ACCOUNT_CURRENCY = "account";
+const ALL_COST_CENTERS = "all";
 
 function titleCase(s: string) {
   return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -37,11 +43,13 @@ function titleCase(s: string) {
 export function GeneralLedgerFilters({
   accounts,
   currencies,
+  costCenters,
   defaultAccountIds,
   defaultFrom,
   defaultTo,
   defaultCurrency,
   defaultVoucherType,
+  defaultCostCenter,
   defaultQuery,
   defaultMin,
   defaultMax,
@@ -49,11 +57,13 @@ export function GeneralLedgerFilters({
 }: {
   accounts: AccountOption[];
   currencies: CurrencyChoice[];
+  costCenters: CostCenterChoice[];
   defaultAccountIds: string[];
   defaultFrom: string;
   defaultTo: string;
   defaultCurrency: string;
   defaultVoucherType: string;
+  defaultCostCenter: string;
   defaultQuery: string;
   defaultMin: string;
   defaultMax: string;
@@ -70,6 +80,7 @@ export function GeneralLedgerFilters({
   const [to, setTo] = useState(defaultTo);
   const [currency, setCurrency] = useState(defaultCurrency || ACCOUNT_CURRENCY);
   const [voucherType, setVoucherType] = useState(defaultVoucherType || "all");
+  const [costCenter, setCostCenter] = useState(defaultCostCenter || ALL_COST_CENTERS);
   const [query, setQuery] = useState(defaultQuery);
   const [min, setMin] = useState(defaultMin);
   const [max, setMax] = useState(defaultMax);
@@ -104,6 +115,8 @@ export function GeneralLedgerFilters({
     else params.delete("cur");
     if (voucherType && voucherType !== "all") params.set("vtype", voucherType);
     else params.delete("vtype");
+    if (costCenter && costCenter !== ALL_COST_CENTERS) params.set("cc", costCenter);
+    else params.delete("cc");
     if (query.trim()) params.set("q", query.trim());
     else params.delete("q");
     if (min.trim()) params.set("min", min.trim());
@@ -199,6 +212,22 @@ export function GeneralLedgerFilters({
                   {VOUCHER_TYPES.map((t) => (
                     <SelectItem key={t} value={t}>
                       {titleCase(t)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="w-44 space-y-1">
+              <Label>Cost center</Label>
+              <Select value={costCenter} onValueChange={setCostCenter}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_COST_CENTERS}>All cost centers</SelectItem>
+                  {costCenters.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

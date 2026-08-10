@@ -60,6 +60,7 @@ export default async function GeneralLedgerPage({
     to?: string;
     cur?: string;
     vtype?: string;
+    cc?: string;
     q?: string;
     min?: string;
     max?: string;
@@ -74,6 +75,7 @@ export default async function GeneralLedgerPage({
     .filter(Boolean);
   const reportingCurrency = sp.cur ?? ""; // "" => each account's own currency
   const vtype = sp.vtype ?? "";
+  const costCenterId = sp.cc ?? "";
   const q = (sp.q ?? "").toLowerCase();
   const minAmount = sp.min ? Number(sp.min) : null;
   const maxAmount = sp.max ? Number(sp.max) : null;
@@ -81,7 +83,7 @@ export default async function GeneralLedgerPage({
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
 
-  const [{ data: accounts }, { data: companyCurrencies }] = await Promise.all([
+  const [{ data: accounts }, { data: companyCurrencies }, { data: costCenters }] = await Promise.all([
     supabase
       .schema("accounting")
       .from("chart_of_accounts")
@@ -97,7 +99,17 @@ export default async function GeneralLedgerPage({
       .select("is_base_currency, currencies:currency_id(id, code, symbol)")
       .eq("company_id", companyId)
       .eq("is_active", true),
+    supabase
+      .schema("accounting")
+      .from("cost_centers")
+      .select("id, name")
+      .eq("company_id", companyId)
+      .eq("is_active", true)
+      .is("deleted_at", null)
+      .order("name"),
   ]);
+
+  const costCenterOptions = costCenters ?? [];
 
   type RawCurrency = { is_base_currency: boolean; currencies: { id: string; code: string; symbol: string } | null };
   const currencyList = ((companyCurrencies as unknown as RawCurrency[]) ?? []).filter((cc) => cc.currencies);
@@ -156,19 +168,21 @@ export default async function GeneralLedgerPage({
     const currencyCode = (targetCurrencyId ? codeById.get(targetCurrencyId) : baseCurrency?.code) ?? "";
     const symbol = (targetCurrencyId ? symbolById.get(targetCurrencyId) : baseCurrency?.symbol) ?? currencyCode;
 
-    const { data: priorLines } = await supabase
+    let priorQuery = supabase
       .schema("reporting")
       .from("v_ledger_entries")
       .select("debit_amount, credit_amount")
       .eq("company_id", companyId)
       .eq("account_id", acc.id)
       .lt("entry_date", from);
+    if (costCenterId) priorQuery = priorQuery.eq("cost_center_id", costCenterId);
+    const { data: priorLines } = await priorQuery;
     const priorDebit = (priorLines ?? []).reduce((sum, l) => sum + l.debit_amount, 0);
     const priorCredit = (priorLines ?? []).reduce((sum, l) => sum + l.credit_amount, 0);
     const openingBase = isDebitNormal ? priorDebit - priorCredit : priorCredit - priorDebit;
     const opening = round2(openingBase * factor);
 
-    const { data: lineRows } = await supabase
+    let lineQuery = supabase
       .schema("reporting")
       .from("v_ledger_entries")
       .select(
@@ -177,7 +191,9 @@ export default async function GeneralLedgerPage({
       .eq("company_id", companyId)
       .eq("account_id", acc.id)
       .gte("entry_date", from)
-      .lte("entry_date", to)
+      .lte("entry_date", to);
+    if (costCenterId) lineQuery = lineQuery.eq("cost_center_id", costCenterId);
+    const { data: lineRows } = await lineQuery
       .order("entry_date")
       .order("voucher_no", { nullsFirst: false })
       .order("line_no");
@@ -281,11 +297,13 @@ export default async function GeneralLedgerPage({
         <GeneralLedgerFilters
           accounts={accounts ?? []}
           currencies={currencyOptions}
+          costCenters={costCenterOptions}
           defaultAccountIds={accountIds}
           defaultFrom={from}
           defaultTo={to}
           defaultCurrency={reportingCurrency}
           defaultVoucherType={vtype}
+          defaultCostCenter={costCenterId}
           defaultQuery={sp.q ?? ""}
           defaultMin={sp.min ?? ""}
           defaultMax={sp.max ?? ""}

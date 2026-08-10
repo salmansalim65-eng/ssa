@@ -29,6 +29,7 @@ export async function getCashOrBankBookSections(params: {
   flag: "is_cash" | "is_bank";
   from: string;
   to: string;
+  country?: string;
 }): Promise<CashBankAccountSection[]> {
   const supabase = await createClient();
 
@@ -45,26 +46,31 @@ export async function getCashOrBankBookSections(params: {
   const accountIds = (accounts ?? []).map((a) => a.id);
   if (accountIds.length === 0) return [];
 
+  let priorQuery = supabase
+    .schema("reporting")
+    .from("v_ledger_entries")
+    .select("account_id, debit_amount, credit_amount")
+    .eq("company_id", params.companyId)
+    .in("account_id", accountIds)
+    .lt("entry_date", params.from);
+  let periodQuery = supabase
+    .schema("reporting")
+    .from("v_ledger_entries")
+    .select(
+      "account_id, journal_entry_id, entry_date, voucher_no, debit_amount, credit_amount, description, narration, line_no",
+    )
+    .eq("company_id", params.companyId)
+    .in("account_id", accountIds)
+    .gte("entry_date", params.from)
+    .lte("entry_date", params.to);
+  if (params.country) {
+    priorQuery = priorQuery.eq("cost_center_country", params.country);
+    periodQuery = periodQuery.eq("cost_center_country", params.country);
+  }
+
   const [{ data: priorLines }, { data: periodLines }] = await Promise.all([
-    supabase
-      .schema("reporting")
-      .from("v_ledger_entries")
-      .select("account_id, debit_amount, credit_amount")
-      .eq("company_id", params.companyId)
-      .in("account_id", accountIds)
-      .lt("entry_date", params.from),
-    supabase
-      .schema("reporting")
-      .from("v_ledger_entries")
-      .select(
-        "account_id, journal_entry_id, entry_date, voucher_no, debit_amount, credit_amount, description, narration, line_no",
-      )
-      .eq("company_id", params.companyId)
-      .in("account_id", accountIds)
-      .gte("entry_date", params.from)
-      .lte("entry_date", params.to)
-      .order("entry_date")
-      .order("line_no"),
+    priorQuery,
+    periodQuery.order("entry_date").order("line_no"),
   ]);
 
   const openingByAccount = new Map<string, number>();

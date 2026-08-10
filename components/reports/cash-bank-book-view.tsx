@@ -85,7 +85,17 @@ export function CashBankBookView({
           <DateRangeFilter defaultFrom={from} defaultTo={to} />
         </Suspense>
         <Suspense>
-          <ReportCountryFilter countries={countries} selected={country} />
+          <ReportCountryFilter countries={countries} selected={country} currencyOptions={currency.options} />
+        </Suspense>
+        <Suspense>
+          <ReportSelectFilter
+            label="Currency"
+            param="cur"
+            allLabel={currency.baseCode ? `Base (${currency.baseCode})` : "Base"}
+            options={currency.options}
+            selected={selectedCurrency}
+            width="w-40"
+          />
         </Suspense>
         <Suspense>
           <ReportSelectFilter

@@ -1,11 +1,20 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useForm } from "react-hook-form";
+import { useMemo, useState, useTransition } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { PlusIcon } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Form,
   FormControl,
@@ -15,6 +24,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -23,7 +33,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { assetSchema, type AssetFormValues, type AssetInput } from "@/features/assets/schemas";
+import { createCountry } from "@/features/assets/countries/actions";
 import { amountValue } from "@/lib/forms/amount";
+import { formatMoney } from "@/lib/format";
+import { AREA_UNITS, convertedArea } from "@/lib/assets/area-units";
 
 // A newly-picked country pre-selects its currency (if the company has it).
 const COUNTRY_CURRENCY: Record<string, string> = { PK: "PKR", AE: "AED" };
@@ -31,6 +44,7 @@ const COUNTRY_CURRENCY: Record<string, string> = { PK: "PKR", AE: "AED" };
 export interface CurrencyOption {
   id: string;
   code: string;
+  symbol?: string;
 }
 
 export interface CostCenterOption {
@@ -39,26 +53,62 @@ export interface CostCenterOption {
   name: string;
 }
 
+export interface CountryOption {
+  code: string;
+  name: string;
+}
+
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="sm:col-span-2 mt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      {children}
+    </h3>
+  );
+}
+
 export function AssetForm({
   defaultValues,
   currencies,
   costCenters,
+  countries,
+  canAddCountry,
   onSubmit,
   submitLabel,
 }: {
   defaultValues: AssetFormValues;
   currencies: CurrencyOption[];
   costCenters: CostCenterOption[];
+  countries: CountryOption[];
+  canAddCountry: boolean;
   onSubmit: (values: AssetInput) => Promise<{ error?: string } | undefined>;
   submitLabel: string;
 }) {
   const [isPending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
+  const [countryList, setCountryList] = useState<CountryOption[]>(countries);
+  const [addCountryOpen, setAddCountryOpen] = useState(false);
 
   const form = useForm<AssetFormValues, unknown, AssetInput>({
     resolver: zodResolver(assetSchema),
     defaultValues,
   });
+
+  // Live Total Property Value = Current + Title Deed + Service Charges + Other.
+  const [current, titleDeed, service, other, currencyId] = useWatch({
+    control: form.control,
+    name: ["currentValue", "titleDeedValue", "serviceChargesRate", "otherCharges", "currencyId"],
+  });
+  const total =
+    (Number(current) || 0) + (Number(titleDeed) || 0) + (Number(service) || 0) + (Number(other) || 0);
+  const currencyLabel = useMemo(() => {
+    const c = currencies.find((x) => x.id === currencyId);
+    return c ? c.symbol || c.code : "";
+  }, [currencies, currencyId]);
+  const money = (n: number) => `${currencyLabel ? `${currencyLabel} ` : ""}${formatMoney(n)}`;
+
+  const areaUnit = useWatch({ control: form.control, name: "areaUnit" });
+  const areaSqft = useWatch({ control: form.control, name: "areaSqft" });
+  const areaConverted = convertedArea(Number(areaSqft) || 0, areaUnit || null);
 
   function handleSubmit(values: AssetInput) {
     setFormError(null);
@@ -71,6 +121,8 @@ export function AssetForm({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)} className="grid max-w-3xl gap-4 sm:grid-cols-2">
+        {/* PROPERTY INFORMATION ------------------------------------------------ */}
+        <SectionHeading>Property information</SectionHeading>
         <FormField
           control={form.control}
           name="assetName"
@@ -103,24 +155,40 @@ export function AssetForm({
           render={({ field }) => (
             <FormItem>
               <FormLabel>Country</FormLabel>
-              <Select
-                value={field.value}
-                onValueChange={(v) => {
-                  field.onChange(v);
-                  const currency = currencies.find((c) => c.code === COUNTRY_CURRENCY[v]);
-                  if (currency) form.setValue("currencyId", currency.id, { shouldValidate: true });
-                }}
-              >
-                <FormControl>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select a country" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="PK">Pakistan</SelectItem>
-                  <SelectItem value="AE">United Arab Emirates</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex gap-2">
+                <Select
+                  value={field.value}
+                  onValueChange={(v) => {
+                    field.onChange(v);
+                    const currency = currencies.find((c) => c.code === COUNTRY_CURRENCY[v]);
+                    if (currency) form.setValue("currencyId", currency.id, { shouldValidate: true });
+                  }}
+                >
+                  <FormControl>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select a country" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {countryList.map((c) => (
+                      <SelectItem key={c.code} value={c.code}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {canAddCountry && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    title="Add country"
+                    onClick={() => setAddCountryOpen(true)}
+                  >
+                    <PlusIcon className="size-4" />
+                  </Button>
+                )}
+              </div>
               <FormMessage />
             </FormItem>
           )}
@@ -140,38 +208,25 @@ export function AssetForm({
         />
         <FormField
           control={form.control}
-          name="area"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Area</FormLabel>
-              <FormControl>
-                <Input {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="areaSqft"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Area (Sq. Ft)</FormLabel>
-              <FormControl>
-                <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
           name="address"
           render={({ field }) => (
             <FormItem className="sm:col-span-2">
               <FormLabel>Address</FormLabel>
               <FormControl>
                 <Input {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="officialOwner"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Official owner</FormLabel>
+              <FormControl>
+                <Input placeholder="Legal / registered owner" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -225,32 +280,67 @@ export function AssetForm({
             </FormItem>
           )}
         />
+
+        {/* PROPERTY SIZE ------------------------------------------------------- */}
+        <SectionHeading>Property size</SectionHeading>
         <FormField
           control={form.control}
-          name="purchaseValue"
+          name="areaSqft"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Purchase value</FormLabel>
+              <FormLabel>Area</FormLabel>
               <FormControl>
                 <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
               </FormControl>
+              {areaConverted && <FormDescription>{areaConverted}</FormDescription>}
               <FormMessage />
             </FormItem>
           )}
         />
         <FormField
           control={form.control}
-          name="currentValue"
+          name="areaUnit"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Current value</FormLabel>
+              <FormLabel>Area unit</FormLabel>
+              <Select
+                onValueChange={(v) => field.onChange(v === "none" ? "" : v)}
+                value={field.value || "none"}
+              >
+                <FormControl>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="none">Not set</SelectItem>
+                  {AREA_UNITS.map((u) => (
+                    <SelectItem key={u.code} value={u.code}>
+                      {u.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="area"
+          render={({ field }) => (
+            <FormItem className="sm:col-span-2">
+              <FormLabel>Area note (optional)</FormLabel>
               <FormControl>
-                <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
+                <Input placeholder="e.g. Plot 12, Block C" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
+
+        {/* PROPERTY VALUES ----------------------------------------------------- */}
+        <SectionHeading>Property values</SectionHeading>
         <FormField
           control={form.control}
           name="currencyId"
@@ -281,6 +371,60 @@ export function AssetForm({
         />
         <FormField
           control={form.control}
+          name="purchaseValue"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Purchase value</FormLabel>
+              <FormControl>
+                <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="currentValue"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Current value</FormLabel>
+              <FormControl>
+                <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
+              </FormControl>
+              <FormDescription>Changing this adds a Value History record.</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="valueEffectiveDate"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Value effective date</FormLabel>
+              <FormControl>
+                <Input type="date" {...field} />
+              </FormControl>
+              <FormDescription>Date the new current value takes effect.</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="valueRemarks"
+          render={({ field }) => (
+            <FormItem className="sm:col-span-2">
+              <FormLabel>Value change remarks (optional)</FormLabel>
+              <FormControl>
+                <Input placeholder="Reason for the value change" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
           name="titleDeedValue"
           render={({ field }) => (
             <FormItem>
@@ -297,9 +441,22 @@ export function AssetForm({
           name="serviceChargesRate"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Service charges rate</FormLabel>
+              <FormLabel>Service charges</FormLabel>
               <FormControl>
-                <Input type="number" step="0.01" min="0" {...field} value={field.value as number} />
+                <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="otherCharges"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Other charges</FormLabel>
+              <FormControl>
+                <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -318,6 +475,17 @@ export function AssetForm({
             </FormItem>
           )}
         />
+
+        {/* Prominent live total */}
+        <div className="sm:col-span-2 flex items-center justify-between rounded-lg border-2 border-ledger/40 bg-ledger/10 px-4 py-3">
+          <span className="text-sm font-semibold uppercase tracking-wide text-ledger">
+            Total property value
+          </span>
+          <span className="font-mono text-lg font-bold tabular-nums text-foreground">{money(total)}</span>
+        </div>
+
+        {/* OTHER --------------------------------------------------------------- */}
+        <SectionHeading>Other</SectionHeading>
         <FormField
           control={form.control}
           name="groupCostCenterId"
@@ -368,6 +536,91 @@ export function AssetForm({
           {isPending ? "Saving…" : submitLabel}
         </Button>
       </form>
+
+      {canAddCountry && (
+        <AddCountryDialog
+          open={addCountryOpen}
+          onOpenChange={setAddCountryOpen}
+          onAdded={(c) => {
+            setCountryList((prev) =>
+              prev.some((x) => x.code === c.code) ? prev : [...prev, c].sort((a, b) => a.name.localeCompare(b.name)),
+            );
+            form.setValue("country", c.code, { shouldValidate: true });
+            const currency = currencies.find((x) => x.code === COUNTRY_CURRENCY[c.code]);
+            if (currency) form.setValue("currencyId", currency.id, { shouldValidate: true });
+          }}
+        />
+      )}
     </Form>
+  );
+}
+
+function AddCountryDialog({
+  open,
+  onOpenChange,
+  onAdded,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onAdded: (country: CountryOption) => void;
+}) {
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  function submit() {
+    startTransition(async () => {
+      const result = await createCountry({ name, code: code || undefined });
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
+      if (result?.success) {
+        toast.success("Country added");
+        onAdded({ code: result.code!, name: result.name! });
+        setName("");
+        setCode("");
+        onOpenChange(false);
+      }
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add country</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label htmlFor="new-country-name">Country name</Label>
+            <Input
+              id="new-country-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Saudi Arabia"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="new-country-code">Code (optional)</Label>
+            <Input
+              id="new-country-code"
+              value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              placeholder="Auto-generated if left blank (e.g. SA)"
+              maxLength={6}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={submit} disabled={isPending || name.trim().length < 2}>
+            {isPending ? "Adding…" : "Add country"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

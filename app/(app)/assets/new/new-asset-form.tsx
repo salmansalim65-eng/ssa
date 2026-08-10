@@ -3,10 +3,19 @@
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-import { AssetForm, type CostCenterOption, type CurrencyOption } from "@/components/assets/asset-form";
+import {
+  AssetForm,
+  type CostCenterOption,
+  type CountryOption,
+  type CurrencyOption,
+} from "@/components/assets/asset-form";
 import { createAsset } from "@/features/assets/actions";
 import type { AssetFormValues } from "@/features/assets/schemas";
 import { blankAmount } from "@/lib/forms/amount";
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 const emptyValues: AssetFormValues = {
   assetName: "",
@@ -14,27 +23,36 @@ const emptyValues: AssetFormValues = {
   country: "",
   city: "",
   area: "",
-  areaSqft: 0,
+  areaSqft: blankAmount,
+  areaUnit: "",
   address: "",
   purchaseDate: "",
   purchaseValue: blankAmount,
   currentValue: blankAmount,
   currencyId: "",
-  serviceChargesRate: 0,
+  serviceChargesRate: blankAmount,
   titleDeedValue: blankAmount,
+  otherCharges: blankAmount,
   estimatedRent: blankAmount,
   status: "active",
   owner: "",
+  officialOwner: "",
   groupCostCenterId: "",
   notes: "",
+  valueEffectiveDate: today(),
+  valueRemarks: "",
 };
 
 export function NewAssetForm({
   currencies,
   costCenters,
+  countries,
+  canAddCountry,
 }: {
   currencies: CurrencyOption[];
   costCenters: CostCenterOption[];
+  countries: CountryOption[];
+  canAddCountry: boolean;
 }) {
   const router = useRouter();
 
@@ -43,6 +61,8 @@ export function NewAssetForm({
       defaultValues={emptyValues}
       currencies={currencies}
       costCenters={costCenters}
+      countries={countries}
+      canAddCountry={canAddCountry}
       submitLabel="Create asset"
       onSubmit={async (values) => {
         const result = await createAsset(values);

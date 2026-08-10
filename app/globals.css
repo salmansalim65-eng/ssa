@@ -53,6 +53,9 @@
 
   /* Logo green (#7BBF41) — used for the ledger account header band. */
   --ledger: oklch(0.62 0.16 140);
+  /* A deeper shade of the logo green for the sidebar section-heading band, so it
+     reads as a solid band with light text rather than a pale tint. */
+  --ledger-dark: oklch(0.5 0.15 142);
 
   /* Application header band — the darkest chrome, giving the app identity. */
   --header: oklch(0.29 0.055 258);
@@ -128,6 +131,7 @@
   --color-info: var(--info);
   --color-group: var(--group);
   --color-ledger: var(--ledger);
+  --color-ledger-dark: var(--ledger-dark);
   --color-header: var(--header);
   --color-header-foreground: var(--header-foreground);
   --color-header-muted: var(--header-muted);

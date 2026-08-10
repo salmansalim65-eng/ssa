@@ -42,12 +42,12 @@ export default async function AssetsPage({
     .schema("assets")
     .from("assets")
     .select(
-      "id, asset_code, asset_name, property_type, country, city, official_owner, area_sqft, area_unit, current_value, status",
+      "id, asset_code, asset_name, property_type, country, city, official_owner, area_sqft, area_unit, current_value, currency_id, status",
     )
     .eq("company_id", companyId);
   if (countryFilter) assetQuery = assetQuery.eq("country", countryFilter);
 
-  const [{ data: assetRows }, { data: countries }, canCreate] = await Promise.all([
+  const [{ data: assetRows }, { data: countries }, { data: currencyRows }, canCreate] = await Promise.all([
     assetQuery.order("asset_code"),
     supabase
       .schema("core")
@@ -56,6 +56,7 @@ export default async function AssetsPage({
       .eq("company_id", companyId)
       .eq("is_active", true)
       .order("name"),
+    supabase.schema("core").from("currencies").select("id, code, symbol"),
     hasPermission("assets", "create"),
   ]);
 
@@ -64,8 +65,16 @@ export default async function AssetsPage({
   const nameByCode = new Map(countryList.map((c) => [c.code, c.name] as const));
   const countryName = (code: string) => nameByCode.get(code) ?? code;
 
+  // Currency symbol per asset so amounts read e.g. "Rs 200,000,000" / "SR 4,000,000".
+  const symbolById = new Map((currencyRows ?? []).map((c) => [c.id, c.symbol || c.code] as const));
+  const money = (value: number, currencyId: string | null | undefined) => {
+    const sym = currencyId ? symbolById.get(currencyId) : undefined;
+    return `${sym ? `${sym} ` : ""}${formatMoney(value)}`;
+  };
+
   // Group assets by country, ordered by country name; each group carries its own
-  // Current Value / Total Value subtotals, plus a grand total across all.
+  // Current Value subtotal. No cross-country grand total — countries can use
+  // different currencies, so a combined sum would be meaningless.
   const groups = new Map<string, typeof rows>();
   for (const a of rows) {
     if (!groups.has(a.country)) groups.set(a.country, []);
@@ -74,7 +83,11 @@ export default async function AssetsPage({
   const groupKeys = [...groups.keys()].sort((x, y) => countryName(x).localeCompare(countryName(y)));
 
   const sumCurrent = (list: typeof rows) => list.reduce((s, a) => s + (a.current_value ?? 0), 0);
-  const grandCurrent = sumCurrent(rows);
+  // The subtotal's currency: the group's single currency, or null when mixed.
+  const groupCurrency = (list: typeof rows) => {
+    const ids = new Set(list.map((a) => a.currency_id).filter(Boolean));
+    return ids.size === 1 ? ([...ids][0] as string) : null;
+  };
 
   return (
     <div className="space-y-5">
@@ -155,7 +168,7 @@ export default async function AssetsPage({
                           <TableCell>{asset.official_owner ?? "—"}</TableCell>
                           <TableCell>{formatArea(asset.area_sqft, asset.area_unit)}</TableCell>
                           <TableCell className="text-right font-mono tabular-nums">
-                            {asset.current_value != null ? formatMoney(asset.current_value) : "—"}
+                            {asset.current_value != null ? money(asset.current_value, asset.currency_id) : "—"}
                           </TableCell>
                           <TableCell>
                             <Badge
@@ -167,28 +180,18 @@ export default async function AssetsPage({
                           </TableCell>
                         </TableRow>
                       ))}
-                      <TableRow className="border-t hover:bg-transparent">
-                        <TableCell colSpan={4} className="text-right font-medium text-muted-foreground">
+                      <TableRow className="border-t bg-ledger/10 hover:bg-ledger/10">
+                        <TableCell colSpan={4} className="text-right font-semibold text-ledger">
                           {countryName(code)} total
                         </TableCell>
-                        <TableCell className="text-right font-mono font-semibold tabular-nums">
-                          {formatMoney(sumCurrent(list))}
+                        <TableCell className="text-right font-mono font-bold tabular-nums">
+                          {money(sumCurrent(list), groupCurrency(list))}
                         </TableCell>
                         <TableCell />
                       </TableRow>
                     </Fragment>
                   );
                 })}
-
-                <TableRow className="border-t-2 bg-ledger/10 hover:bg-ledger/10">
-                  <TableCell colSpan={4} className="text-right font-semibold uppercase tracking-wide text-ledger">
-                    All countries total
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-base font-bold tabular-nums">
-                    {formatMoney(grandCurrent)}
-                  </TableCell>
-                  <TableCell />
-                </TableRow>
               </TableBody>
             </Table>
           </div>

@@ -56,12 +56,20 @@ export async function getVoucherListRows(
 ): Promise<VoucherListRow[]> {
   const supabase = await createClient();
 
+  // Currency symbols are looked up from a map rather than embedded on each
+  // query: currency_id -> core.currencies is a CROSS-SCHEMA relationship
+  // (accounting -> core) that PostgREST can't embed, and attempting it errors the
+  // whole query (which previously blanked these lists entirely).
+  const { data: currencyRows } = await supabase.schema("core").from("currencies").select("id, symbol");
+  const symbolById = new Map((currencyRows ?? []).map((c) => [c.id, c.symbol] as const));
+  const symbolFor = (currencyId: string | null | undefined) => (currencyId ? symbolById.get(currencyId) ?? null : null);
+
   switch (voucherType) {
     case "receipt_voucher": {
       const { data } = await supabase
         .schema("accounting")
         .from("receipt_vouchers")
-        .select("id, voucher_no, receipt_date, total_amount, exchange_rate, journal_entry_id, journal_entries:journal_entry_id(status), currencies:currency_id(symbol), debit:debit_account_id(account_name)")
+        .select("id, voucher_no, receipt_date, total_amount, exchange_rate, currency_id, journal_entry_id, journal_entries:journal_entry_id(status), debit:debit_account_id(account_name)")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false });
       return (data ?? []).map((r) => ({
@@ -70,7 +78,7 @@ export async function getVoucherListRows(
         date: r.receipt_date,
         party: (r.debit as unknown as { account_name: string } | null)?.account_name ?? "—",
         amount: r.total_amount,
-        currencySymbol: (r.currencies as unknown as { symbol: string } | null)?.symbol ?? null,
+        currencySymbol: symbolFor(r.currency_id),
         baseAmount: Number(r.total_amount) * Number(r.exchange_rate ?? 1),
         journalEntryId: r.journal_entry_id,
         status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
@@ -80,7 +88,7 @@ export async function getVoucherListRows(
       const { data } = await supabase
         .schema("accounting")
         .from("payment_vouchers")
-        .select("id, voucher_no, payment_date, total_amount, exchange_rate, journal_entry_id, journal_entries:journal_entry_id(status), currencies:currency_id(symbol), credit:credit_account_id(account_name)")
+        .select("id, voucher_no, payment_date, total_amount, exchange_rate, currency_id, journal_entry_id, journal_entries:journal_entry_id(status), credit:credit_account_id(account_name)")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false });
       return (data ?? []).map((r) => ({
@@ -89,7 +97,7 @@ export async function getVoucherListRows(
         date: r.payment_date,
         party: (r.credit as unknown as { account_name: string } | null)?.account_name ?? "—",
         amount: r.total_amount,
-        currencySymbol: (r.currencies as unknown as { symbol: string } | null)?.symbol ?? null,
+        currencySymbol: symbolFor(r.currency_id),
         baseAmount: Number(r.total_amount) * Number(r.exchange_rate ?? 1),
         journalEntryId: r.journal_entry_id,
         status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
@@ -99,7 +107,7 @@ export async function getVoucherListRows(
       const { data } = await supabase
         .schema("accounting")
         .from("pdc_payment_vouchers")
-        .select("id, voucher_no, cheque_date, payee, total_amount, exchange_rate, journal_entry_id, journal_entries:journal_entry_id(status), currencies:currency_id(symbol)")
+        .select("id, voucher_no, cheque_date, payee, total_amount, exchange_rate, currency_id, journal_entry_id, journal_entries:journal_entry_id(status)")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false });
       return (data ?? []).map((r) => ({
@@ -108,7 +116,7 @@ export async function getVoucherListRows(
         date: r.cheque_date,
         party: r.payee,
         amount: r.total_amount,
-        currencySymbol: (r.currencies as unknown as { symbol: string } | null)?.symbol ?? null,
+        currencySymbol: symbolFor(r.currency_id),
         baseAmount: Number(r.total_amount) * Number(r.exchange_rate ?? 1),
         journalEntryId: r.journal_entry_id,
         status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
@@ -118,7 +126,7 @@ export async function getVoucherListRows(
       const { data } = await supabase
         .schema("accounting")
         .from("pdc_receipt_vouchers")
-        .select("id, voucher_no, cheque_date, payer, total_amount, exchange_rate, journal_entry_id, journal_entries:journal_entry_id(status), currencies:currency_id(symbol)")
+        .select("id, voucher_no, cheque_date, payer, total_amount, exchange_rate, currency_id, journal_entry_id, journal_entries:journal_entry_id(status)")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false });
       return (data ?? []).map((r) => ({
@@ -127,7 +135,7 @@ export async function getVoucherListRows(
         date: r.cheque_date,
         party: r.payer,
         amount: r.total_amount,
-        currencySymbol: (r.currencies as unknown as { symbol: string } | null)?.symbol ?? null,
+        currencySymbol: symbolFor(r.currency_id),
         baseAmount: Number(r.total_amount) * Number(r.exchange_rate ?? 1),
         journalEntryId: r.journal_entry_id,
         status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
@@ -137,7 +145,7 @@ export async function getVoucherListRows(
       const { data } = await supabase
         .schema("accounting")
         .from("cheque_return_vouchers")
-        .select("id, voucher_no, return_date, return_reason, penalty_amount, exchange_rate, journal_entry_id, journal_entries:journal_entry_id(status), currencies:currency_id(symbol)")
+        .select("id, voucher_no, return_date, return_reason, penalty_amount, exchange_rate, currency_id, journal_entry_id, journal_entries:journal_entry_id(status)")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false });
       return (data ?? []).map((r) => ({
@@ -146,7 +154,7 @@ export async function getVoucherListRows(
         date: r.return_date,
         party: r.return_reason,
         amount: r.penalty_amount,
-        currencySymbol: (r.currencies as unknown as { symbol: string } | null)?.symbol ?? null,
+        currencySymbol: symbolFor(r.currency_id),
         baseAmount: Number(r.penalty_amount) * Number(r.exchange_rate ?? 1),
         journalEntryId: r.journal_entry_id,
         status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
@@ -191,7 +199,7 @@ export async function getVoucherListRows(
         .schema("accounting")
         .from("opening_balance_vouchers")
         .select(
-          "id, voucher_no, as_of_date, total_amount, exchange_rate, journal_entry_id, journal_entries:journal_entry_id(status), currencies:currency_id(symbol)",
+          "id, voucher_no, as_of_date, total_amount, exchange_rate, currency_id, journal_entry_id, journal_entries:journal_entry_id(status)",
         )
         .eq("company_id", companyId)
         .order("created_at", { ascending: false });
@@ -239,7 +247,7 @@ export async function getVoucherListRows(
           date: r.as_of_date,
           party,
           amount: r.total_amount,
-          currencySymbol: (r.currencies as unknown as { symbol: string } | null)?.symbol ?? null,
+          currencySymbol: symbolFor(r.currency_id),
           baseAmount: Number(r.total_amount) * Number(r.exchange_rate ?? 1),
           journalEntryId: r.journal_entry_id,
           status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,

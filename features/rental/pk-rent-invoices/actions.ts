@@ -32,6 +32,21 @@ async function getAssetCostCenterId(assetId: string) {
   return (data?.id as string | undefined) ?? null;
 }
 
+// The tenant's own Chart-of-Accounts account, so the receivable debits the
+// tenant's individual ledger rather than a shared receivable control account.
+// Returns null when the tenant has no linked account (older tenants).
+async function getTenantAccountId(companyId: string, tenantId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .schema("rental")
+    .from("tenants")
+    .select("account_id")
+    .eq("company_id", companyId)
+    .eq("id", tenantId)
+    .maybeSingle();
+  return (data?.account_id as string | undefined) ?? null;
+}
+
 export async function generatePkRentInvoice(scheduleId: string, input: GeneratePkInvoiceInput) {
   const parsed = generatePkInvoiceSchema.safeParse({ ...input, scheduleId });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -54,7 +69,7 @@ export async function generatePkRentInvoice(scheduleId: string, input: GenerateP
   const { data: lease, error: leaseError } = await supabase
     .schema("rental")
     .from("pk_leases")
-    .select("currency_id, asset_id")
+    .select("currency_id, asset_id, tenant_id")
     .eq("id", schedule.lease_id)
     .single();
   if (leaseError || !lease) return { error: "Lease not found" };
@@ -63,6 +78,8 @@ export async function generatePkRentInvoice(scheduleId: string, input: GenerateP
   // income / receivables attribute to the asset's country (e.g. Pakistan) and
   // show up in country-filtered reports (Trial Balance, Balance Sheet, P&L).
   const costCenterId = lease.asset_id ? await getAssetCostCenterId(lease.asset_id) : null;
+  // Debit the tenant's own account so the invoice shows in the tenant's ledger.
+  const tenantAccountId = lease.tenant_id ? await getTenantAccountId(companyId, lease.tenant_id) : null;
 
   const utilityTotal = parsed.data.utilityCharges.reduce((sum, u) => sum + u.amount, 0);
   const advanceAdjusted = parsed.data.advanceAdjusted;
@@ -92,9 +109,13 @@ export async function generatePkRentInvoice(scheduleId: string, input: GenerateP
   const today = new Date().toISOString().slice(0, 10);
   const netReceivable = schedule.amount + utilityTotal - advanceAdjusted;
 
+  // The tenant's own account is the receivable target; fall back to the shared
+  // Tenant Receivable posting account when a tenant has no linked account.
+  const receivableAccountId = tenantAccountId ?? tenantReceivableId;
+
   const lines: EntryLineInput[] = [];
   if (netReceivable > 0) {
-    lines.push({ accountId: tenantReceivableId, costCenterId, debit: netReceivable, credit: 0, description: "Pakistan rent invoice" });
+    lines.push({ accountId: receivableAccountId, costCenterId, debit: netReceivable, credit: 0, description: "Pakistan rent invoice" });
   }
   if (advanceAdjusted > 0) {
     lines.push({ accountId: advanceLiabilityId!, costCenterId, debit: advanceAdjusted, credit: 0, description: "Advance rent adjusted" });

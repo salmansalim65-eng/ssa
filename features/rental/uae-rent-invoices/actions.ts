@@ -31,6 +31,21 @@ async function getAssetCostCenterId(assetId: string) {
   return (data?.id as string | undefined) ?? null;
 }
 
+// The tenant's own Chart-of-Accounts account, so the receivable debits the
+// tenant's individual ledger rather than a shared receivable control account.
+// Returns null when the tenant has no linked account (older tenants).
+async function getTenantAccountId(companyId: string, tenantId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .schema("rental")
+    .from("tenants")
+    .select("account_id")
+    .eq("company_id", companyId)
+    .eq("id", tenantId)
+    .maybeSingle();
+  return (data?.account_id as string | undefined) ?? null;
+}
+
 function addPeriod(date: string, cycle: "monthly" | "yearly") {
   const d = new Date(date);
   if (cycle === "monthly") d.setMonth(d.getMonth() + 1);
@@ -58,7 +73,7 @@ export async function generateUaeRentInvoice(scheduleId: string) {
   const { data: lease, error: leaseError } = await supabase
     .schema("rental")
     .from("uae_leases")
-    .select("currency_id, rent_cycle, lease_type, asset_id")
+    .select("currency_id, rent_cycle, lease_type, asset_id, tenant_id")
     .eq("id", schedule.lease_id)
     .single();
   if (leaseError || !lease) return { error: "Lease not found" };
@@ -69,6 +84,8 @@ export async function generateUaeRentInvoice(scheduleId: string) {
   // / receivables attribute to the asset's country and show up in
   // country-filtered reports (Trial Balance, Balance Sheet, P&L).
   const costCenterId = lease.asset_id ? await getAssetCostCenterId(lease.asset_id) : null;
+  // Debit the tenant's own account so the invoice shows in the tenant's ledger.
+  const tenantAccountId = lease.tenant_id ? await getTenantAccountId(companyId, lease.tenant_id) : null;
 
   const [tenantReceivableId, rentalIncomeId] = await Promise.all([
     getPostingAccount(companyId, "tenant_receivable"),
@@ -77,6 +94,9 @@ export async function generateUaeRentInvoice(scheduleId: string) {
   if (!tenantReceivableId || !rentalIncomeId) {
     return { error: "Configure Posting Templates for UAE Rent Invoice first (Tenant Receivable + Rental Income accounts)." };
   }
+  // The tenant's own account is the receivable target; fall back to the shared
+  // Tenant Receivable posting account when a tenant has no linked account.
+  const receivableAccountId = tenantAccountId ?? tenantReceivableId;
 
   const invoiceId = crypto.randomUUID();
   const today = new Date().toISOString().slice(0, 10);
@@ -91,7 +111,7 @@ export async function generateUaeRentInvoice(scheduleId: string) {
     narration: "UAE rent invoice",
     createdBy,
     lines: [
-      { accountId: tenantReceivableId, costCenterId, debit: schedule.amount, credit: 0, description: "UAE rent invoice" },
+      { accountId: receivableAccountId, costCenterId, debit: schedule.amount, credit: 0, description: "UAE rent invoice" },
       { accountId: rentalIncomeId, costCenterId, debit: 0, credit: schedule.amount, description: "UAE rent invoice" },
     ],
   });

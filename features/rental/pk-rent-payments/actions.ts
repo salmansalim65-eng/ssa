@@ -18,6 +18,33 @@ async function getPostingAccount(companyId: string, accountRole: string) {
   return data as string | null;
 }
 
+// The tenant's own account and the leased asset's cost centre, so the payment
+// credit clears the same tenant-ledger line the invoice debited and carries the
+// same country attribution. Both return null when unavailable (older data).
+async function getLeasePostingContext(companyId: string, leaseId: string) {
+  const supabase = await createClient();
+  const { data: lease } = await supabase
+    .schema("rental")
+    .from("pk_leases")
+    .select("tenant_id, asset_id")
+    .eq("id", leaseId)
+    .maybeSingle();
+  if (!lease) return { tenantAccountId: null, costCenterId: null };
+
+  const [tenant, cc] = await Promise.all([
+    lease.tenant_id
+      ? supabase.schema("rental").from("tenants").select("account_id").eq("company_id", companyId).eq("id", lease.tenant_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    lease.asset_id
+      ? supabase.schema("accounting").from("cost_centers").select("id").eq("asset_id", lease.asset_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  return {
+    tenantAccountId: (tenant.data?.account_id as string | undefined) ?? null,
+    costCenterId: (cc.data?.id as string | undefined) ?? null,
+  };
+}
+
 /**
  * Records money received against a specific invoice. Posts its own small
  * JE immediately (Dr Cash/Bank, Cr Tenant Receivable) rather than routing
@@ -38,7 +65,7 @@ export async function recordPkRentPayment(invoiceId: string, input: RecordPkPaym
   const { data: invoice, error: invoiceError } = await supabase
     .schema("rental")
     .from("pk_rent_invoices")
-    .select("currency_id, outstanding_amount, journal_entry_id")
+    .select("currency_id, outstanding_amount, journal_entry_id, lease_id")
     .eq("id", invoiceId)
     .single();
   if (invoiceError || !invoice) return { error: "Invoice not found" };
@@ -64,6 +91,10 @@ export async function recordPkRentPayment(invoiceId: string, input: RecordPkPaym
   if (!tenantReceivableId) {
     return { error: "Configure Posting Templates for Pakistan Rent Invoice first (Tenant Receivable account)." };
   }
+  // Credit the tenant's own account (matching the invoice debit) so the payment
+  // clears the receivable in the tenant's own ledger; carry the same cost centre.
+  const { tenantAccountId, costCenterId } = await getLeasePostingContext(companyId, invoice.lease_id);
+  const receivableAccountId = tenantAccountId ?? tenantReceivableId;
 
   const paymentId = crypto.randomUUID();
 
@@ -76,8 +107,8 @@ export async function recordPkRentPayment(invoiceId: string, input: RecordPkPaym
     narration: "Pakistan rent payment received",
     createdBy,
     lines: [
-      { accountId: parsed.data.cashBankAccountId, debit: parsed.data.amount, credit: 0, description: "Rent received" },
-      { accountId: tenantReceivableId, debit: 0, credit: parsed.data.amount, description: "Rent received" },
+      { accountId: parsed.data.cashBankAccountId, costCenterId, debit: parsed.data.amount, credit: 0, description: "Rent received" },
+      { accountId: receivableAccountId, costCenterId, debit: 0, credit: parsed.data.amount, description: "Rent received" },
     ],
   });
   if ("error" in je) return { error: je.error };

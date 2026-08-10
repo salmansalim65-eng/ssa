@@ -51,6 +51,7 @@ export async function createHhLease(input: HhLeaseInput) {
     remarks: line.remarks || null,
     document_no: documentNo as string,
     document_date: parsed.data.documentDate,
+    lease_type: "hh",
     created_by: createdBy,
   }));
 

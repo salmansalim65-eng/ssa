@@ -8,6 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/ui/page-header";
 import { EscToBack } from "@/components/vouchers/esc-to-back";
 import { RecordRentPaymentForm } from "@/components/rental/record-rent-payment-form";
@@ -122,9 +123,10 @@ export default async function UaeRentInvoiceDetailPage({ params }: { params: Pro
       <PageHeader
         eyebrow="Lease Invoice"
         title={invoice.voucher_no ?? "Draft"}
-        backHref="/rental/uae/invoices"
+        backHref="/rental/invoices"
         actions={
           <>
+            <Badge variant="outline">{invoice.invoice_type === "HH" ? "HH Invoice" : "UAE Invoice"}</Badge>
             <VoucherStatusBadge status={status} />
             <PrintButton />
             {status === "draft" && canDelete && (

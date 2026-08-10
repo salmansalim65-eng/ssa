@@ -45,10 +45,12 @@ export async function generateUaeRentInvoice(scheduleId: string) {
   const { data: lease, error: leaseError } = await supabase
     .schema("rental")
     .from("uae_leases")
-    .select("currency_id, rent_cycle")
+    .select("currency_id, rent_cycle, lease_type")
     .eq("id", schedule.lease_id)
     .single();
   if (leaseError || !lease) return { error: "Lease not found" };
+  // HH leases are uae_leases; their invoices inherit invoice_type = 'HH'.
+  const invoiceType = lease.lease_type === "hh" ? "HH" : "UAE";
 
   const [tenantReceivableId, rentalIncomeId] = await Promise.all([
     getPostingAccount(companyId, "tenant_receivable"),
@@ -91,6 +93,7 @@ export async function generateUaeRentInvoice(scheduleId: string) {
     currency_id: lease.currency_id,
     exchange_rate: je.exchangeRate,
     outstanding_balance: schedule.amount,
+    invoice_type: invoiceType,
     created_by: createdBy,
   });
   if (error) return { error: error.message };

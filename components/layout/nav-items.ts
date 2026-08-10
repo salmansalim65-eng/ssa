@@ -25,7 +25,6 @@ import {
   LineChartIcon,
   KeyRoundIcon,
   ReceiptIcon,
-  ContactIcon,
   BadgeDollarSignIcon,
 } from "lucide-react";
 
@@ -65,7 +64,6 @@ export const navSections: NavSection[] = [
   {
     label: "Rental",
     items: [
-      { label: "Tenants", href: "/rental/tenants", icon: ContactIcon },
       { label: "UAE Leases", href: "/rental/uae/leases", icon: KeyRoundIcon },
       { label: "HH Lease", href: "/rental/uae/hh-lease", icon: KeyRoundIcon },
       { label: "Pakistan Leases", href: "/rental/pk/leases", icon: KeyRoundIcon },

@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { HomeIcon, PlusIcon } from "lucide-react";
 
@@ -61,13 +62,28 @@ export default async function AssetsPage({
   const rows = assetRows ?? [];
   const countryList = countries ?? [];
   const nameByCode = new Map(countryList.map((c) => [c.code, c.name] as const));
+  const countryName = (code: string) => nameByCode.get(code) ?? code;
+
+  // Group assets by country, ordered by country name; each group carries its own
+  // Current Value / Total Value subtotals, plus a grand total across all.
+  const groups = new Map<string, typeof rows>();
+  for (const a of rows) {
+    if (!groups.has(a.country)) groups.set(a.country, []);
+    groups.get(a.country)!.push(a);
+  }
+  const groupKeys = [...groups.keys()].sort((x, y) => countryName(x).localeCompare(countryName(y)));
+
+  const sumCurrent = (list: typeof rows) => list.reduce((s, a) => s + (a.current_value ?? 0), 0);
+  const sumTotal = (list: typeof rows) => list.reduce((s, a) => s + (a.total_property_value ?? 0), 0);
+  const grandCurrent = sumCurrent(rows);
+  const grandTotal = sumTotal(rows);
 
   return (
     <div className="space-y-5">
       <PageHeader
         eyebrow="Assets & Property"
         title="Asset Register"
-        description="Registered rental properties and other assets."
+        description="Registered rental properties and other assets, grouped by country."
         actions={
           canCreate && (
             <Button asChild>
@@ -108,7 +124,6 @@ export default async function AssetsPage({
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Code</TableHead>
                   <TableHead>Name</TableHead>
-                  <TableHead>Country</TableHead>
                   <TableHead>Official owner</TableHead>
                   <TableHead>Area</TableHead>
                   <TableHead className="text-right">Current Value</TableHead>
@@ -117,33 +132,75 @@ export default async function AssetsPage({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((asset) => (
-                  <TableRow key={asset.id}>
-                    <TableCell>
-                      <Link
-                        href={`/assets/${asset.id}`}
-                        className="font-mono font-medium text-primary hover:underline"
-                      >
-                        {asset.asset_code}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="font-medium">{asset.asset_name}</TableCell>
-                    <TableCell>{nameByCode.get(asset.country) ?? asset.country}</TableCell>
-                    <TableCell>{asset.official_owner ?? "—"}</TableCell>
-                    <TableCell>{formatArea(asset.area_sqft, asset.area_unit)}</TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">
-                      {asset.current_value != null ? formatMoney(asset.current_value) : "—"}
-                    </TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">
-                      {asset.total_property_value != null ? formatMoney(asset.total_property_value) : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={statusVariant[asset.status as keyof typeof statusVariant]} className="capitalize">
-                        {asset.status}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {groupKeys.map((code) => {
+                  const list = groups.get(code)!;
+                  return (
+                    <Fragment key={code}>
+                      <TableRow className="bg-muted/50 hover:bg-muted/50">
+                        <TableCell colSpan={7} className="font-semibold">
+                          {countryName(code)}
+                          <span className="ml-2 font-normal text-muted-foreground">
+                            ({list.length} asset{list.length === 1 ? "" : "s"})
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                      {list.map((asset) => (
+                        <TableRow key={asset.id}>
+                          <TableCell>
+                            <Link
+                              href={`/assets/${asset.id}`}
+                              className="font-mono font-medium text-primary hover:underline"
+                            >
+                              {asset.asset_code}
+                            </Link>
+                          </TableCell>
+                          <TableCell className="font-medium">{asset.asset_name}</TableCell>
+                          <TableCell>{asset.official_owner ?? "—"}</TableCell>
+                          <TableCell>{formatArea(asset.area_sqft, asset.area_unit)}</TableCell>
+                          <TableCell className="text-right font-mono tabular-nums">
+                            {asset.current_value != null ? formatMoney(asset.current_value) : "—"}
+                          </TableCell>
+                          <TableCell className="text-right font-mono tabular-nums">
+                            {asset.total_property_value != null ? formatMoney(asset.total_property_value) : "—"}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={statusVariant[asset.status as keyof typeof statusVariant]}
+                              className="capitalize"
+                            >
+                              {asset.status}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      <TableRow className="border-t hover:bg-transparent">
+                        <TableCell colSpan={4} className="text-right font-medium text-muted-foreground">
+                          {countryName(code)} total
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-semibold tabular-nums">
+                          {formatMoney(sumCurrent(list))}
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-semibold tabular-nums">
+                          {formatMoney(sumTotal(list))}
+                        </TableCell>
+                        <TableCell />
+                      </TableRow>
+                    </Fragment>
+                  );
+                })}
+
+                <TableRow className="border-t-2 bg-ledger/10 hover:bg-ledger/10">
+                  <TableCell colSpan={4} className="text-right font-semibold uppercase tracking-wide text-ledger">
+                    All countries total
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-base font-bold tabular-nums">
+                    {formatMoney(grandCurrent)}
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-base font-bold tabular-nums">
+                    {formatMoney(grandTotal)}
+                  </TableCell>
+                  <TableCell />
+                </TableRow>
               </TableBody>
             </Table>
           </div>

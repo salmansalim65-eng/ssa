@@ -110,6 +110,21 @@ export function AssetForm({
   const areaSqft = useWatch({ control: form.control, name: "areaSqft" });
   const areaConverted = convertedArea(Number(areaSqft) || 0, areaUnit || null);
 
+  // Single "Cost center" dropdown backed by two fields: costCenterMode
+  // ('new' | 'none' | 'existing') and, for 'existing', groupCostCenterId.
+  const costCenterMode = useWatch({ control: form.control, name: "costCenterMode" });
+  const groupCostCenterId = useWatch({ control: form.control, name: "groupCostCenterId" });
+  const costCenterSelectValue = costCenterMode === "existing" ? groupCostCenterId || "new" : costCenterMode || "new";
+  function handleCostCenterChange(value: string) {
+    if (value === "new" || value === "none") {
+      form.setValue("costCenterMode", value, { shouldValidate: true });
+      form.setValue("groupCostCenterId", "", { shouldValidate: true });
+    } else {
+      form.setValue("costCenterMode", "existing", { shouldValidate: true });
+      form.setValue("groupCostCenterId", value, { shouldValidate: true });
+    }
+  }
+
   function handleSubmit(values: AssetInput) {
     setFormError(null);
     startTransition(async () => {
@@ -486,38 +501,29 @@ export function AssetForm({
 
         {/* OTHER --------------------------------------------------------------- */}
         <SectionHeading>Other</SectionHeading>
-        <FormField
-          control={form.control}
-          name="groupCostCenterId"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Cost center</FormLabel>
-              <Select
-                onValueChange={(value) => field.onChange(value === "none" ? "" : value)}
-                defaultValue={field.value || "none"}
-              >
-                <FormControl>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {costCenters.map((cc) => (
-                    <SelectItem key={cc.id} value={cc.id}>
-                      {cc.code} — {cc.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormDescription>
-                Optional link to another cost center (e.g. a shared building or overhead center) for
-                grouping/allocation — separate from this asset&apos;s own dedicated cost center.
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <FormItem>
+          <FormLabel>Cost center</FormLabel>
+          <Select value={costCenterSelectValue} onValueChange={handleCostCenterChange}>
+            <FormControl>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+            </FormControl>
+            <SelectContent>
+              <SelectItem value="new">New — create a dedicated cost center</SelectItem>
+              <SelectItem value="none">None — don&apos;t link a cost center</SelectItem>
+              {costCenters.map((cc) => (
+                <SelectItem key={cc.id} value={cc.id}>
+                  {cc.code} — {cc.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <FormDescription>
+            <strong>New</strong> creates a dedicated cost center for this asset. <strong>None</strong> links
+            nothing. Or pick an existing cost center to link the asset to it.
+          </FormDescription>
+        </FormItem>
         <FormField
           control={form.control}
           name="notes"

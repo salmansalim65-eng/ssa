@@ -35,7 +35,8 @@ function toRow(input: AssetInput) {
     status: input.status,
     owner: input.owner || null,
     official_owner: input.officialOwner || null,
-    group_cost_center_id: input.groupCostCenterId || null,
+    cost_center_mode: input.costCenterMode,
+    group_cost_center_id: input.costCenterMode === "existing" ? input.groupCostCenterId || null : null,
     notes: input.notes || null,
   };
 }

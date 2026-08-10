@@ -1089,6 +1089,7 @@ export interface Database {
           status: "active" | "sold" | "inactive";
           owner: string | null;
           official_owner: string | null;
+          cost_center_mode: "new" | "none" | "existing";
           group_cost_center_id: string | null;
           title_deed_attachment_id: string | null;
           notes: string | null;

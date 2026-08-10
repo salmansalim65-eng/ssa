@@ -43,6 +43,7 @@ function titleCase(s: string) {
 export function GeneralLedgerFilters({
   accounts,
   currencies,
+  baseCurrencyId = "",
   costCenters,
   defaultAccountIds,
   defaultFrom,
@@ -57,6 +58,7 @@ export function GeneralLedgerFilters({
 }: {
   accounts: AccountOption[];
   currencies: CurrencyChoice[];
+  baseCurrencyId?: string;
   costCenters: CostCenterChoice[];
   defaultAccountIds: string[];
   defaultFrom: string;
@@ -193,6 +195,7 @@ export function GeneralLedgerFilters({
                   {currencies.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.code}
+                      {c.id === baseCurrencyId ? " (base)" : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>

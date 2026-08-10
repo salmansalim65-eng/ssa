@@ -22,20 +22,19 @@ export function KpiCard({
   const card = (
     <Card
       className={cn(
-        // Soft light tint so the stat cards read as gentle light panels rather
-        // than plain white.
-        "h-full gap-0 border-primary/10 bg-primary/[0.04] py-0",
-        href && "transition-colors hover:border-ring/50 hover:bg-primary/[0.07]",
+        // Dark chrome panels — the same navy as the app header — with light text.
+        "h-full gap-0 border-header-border bg-header py-0 text-header-foreground",
+        href && "transition-[filter,border-color] hover:border-ring/50 hover:brightness-110",
       )}
     >
       <CardContent className="flex items-start justify-between gap-3 p-5">
         <div className="min-w-0 space-y-1">
-          <p className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <p className="truncate text-xs font-medium uppercase tracking-wide text-header-muted">
             {label}
           </p>
           <p
             className={cn(
-              "text-2xl font-semibold tracking-tight tabular-nums text-foreground",
+              "text-2xl font-semibold tracking-tight tabular-nums text-header-foreground",
               tone === "success" && "text-success",
               tone === "destructive" && "text-destructive",
               tone === "warning" && "text-warning",
@@ -43,15 +42,15 @@ export function KpiCard({
           >
             {value}
           </p>
-          {subtext && <p className="text-xs text-muted-foreground">{subtext}</p>}
+          {subtext && <p className="text-xs text-header-muted">{subtext}</p>}
         </div>
         <span
           className={cn(
             "flex size-9 shrink-0 items-center justify-center rounded-lg",
-            tone === "success" && "bg-success/12 text-success",
-            tone === "destructive" && "bg-destructive/10 text-destructive",
-            tone === "warning" && "bg-warning/15 text-warning",
-            !tone && "bg-primary/10 text-primary",
+            tone === "success" && "bg-success/15 text-success",
+            tone === "destructive" && "bg-destructive/15 text-destructive",
+            tone === "warning" && "bg-warning/20 text-warning",
+            !tone && "bg-header-accent text-header-foreground",
           )}
         >
           <Icon className="size-4.5" />

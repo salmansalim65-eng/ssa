@@ -184,26 +184,26 @@ export default async function DashboardPage() {
           href="/accounting/voucher-register"
         />
         <Link href="/admin/exchange-rates" className="block rounded-lg">
-          <Card className="h-full border-primary/10 bg-primary/[0.04] transition-colors hover:border-ring/50 hover:bg-primary/[0.07]">
+          <Card className="h-full border-header-border bg-header text-header-foreground transition-[filter,border-color] hover:border-ring/50 hover:brightness-110">
             <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Currency summary</CardTitle>
-              <ClockIcon className="size-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium text-header-muted">Currency summary</CardTitle>
+              <ClockIcon className="size-4 text-header-muted" />
             </CardHeader>
             <CardContent className="space-y-1">
               {currencySummary.length === 0 && (
-                <p className="text-sm text-muted-foreground">No currencies configured.</p>
+                <p className="text-sm text-header-muted">No currencies configured.</p>
               )}
               {currencySummary.map((c) => (
                 <div key={c.code} className="flex items-center justify-between text-sm">
                   <span className="flex items-center gap-2">
                     {c.code}
                     {c.isBase && (
-                      <Badge variant="outline" className="text-xs">
+                      <Badge variant="outline" className="border-white/25 text-xs text-header-foreground">
                         Base
                       </Badge>
                     )}
                   </span>
-                  <span className="text-muted-foreground">
+                  <span className="text-header-muted">
                     {c.isBase
                       ? "1.000000"
                       : c.rate
@@ -219,7 +219,7 @@ export default async function DashboardPage() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Link href="/reports/asset-register" className="block rounded-lg">
-          <Card className="h-full border-primary/10 bg-primary/[0.04] transition-colors hover:border-ring/50 hover:bg-primary/[0.07]">
+          <Card className="h-full border-header-border bg-header text-header-foreground transition-[filter,border-color] hover:border-ring/50 hover:brightness-110">
             <CardHeader>
               <CardTitle>Assets by country</CardTitle>
             </CardHeader>
@@ -229,7 +229,7 @@ export default async function DashboardPage() {
           </Card>
         </Link>
         <Link href="/reports/asset-register" className="block rounded-lg">
-          <Card className="h-full border-primary/10 bg-primary/[0.04] transition-colors hover:border-ring/50 hover:bg-primary/[0.07]">
+          <Card className="h-full border-header-border bg-header text-header-foreground transition-[filter,border-color] hover:border-ring/50 hover:brightness-110">
             <CardHeader>
               <CardTitle>Assets by property type</CardTitle>
             </CardHeader>
@@ -240,7 +240,7 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      <Card className="border-primary/10 bg-primary/[0.04]">
+      <Card>
         <CardHeader className="border-b pb-4">
           <CardTitle>Recent transactions</CardTitle>
           <CardAction>

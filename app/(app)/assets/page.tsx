@@ -42,7 +42,7 @@ export default async function AssetsPage({
     .schema("assets")
     .from("assets")
     .select(
-      "id, asset_code, asset_name, property_type, country, city, official_owner, area_sqft, area_unit, current_value, total_property_value, status",
+      "id, asset_code, asset_name, property_type, country, city, official_owner, area_sqft, area_unit, current_value, status",
     )
     .eq("company_id", companyId);
   if (countryFilter) assetQuery = assetQuery.eq("country", countryFilter);
@@ -74,9 +74,7 @@ export default async function AssetsPage({
   const groupKeys = [...groups.keys()].sort((x, y) => countryName(x).localeCompare(countryName(y)));
 
   const sumCurrent = (list: typeof rows) => list.reduce((s, a) => s + (a.current_value ?? 0), 0);
-  const sumTotal = (list: typeof rows) => list.reduce((s, a) => s + (a.total_property_value ?? 0), 0);
   const grandCurrent = sumCurrent(rows);
-  const grandTotal = sumTotal(rows);
 
   return (
     <div className="space-y-5">
@@ -127,7 +125,6 @@ export default async function AssetsPage({
                   <TableHead>Official owner</TableHead>
                   <TableHead>Area</TableHead>
                   <TableHead className="text-right">Current Value</TableHead>
-                  <TableHead className="text-right">Total Value</TableHead>
                   <TableHead className="w-28">Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -137,7 +134,7 @@ export default async function AssetsPage({
                   return (
                     <Fragment key={code}>
                       <TableRow className="bg-muted/50 hover:bg-muted/50">
-                        <TableCell colSpan={7} className="font-semibold">
+                        <TableCell colSpan={6} className="font-semibold">
                           {countryName(code)}
                           <span className="ml-2 font-normal text-muted-foreground">
                             ({list.length} asset{list.length === 1 ? "" : "s"})
@@ -160,9 +157,6 @@ export default async function AssetsPage({
                           <TableCell className="text-right font-mono tabular-nums">
                             {asset.current_value != null ? formatMoney(asset.current_value) : "—"}
                           </TableCell>
-                          <TableCell className="text-right font-mono tabular-nums">
-                            {asset.total_property_value != null ? formatMoney(asset.total_property_value) : "—"}
-                          </TableCell>
                           <TableCell>
                             <Badge
                               variant={statusVariant[asset.status as keyof typeof statusVariant]}
@@ -180,9 +174,6 @@ export default async function AssetsPage({
                         <TableCell className="text-right font-mono font-semibold tabular-nums">
                           {formatMoney(sumCurrent(list))}
                         </TableCell>
-                        <TableCell className="text-right font-mono font-semibold tabular-nums">
-                          {formatMoney(sumTotal(list))}
-                        </TableCell>
                         <TableCell />
                       </TableRow>
                     </Fragment>
@@ -195,9 +186,6 @@ export default async function AssetsPage({
                   </TableCell>
                   <TableCell className="text-right font-mono text-base font-bold tabular-nums">
                     {formatMoney(grandCurrent)}
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-base font-bold tabular-nums">
-                    {formatMoney(grandTotal)}
                   </TableCell>
                   <TableCell />
                 </TableRow>

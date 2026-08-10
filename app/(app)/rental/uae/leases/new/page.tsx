@@ -41,7 +41,10 @@ export default async function NewUaeLeasePage() {
   type RawCurrency = { is_base_currency: boolean; currencies: { id: string; code: string } | null };
   const rawCurrencies = ((companyCurrencies as unknown as RawCurrency[]) ?? []).filter((cc) => cc.currencies);
   const currencyOptions = rawCurrencies.map((cc) => ({ id: cc.currencies!.id, code: cc.currencies!.code }));
-  const defaultCurrencyId = rawCurrencies.find((cc) => cc.is_base_currency)?.currencies!.id;
+  // UAE leases default to AED; fall back to the company base currency.
+  const defaultCurrencyId =
+    rawCurrencies.find((cc) => cc.currencies!.code === "AED")?.currencies!.id ??
+    rawCurrencies.find((cc) => cc.is_base_currency)?.currencies!.id;
 
   return (
     <div className="space-y-5">

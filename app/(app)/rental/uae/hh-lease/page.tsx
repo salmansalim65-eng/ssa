@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { HhLeaseForm } from "@/components/rental/hh-lease-form";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { loadTenantAccounts } from "@/lib/rental/tenant-accounts";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 
 export default async function NewHhLeasePage() {
@@ -13,7 +14,7 @@ export default async function NewHhLeasePage() {
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
 
-  const [{ data: assets }, { data: tenants }, { data: companyCurrencies }] = await Promise.all([
+  const [{ data: assets }, tenants, { data: companyCurrencies }] = await Promise.all([
     supabase
       .schema("assets")
       .from("assets")
@@ -22,14 +23,8 @@ export default async function NewHhLeasePage() {
       .eq("country", "AE")
       .is("deleted_at", null)
       .order("asset_code"),
-    supabase
-      .schema("rental")
-      .from("tenants")
-      .select("id, name")
-      .eq("company_id", companyId)
-      .eq("is_active", true)
-      .is("deleted_at", null)
-      .order("name"),
+    // HH tenants come from the Chart of Accounts tenant group (country = AE).
+    loadTenantAccounts(companyId, "AE"),
     supabase
       .schema("core")
       .from("company_currencies")

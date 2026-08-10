@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { PkLeaseForm } from "@/components/rental/pk-lease-form";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { loadTenantAccounts } from "@/lib/rental/tenant-accounts";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 
 export default async function NewPkLeasePage() {
@@ -13,7 +14,7 @@ export default async function NewPkLeasePage() {
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
 
-  const [{ data: assets }, { data: tenants }, { data: companyCurrencies }] = await Promise.all([
+  const [{ data: assets }, tenants, { data: companyCurrencies }] = await Promise.all([
     supabase
       .schema("assets")
       .from("assets")
@@ -22,14 +23,8 @@ export default async function NewPkLeasePage() {
       .eq("country", "PK")
       .is("deleted_at", null)
       .order("asset_code"),
-    supabase
-      .schema("rental")
-      .from("tenants")
-      .select("id, name")
-      .eq("company_id", companyId)
-      .eq("is_active", true)
-      .is("deleted_at", null)
-      .order("name"),
+    // Pakistan tenants come from the Chart of Accounts tenant group (country = PK).
+    loadTenantAccounts(companyId, "PK"),
     supabase
       .schema("core")
       .from("company_currencies")

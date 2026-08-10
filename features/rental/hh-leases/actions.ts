@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { resolveTenantId } from "@/lib/rental/tenant-accounts";
 import { generateAllUaeRentInvoices, postAllUaeRentInvoices } from "@/features/rental/uae-rent-invoices/actions";
 import { hhLeaseSchema, type HhLeaseInput } from "./schemas";
 
@@ -37,10 +38,11 @@ export async function createHhLease(input: HhLeaseInput) {
     return { error: numberError?.message ?? "Failed to generate document number" };
   }
 
+  const tenantId = await resolveTenantId(companyId, parsed.data.tenantId, createdBy);
   const rows = parsed.data.lines.map((line) => ({
     company_id: companyId,
     asset_id: line.assetId,
-    tenant_id: parsed.data.tenantId,
+    tenant_id: tenantId,
     lease_start: line.leaseStart,
     lease_end: line.leaseEnd,
     rental_amount: line.rentalAmount,

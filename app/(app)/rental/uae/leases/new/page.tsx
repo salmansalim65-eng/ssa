@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { UaeLeaseForm } from "@/components/rental/uae-lease-form";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { loadTenantAccounts } from "@/lib/rental/tenant-accounts";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 
 export default async function NewUaeLeasePage() {
@@ -13,7 +14,7 @@ export default async function NewUaeLeasePage() {
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
 
-  const [{ data: assets }, { data: tenants }, { data: companyCurrencies }] = await Promise.all([
+  const [{ data: assets }, tenants, { data: companyCurrencies }] = await Promise.all([
     supabase
       .schema("assets")
       .from("assets")
@@ -22,14 +23,8 @@ export default async function NewUaeLeasePage() {
       .eq("country", "AE")
       .is("deleted_at", null)
       .order("asset_code"),
-    supabase
-      .schema("rental")
-      .from("tenants")
-      .select("id, name")
-      .eq("company_id", companyId)
-      .eq("is_active", true)
-      .is("deleted_at", null)
-      .order("name"),
+    // UAE tenants come from the Chart of Accounts tenant group (country = AE).
+    loadTenantAccounts(companyId, "AE"),
     supabase
       .schema("core")
       .from("company_currencies")

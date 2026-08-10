@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { SummaryCard } from "@/components/ui/summary-card";
 import { VoucherListTable } from "@/components/vouchers/voucher-list-table";
 import { hasPermission } from "@/lib/auth/permissions";
+import { createClient } from "@/lib/supabase/server";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { getVoucherListRows } from "@/lib/vouchers/queries";
 import { isPhase5VoucherType, VOUCHER_TYPE_LABELS } from "@/lib/vouchers/meta";
@@ -32,11 +33,22 @@ export default async function VoucherListPage({
   if (!isPhase5VoucherType(voucherType)) notFound();
 
   const companyId = await getCurrentCompanyId();
+  const supabase = await createClient();
 
-  const [rows, canCreate] = await Promise.all([
+  const [rows, canCreate, { data: baseCurrency }] = await Promise.all([
     getVoucherListRows(companyId, voucherType),
     hasPermission(voucherType, "create"),
+    supabase
+      .schema("core")
+      .from("company_currencies")
+      .select("currencies:currency_id(symbol)")
+      .eq("company_id", companyId)
+      .eq("is_active", true)
+      .eq("is_base_currency", true)
+      .maybeSingle(),
   ]);
+  const baseCurrencySymbol =
+    (baseCurrency as unknown as { currencies: { symbol: string } | null } | null)?.currencies?.symbol ?? null;
 
   const label = VOUCHER_TYPE_LABELS[voucherType];
   const drafts = rows.filter((r) => r.status === "draft").length;
@@ -73,6 +85,7 @@ export default async function VoucherListPage({
           voucherType={voucherType}
           partyLabel={PARTY_LABELS[voucherType]}
           showAmount={!NO_AMOUNT_TYPES.has(voucherType)}
+          baseCurrencySymbol={baseCurrencySymbol}
         />
       </div>
     </div>

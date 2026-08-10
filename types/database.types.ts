@@ -1675,6 +1675,7 @@ export interface Database {
           outstanding_balance: number;
           currency_code: string;
           status: JournalEntryStatus;
+          exchange_rate: number;
         };
       };
       v_outstanding_rent: {
@@ -1692,6 +1693,7 @@ export interface Database {
           outstanding_balance: number;
           currency_code: string;
           status: JournalEntryStatus;
+          exchange_rate: number;
           days_overdue: number;
         };
       };

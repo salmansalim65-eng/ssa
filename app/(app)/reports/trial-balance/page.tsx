@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { AsOfDateFilter } from "@/components/reports/as-of-date-filter";
 import { CsvExportButton } from "@/components/reports/csv-export-button";
 import { ReportCountryFilter } from "@/components/reports/report-country-filter";
+import { ReportSelectFilter } from "@/components/reports/report-select-filter";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { aggregateByAccount } from "@/lib/reports/account-aggregation";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
@@ -26,9 +27,9 @@ function today() {
 export default async function TrialBalancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ asOf?: string; country?: string }>;
+  searchParams: Promise<{ asOf?: string; country?: string; cc?: string; cur?: string }>;
 }) {
-  const { asOf = today(), country = "" } = await searchParams;
+  const { asOf = today(), country = "", cc = "", cur = "" } = await searchParams;
 
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
@@ -40,14 +41,61 @@ export default async function TrialBalancePage({
     .eq("company_id", companyId)
     .lte("entry_date", asOf);
   if (country) linesQuery = linesQuery.eq("cost_center_country", country);
-  const [{ data: lines }, countries] = await Promise.all([linesQuery, loadReportCountries(companyId)]);
+  if (cc) linesQuery = linesQuery.eq("cost_center_id", cc);
+  const [{ data: lines }, countries, { data: companyCurrencies }, { data: costCenters }] = await Promise.all([
+    linesQuery,
+    loadReportCountries(companyId),
+    supabase
+      .schema("core")
+      .from("company_currencies")
+      .select("is_base_currency, currencies:currency_id(id, code, symbol)")
+      .eq("company_id", companyId)
+      .eq("is_active", true),
+    supabase
+      .schema("accounting")
+      .from("cost_centers")
+      .select("id, name")
+      .eq("company_id", companyId)
+      .eq("is_active", true)
+      .is("deleted_at", null)
+      .order("name"),
+  ]);
   const countryName = country ? countries.find((c) => c.code === country)?.name ?? country : "";
+  const costCenterOptions = (costCenters ?? []).map((c) => ({ value: c.id, label: c.name }));
+
+  // Company currencies (base first). Ledger amounts are stored in base currency;
+  // choosing another currency converts every figure at that currency's rate as
+  // of the report's as-of date.
+  type RawCurrency = { is_base_currency: boolean; currencies: { id: string; code: string; symbol: string } | null };
+  const currencyList = ((companyCurrencies as unknown as RawCurrency[]) ?? []).filter((c) => c.currencies);
+  const baseCurrency = currencyList.find((c) => c.is_base_currency)?.currencies ?? null;
+  const currencyOptions = currencyList
+    .map((c) => ({ value: c.currencies!.id, label: c.currencies!.code }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  const selectedCurrencyId = cur || baseCurrency?.id || "";
+  const selectedCurrency = currencyList.find((c) => c.currencies!.id === selectedCurrencyId)?.currencies ?? baseCurrency;
+
+  // Conversion factor base -> selected currency at the as-of date. No rate
+  // configured (or base selected) leaves amounts in base rather than failing.
+  let factor = 1;
+  if (selectedCurrencyId && baseCurrency && selectedCurrencyId !== baseCurrency.id) {
+    const { data: rate, error } = await supabase.schema("core").rpc("fn_exchange_rate_to_base", {
+      p_company_id: companyId,
+      p_currency_id: selectedCurrencyId,
+      p_as_of_date: asOf,
+    });
+    if (!error && rate) factor = 1 / (rate as number);
+  }
+
+  const symbol = selectedCurrency?.symbol ?? selectedCurrency?.code ?? "";
+  // `SYMBOL 1,234` — currency symbol before a thousands-separated amount.
+  const money = (n: number) => (symbol ? `${symbol} ${formatMoney(n)}` : formatMoney(n));
 
   const byAccount = aggregateByAccount(lines ?? []);
 
   const rows = Array.from(byAccount.values())
     .map((a) => {
-      const net = a.debit - a.credit;
+      const net = (a.debit - a.credit) * factor;
       return {
         account_code: a.account_code,
         account_name: a.account_name,
@@ -61,6 +109,8 @@ export default async function TrialBalancePage({
 
   const totalDebit = rows.reduce((sum, r) => sum + r.debit, 0);
   const totalCredit = rows.reduce((sum, r) => sum + r.credit, 0);
+  // Tolerance guards floating-point drift from currency conversion.
+  const imbalanced = Math.abs(totalDebit - totalCredit) >= 0.005;
 
   return (
     <div className="space-y-5">
@@ -69,7 +119,7 @@ export default async function TrialBalancePage({
         title="Trial Balance"
         description={`Net debit/credit position per account as of ${formatDate(asOf)}${
           countryName ? ` · ${countryName}` : ""
-        }.`}
+        }. Amounts in ${selectedCurrency?.code ?? "base currency"}.`}
         className="print:hidden"
         actions={
           <>
@@ -89,6 +139,25 @@ export default async function TrialBalancePage({
         </Suspense>
         <Suspense>
           <ReportCountryFilter countries={countries} selected={country} />
+        </Suspense>
+        <Suspense>
+          <ReportSelectFilter
+            label="Cost centre"
+            param="cc"
+            allLabel="All cost centres"
+            options={costCenterOptions}
+            selected={cc}
+          />
+        </Suspense>
+        <Suspense>
+          <ReportSelectFilter
+            label="Currency"
+            param="cur"
+            allLabel={baseCurrency ? `Base (${baseCurrency.code})` : "Base"}
+            options={currencyOptions}
+            selected={cur}
+            width="w-40"
+          />
         </Suspense>
       </div>
 
@@ -110,10 +179,10 @@ export default async function TrialBalancePage({
                 <TableCell className="font-medium">{r.account_name}</TableCell>
                 <TableCell className="capitalize">{r.account_type}</TableCell>
                 <TableCell className="text-right font-mono tabular-nums">
-                  {r.debit ? formatMoney(r.debit) : ""}
+                  {r.debit ? money(r.debit) : ""}
                 </TableCell>
                 <TableCell className="text-right font-mono tabular-nums">
-                  {r.credit ? formatMoney(r.credit) : ""}
+                  {r.credit ? money(r.credit) : ""}
                 </TableCell>
               </TableRow>
             ))}
@@ -126,20 +195,22 @@ export default async function TrialBalancePage({
             )}
           </TableBody>
           {rows.length > 0 && (
-            <tfoot className="border-t bg-muted/40">
-              <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={3} className="font-medium">
+            <tfoot>
+              {/* Dark navy treatment (same tokens as the column headers) so the
+                  totals stand out from the account rows. */}
+              <TableRow className="bg-header text-header-foreground hover:bg-header [&>td]:border-header-border">
+                <TableCell colSpan={3} className="font-semibold">
                   Total
                 </TableCell>
                 <TableCell
-                  className={`text-right font-mono font-medium tabular-nums ${totalDebit !== totalCredit ? "text-destructive" : ""}`}
+                  className={`text-right font-mono font-semibold tabular-nums ${imbalanced ? "text-destructive" : ""}`}
                 >
-                  {formatMoney(totalDebit)}
+                  {money(totalDebit)}
                 </TableCell>
                 <TableCell
-                  className={`text-right font-mono font-medium tabular-nums ${totalDebit !== totalCredit ? "text-destructive" : ""}`}
+                  className={`text-right font-mono font-semibold tabular-nums ${imbalanced ? "text-destructive" : ""}`}
                 >
-                  {formatMoney(totalCredit)}
+                  {money(totalCredit)}
                 </TableCell>
               </TableRow>
             </tfoot>

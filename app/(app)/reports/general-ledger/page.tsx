@@ -297,6 +297,7 @@ export default async function GeneralLedgerPage({
         <GeneralLedgerFilters
           accounts={accounts ?? []}
           currencies={currencyOptions}
+          baseCurrencyId={baseCurrency?.id ?? ""}
           costCenters={costCenterOptions}
           defaultAccountIds={accountIds}
           defaultFrom={from}

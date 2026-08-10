@@ -30,6 +30,10 @@ function today() {
 interface AccountBalance {
   account_code: string;
   account_name: string;
+  debit: number;
+  credit: number;
+  /** Positive amount in the account's natural direction (income: credit-debit;
+   * expense: debit-credit) — what the Amount column and section totals sum. */
   balance: number;
 }
 
@@ -52,8 +56,30 @@ export default async function ProfitAndLossPage({
     .gte("entry_date", from)
     .lte("entry_date", to);
   if (country) linesQuery = linesQuery.eq("cost_center_country", country);
-  const [{ data: lines }, countries] = await Promise.all([linesQuery, loadReportCountries(companyId)]);
+  const [{ data: lines }, countries, { data: companyCurrencies }] = await Promise.all([
+    linesQuery,
+    loadReportCountries(companyId),
+    supabase
+      .schema("core")
+      .from("company_currencies")
+      .select("is_base_currency, currencies:currency_id(code, symbol)")
+      .eq("company_id", companyId)
+      .eq("is_active", true)
+      .eq("is_base_currency", true)
+      .maybeSingle(),
+  ]);
   const countryName = country ? countries.find((c) => c.code === country)?.name ?? country : "";
+
+  // Ledger amounts are already stored in base currency (v_ledger_entries uses
+  // base_debit_amount/base_credit_amount), so every figure below reads in the
+  // company's base currency.
+  const baseCurrency = (companyCurrencies as unknown as { currencies: { code: string; symbol: string } | null } | null)
+    ?.currencies;
+  const symbol = baseCurrency?.symbol ?? baseCurrency?.code ?? "";
+  // `SYMBOL 1,234` — currency symbol before a thousands-separated amount. The
+  // Income/Expense section headers already convey the Dr/Cr direction, and each
+  // account's raw debits/credits show in their own columns.
+  const money = (n: number) => (symbol ? `${symbol} ${formatMoney(n)}` : formatMoney(n));
 
   const byAccount = new Map<
     string,
@@ -77,15 +103,19 @@ export default async function ProfitAndLossPage({
   for (const a of byAccount.values()) {
     if (a.account_type === "income") {
       const balance = a.credit - a.debit;
-      if (balance !== 0) income.push({ account_code: a.account_code, account_name: a.account_name, balance });
+      if (balance !== 0)
+        income.push({ account_code: a.account_code, account_name: a.account_name, debit: a.debit, credit: a.credit, balance });
     } else {
       const balance = a.debit - a.credit;
-      if (balance !== 0) expense.push({ account_code: a.account_code, account_name: a.account_name, balance });
+      if (balance !== 0)
+        expense.push({ account_code: a.account_code, account_name: a.account_name, debit: a.debit, credit: a.credit, balance });
     }
   }
   income.sort((a, b) => a.account_code.localeCompare(b.account_code));
   expense.sort((a, b) => a.account_code.localeCompare(b.account_code));
 
+  const sumDebit = (rows: AccountBalance[]) => rows.reduce((s, r) => s + r.debit, 0);
+  const sumCredit = (rows: AccountBalance[]) => rows.reduce((s, r) => s + r.credit, 0);
   const totalIncome = income.reduce((s, r) => s + r.balance, 0);
   const totalExpense = expense.reduce((s, r) => s + r.balance, 0);
   const netProfit = totalIncome - totalExpense;
@@ -95,6 +125,24 @@ export default async function ProfitAndLossPage({
     ...expense.map((r) => ({ ...r, section: "Expense" })),
   ];
 
+  // Dark navy treatment (same tokens as the column headers) for the subtotal /
+  // total rows, matching the Balance Sheet and Trial Balance.
+  const totalRow = "bg-header text-header-foreground hover:bg-header [&>td]:border-header-border";
+
+  function accountRows(rows: AccountBalance[]) {
+    return rows.map((r) => (
+      <TableRow key={r.account_code}>
+        <TableCell className="pl-6">
+          <span className="mr-2 font-mono text-xs text-muted-foreground">{r.account_code}</span>
+          <span className="font-medium">{r.account_name}</span>
+        </TableCell>
+        <TableCell className="text-right font-mono tabular-nums">{r.debit ? money(r.debit) : ""}</TableCell>
+        <TableCell className="text-right font-mono tabular-nums">{r.credit ? money(r.credit) : ""}</TableCell>
+        <TableCell className="text-right font-mono tabular-nums">{money(r.balance)}</TableCell>
+      </TableRow>
+    ));
+  }
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -102,14 +150,14 @@ export default async function ProfitAndLossPage({
         title="Profit & Loss"
         description={`Income vs. expense for ${formatDate(from)} to ${formatDate(to)}${
           countryName ? ` · ${countryName}` : ""
-        }.`}
+        }. Amounts in base currency${baseCurrency?.code ? ` (${baseCurrency.code})` : ""}.`}
         className="print:hidden"
         actions={
           <>
             <CsvExportButton
               filename={`profit-and-loss-${from}-to-${to}.csv`}
-              headers={["Section", "Code", "Name", "Amount"]}
-              rows={exportRows.map((r) => [r.section, r.account_code, r.account_name, r.balance])}
+              headers={["Section", "Code", "Name", "Debit", "Credit", "Amount"]}
+              rows={exportRows.map((r) => [r.section, r.account_code, r.account_name, r.debit, r.credit, r.balance])}
             />
             <PrintButton />
           </>
@@ -130,54 +178,46 @@ export default async function ProfitAndLossPage({
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <TableHead>Account</TableHead>
+              <TableHead className="text-right">Debit</TableHead>
+              <TableHead className="text-right">Credit</TableHead>
               <TableHead className="text-right">Amount</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            <TableRow className="bg-muted/50">
-              <TableCell colSpan={2} className="font-semibold">
+            <TableRow className="bg-muted/50 hover:bg-muted/50">
+              <TableCell colSpan={4} className="font-semibold">
                 Income
               </TableCell>
             </TableRow>
-            {income.map((r) => (
-              <TableRow key={r.account_code}>
-                <TableCell className="pl-6">
-                  <span className="mr-2 font-mono text-xs text-muted-foreground">{r.account_code}</span>
-                  <span className="font-medium">{r.account_name}</span>
-                </TableCell>
-                <TableCell className="text-right font-mono tabular-nums">{formatMoney(r.balance)}</TableCell>
-              </TableRow>
-            ))}
-            <TableRow>
+            {accountRows(income)}
+            <TableRow className={totalRow}>
               <TableCell className="font-medium">Total income</TableCell>
-              <TableCell className="text-right font-mono font-medium tabular-nums">{formatMoney(totalIncome)}</TableCell>
+              <TableCell className="text-right font-mono font-medium tabular-nums">{money(sumDebit(income))}</TableCell>
+              <TableCell className="text-right font-mono font-medium tabular-nums">{money(sumCredit(income))}</TableCell>
+              <TableCell className="text-right font-mono font-medium tabular-nums">{money(totalIncome)}</TableCell>
             </TableRow>
 
-            <TableRow className="bg-muted/50">
-              <TableCell colSpan={2} className="font-semibold">
+            <TableRow className="bg-muted/50 hover:bg-muted/50">
+              <TableCell colSpan={4} className="font-semibold">
                 Expense
               </TableCell>
             </TableRow>
-            {expense.map((r) => (
-              <TableRow key={r.account_code}>
-                <TableCell className="pl-6">
-                  <span className="mr-2 font-mono text-xs text-muted-foreground">{r.account_code}</span>
-                  <span className="font-medium">{r.account_name}</span>
-                </TableCell>
-                <TableCell className="text-right font-mono tabular-nums">{formatMoney(r.balance)}</TableCell>
-              </TableRow>
-            ))}
-            <TableRow>
+            {accountRows(expense)}
+            <TableRow className={totalRow}>
               <TableCell className="font-medium">Total expense</TableCell>
-              <TableCell className="text-right font-mono font-medium tabular-nums">{formatMoney(totalExpense)}</TableCell>
+              <TableCell className="text-right font-mono font-medium tabular-nums">{money(sumDebit(expense))}</TableCell>
+              <TableCell className="text-right font-mono font-medium tabular-nums">{money(sumCredit(expense))}</TableCell>
+              <TableCell className="text-right font-mono font-medium tabular-nums">{money(totalExpense)}</TableCell>
             </TableRow>
 
-            <TableRow className="border-t-2">
-              <TableCell className="font-semibold">Net profit / (loss)</TableCell>
+            <TableRow className={totalRow}>
+              <TableCell colSpan={3} className="font-semibold">
+                Net profit / (loss)
+              </TableCell>
               <TableCell
                 className={`text-right font-mono font-semibold tabular-nums ${netProfit >= 0 ? "text-success" : "text-destructive"}`}
               >
-                {formatMoney(netProfit)}
+                {money(netProfit)}
               </TableCell>
             </TableRow>
           </TableBody>

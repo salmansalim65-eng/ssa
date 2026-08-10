@@ -42,9 +42,9 @@ function netOf(r: { debit: number; credit: number }) {
 export default async function BalanceSheetPage({
   searchParams,
 }: {
-  searchParams: Promise<{ asOf?: string; country?: string; cc?: string }>;
+  searchParams: Promise<{ asOf?: string; country?: string; cc?: string; cur?: string }>;
 }) {
-  const { asOf = today(), country = "", cc = "" } = await searchParams;
+  const { asOf = today(), country = "", cc = "", cur = "" } = await searchParams;
 
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
@@ -63,11 +63,9 @@ export default async function BalanceSheetPage({
     supabase
       .schema("core")
       .from("company_currencies")
-      .select("is_base_currency, currencies:currency_id(code, symbol)")
+      .select("is_base_currency, currencies:currency_id(id, code, symbol)")
       .eq("company_id", companyId)
-      .eq("is_active", true)
-      .eq("is_base_currency", true)
-      .maybeSingle(),
+      .eq("is_active", true),
     supabase
       .schema("accounting")
       .from("cost_centers")
@@ -80,13 +78,31 @@ export default async function BalanceSheetPage({
   const countryName = country ? countries.find((c) => c.code === country)?.name ?? country : "";
   const costCenterOptions = (costCenters ?? []).map((c) => ({ value: c.id, label: c.name }));
 
-  // Ledger amounts are already stored in base currency (v_ledger_entries uses
-  // base_debit_amount/base_credit_amount), so every figure below — and the
-  // "All countries" totals — reads in the company's base currency.
-  const baseCurrency = (companyCurrencies as unknown as { currencies: { code: string; symbol: string } | null } | null)
-    ?.currencies;
-  const symbol = baseCurrency?.symbol ?? baseCurrency?.code ?? "";
+  // Company currencies (base first). Ledger amounts are stored in base currency;
+  // choosing another currency converts every figure at that currency's rate as
+  // of the report's as-of date.
+  type RawCurrency = { is_base_currency: boolean; currencies: { id: string; code: string; symbol: string } | null };
+  const currencyList = ((companyCurrencies as unknown as RawCurrency[]) ?? []).filter((c) => c.currencies);
+  const baseCurrency = currencyList.find((c) => c.is_base_currency)?.currencies ?? null;
+  const currencyOptions = currencyList
+    .map((c) => ({ value: c.currencies!.id, label: c.currencies!.code }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  const selectedCurrencyId = cur || baseCurrency?.id || "";
+  const selectedCurrency = currencyList.find((c) => c.currencies!.id === selectedCurrencyId)?.currencies ?? baseCurrency;
 
+  // Conversion factor base -> selected currency at the as-of date. No rate
+  // configured (or base selected) leaves amounts in base rather than failing.
+  let factor = 1;
+  if (selectedCurrencyId && baseCurrency && selectedCurrencyId !== baseCurrency.id) {
+    const { data: rate, error } = await supabase.schema("core").rpc("fn_exchange_rate_to_base", {
+      p_company_id: companyId,
+      p_currency_id: selectedCurrencyId,
+      p_as_of_date: asOf,
+    });
+    if (!error && rate) factor = 1 / (rate as number);
+  }
+
+  const symbol = selectedCurrency?.symbol ?? selectedCurrency?.code ?? "";
   // `SYMBOL 1,234` — currency symbol before a thousands-separated amount.
   const money = (n: number) => (symbol ? `${symbol} ${formatMoney(n)}` : formatMoney(n));
   // `SYMBOL 1,234 Dr` / `SYMBOL 1,234 Cr` from a net debit figure.
@@ -109,8 +125,8 @@ export default async function BalanceSheetPage({
     buckets[a.account_type as AccountType].push({
       account_code: a.account_code,
       account_name: a.account_name,
-      debit: a.debit,
-      credit: a.credit,
+      debit: a.debit * factor,
+      credit: a.credit * factor,
     });
   }
 
@@ -127,7 +143,8 @@ export default async function BalanceSheetPage({
   const netProfit = incomeNet - expenseNet;
   const equityAndProfitNet = equityNet + netProfit;
   const liabilitiesAndEquityNet = liabilityNet + equityAndProfitNet;
-  const balanced = assetNet === liabilitiesAndEquityNet;
+  // Tolerance guards floating-point drift from currency conversion.
+  const balanced = Math.abs(assetNet - liabilitiesAndEquityNet) < 0.005;
 
   // Synthetic profit/(loss) row: a profit is a credit to equity, a loss a debit.
   const profitRow: AccountBalance = {
@@ -192,7 +209,7 @@ export default async function BalanceSheetPage({
         title="Balance Sheet"
         description={`Assets, liabilities, and equity as of ${formatDate(asOf)}${
           countryName ? ` · ${countryName}` : ""
-        }. Amounts in base currency${baseCurrency?.code ? ` (${baseCurrency.code})` : ""}.`}
+        }. Amounts in ${selectedCurrency?.code ?? "base currency"}.`}
         className="print:hidden"
         actions={
           <>
@@ -230,6 +247,16 @@ export default async function BalanceSheetPage({
             allLabel="All cost centres"
             options={costCenterOptions}
             selected={cc}
+          />
+        </Suspense>
+        <Suspense>
+          <ReportSelectFilter
+            label="Currency"
+            param="cur"
+            allLabel={baseCurrency ? `Base (${baseCurrency.code})` : "Base"}
+            options={currencyOptions}
+            selected={cur}
+            width="w-40"
           />
         </Suspense>
       </div>

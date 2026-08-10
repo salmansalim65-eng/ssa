@@ -60,7 +60,10 @@ export function VoucherListTable({
             <TableCell className="text-muted-foreground">{formatDate(row.date)}</TableCell>
             <TableCell className="max-w-xs truncate">{row.party || "—"}</TableCell>
             {showAmount && (
-              <TableCell className="text-right font-mono tabular-nums">{formatMoney(row.amount)}</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">
+                {row.currencySymbol ? `${row.currencySymbol} ` : ""}
+                {formatMoney(row.amount)}
+              </TableCell>
             )}
             <TableCell>
               <VoucherStatusBadge status={row.status} />

@@ -12,6 +12,9 @@ export interface VoucherListRow {
   date: string;
   party: string;
   amount: number;
+  /** Symbol of the voucher's transaction currency, prefixed to the amount when
+   * present (e.g. "Rs", "SR"). Null falls back to a bare number. */
+  currencySymbol?: string | null;
   journalEntryId: string;
   status: JournalEntryStatus;
 }
@@ -168,23 +171,34 @@ export async function getVoucherListRows(
       }));
     }
     case "opening_balance_voucher": {
+      // Show the property/asset account(s) the opening balance was booked to —
+      // not the CAPITAL contra — and the amount in its own transaction currency.
       const { data } = await supabase
         .schema("accounting")
         .from("opening_balance_vouchers")
         .select(
-          "id, voucher_no, as_of_date, total_amount, journal_entry_id, journal_entries:journal_entry_id(status), contra:contra_account_id(account_name)",
+          "id, voucher_no, as_of_date, total_amount, journal_entry_id, journal_entries:journal_entry_id(status), currencies:currency_id(symbol), lines:opening_balance_voucher_lines(debit, credit, account:account_id(account_name))",
         )
         .eq("company_id", companyId)
         .order("created_at", { ascending: false });
-      return (data ?? []).map((r) => ({
-        id: r.id,
-        voucherNo: r.voucher_no,
-        date: r.as_of_date,
-        party: (r.contra as unknown as { account_name: string } | null)?.account_name ?? "—",
-        amount: r.total_amount,
-        journalEntryId: r.journal_entry_id,
-        status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
-      }));
+      return (data ?? []).map((r) => {
+        const lines =
+          (r.lines as unknown as { debit: number; credit: number; account: { account_name: string } | null }[]) ?? [];
+        // The debit side holds the asset; fall back to any line if none is a debit.
+        const source = lines.filter((l) => Number(l.debit) > 0);
+        const names = [...new Set((source.length ? source : lines).map((l) => l.account?.account_name).filter(Boolean))];
+        const party = names.length === 1 ? (names[0] as string) : names.length > 1 ? `Split (${names.length})` : "—";
+        return {
+          id: r.id,
+          voucherNo: r.voucher_no,
+          date: r.as_of_date,
+          party,
+          amount: r.total_amount,
+          currencySymbol: (r.currencies as unknown as { symbol: string } | null)?.symbol ?? null,
+          journalEntryId: r.journal_entry_id,
+          status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
+        };
+      });
     }
   }
 }

@@ -58,8 +58,10 @@ export function LeaseDeleteButton({
         <DialogHeader>
           <DialogTitle>Delete this {label}?</DialogTitle>
           <DialogDescription>
-            The lease is removed from the list. Its history is retained for audit and can be restored by an
-            administrator. This does not delete any invoices already generated from it.
+            The lease is removed from the list, and <strong>every invoice generated from it is deleted too —
+            including posted ones</strong>, so their rental income is cleared from the ledger and reports. The
+            lease record itself is retained for audit and can be restored by an administrator. A lease whose
+            invoices have recorded payments can&apos;t be deleted — remove the payments first.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

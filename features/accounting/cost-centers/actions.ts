@@ -99,11 +99,12 @@ export async function deleteCostCenter(costCenterId: string) {
   await requirePermission("cost_centers", "delete");
 
   const supabase = await createClient();
+  // Soft-delete via SECURITY DEFINER RPC: stamping deleted_at through the
+  // RLS-scoped client is rejected because the SELECT policy filters
+  // `deleted_at IS NULL` (see migration 0059).
   const { error } = await supabase
     .schema("accounting")
-    .from("cost_centers")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("id", costCenterId);
+    .rpc("fn_soft_delete_cost_center", { p_id: costCenterId });
 
   if (error) return { error: error.message };
 

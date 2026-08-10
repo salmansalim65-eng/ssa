@@ -7,6 +7,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PageHeader } from "@/components/ui/page-header";
+import { CsvExportButton } from "@/components/reports/csv-export-button";
+import { PrintButton } from "@/components/vouchers/print-button";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, formatMoney } from "@/lib/format";
@@ -26,6 +28,17 @@ export default async function AssetValuationReportPage() {
   const totalPurchase = (rows ?? []).reduce((sum, r) => sum + (r.purchase_value ?? 0), 0);
   const totalCurrent = (rows ?? []).reduce((sum, r) => sum + (r.current_value ?? 0), 0);
 
+  const csvRows = (rows ?? []).map((r) => [
+    r.asset_code,
+    r.asset_name,
+    [r.city, r.country].filter(Boolean).join(", "),
+    r.purchase_value ?? 0,
+    r.current_value ?? 0,
+    r.variance ?? 0,
+    r.latest_valuation_date ? formatDate(r.latest_valuation_date) : "",
+    r.latest_valuer ?? "",
+  ]);
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -33,6 +46,27 @@ export default async function AssetValuationReportPage() {
         title="Asset Valuation Report"
         description="Purchase value vs. current value (latest recorded valuation) per asset. Reporting only — no accounting impact."
         className="print:hidden"
+        actions={
+          <>
+            {(rows ?? []).length > 0 && (
+              <CsvExportButton
+                filename="asset-valuation.csv"
+                headers={[
+                  "Code",
+                  "Name",
+                  "Location",
+                  "Purchase Value",
+                  "Current Value",
+                  "Variance",
+                  "Latest Valuation",
+                  "Valuer",
+                ]}
+                rows={csvRows}
+              />
+            )}
+            <PrintButton />
+          </>
+        }
       />
 
       <div className="overflow-hidden rounded-lg border bg-card shadow-xs">

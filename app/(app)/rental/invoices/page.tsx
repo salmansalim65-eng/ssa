@@ -99,6 +99,16 @@ export default async function RentInvoicesPage({
   const money = (r: InvoiceRow) =>
     r.currency_symbol ? `${r.currency_symbol} ${formatMoney(r.total_amount)}` : formatMoney(r.total_amount);
 
+  // Totals for the footer, grouped by currency — invoices can be a mix of PKR
+  // and AED, so a single cross-currency sum would be meaningless.
+  const totalsByCurrency = new Map<string, { symbol: string | null; amount: number }>();
+  for (const r of rows) {
+    const t = totalsByCurrency.get(r.currency_code) ?? { symbol: r.currency_symbol, amount: 0 };
+    t.amount += Number(r.total_amount);
+    totalsByCurrency.set(r.currency_code, t);
+  }
+  const totalLines = [...totalsByCurrency.entries()].map(([code, t]) => ({ code, ...t }));
+
   function tabHref(key: string) {
     const params = new URLSearchParams();
     if (key) params.set("type", key);
@@ -208,6 +218,22 @@ export default async function RentInvoicesPage({
                 </TableRow>
               ))}
             </TableBody>
+            <tfoot className="border-t bg-muted/40">
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={6} className="font-medium">
+                  Total{totalLines.length > 1 ? " (per currency)" : ""}
+                </TableCell>
+                <TableCell className="text-right font-mono font-semibold tabular-nums">
+                  {totalLines.map((t) => (
+                    <div key={t.code}>
+                      {t.symbol ? `${t.symbol} ` : `${t.code} `}
+                      {formatMoney(t.amount)}
+                    </div>
+                  ))}
+                </TableCell>
+                <TableCell />
+              </TableRow>
+            </tfoot>
           </Table>
         )}
       </div>

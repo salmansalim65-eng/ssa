@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertCircleIcon, TrendingUpIcon, WalletIcon } from "lucide-react";
+import { AlertCircleIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,13 +22,6 @@ import type { VoucherType } from "@/types/database.types";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
-}
-function monthStart() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-}
-function yearStart() {
-  return `${new Date().getFullYear()}-01-01`;
 }
 
 // Each country card shows figures in that country's own currency.
@@ -66,10 +59,9 @@ export default async function DashboardPage({
   const [
     { data: ledgerRows },
     { data: rentRows },
-    { data: monthlyInvoices },
-    { data: yearlyInvoices },
+    { data: cashBankAccounts },
+    { data: cashBankLedger },
     { count: pendingApprovals },
-    { data: baseCurrency },
     { data: currencies },
     { data: recentVouchers },
   ] = await Promise.all([
@@ -88,33 +80,26 @@ export default async function DashboardPage({
       .eq("company_id", companyId)
       .in("country", ["UAE", "PK"]),
     supabase
-      .schema("reporting")
-      .from("v_rental_income")
-      .select("amount, exchange_rate")
+      .schema("accounting")
+      .from("chart_of_accounts")
+      .select("id, account_code, account_name, currency_id")
       .eq("company_id", companyId)
-      .gte("invoice_date", monthStart())
-      .lte("invoice_date", today()),
+      .is("deleted_at", null)
+      .or("is_cash.eq.true,is_bank.eq.true")
+      .order("account_code"),
     supabase
       .schema("reporting")
-      .from("v_rental_income")
-      .select("amount, exchange_rate")
+      .from("v_ledger_entries")
+      .select("account_id, doc_debit_amount, doc_credit_amount, is_cash, is_bank")
       .eq("company_id", companyId)
-      .gte("invoice_date", yearStart())
-      .lte("invoice_date", today()),
+      .or("is_cash.eq.true,is_bank.eq.true"),
     supabase
       .schema("accounting")
       .from("voucher_approvals")
       .select("id", { count: "exact", head: true })
       .eq("company_id", companyId)
       .eq("status", "pending"),
-    supabase
-      .schema("core")
-      .from("company_currencies")
-      .select("currencies:currency_id(symbol)")
-      .eq("company_id", companyId)
-      .eq("is_base_currency", true)
-      .maybeSingle(),
-    supabase.schema("core").from("currencies").select("code, symbol"),
+    supabase.schema("core").from("currencies").select("id, code, symbol"),
     supabase
       .schema("accounting")
       .from("v_voucher_register")
@@ -125,9 +110,23 @@ export default async function DashboardPage({
   ]);
 
   const symbolByCode = new Map((currencies ?? []).map((c) => [c.code as string, c.symbol as string]));
+  const symbolById = new Map((currencies ?? []).map((c) => [c.id as string, c.symbol as string]));
   const sym = (code: string) => symbolByCode.get(code) ?? code;
-  const baseSymbol =
-    (baseCurrency as unknown as { currencies: { symbol: string } | null } | null)?.currencies?.symbol ?? "";
+  const symById = (id: string | null) => (id ? symbolById.get(id) ?? "" : "");
+
+  // Cash & Bank accounts, each with its posted balance in its own currency.
+  const bankBalById = new Map<string, number>();
+  for (const r of cashBankLedger ?? []) {
+    const k = r.account_id as string;
+    bankBalById.set(k, (bankBalById.get(k) ?? 0) + Number(r.doc_debit_amount) - Number(r.doc_credit_amount));
+  }
+  const bankAccounts = (cashBankAccounts ?? []).map((a) => ({
+    code: a.account_code as string,
+    name: a.account_name as string,
+    symbol: symById(a.currency_id as string | null),
+    balance: bankBalById.get(a.id as string) ?? 0,
+  }));
+  const bankByCurrency = [...bankAccounts.reduce((m, a) => m.set(a.symbol, (m.get(a.symbol) ?? 0) + a.balance), new Map<string, number>())];
 
   // Ledger balances in each country's own currency (document amounts). The
   // balance cards reflect operating balances only, so Cash & Bank, Fixed Asset
@@ -144,13 +143,11 @@ export default async function DashboardPage({
     b.credit += Number(r.doc_credit_amount);
   }
 
-  // Rent figures in each country's own currency (document amounts), plus a
-  // base-currency running total for the cross-country KPI below.
+  // Rent figures in each country's own currency (document amounts).
   const rentByCountry: Record<string, { billed: number; outstanding: number; overdue: number; due: number }> = {
     UAE: { billed: 0, outstanding: 0, overdue: 0, due: 0 },
     PK: { billed: 0, outstanding: 0, overdue: 0, due: 0 },
   };
-  let outstandingBase = 0;
   const now = today();
   for (const r of rentRows ?? []) {
     const g = rentByCountry[r.country as string];
@@ -161,21 +158,19 @@ export default async function DashboardPage({
     g.outstanding += outstanding;
     if (r.due_date < now) g.overdue += outstanding;
     else g.due += outstanding;
-    outstandingBase += outstanding * (Number(r.exchange_rate) || 1);
   }
   const rentReceipts = (c: string) => rentByCountry[c].billed - rentByCountry[c].outstanding;
 
-  // Cross-country KPIs stay in base currency (they sum multiple currencies).
-  const toBase = (rows: { amount: number; exchange_rate: number }[] | null) =>
-    (rows ?? []).reduce((s, r) => s + Number(r.amount) * (Number(r.exchange_rate) || 1), 0);
-  const monthlyRentalIncome = toBase(monthlyInvoices);
-  const yearlyRentalIncome = toBase(yearlyInvoices);
-
+  const isBank = panel === "bank";
   const selected = (panel in BALANCE_PANELS ? panel : "") as PanelKey | "";
-  const detail = selected ? await loadDetail(companyId, selected, sym(BALANCE_PANELS[selected].currency)) : null;
+  const detail = selected
+    ? await loadDetail(companyId, selected, sym(BALANCE_PANELS[selected].currency))
+    : isBank
+      ? bankDetail(bankAccounts)
+      : null;
 
-  function cardHref(key: PanelKey) {
-    return selected === key ? "/dashboard" : `/dashboard?panel=${key}`;
+  function cardHref(key: PanelKey | "bank") {
+    return panel === key ? "/dashboard" : `/dashboard?panel=${key}`;
   }
 
   const aed = sym("AED");
@@ -272,26 +267,42 @@ export default async function DashboardPage({
         </Card>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard
-          label="Rental income (month)"
-          value={money(baseSymbol, monthlyRentalIncome)}
-          icon={TrendingUpIcon}
-          href="/reports/rental-income"
-        />
-        <KpiCard
-          label="Rental income (year)"
-          value={money(baseSymbol, yearlyRentalIncome)}
-          icon={TrendingUpIcon}
-          href="/reports/rental-income"
-        />
-        <KpiCard
-          label="Outstanding rent"
-          value={money(baseSymbol, outstandingBase)}
-          icon={WalletIcon}
-          tone={outstandingBase > 0 ? "warning" : undefined}
-          href="/reports/outstanding-rent"
-        />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <SummaryCard
+          title="Bank & Balance"
+          href={cardHref("bank")}
+          active={isBank}
+          footer={
+            <div className="text-center text-xs font-medium text-muted-foreground">
+              {bankAccounts.length} cash &amp; bank account{bankAccounts.length === 1 ? "" : "s"} — click for detail
+            </div>
+          }
+        >
+          {bankByCurrency.length > 0 ? (
+            <div className="flex flex-wrap justify-between gap-2">
+              {bankByCurrency.map(([symbol, total]) => (
+                <StatCol key={symbol || "—"} value={money(symbol, total)} label={symbol || "Balance"} />
+              ))}
+            </div>
+          ) : (
+            <div className="py-1 text-sm text-muted-foreground">No cash or bank accounts yet.</div>
+          )}
+        </SummaryCard>
+
+        <SummaryCard
+          title="Rent Report"
+          href="/reports/rent-report"
+          footer={
+            <div className="text-center text-xs font-medium text-muted-foreground">
+              Cost-centre-wise, month-wise rent — open report
+            </div>
+          }
+        >
+          <div className="py-1 text-sm text-muted-foreground">
+            UAE and Pakistan rent, per cost centre and month.
+          </div>
+        </SummaryCard>
+
         <KpiCard
           label="Pending approvals"
           value={(pendingApprovals ?? 0).toLocaleString()}
@@ -340,7 +351,9 @@ export default async function DashboardPage({
                   </TableCell>
                   <TableCell>{VOUCHER_TYPE_LABELS[row.voucher_type as VoucherType]}</TableCell>
                   <TableCell className="text-muted-foreground">{formatDate(row.entry_date)}</TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{formatMoney(row.amount)}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">
+                    {money(symById(row.currency_id), Number(row.doc_amount ?? row.amount))}
+                  </TableCell>
                   <TableCell>
                     <VoucherStatusBadge status={row.status} />
                   </TableCell>
@@ -359,6 +372,43 @@ export default async function DashboardPage({
       </Card>
     </div>
   );
+}
+
+// Bank & Balance drill-down — each cash/bank account and its balance, shown in
+// that account's own currency with its symbol.
+function bankDetail(accounts: { code: string; name: string; symbol: string; balance: number }[]) {
+  return {
+    title: "Cash & Bank Balances",
+    body: (
+      <Table className="[&_td]:first:pl-5 [&_td]:last:pr-5 [&_th]:first:pl-5 [&_th]:last:pr-5">
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            <TableHead>Account</TableHead>
+            <TableHead>Currency</TableHead>
+            <TableHead className="text-right">Balance</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {accounts.map((a) => (
+            <TableRow key={a.code}>
+              <TableCell>
+                <span className="font-mono text-xs text-muted-foreground">{a.code}</span> {a.name}
+              </TableCell>
+              <TableCell className="text-muted-foreground">{a.symbol || "—"}</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">{money(a.symbol, a.balance)}</TableCell>
+            </TableRow>
+          ))}
+          {accounts.length === 0 && (
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={3} className="py-10 text-center text-muted-foreground">
+                No cash or bank accounts yet.
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+    ),
+  };
 }
 
 // Detail report for a selected card — figures in the country's own currency.

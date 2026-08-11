@@ -39,6 +39,7 @@ export async function createUaeLease(input: UaeLeaseInput) {
       security_deposit: parsed.data.securityDeposit,
       currency_id: parsed.data.currencyId,
       due_date: parsed.data.dueDate || null,
+      voucher_date: parsed.data.voucherDate || null,
       created_by: user.user!.id,
     })
     .select("id")
@@ -94,6 +95,14 @@ export async function updateUaeLease(id: string, input: UaeLeaseInput) {
   });
   if (error) return { error: error.message };
 
+  // voucher_date is display-only and not part of the update RPC — persist it
+  // directly (the same table allows the direct status update used elsewhere).
+  await supabase
+    .schema("rental")
+    .from("uae_leases")
+    .update({ voucher_date: parsed.data.voucherDate || null })
+    .eq("id", id);
+
   revalidatePath("/rental/uae/leases");
   revalidatePath(`/rental/uae/leases/${id}`);
   return { success: true, id };
@@ -108,7 +117,7 @@ export async function copyUaeLease(id: string) {
     .schema("rental")
     .from("uae_leases")
     .select(
-      "asset_id, tenant_id, lease_start, lease_end, rental_amount, rent_cycle, security_deposit, currency_id, due_date",
+      "asset_id, tenant_id, lease_start, lease_end, rental_amount, rent_cycle, security_deposit, currency_id, due_date, voucher_date",
     )
     .eq("company_id", companyId)
     .eq("id", id)
@@ -127,6 +136,7 @@ export async function copyUaeLease(id: string) {
     securityDeposit: src.security_deposit,
     currencyId: src.currency_id,
     dueDate: src.due_date ?? "",
+    voucherDate: src.voucher_date ?? "",
   });
 }
 

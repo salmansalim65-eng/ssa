@@ -26,6 +26,7 @@ import {
   KeyRoundIcon,
   ReceiptIcon,
   BadgeDollarSignIcon,
+  CalendarRangeIcon,
 } from "lucide-react";
 
 export interface NavItem {
@@ -123,6 +124,7 @@ export const navSections: NavSection[] = [
       { label: "Purchase Report", href: "/reports/purchase-report", icon: ShoppingCartIcon },
       { label: "Sale Report", href: "/reports/sale-report", icon: BadgeDollarSignIcon },
       { label: "Rental Income", href: "/reports/rental-income", icon: ReceiptIcon },
+      { label: "Rent Report", href: "/reports/rent-report", icon: CalendarRangeIcon },
       { label: "Outstanding Rent", href: "/reports/outstanding-rent", icon: ClockIcon },
       { label: "Currency Exchange", href: "/reports/currency-exchange", icon: ArrowUpFromLineIcon },
     ],

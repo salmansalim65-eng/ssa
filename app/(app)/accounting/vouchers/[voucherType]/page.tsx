@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { getVoucherListRows } from "@/lib/vouchers/queries";
 import { isPhase5VoucherType, VOUCHER_TYPE_LABELS } from "@/lib/vouchers/meta";
+import { isJournalTabType, VoucherTypeTabs } from "@/components/vouchers/voucher-type-tabs";
 
 const NO_AMOUNT_TYPES = new Set(["journal_voucher", "jv_maintenance_voucher"]);
 const PARTY_LABELS: Record<string, string> = {
@@ -20,7 +21,7 @@ const PARTY_LABELS: Record<string, string> = {
   pdc_receipt_voucher: "Payer",
   cheque_return_voucher: "Return reason",
   journal_voucher: "Narration",
-  jv_maintenance_voucher: "Adjustment reason",
+  jv_maintenance_voucher: "Remarks",
   opening_balance_voucher: "Account",
 };
 
@@ -71,6 +72,8 @@ export default async function VoucherListPage({
           )
         }
       />
+
+      {isJournalTabType(voucherType) && <VoucherTypeTabs active={voucherType} mode="list" />}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <SummaryCard label="Total" value={rows.length} icon={FileTextIcon} accent="primary" />

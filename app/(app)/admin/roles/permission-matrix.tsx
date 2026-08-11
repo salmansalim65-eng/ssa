@@ -33,11 +33,20 @@ export interface PermissionRow {
   action: PermissionAction;
 }
 
+// A few module keys read better with a hand-written label than title-casing the
+// key. Kept minimal — the key itself stays stable for grants/RLS.
+const MODULE_LABEL_OVERRIDES: Record<string, string> = {
+  jv_maintenance_voucher: "JV Service Charges",
+};
+
 function moduleLabel(moduleKey: string) {
-  return moduleKey
-    .split("_")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
+  return (
+    MODULE_LABEL_OVERRIDES[moduleKey] ??
+    moduleKey
+      .split("_")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ")
+  );
 }
 
 export function PermissionMatrix({

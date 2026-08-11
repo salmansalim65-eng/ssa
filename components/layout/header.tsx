@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Building2Icon, MenuIcon } from "lucide-react";
+import { Building2Icon, CalendarDaysIcon, MenuIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { formatDate } from "@/lib/format";
 import { Breadcrumbs } from "./breadcrumbs";
 import { SidebarNav } from "./sidebar-nav";
 import { ThemeToggle } from "./theme-toggle";
@@ -24,22 +25,25 @@ export function Header({
   companyName: string;
 }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // Same calendar-day string on server and client; the span carries
+  // suppressHydrationWarning to tolerate a midnight boundary.
+  const todayLabel = formatDate(new Date().toISOString().slice(0, 10));
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-header-border bg-header px-4 text-header-foreground print:hidden">
+    <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-header-border bg-gradient-to-r from-[#7BBF41] to-[#3A53A4] px-4 text-white print:hidden">
       <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
         <Button
           variant="ghost"
           size="icon"
-          className="text-header-foreground hover:bg-header-accent hover:text-header-foreground md:hidden"
+          className="text-white hover:bg-white/15 hover:text-white md:hidden"
           onClick={() => setMobileNavOpen(true)}
           aria-label="Open navigation"
         >
           <MenuIcon />
         </Button>
         <SheetContent side="left" className="flex w-64 flex-col p-0">
-          <SheetHeader className="shrink-0 border-b bg-header p-4 text-header-foreground">
-            <SheetTitle className="flex items-center gap-2.5 text-header-foreground">
+          <SheetHeader className="shrink-0 border-b bg-ledger p-4 text-white">
+            <SheetTitle className="flex items-center gap-2.5 text-white">
               <Image src="/logo.svg" alt="SSA logo" width={28} height={28} className="size-7" />
               Rental &amp; Accounting ERP
             </SheetTitle>
@@ -53,14 +57,20 @@ export function Header({
       <Breadcrumbs />
 
       <div className="ml-auto flex items-center gap-1.5">
+        <span className="hidden items-center gap-1.5 rounded-md border border-white/20 bg-white/10 px-2.5 py-1 text-xs font-medium text-white sm:inline-flex">
+          <CalendarDaysIcon className="size-3.5 text-white/80" />
+          <span className="tabular-nums" suppressHydrationWarning>
+            {todayLabel}
+          </span>
+        </span>
         {companyName && (
-          <span className="hidden items-center gap-1.5 rounded-md border border-header-border bg-header-accent px-2.5 py-1 text-xs font-medium text-header-foreground sm:inline-flex">
-            <Building2Icon className="size-3.5 text-header-muted" />
+          <span className="hidden items-center gap-1.5 rounded-md border border-white/20 bg-white/10 px-2.5 py-1 text-xs font-medium text-white sm:inline-flex">
+            <Building2Icon className="size-3.5 text-white/80" />
             {companyName}
           </span>
         )}
         <ThemeToggle />
-        <div className="mx-1 hidden h-6 w-px bg-header-border sm:block" />
+        <div className="mx-1 hidden h-6 w-px bg-white/25 sm:block" />
         <UserMenu fullName={fullName} email={email} />
       </div>
     </header>

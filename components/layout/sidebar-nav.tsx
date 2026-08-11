@@ -78,17 +78,17 @@ export function SidebarNav({
                 "relative flex items-center rounded-md text-sm transition-colors",
                 collapsed ? "size-9 justify-center" : "gap-2.5 px-3 py-2",
                 active
-                  ? "bg-primary/10 font-semibold text-primary"
+                  ? "bg-ledger/15 font-semibold text-ledger-dark"
                   : "font-medium text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground",
               )}
             >
               {active && (
                 <span
-                  className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-primary"
+                  className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-ledger"
                   aria-hidden
                 />
               )}
-              <Icon className={cn("size-4 shrink-0", active ? "text-primary" : "text-muted-foreground/80")} />
+              <Icon className={cn("size-4 shrink-0", active ? "text-ledger-dark" : "text-muted-foreground/80")} />
               {!collapsed && <span className="truncate">{item.label}</span>}
             </Link>
           );

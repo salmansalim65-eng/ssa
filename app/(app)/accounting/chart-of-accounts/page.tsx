@@ -15,7 +15,7 @@ export default async function ChartOfAccountsPage() {
       supabase
         .schema("accounting")
         .from("chart_of_accounts")
-        .select("id, account_code, account_name, parent_id, account_type, currency_id, opening_balance, is_group, is_active, is_cash, is_bank, is_tenant_group, id_number, phone, email, country")
+        .select("id, account_code, account_name, parent_id, account_type, currency_id, opening_balance, is_group, is_active, is_cash, is_bank, is_tenant_group, id_number, contact_person, phone, email, country")
         .eq("company_id", companyId)
         .is("deleted_at", null),
       supabase
@@ -43,6 +43,7 @@ export default async function ChartOfAccountsPage() {
     is_bank: boolean;
     is_tenant_group: boolean;
     id_number: string | null;
+    contact_person: string | null;
     phone: string | null;
     email: string | null;
     country: string | null;
@@ -72,6 +73,7 @@ export default async function ChartOfAccountsPage() {
     is_bank: a.is_bank,
     is_tenant_group: a.is_tenant_group,
     id_number: a.id_number,
+    contact_person: a.contact_person,
     phone: a.phone,
     email: a.email,
     country: a.country,

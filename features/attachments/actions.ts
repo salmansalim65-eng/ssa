@@ -20,6 +20,7 @@ async function getCurrentCompanyId() {
 const ENTITY_TYPE_PERMISSION_MODULE: Record<string, string> = {
   asset: "assets",
   purchase_voucher: "purchase_voucher",
+  chart_of_account: "chart_of_accounts",
 };
 
 function permissionModuleForEntityType(entityType: string) {

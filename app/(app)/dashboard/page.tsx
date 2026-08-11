@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/table";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { SummaryCard, StatCol } from "@/components/dashboard/summary-card";
-import { PageHeader } from "@/components/ui/page-header";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, formatMoney } from "@/lib/format";
@@ -168,12 +167,6 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow="Overview"
-        title="Dashboard"
-        description="Balances and rent position by country, each in its own currency. Click a card to open its detail below."
-      />
-
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
           title="Balances UAE"
@@ -292,11 +285,16 @@ export default async function DashboardPage({
         />
       </div>
 
-      <Card>
-        <CardHeader className="border-b pb-4">
-          <CardTitle>Recent transactions</CardTitle>
-          <CardAction>
-            <Button asChild variant="outline" size="sm">
+      <Card className="overflow-hidden border-ledger-dark pt-0">
+        <CardHeader className="flex-row items-center gap-2 space-y-0 border-b-2 border-ledger-dark bg-ledger-dark px-5 py-2.5 text-white">
+          <CardTitle className="text-white">Recent transactions</CardTitle>
+          <CardAction className="self-auto">
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="border-white/30 bg-transparent text-white hover:bg-white/15 hover:text-white"
+            >
               <Link href="/accounting/voucher-register">View all</Link>
             </Button>
           </CardAction>

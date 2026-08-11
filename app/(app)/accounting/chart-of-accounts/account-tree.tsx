@@ -130,6 +130,18 @@ const typeBadgeClass: Record<AccountRow["account_type"], string> = {
   expense: "border-destructive/30 bg-destructive/10 text-destructive",
 };
 
+// Logo-blue group tint that steps down by level so each depth reads distinctly.
+// Full literal class strings keep them in Tailwind's JIT output.
+const GROUP_TINTS = [
+  "bg-group/[0.16] hover:bg-group/[0.20]",
+  "bg-group/[0.10] hover:bg-group/[0.14]",
+  "bg-group/[0.06] hover:bg-group/[0.10]",
+  "bg-group/[0.04] hover:bg-group/[0.08]",
+] as const;
+function groupTintClass(depth: number): string {
+  return GROUP_TINTS[Math.min(depth, GROUP_TINTS.length - 1)];
+}
+
 function descendantIds(accounts: AccountRow[], rootId: string): Set<string> {
   const childrenOf = new Map<string, AccountRow[]>();
   for (const a of accounts) {
@@ -308,7 +320,11 @@ export function AccountTree({
 
   const canReorder = canEdit && sortMode === "manual" && !filtersActive;
 
-  function renderRows(parentKey: string, depth: number): ReactNode[] {
+  // `guides` carries, for each distant-ancestor column (all but the immediate
+  // parent), whether a vertical rail should continue through this row — i.e. that
+  // ancestor still has siblings below it. This is what turns the indentation into
+  // a genuine ├─ / └─ tree instead of free-floating pips.
+  function renderRows(parentKey: string, depth: number, guides: boolean[]): ReactNode[] {
     const siblings = orderedChildren.get(parentKey) ?? [];
     const visibleRows = visibleIds ? siblings.filter((a) => visibleIds.has(a.id)) : siblings;
     return visibleRows.flatMap((account, siblingIndex) => {
@@ -327,58 +343,78 @@ export function AccountTree({
           key={account.id}
           className={cn(
             "group",
-            // Group rows carry a logo-blue tint that is stronger at the top of
-            // the tree and lighter deeper down, so the levels read at a glance;
-            // posting rows stay on the plain card surface.
-            isGroup
-              ? depth === 0
-                ? "bg-group/[0.16] hover:bg-group/[0.20]"
-                : "bg-group/[0.07] hover:bg-group/[0.11]"
-              : "hover:bg-muted/30",
+            // Group rows carry a logo-blue tint that steps down level by level, so
+            // depth reads at a glance; posting rows stay on the plain card surface.
+            isGroup ? groupTintClass(depth) : "hover:bg-muted/30",
             !account.is_active && "opacity-70",
           )}
         >
-          {/* Account code + tree affordance */}
+          {/* Account code + tree connector rails */}
           <td className="p-0 align-middle">
-            <div className="flex items-center py-2 pr-3" style={{ paddingLeft: `${depth * 1.25 + 0.75}rem` }}>
-              {/* Depth guide lines */}
-              {Array.from({ length: depth }).map((_, i) => (
-                <span key={i} aria-hidden className="mr-1 h-6 w-px shrink-0 bg-border" />
-              ))}
-              {hasChildren ? (
-                <button
-                  type="button"
-                  onClick={() => toggle(account.id)}
-                  className="mr-1 flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
-                  aria-label={isExpanded ? "Collapse" : "Expand"}
-                  aria-expanded={isExpanded}
-                >
-                  {isExpanded ? (
-                    <ChevronDownIcon className="size-4" />
-                  ) : (
-                    <ChevronRightIcon className="size-4" />
-                  )}
-                </button>
-              ) : (
-                <span className="mr-1 inline-block size-5 shrink-0" />
-              )}
-              {isGroup ? (
-                isExpanded ? (
-                  <FolderOpenIcon className="mr-2 size-4 shrink-0 text-group" />
+            <div className="flex items-stretch">
+              {/* One fixed-width rail column per ancestor level. Distant-ancestor
+                  columns draw a full-height vertical line when that branch
+                  continues below; the immediate-parent column draws the ├─/└─
+                  elbow into this node. Full-height segments meet across rows, so
+                  the hierarchy reads as one connected tree. */}
+              {Array.from({ length: depth }).map((_, i) => {
+                const isElbow = i === depth - 1;
+                return (
+                  <span key={i} aria-hidden className="relative w-5 shrink-0 self-stretch">
+                    {!isElbow && guides[i] && (
+                      <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-tree-guide" />
+                    )}
+                    {isElbow && (
+                      <>
+                        <span
+                          className={cn(
+                            "absolute left-1/2 w-px -translate-x-1/2 bg-tree-guide",
+                            isLastSibling ? "top-0 h-1/2" : "inset-y-0",
+                          )}
+                        />
+                        <span className="absolute left-1/2 top-1/2 h-px w-1/2 -translate-y-1/2 bg-tree-guide" />
+                      </>
+                    )}
+                  </span>
+                );
+              })}
+              {/* Node: expand toggle, folder/file icon, code */}
+              <div className={cn("flex flex-1 items-center py-2 pr-3", depth === 0 ? "pl-3" : "pl-1.5")}>
+                {hasChildren ? (
+                  <button
+                    type="button"
+                    onClick={() => toggle(account.id)}
+                    className="mr-1 flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+                    aria-label={isExpanded ? "Collapse" : "Expand"}
+                    aria-expanded={isExpanded}
+                  >
+                    {isExpanded ? (
+                      <ChevronDownIcon className="size-4" />
+                    ) : (
+                      <ChevronRightIcon className="size-4" />
+                    )}
+                  </button>
                 ) : (
-                  <FolderIcon className="mr-2 size-4 shrink-0 text-group" />
-                )
-              ) : (
-                <FileTextIcon className="mr-2 size-4 shrink-0 text-muted-foreground" />
-              )}
-              <span
-                className={cn(
-                  "font-mono text-xs",
-                  isGroup ? "font-bold text-group" : "text-muted-foreground",
+                  <span className="mr-1 inline-block size-5 shrink-0" />
                 )}
-              >
-                {account.account_code}
-              </span>
+                {isGroup ? (
+                  isExpanded ? (
+                    <FolderOpenIcon className="mr-2 size-4 shrink-0 text-group" />
+                  ) : (
+                    <FolderIcon className="mr-2 size-4 shrink-0 text-group" />
+                  )
+                ) : (
+                  <FileTextIcon className="mr-2 size-4 shrink-0 text-muted-foreground" />
+                )}
+                <span
+                  className={cn(
+                    "font-mono text-xs",
+                    isGroup ? "font-bold text-group" : "text-muted-foreground",
+                  )}
+                >
+                  {account.account_code}
+                </span>
+              </div>
             </div>
           </td>
 
@@ -527,12 +563,15 @@ export function AccountTree({
         </TableRow>
       );
 
-      return isExpanded ? [row, ...renderRows(account.id, depth + 1)] : [row];
+      // Roots (depth 0) have no rail to their left, so they contribute no guide
+      // column; from depth 1 down, each level appends whether it continues below.
+      const childGuides = depth === 0 ? [] : [...guides, !isLastSibling];
+      return isExpanded ? [row, ...renderRows(account.id, depth + 1, childGuides)] : [row];
     });
   }
 
   const hasAccounts = accounts.length > 0;
-  const bodyRows = renderRows("__root__", 0);
+  const bodyRows = renderRows("__root__", 0, []);
 
   return (
     <div className="space-y-5">

@@ -21,11 +21,20 @@ function keyOf(moduleKey: string, action: string) {
   return `${moduleKey}:${action}`;
 }
 
+// A few module keys read better with a hand-written label than title-casing the
+// key. The key itself stays stable for grants/RLS.
+const MODULE_LABEL_OVERRIDES: Record<string, string> = {
+  jv_maintenance_voucher: "JV Service Charges",
+};
+
 function prettifyModule(moduleKey: string) {
-  return moduleKey
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
+  return (
+    MODULE_LABEL_OVERRIDES[moduleKey] ??
+    moduleKey
+      .split("_")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ")
+  );
 }
 
 function capitalize(value: string) {

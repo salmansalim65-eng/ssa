@@ -11,7 +11,7 @@ export const VOUCHER_TYPE_LABELS: Record<VoucherType, string> = {
   pdc_receipt_voucher: "Post-Dated Receipt Voucher",
   cheque_return_voucher: "Cheque Return Voucher",
   journal_voucher: "Journal Voucher",
-  jv_maintenance_voucher: "JV Maintenance Voucher",
+  jv_maintenance_voucher: "JV Service Charges",
   opening_balance_voucher: "Opening Balance Voucher",
   uae_rent_invoice: "UAE Rent Invoice",
   pk_rent_invoice: "Pakistan Rent Invoice",

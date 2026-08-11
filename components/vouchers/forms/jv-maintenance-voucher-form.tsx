@@ -108,7 +108,7 @@ export function JvMaintenanceVoucherForm({
         setFormError(result.error);
         return;
       }
-      toast.success(isEdit ? "JV maintenance voucher updated" : "JV maintenance voucher created");
+      toast.success(isEdit ? "JV service charges updated" : "JV service charges created");
       router.push(`/accounting/vouchers/jv_maintenance_voucher/${isEdit ? voucherId : result.id}`);
     });
   }
@@ -119,7 +119,7 @@ export function JvMaintenanceVoucherForm({
         {/* Document header */}
         <FormSection
           title="Document information"
-          description="Header details for this JV maintenance voucher."
+          description="Header details for this JV service charges voucher."
           icon={FileTextIcon}
         >
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -189,7 +189,7 @@ export function JvMaintenanceVoucherForm({
 
         {/* Line entries */}
         <FormSection
-          title="Maintenance entries"
+          title="Service charge entries"
           description="Each row posts a balanced debit / credit pair for the given amount."
           icon={ListPlusIcon}
           contentClassName="p-0"
@@ -376,7 +376,7 @@ export function JvMaintenanceVoucherForm({
             <Link href="/accounting/vouchers/jv_maintenance_voucher">Cancel</Link>
           </Button>
           <Button type="submit" disabled={isPending}>
-            {isPending ? (isEdit ? "Saving…" : "Creating…") : isEdit ? "Save changes" : "Create JV maintenance voucher"}
+            {isPending ? (isEdit ? "Saving…" : "Creating…") : isEdit ? "Save changes" : "Create JV service charges"}
           </Button>
         </div>
       </form>

@@ -14,6 +14,7 @@ import { createClient } from "@/lib/supabase/server";
 import { mapVoucherCurrencies, type RawCompanyCurrency } from "@/lib/vouchers/currencies";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { isPhase5VoucherType, VOUCHER_TYPE_LABELS } from "@/lib/vouchers/meta";
+import { isJournalTabType, VoucherTypeTabs } from "@/components/vouchers/voucher-type-tabs";
 
 export default async function NewVoucherPage({
   params,
@@ -107,6 +108,8 @@ export default async function NewVoucherPage({
         description="Fill in the header details and entry lines, then save as a draft."
         backHref={`/accounting/vouchers/${voucherType}`}
       />
+
+      {isJournalTabType(voucherType) && <VoucherTypeTabs active={voucherType} mode="new" />}
 
       {voucherType === "receipt_voucher" && (
         <ReceiptVoucherForm

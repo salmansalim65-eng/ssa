@@ -5,7 +5,14 @@ import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/auth/permissions";
 import { formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
-import { createJournalEntry, getCurrentCompanyId, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
+import {
+  createJournalEntry,
+  getAccountIdByName,
+  getCurrentCompanyId,
+  postVoucher,
+  type EntryLineInput,
+} from "@/lib/vouchers/engine";
+import { pkIncomeTaxProvision } from "@/lib/rental/lease-accounting";
 import { generatePkInvoiceSchema, type GeneratePkInvoiceInput } from "./schemas";
 
 async function getPostingAccount(companyId: string, accountRole: string) {
@@ -69,7 +76,7 @@ export async function generatePkRentInvoice(scheduleId: string, input: GenerateP
   const { data: lease, error: leaseError } = await supabase
     .schema("rental")
     .from("pk_leases")
-    .select("currency_id, asset_id, tenant_id, voucher_date")
+    .select("currency_id, asset_id, tenant_id, voucher_date, official_rent, monthly_rent")
     .eq("id", schedule.lease_id)
     .single();
   if (leaseError || !lease) return { error: "Lease not found" };
@@ -126,6 +133,30 @@ export async function generatePkRentInvoice(scheduleId: string, input: GenerateP
   lines.push({ accountId: rentalIncomeId, costCenterId, debit: 0, credit: schedule.amount, description: "Pakistan rent invoice" });
   if (utilityTotal > 0) {
     lines.push({ accountId: utilityIncomeId!, costCenterId, debit: 0, credit: utilityTotal, description: "Utility recovery" });
+  }
+
+  // PK income-tax provision: 10% of the OFFICIAL rent for the invoiced period,
+  // booked as a self-balancing pair (Income Tax expense Dr / Provision liability
+  // Cr). This leaves the tenant + Rent Income PK treatment — which stays based
+  // on the actual monthly rent — completely unchanged, and the entry stays
+  // balanced. periodMonths scales the monthly official rent to a
+  // quarterly/yearly invoice (1 for a monthly invoice).
+  const monthlyRent = Number(lease.monthly_rent) || 0;
+  const periodMonths = monthlyRent > 0 ? Math.max(1, Math.round(schedule.amount / monthlyRent)) : 1;
+  const provision = pkIncomeTaxProvision(Number(lease.official_rent) || 0, periodMonths);
+  if (provision > 0) {
+    const [incomeTaxExpenseId, incomeTaxProvisionId] = await Promise.all([
+      getAccountIdByName(companyId, "INCOME TAX (RENT PK)"),
+      getAccountIdByName(companyId, "PROVISION INCOME TAX (RENT PK)"),
+    ]);
+    if (!incomeTaxExpenseId || !incomeTaxProvisionId) {
+      return {
+        error:
+          'Add the "INCOME TAX (RENT PK)" and "PROVISION INCOME TAX (RENT PK)" accounts to the Chart of Accounts to post the rent income-tax provision.',
+      };
+    }
+    lines.push({ accountId: incomeTaxExpenseId, costCenterId, debit: provision, credit: 0, description: "Income tax provision on rent (PK)" });
+    lines.push({ accountId: incomeTaxProvisionId, costCenterId, debit: 0, credit: provision, description: "Provision for income tax (rent PK)" });
   }
 
   const je = await createJournalEntry({

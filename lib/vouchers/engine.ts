@@ -27,6 +27,26 @@ export const getCurrentCompanyId = cache(async () => {
   return data;
 });
 
+/**
+ * Resolves a posting account by its Chart-of-Accounts name (case-insensitive,
+ * leaf accounts only) within a company. Used where an account is identified by
+ * a well-known business name (e.g. "SAMAD RENT") rather than a posting-template
+ * role, so IDs are never hard-coded. Returns null when it can't be found.
+ */
+export async function getAccountIdByName(companyId: string, accountName: string): Promise<string | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .schema("accounting")
+    .from("chart_of_accounts")
+    .select("id")
+    .eq("company_id", companyId)
+    .eq("is_group", false)
+    .is("deleted_at", null)
+    .ilike("account_name", accountName)
+    .maybeSingle();
+  return (data?.id as string | undefined) ?? null;
+}
+
 export async function getVoucherApproval(voucherType: VoucherType, voucherId: string) {
   const supabase = await createClient();
   const { data } = await supabase

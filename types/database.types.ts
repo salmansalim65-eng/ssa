@@ -394,6 +394,7 @@ export interface Database {
           is_cash: boolean;
           is_bank: boolean;
           is_tenant_group: boolean;
+          sort_order: number;
           id_number: string | null;
           phone: string | null;
           email: string | null;

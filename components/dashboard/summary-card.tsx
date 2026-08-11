@@ -22,12 +22,12 @@ export function SummaryCard({
   const inner = (
     <div
       className={cn(
-        "flex h-full flex-col overflow-hidden rounded-md border-2 border-ledger-dark bg-card shadow-sm",
+        "flex h-full flex-col overflow-hidden rounded-md border-2 border-ledger bg-card shadow-sm",
         href && "transition-shadow hover:shadow-md",
-        active && "ring-2 ring-ledger-dark ring-offset-2 ring-offset-background",
+        active && "ring-2 ring-ledger ring-offset-2 ring-offset-background",
       )}
     >
-      <div className="truncate border-b-2 border-ledger-dark bg-ledger-dark px-3 py-1.5 text-center text-xs font-bold uppercase tracking-wide text-white">
+      <div className="truncate border-b-2 border-ledger bg-ledger px-3 py-1.5 text-center text-xs font-bold uppercase tracking-wide text-white">
         {title}
       </div>
       <div className="flex flex-1 flex-col justify-between gap-3 p-3">{children}</div>

@@ -71,6 +71,8 @@ export default async function EditPkLeasePage({ params }: { params: Promise<{ id
           leaseStart: lease.lease_start,
           leaseEnd: lease.lease_end,
           monthlyRent: lease.monthly_rent,
+          officialRent: lease.official_rent ?? "",
+          rentCycle: lease.rent_cycle ?? "monthly",
           advanceRent: lease.advance_rent,
           securityDeposit: lease.security_deposit,
           currencyId: lease.currency_id,

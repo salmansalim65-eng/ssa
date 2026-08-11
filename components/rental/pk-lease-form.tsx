@@ -75,6 +75,8 @@ export function PkLeaseForm({
       leaseStart: today(),
       leaseEnd: today(),
       monthlyRent: blankAmount,
+      officialRent: blankAmount,
+      rentCycle: "monthly",
       advanceRent: blankAmount,
       securityDeposit: blankAmount,
       currencyId: defaultCurrencyId ?? currencies[0]?.id ?? "",
@@ -200,6 +202,41 @@ export function PkLeaseForm({
               <FormControl>
                 <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
               </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="officialRent"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Official rent</FormLabel>
+              <FormControl>
+                <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="rentCycle"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Rent cycle</FormLabel>
+              <Select onValueChange={field.onChange} value={field.value}>
+                <FormControl>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select rent cycle" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                  <SelectItem value="quarterly">Quarterly</SelectItem>
+                  <SelectItem value="yearly">Yearly</SelectItem>
+                </SelectContent>
+              </Select>
               <FormMessage />
             </FormItem>
           )}

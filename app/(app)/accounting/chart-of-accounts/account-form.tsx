@@ -30,6 +30,7 @@ import {
   type AccountFormValues,
   type AccountInput,
 } from "@/features/accounting/chart-of-accounts/schemas";
+import { AccountAttachmentField } from "@/components/accounting/account-attachment-field";
 import { amountValue } from "@/lib/forms/amount";
 
 const typeLabels: Record<(typeof ACCOUNT_TYPES)[number], string> = {
@@ -64,6 +65,7 @@ export function AccountForm({
   countries,
   onSubmit,
   submitLabel,
+  accountId,
 }: {
   defaultValues: AccountInput;
   parentOptions: ParentOption[];
@@ -71,6 +73,8 @@ export function AccountForm({
   countries: CountryOption[];
   onSubmit: (values: AccountInput) => Promise<{ error?: string } | undefined>;
   submitLabel: string;
+  /** Present when editing an existing account — enables the document uploads. */
+  accountId?: string;
 }) {
   const [isPending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
@@ -269,6 +273,19 @@ export function AccountForm({
               />
               <FormField
                 control={form.control}
+                name="contactPerson"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Contact person</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
                 name="phone"
                 render={({ field }) => (
                   <FormItem>
@@ -323,6 +340,17 @@ export function AccountForm({
                 )}
               />
             </div>
+            {accountId ? (
+              <div className="grid gap-4 border-t pt-4 sm:grid-cols-3">
+                <AccountAttachmentField accountId={accountId} slot="id" label="ID attachment" />
+                <AccountAttachmentField accountId={accountId} slot="police" label="Police verification" />
+                <AccountAttachmentField accountId={accountId} slot="agreement" label="Rent agreement" />
+              </div>
+            ) : (
+              <p className="border-t pt-4 text-xs text-muted-foreground">
+                Save the account first to attach ID, police verification and rent agreement documents.
+              </p>
+            )}
           </FormSection>
         )}
 

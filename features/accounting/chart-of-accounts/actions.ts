@@ -67,6 +67,7 @@ export async function createAccount(input: AccountInput) {
     is_bank: parsed.data.isBank,
     is_tenant_group: parsed.data.isGroup ? parsed.data.isTenantGroup : false,
     id_number: parsed.data.idNumber || null,
+    contact_person: parsed.data.contactPerson || null,
     phone: parsed.data.phone || null,
     email: parsed.data.email || null,
     country: parsed.data.country || null,
@@ -110,6 +111,7 @@ export async function updateAccount(accountId: string, input: AccountInput) {
       is_bank: parsed.data.isBank,
       is_tenant_group: parsed.data.isGroup ? parsed.data.isTenantGroup : false,
       id_number: parsed.data.idNumber || null,
+      contact_person: parsed.data.contactPerson || null,
       phone: parsed.data.phone || null,
       email: parsed.data.email || null,
       country: parsed.data.country || null,
@@ -120,6 +122,63 @@ export async function updateAccount(accountId: string, input: AccountInput) {
 
   revalidatePath("/accounting/chart-of-accounts");
   return { success: true };
+}
+
+// The three document slots on an account, mapped to their attachment-id columns.
+const ATTACHMENT_COLUMNS = {
+  id: "id_attachment_id",
+  police: "police_verification_attachment_id",
+  agreement: "rent_agreement_attachment_id",
+} as const;
+export type AccountAttachmentSlot = keyof typeof ATTACHMENT_COLUMNS;
+
+/** Points a document slot at an uploaded attachment, or clears it when null. */
+export async function setAccountAttachment(
+  accountId: string,
+  slot: AccountAttachmentSlot,
+  attachmentId: string | null,
+) {
+  await requirePermission("chart_of_accounts", "edit");
+  const column = ATTACHMENT_COLUMNS[slot];
+  if (!column) return { error: "Invalid attachment slot" };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .schema("accounting")
+    .from("chart_of_accounts")
+    .update({ [column]: attachmentId })
+    .eq("id", accountId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/accounting/chart-of-accounts");
+  return { success: true };
+}
+
+/** Loads a slot's current file (name + short-lived signed URL), or null. */
+export async function getAccountAttachment(accountId: string, slot: AccountAttachmentSlot) {
+  const column = ATTACHMENT_COLUMNS[slot];
+  if (!column) return null;
+
+  const supabase = await createClient();
+  const { data: acct } = await supabase
+    .schema("accounting")
+    .from("chart_of_accounts")
+    .select(column)
+    .eq("id", accountId)
+    .maybeSingle();
+  const attachmentId = (acct as Record<string, string | null> | null)?.[column] ?? null;
+  if (!attachmentId) return null;
+
+  const { data: att } = await supabase
+    .schema("core")
+    .from("attachments")
+    .select("id, file_name, bucket, path")
+    .eq("id", attachmentId)
+    .maybeSingle();
+  if (!att) return null;
+
+  const { data: signed } = await supabase.storage.from(att.bucket).createSignedUrl(att.path, 60 * 60);
+  return { id: att.id, fileName: att.file_name, url: signed?.signedUrl ?? null };
 }
 
 export async function setAccountActive(accountId: string, isActive: boolean) {

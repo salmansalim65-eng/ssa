@@ -72,6 +72,7 @@ export interface AccountRow {
   is_bank: boolean;
   is_tenant_group: boolean;
   id_number: string | null;
+  contact_person: string | null;
   phone: string | null;
   email: string | null;
   country: string | null;
@@ -96,6 +97,7 @@ const emptyValues: AccountInput = {
   isBank: false,
   isTenantGroup: false,
   idNumber: "",
+  contactPerson: "",
   phone: "",
   email: "",
   country: "",
@@ -594,6 +596,7 @@ export function AccountTree({
                       isBank: dialog.account.is_bank,
                       isTenantGroup: dialog.account.is_tenant_group,
                       idNumber: dialog.account.id_number ?? "",
+                      contactPerson: dialog.account.contact_person ?? "",
                       phone: dialog.account.phone ?? "",
                       email: dialog.account.email ?? "",
                       country: dialog.account.country ?? "",
@@ -606,6 +609,7 @@ export function AccountTree({
                     }
               }
               submitLabel={dialog.mode === "edit" ? "Save changes" : "Add account"}
+              accountId={dialog.mode === "edit" ? dialog.account.id : undefined}
               onSubmit={async (values) => {
                 const result =
                   dialog.mode === "edit"

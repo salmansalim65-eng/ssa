@@ -7,6 +7,8 @@ export const pkLeaseSchema = z
     leaseStart: z.string().date("Enter a valid date"),
     leaseEnd: z.string().date("Enter a valid date"),
     monthlyRent: z.coerce.number().positive("Must be greater than zero"),
+    officialRent: z.coerce.number().nonnegative().optional().or(z.literal("")),
+    rentCycle: z.enum(["monthly", "quarterly", "yearly"]),
     advanceRent: z.coerce.number().nonnegative(),
     securityDeposit: z.coerce.number().nonnegative(),
     currencyId: z.string().uuid("Select a currency"),

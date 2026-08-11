@@ -170,6 +170,16 @@ export default async function PkLeaseDetailPage({ params }: { params: Promise<{ 
           </p>
         </div>
         <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Official rent</p>
+          <p className="mt-0.5">
+            {lease.official_rent != null ? `${formatMoney(lease.official_rent)} ${refs.currencies?.code ?? ""}` : "—"}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Rent cycle</p>
+          <p className="mt-0.5 capitalize">{lease.rent_cycle ?? "monthly"}</p>
+        </div>
+        <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Advance rent (remaining)</p>
           <p className="mt-0.5">
             {formatMoney(remainingAdvance)} / {formatMoney(lease.advance_rent)} {refs.currencies?.code}

@@ -87,15 +87,20 @@ export function GeneralLedgerFilters({
   const [min, setMin] = useState(defaultMin);
   const [max, setMax] = useState(defaultMax);
 
-  const filteredAccounts = useMemo(() => {
+  // All accounts matching the current search (drives "Select all"); the visible
+  // list is capped so a long chart of accounts stays responsive.
+  const matchingAccounts = useMemo(() => {
     const q = accountSearch.trim().toLowerCase();
-    const list = q
+    return q
       ? accounts.filter(
           (a) => a.account_name.toLowerCase().includes(q) || a.account_code.toLowerCase().includes(q),
         )
       : accounts;
-    return list.slice(0, 200);
   }, [accounts, accountSearch]);
+
+  const filteredAccounts = useMemo(() => matchingAccounts.slice(0, 200), [matchingAccounts]);
+  const allMatchingSelected =
+    matchingAccounts.length > 0 && matchingAccounts.every((a) => selected.has(a.id));
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -104,6 +109,14 @@ export function GeneralLedgerFilters({
       else next.add(id);
       return next;
     });
+  }
+
+  function selectAllMatching() {
+    setSelected((prev) => new Set([...prev, ...matchingAccounts.map((a) => a.id)]));
+  }
+
+  function clearSelection() {
+    setSelected(new Set());
   }
 
   function apply() {
@@ -158,6 +171,24 @@ export function GeneralLedgerFilters({
             value={accountSearch}
             onChange={(e) => setAccountSearch(e.target.value)}
           />
+          <div className="flex items-center justify-between px-1 text-xs">
+            <button
+              type="button"
+              onClick={selectAllMatching}
+              disabled={matchingAccounts.length === 0 || allMatchingSelected}
+              className="font-medium text-primary hover:underline disabled:cursor-default disabled:text-muted-foreground disabled:no-underline"
+            >
+              Select all{accountSearch.trim() ? ` (${matchingAccounts.length})` : ""}
+            </button>
+            <button
+              type="button"
+              onClick={clearSelection}
+              disabled={selected.size === 0}
+              className="font-medium text-primary hover:underline disabled:cursor-default disabled:text-muted-foreground disabled:no-underline"
+            >
+              Clear
+            </button>
+          </div>
           <div className="max-h-48 overflow-y-auto rounded-md border p-1">
             {filteredAccounts.map((a) => (
               <label

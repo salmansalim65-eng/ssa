@@ -32,15 +32,16 @@ function yearStart() {
   return `${new Date().getFullYear()}-01-01`;
 }
 
-// The four summary cards. Each keys off a country: ledger balances use the ISO
-// cost-centre country ('AE' / 'PK'); rental income uses its label ('UAE' / 'PK').
+// Each country card shows figures in that country's own currency.
 const BALANCE_PANELS = {
-  "balances-uae": { kind: "balances", ccCountry: "AE", label: "UAE" },
-  "balances-pk": { kind: "balances", ccCountry: "PK", label: "Pakistan" },
-  "rent-uae": { kind: "rent", rentCountry: "UAE", label: "UAE" },
-  "rent-pk": { kind: "rent", rentCountry: "PK", label: "Pakistan" },
+  "balances-uae": { kind: "balances", ccCountry: "AE", rentCountry: "UAE", currency: "AED", label: "UAE" },
+  "balances-pk": { kind: "balances", ccCountry: "PK", rentCountry: "PK", currency: "PKR", label: "Pakistan" },
+  "rent-uae": { kind: "rent", ccCountry: "AE", rentCountry: "UAE", currency: "AED", label: "UAE" },
+  "rent-pk": { kind: "rent", ccCountry: "PK", rentCountry: "PK", currency: "PKR", label: "Pakistan" },
 } as const;
 type PanelKey = keyof typeof BALANCE_PANELS;
+
+const money = (symbol: string, n: number) => (symbol ? `${symbol} ${formatMoney(n)}` : formatMoney(n));
 
 export default async function DashboardPage({
   searchParams,
@@ -58,12 +59,13 @@ export default async function DashboardPage({
     { data: yearlyInvoices },
     { count: pendingApprovals },
     { data: baseCurrency },
+    { data: currencies },
     { data: recentVouchers },
   ] = await Promise.all([
     supabase
       .schema("reporting")
       .from("v_ledger_entries")
-      .select("cost_center_country, debit_amount, credit_amount")
+      .select("cost_center_country, doc_debit_amount, doc_credit_amount")
       .eq("company_id", companyId)
       .in("cost_center_country", ["AE", "PK"]),
     supabase
@@ -75,14 +77,14 @@ export default async function DashboardPage({
     supabase
       .schema("reporting")
       .from("v_rental_income")
-      .select("amount")
+      .select("amount, exchange_rate")
       .eq("company_id", companyId)
       .gte("invoice_date", monthStart())
       .lte("invoice_date", today()),
     supabase
       .schema("reporting")
       .from("v_rental_income")
-      .select("amount")
+      .select("amount, exchange_rate")
       .eq("company_id", companyId)
       .gte("invoice_date", yearStart())
       .lte("invoice_date", today()),
@@ -99,6 +101,7 @@ export default async function DashboardPage({
       .eq("company_id", companyId)
       .eq("is_base_currency", true)
       .maybeSingle(),
+    supabase.schema("core").from("currencies").select("code, symbol"),
     supabase
       .schema("accounting")
       .from("v_voucher_register")
@@ -108,12 +111,12 @@ export default async function DashboardPage({
       .limit(8),
   ]);
 
+  const symbolByCode = new Map((currencies ?? []).map((c) => [c.code as string, c.symbol as string]));
+  const sym = (code: string) => symbolByCode.get(code) ?? code;
   const baseSymbol =
     (baseCurrency as unknown as { currencies: { symbol: string } | null } | null)?.currencies?.symbol ?? "";
-  const money = (n: number) => (baseSymbol ? `${baseSymbol} ${formatMoney(n)}` : formatMoney(n));
-  const drCr = (net: number) => `${money(Math.abs(net))} ${net >= 0 ? "Dr" : "Cr"}`;
 
-  // Ledger balances (base currency) per country.
+  // Ledger balances in each country's own currency (document amounts).
   const balByCountry: Record<string, { debit: number; credit: number }> = {
     AE: { debit: 0, credit: 0 },
     PK: { debit: 0, credit: 0 },
@@ -121,103 +124,108 @@ export default async function DashboardPage({
   for (const r of ledgerRows ?? []) {
     const b = balByCountry[r.cost_center_country as string];
     if (!b) continue;
-    b.debit += Number(r.debit_amount);
-    b.credit += Number(r.credit_amount);
+    b.debit += Number(r.doc_debit_amount);
+    b.credit += Number(r.doc_credit_amount);
   }
 
-  // Rent balances (converted to base at each invoice's booking rate) per country.
+  // Rent figures in each country's own currency (document amounts), plus a
+  // base-currency running total for the cross-country KPI below.
   const rentByCountry: Record<string, { billed: number; outstanding: number; overdue: number; due: number }> = {
     UAE: { billed: 0, outstanding: 0, overdue: 0, due: 0 },
     PK: { billed: 0, outstanding: 0, overdue: 0, due: 0 },
   };
+  let outstandingBase = 0;
   const now = today();
   for (const r of rentRows ?? []) {
     const g = rentByCountry[r.country as string];
     if (!g) continue;
-    const rate = Number(r.exchange_rate) || 1;
-    const billed = Number(r.amount) * rate;
-    const outstanding = Number(r.outstanding_balance) * rate;
-    g.billed += billed;
+    const amount = Number(r.amount);
+    const outstanding = Number(r.outstanding_balance);
+    g.billed += amount;
     g.outstanding += outstanding;
     if (r.due_date < now) g.overdue += outstanding;
     else g.due += outstanding;
+    outstandingBase += outstanding * (Number(r.exchange_rate) || 1);
   }
   const rentReceipts = (c: string) => rentByCountry[c].billed - rentByCountry[c].outstanding;
 
-  const monthlyRentalIncome = (monthlyInvoices ?? []).reduce((s, r) => s + r.amount, 0);
-  const yearlyRentalIncome = (yearlyInvoices ?? []).reduce((s, r) => s + r.amount, 0);
-  const totalOutstandingRent =
-    rentByCountry.UAE.outstanding + rentByCountry.PK.outstanding;
+  // Cross-country KPIs stay in base currency (they sum multiple currencies).
+  const toBase = (rows: { amount: number; exchange_rate: number }[] | null) =>
+    (rows ?? []).reduce((s, r) => s + Number(r.amount) * (Number(r.exchange_rate) || 1), 0);
+  const monthlyRentalIncome = toBase(monthlyInvoices);
+  const yearlyRentalIncome = toBase(yearlyInvoices);
 
   const selected = (panel in BALANCE_PANELS ? panel : "") as PanelKey | "";
-  const detail = selected ? await loadDetail(companyId, selected, baseSymbol) : null;
+  const detail = selected ? await loadDetail(companyId, selected, sym(BALANCE_PANELS[selected].currency)) : null;
 
   function cardHref(key: PanelKey) {
     return selected === key ? "/dashboard" : `/dashboard?panel=${key}`;
   }
+
+  const aed = sym("AED");
+  const pkr = sym("PKR");
+  const drCr = (symbol: string, net: number) => `${money(symbol, Math.abs(net))} ${net >= 0 ? "Dr" : "Cr"}`;
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Overview"
         title="Dashboard"
-        description="Balances and rent position by country. Click a card to open its detail below."
+        description="Balances and rent position by country, each in its own currency. Click a card to open its detail below."
       />
 
-      {/* Four country balance cards — click to open the detail report below. */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard title="Balances UAE" href={cardHref("balances-uae")} active={selected === "balances-uae"}>
           <div className="flex justify-between gap-2">
-            <StatCol value={money(balByCountry.AE.debit)} label="Debit" />
-            <StatCol value={money(balByCountry.AE.credit)} label="Credit" align="right" />
+            <StatCol value={money(aed, balByCountry.AE.debit)} label="Debit" />
+            <StatCol value={money(aed, balByCountry.AE.credit)} label="Credit" align="right" />
           </div>
           <div className="border-t pt-2 text-center text-lg font-bold tabular-nums">
-            {drCr(balByCountry.AE.debit - balByCountry.AE.credit)}
+            {drCr(aed, balByCountry.AE.debit - balByCountry.AE.credit)}
           </div>
         </SummaryCard>
 
         <SummaryCard title="Balances PK" href={cardHref("balances-pk")} active={selected === "balances-pk"}>
           <div className="flex justify-between gap-2">
-            <StatCol value={money(balByCountry.PK.debit)} label="Debit" />
-            <StatCol value={money(balByCountry.PK.credit)} label="Credit" align="right" />
+            <StatCol value={money(pkr, balByCountry.PK.debit)} label="Debit" />
+            <StatCol value={money(pkr, balByCountry.PK.credit)} label="Credit" align="right" />
           </div>
           <div className="border-t pt-2 text-center text-lg font-bold tabular-nums">
-            {drCr(balByCountry.PK.debit - balByCountry.PK.credit)}
+            {drCr(pkr, balByCountry.PK.debit - balByCountry.PK.credit)}
           </div>
         </SummaryCard>
 
         <SummaryCard title="Rent Balance UAE" href={cardHref("rent-uae")} active={selected === "rent-uae"}>
           <div className="grid grid-cols-3 gap-2">
-            <StatCol value={money(rentByCountry.UAE.overdue)} label="Overdue" />
-            <StatCol value={money(rentByCountry.UAE.due)} label="Due" align="center" />
-            <StatCol value={money(rentByCountry.UAE.billed)} label="Total" align="right" />
+            <StatCol value={money(aed, rentByCountry.UAE.overdue)} label="Overdue" />
+            <StatCol value={money(aed, rentByCountry.UAE.due)} label="Due" align="center" />
+            <StatCol value={money(aed, rentByCountry.UAE.billed)} label="Total" align="right" />
           </div>
           <div className="flex items-center justify-between border-t pt-2">
-            <StatCol value={money(rentReceipts("UAE"))} label="Receipts" />
+            <StatCol value={money(aed, rentReceipts("UAE"))} label="Receipts" />
             <div className="text-right text-base font-bold tabular-nums">
-              Balance: {money(rentByCountry.UAE.outstanding)}
+              Balance: {money(aed, rentByCountry.UAE.outstanding)}
             </div>
           </div>
         </SummaryCard>
 
         <SummaryCard title="Rent Balance PK" href={cardHref("rent-pk")} active={selected === "rent-pk"}>
           <div className="grid grid-cols-3 gap-2">
-            <StatCol value={money(rentByCountry.PK.overdue)} label="Overdue" />
-            <StatCol value={money(rentByCountry.PK.due)} label="Due" align="center" />
-            <StatCol value={money(rentByCountry.PK.billed)} label="Total" align="right" />
+            <StatCol value={money(pkr, rentByCountry.PK.overdue)} label="Overdue" />
+            <StatCol value={money(pkr, rentByCountry.PK.due)} label="Due" align="center" />
+            <StatCol value={money(pkr, rentByCountry.PK.billed)} label="Total" align="right" />
           </div>
           <div className="flex items-center justify-between border-t pt-2">
-            <StatCol value={money(rentReceipts("PK"))} label="Receipts" />
+            <StatCol value={money(pkr, rentReceipts("PK"))} label="Receipts" />
             <div className="text-right text-base font-bold tabular-nums">
-              Balance: {money(rentByCountry.PK.outstanding)}
+              Balance: {money(pkr, rentByCountry.PK.outstanding)}
             </div>
           </div>
         </SummaryCard>
       </div>
 
-      {/* Detail report for the selected card. */}
       {detail && (
-        <Card className="border-ledger-dark/40">
+        <Card className="border-ledger/40">
           <CardHeader className="border-b pb-4">
             <CardTitle>{detail.title}</CardTitle>
             <CardAction>
@@ -230,25 +238,24 @@ export default async function DashboardPage({
         </Card>
       )}
 
-      {/* Secondary KPIs. */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
           label="Rental income (month)"
-          value={money(monthlyRentalIncome)}
+          value={money(baseSymbol, monthlyRentalIncome)}
           icon={TrendingUpIcon}
           href="/reports/rental-income"
         />
         <KpiCard
           label="Rental income (year)"
-          value={money(yearlyRentalIncome)}
+          value={money(baseSymbol, yearlyRentalIncome)}
           icon={TrendingUpIcon}
           href="/reports/rental-income"
         />
         <KpiCard
           label="Outstanding rent"
-          value={money(totalOutstandingRent)}
+          value={money(baseSymbol, outstandingBase)}
           icon={WalletIcon}
-          tone={totalOutstandingRent > 0 ? "warning" : undefined}
+          tone={outstandingBase > 0 ? "warning" : undefined}
           href="/reports/outstanding-rent"
         />
         <KpiCard
@@ -315,18 +322,17 @@ export default async function DashboardPage({
   );
 }
 
-// Detail report for a selected card: a per-account trial balance (balances
-// cards) or the outstanding rent list (rent cards), both scoped to the country.
-async function loadDetail(companyId: string, key: PanelKey, baseSymbol: string) {
+// Detail report for a selected card — figures in the country's own currency.
+async function loadDetail(companyId: string, key: PanelKey, symbol: string) {
   const supabase = await createClient();
   const cfg = BALANCE_PANELS[key];
-  const money = (n: number) => (baseSymbol ? `${baseSymbol} ${formatMoney(n)}` : formatMoney(n));
+  const fmt = (n: number) => money(symbol, n);
 
   if (cfg.kind === "balances") {
     const { data } = await supabase
       .schema("reporting")
       .from("v_ledger_entries")
-      .select("account_code, account_name, debit_amount, credit_amount")
+      .select("account_code, account_name, doc_debit_amount, doc_credit_amount")
       .eq("company_id", companyId)
       .eq("cost_center_country", cfg.ccCountry);
 
@@ -334,8 +340,8 @@ async function loadDetail(companyId: string, key: PanelKey, baseSymbol: string) 
     for (const r of data ?? []) {
       const k = r.account_code as string;
       const a = byAccount.get(k) ?? { name: r.account_name as string, debit: 0, credit: 0 };
-      a.debit += Number(r.debit_amount);
-      a.credit += Number(r.credit_amount);
+      a.debit += Number(r.doc_debit_amount);
+      a.credit += Number(r.doc_credit_amount);
       byAccount.set(k, a);
     }
     const rows = [...byAccount.entries()].sort((a, b) => a[0].localeCompare(b[0]));
@@ -362,10 +368,10 @@ async function loadDetail(companyId: string, key: PanelKey, baseSymbol: string) 
                   <TableCell>
                     <span className="font-mono text-xs text-muted-foreground">{code}</span> {a.name}
                   </TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{money(a.debit)}</TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{money(a.credit)}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">{fmt(a.debit)}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">{fmt(a.credit)}</TableCell>
                   <TableCell className="text-right font-mono tabular-nums">
-                    {money(Math.abs(net))} {net >= 0 ? "Dr" : "Cr"}
+                    {fmt(Math.abs(net))} {net >= 0 ? "Dr" : "Cr"}
                   </TableCell>
                 </TableRow>
               );
@@ -382,10 +388,10 @@ async function loadDetail(companyId: string, key: PanelKey, baseSymbol: string) 
             <tfoot className="border-t bg-muted/40">
               <TableRow className="hover:bg-transparent">
                 <TableCell className="font-medium">Total</TableCell>
-                <TableCell className="text-right font-mono font-semibold tabular-nums">{money(totalDebit)}</TableCell>
-                <TableCell className="text-right font-mono font-semibold tabular-nums">{money(totalCredit)}</TableCell>
+                <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totalDebit)}</TableCell>
+                <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totalCredit)}</TableCell>
                 <TableCell className="text-right font-mono font-semibold tabular-nums">
-                  {money(Math.abs(totalDebit - totalCredit))} {totalDebit - totalCredit >= 0 ? "Dr" : "Cr"}
+                  {fmt(Math.abs(totalDebit - totalCredit))} {totalDebit - totalCredit >= 0 ? "Dr" : "Cr"}
                 </TableCell>
               </TableRow>
             </tfoot>
@@ -395,18 +401,18 @@ async function loadDetail(companyId: string, key: PanelKey, baseSymbol: string) 
     };
   }
 
-  // Rent detail — outstanding invoices for the country, converted to base.
+  // Rent detail — outstanding invoices for the country, in the country currency.
   const { data } = await supabase
     .schema("reporting")
     .from("v_rental_income")
-    .select("invoice_id, voucher_no, due_date, tenant_name, asset_code, asset_name, amount, outstanding_balance, exchange_rate")
+    .select("invoice_id, voucher_no, due_date, tenant_name, asset_code, asset_name, outstanding_balance")
     .eq("company_id", companyId)
     .eq("country", cfg.rentCountry)
     .gt("outstanding_balance", 0)
     .order("due_date");
 
   const rows = data ?? [];
-  const totalOutstanding = rows.reduce((s, r) => s + Number(r.outstanding_balance) * (Number(r.exchange_rate) || 1), 0);
+  const totalOutstanding = rows.reduce((s, r) => s + Number(r.outstanding_balance), 0);
   const nowDate = today();
 
   return {
@@ -433,9 +439,7 @@ async function loadDetail(companyId: string, key: PanelKey, baseSymbol: string) 
               <TableCell>
                 <span className="font-mono text-xs text-muted-foreground">{r.asset_code}</span> {r.asset_name}
               </TableCell>
-              <TableCell className="text-right font-mono tabular-nums">
-                {money(Number(r.outstanding_balance) * (Number(r.exchange_rate) || 1))}
-              </TableCell>
+              <TableCell className="text-right font-mono tabular-nums">{fmt(Number(r.outstanding_balance))}</TableCell>
             </TableRow>
           ))}
           {rows.length === 0 && (
@@ -452,7 +456,7 @@ async function loadDetail(companyId: string, key: PanelKey, baseSymbol: string) 
               <TableCell colSpan={4} className="font-medium">
                 Total outstanding
               </TableCell>
-              <TableCell className="text-right font-mono font-semibold tabular-nums">{money(totalOutstanding)}</TableCell>
+              <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totalOutstanding)}</TableCell>
             </TableRow>
           </tfoot>
         )}

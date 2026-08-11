@@ -2,6 +2,11 @@
 
 import { useMemo, useState, useTransition, type ReactNode } from "react";
 import {
+  ArrowDownIcon,
+  ArrowDownToLineIcon,
+  ArrowDownUpIcon,
+  ArrowUpIcon,
+  ArrowUpToLineIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   ChevronsDownUpIcon,
@@ -51,6 +56,7 @@ import { blankAmount } from "@/lib/forms/amount";
 import {
   createAccount,
   deleteAccount,
+  moveAccount,
   setAccountActive,
   updateAccount,
 } from "@/features/accounting/chart-of-accounts/actions";
@@ -71,12 +77,25 @@ export interface AccountRow {
   is_cash: boolean;
   is_bank: boolean;
   is_tenant_group: boolean;
+  sort_order: number;
+  balance: number;
   id_number: string | null;
   contact_person: string | null;
   phone: string | null;
   email: string | null;
   country: string | null;
 }
+
+type SortMode = "manual" | "name_asc" | "name_desc" | "code" | "balance_desc" | "balance_asc";
+
+const SORT_LABELS: Record<SortMode, string> = {
+  manual: "Manual order",
+  name_asc: "Name A–Z",
+  name_desc: "Name Z–A",
+  code: "Account code",
+  balance_desc: "Balance high→low",
+  balance_asc: "Balance low→high",
+};
 
 type DialogState =
   | { mode: "create"; parentId: string | null }
@@ -157,6 +176,7 @@ export function AccountTree({
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [levelFilter, setLevelFilter] = useState<LevelFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [sortMode, setSortMode] = useState<SortMode>("manual");
 
   const filtersActive =
     query.trim() !== "" || typeFilter !== "all" || levelFilter !== "all" || statusFilter !== "all";
@@ -172,7 +192,9 @@ export function AccountTree({
     };
   }, [accounts]);
 
-  const { childrenByParent, parentById } = useMemo(() => {
+  // Group by parent, and roll each group's balance up from its descendants
+  // (leaf balances come from the ledger; groups don't post directly).
+  const { childrenByParent, parentById, rolledBalance } = useMemo(() => {
     const childrenByParent = new Map<string, AccountRow[]>();
     const parentById = new Map<string, string | null>();
     for (const a of accounts) {
@@ -181,10 +203,40 @@ export function AccountTree({
       childrenByParent.get(key)!.push(a);
       parentById.set(a.id, a.parent_id);
     }
-    for (const list of childrenByParent.values())
-      list.sort((a, b) => a.account_code.localeCompare(b.account_code));
-    return { childrenByParent, parentById };
+    const rolledBalance = new Map<string, number>();
+    const roll = (id: string, own: number): number => {
+      const kids = childrenByParent.get(id) ?? [];
+      const total = kids.reduce((s, k) => s + roll(k.id, k.balance), own);
+      rolledBalance.set(id, total);
+      return total;
+    };
+    for (const a of accounts) if (!rolledBalance.has(a.id)) roll(a.id, a.balance);
+    return { childrenByParent, parentById, rolledBalance };
   }, [accounts]);
+
+  // Sibling ordering for the chosen sort mode. "Manual" honors sort_order (with
+  // account_code as a stable tiebreaker); the others are view-only.
+  const orderedChildren = useMemo(() => {
+    const compare = (a: AccountRow, b: AccountRow): number => {
+      switch (sortMode) {
+        case "name_asc":
+          return a.account_name.localeCompare(b.account_name);
+        case "name_desc":
+          return b.account_name.localeCompare(a.account_name);
+        case "code":
+          return a.account_code.localeCompare(b.account_code);
+        case "balance_desc":
+          return Math.abs(rolledBalance.get(b.id) ?? 0) - Math.abs(rolledBalance.get(a.id) ?? 0);
+        case "balance_asc":
+          return Math.abs(rolledBalance.get(a.id) ?? 0) - Math.abs(rolledBalance.get(b.id) ?? 0);
+        default:
+          return a.sort_order - b.sort_order || a.account_code.localeCompare(b.account_code);
+      }
+    };
+    const ordered = new Map<string, AccountRow[]>();
+    for (const [key, list] of childrenByParent) ordered.set(key, list.slice().sort(compare));
+    return ordered;
+  }, [childrenByParent, rolledBalance, sortMode]);
 
   // Accounts passing the active filters, plus their ancestors so the branch
   // stays readable. When filtering, every ancestor is force-expanded.
@@ -254,28 +306,34 @@ export function AccountTree({
     });
   }
 
-  function renderRows(parentKey: string, depth: number): ReactNode[] {
-    const rows = childrenByParent.get(parentKey) ?? [];
-    return rows.flatMap((account) => {
-      if (visibleIds && !visibleIds.has(account.id)) return [];
+  const canReorder = canEdit && sortMode === "manual" && !filtersActive;
 
-      const children = childrenByParent.get(account.id) ?? [];
+  function renderRows(parentKey: string, depth: number): ReactNode[] {
+    const siblings = orderedChildren.get(parentKey) ?? [];
+    const visibleRows = visibleIds ? siblings.filter((a) => visibleIds.has(a.id)) : siblings;
+    return visibleRows.flatMap((account, siblingIndex) => {
+      const children = orderedChildren.get(account.id) ?? [];
       const visibleChildren = visibleIds
         ? children.filter((c) => visibleIds.has(c.id))
         : children;
       const hasChildren = visibleChildren.length > 0;
       const isExpanded = filtersActive ? true : expanded.has(account.id);
       const isGroup = account.is_group;
+      const isFirstSibling = siblingIndex === 0;
+      const isLastSibling = siblingIndex === visibleRows.length - 1;
 
       const row = (
         <TableRow
           key={account.id}
           className={cn(
             "group",
-            // Group rows carry a soft logo-blue tint so the hierarchy reads at
-            // a glance; posting rows stay on the plain white card surface.
+            // Group rows carry a logo-blue tint that is stronger at the top of
+            // the tree and lighter deeper down, so the levels read at a glance;
+            // posting rows stay on the plain card surface.
             isGroup
-              ? "bg-group/[0.10] hover:bg-group/[0.14]"
+              ? depth === 0
+                ? "bg-group/[0.16] hover:bg-group/[0.20]"
+                : "bg-group/[0.07] hover:bg-group/[0.11]"
               : "hover:bg-muted/30",
             !account.is_active && "opacity-70",
           )}
@@ -327,7 +385,16 @@ export function AccountTree({
           {/* Account name */}
           <td className="p-3 align-middle">
             <div className="flex items-center gap-2">
-              <span className={cn("truncate", isGroup ? "font-bold text-group" : "font-medium")}>
+              <span
+                className={cn(
+                  "truncate",
+                  isGroup
+                    ? depth === 0
+                      ? "font-bold uppercase tracking-wide text-group"
+                      : "font-semibold text-group"
+                    : "font-medium",
+                )}
+              >
                 {account.account_name}
               </span>
               {isGroup && (
@@ -368,13 +435,11 @@ export function AccountTree({
             <StatusBadge active={account.is_active} />
           </td>
 
-          {/* Opening balance */}
+          {/* Current balance (rolled up from descendants for group rows) */}
           <td className="p-3 text-right align-middle font-mono text-sm tabular-nums">
-            {isGroup ? (
-              <span className="text-muted-foreground/50">—</span>
-            ) : (
-              formatMoney(account.opening_balance)
-            )}
+            <span className={cn(isGroup && "font-semibold text-group")}>
+              {formatMoney(rolledBalance.get(account.id) ?? 0)}
+            </span>
           </td>
 
           {/* Actions */}
@@ -397,6 +462,35 @@ export function AccountTree({
                     <DropdownMenuItem onSelect={() => setDialog({ mode: "create", parentId: account.id })}>
                       <PlusIcon className="size-4" /> Add child account
                     </DropdownMenuItem>
+                  )}
+                  {canReorder && (
+                    <>
+                      <DropdownMenuItem
+                        disabled={isFirstSibling}
+                        onSelect={() => run(() => moveAccount(account.id, "up"), "Order updated")}
+                      >
+                        <ArrowUpIcon className="size-4" /> Move up
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={isLastSibling}
+                        onSelect={() => run(() => moveAccount(account.id, "down"), "Order updated")}
+                      >
+                        <ArrowDownIcon className="size-4" /> Move down
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={isFirstSibling}
+                        onSelect={() => run(() => moveAccount(account.id, "top"), "Order updated")}
+                      >
+                        <ArrowUpToLineIcon className="size-4" /> Move to top
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={isLastSibling}
+                        onSelect={() => run(() => moveAccount(account.id, "bottom"), "Order updated")}
+                      >
+                        <ArrowDownToLineIcon className="size-4" /> Move to bottom
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
                   )}
                   {canEdit && (
                     <DropdownMenuItem onSelect={() => setDialog({ mode: "edit", account })}>
@@ -514,6 +608,19 @@ export function AccountTree({
                 Clear
               </Button>
             )}
+            <Select value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
+              <SelectTrigger className="w-[11.5rem]" aria-label="Sort accounts">
+                <ArrowDownUpIcon className="size-4 opacity-70" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(SORT_LABELS) as SortMode[]).map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {SORT_LABELS[m]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <div className="ml-1 hidden items-center gap-1 sm:flex">
               <Button variant="outline" size="sm" onClick={expandAll} disabled={filtersActive}>
                 <ChevronsUpDownIcon /> Expand all
@@ -558,7 +665,7 @@ export function AccountTree({
                 <TableHead className="w-28">Type</TableHead>
                 <TableHead className="w-24">Currency</TableHead>
                 <TableHead className="w-28">Status</TableHead>
-                <TableHead className="w-40 text-right">Opening Balance</TableHead>
+                <TableHead className="w-40 text-right">Balance</TableHead>
                 <TableHead className="w-12" />
               </TableRow>
             </TableHeader>

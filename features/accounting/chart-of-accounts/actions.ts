@@ -197,6 +197,69 @@ export async function setAccountActive(accountId: string, isActive: boolean) {
   return { success: true };
 }
 
+// Reorders an account among its siblings (accounts with the same parent). Only
+// the sort_order of the affected siblings changes — never the parent,
+// account_code or accounting history — so the move is inherently
+// hierarchy-safe. `direction` slides the account within its sibling list.
+export async function moveAccount(accountId: string, direction: "up" | "down" | "top" | "bottom") {
+  await requirePermission("chart_of_accounts", "edit");
+  const companyId = await getCurrentCompanyId();
+  const supabase = await createClient();
+
+  const { data: account } = await supabase
+    .schema("accounting")
+    .from("chart_of_accounts")
+    .select("id, parent_id")
+    .eq("company_id", companyId)
+    .eq("id", accountId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (!account) return { error: "Account not found" };
+
+  let siblingQuery = supabase
+    .schema("accounting")
+    .from("chart_of_accounts")
+    .select("id, sort_order, account_code")
+    .eq("company_id", companyId)
+    .is("deleted_at", null);
+  siblingQuery = account.parent_id
+    ? siblingQuery.eq("parent_id", account.parent_id)
+    : siblingQuery.is("parent_id", null);
+  const { data: siblings } = await siblingQuery;
+
+  const ordered = (siblings ?? [])
+    .slice()
+    .sort((a, b) => a.sort_order - b.sort_order || a.account_code.localeCompare(b.account_code));
+  const from = ordered.findIndex((s) => s.id === accountId);
+  if (from === -1) return { error: "Account not found" };
+
+  let to = from;
+  if (direction === "up") to = Math.max(0, from - 1);
+  else if (direction === "down") to = Math.min(ordered.length - 1, from + 1);
+  else if (direction === "top") to = 0;
+  else if (direction === "bottom") to = ordered.length - 1;
+  if (to === from) return { success: true };
+
+  const [moved] = ordered.splice(from, 1);
+  ordered.splice(to, 0, moved);
+
+  // Renumber to a contiguous 0..n sequence, persisting only the rows that moved.
+  const byId = new Map((siblings ?? []).map((s) => [s.id, s.sort_order]));
+  for (let index = 0; index < ordered.length; index++) {
+    const row = ordered[index];
+    if (byId.get(row.id) === index) continue;
+    const { error } = await supabase
+      .schema("accounting")
+      .from("chart_of_accounts")
+      .update({ sort_order: index })
+      .eq("id", row.id);
+    if (error) return { error: error.message };
+  }
+
+  revalidatePath("/accounting/chart-of-accounts");
+  return { success: true };
+}
+
 export async function deleteAccount(accountId: string) {
   await requirePermission("chart_of_accounts", "delete");
 

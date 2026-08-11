@@ -10,12 +10,12 @@ export default async function ChartOfAccountsPage() {
 
   const companyId = await getCurrentCompanyId();
 
-  const [{ data: accounts }, { data: companyCurrencies }, canCreate, canEdit, canDelete] =
+  const [{ data: accounts }, { data: companyCurrencies }, { data: ledger }, canCreate, canEdit, canDelete] =
     await Promise.all([
       supabase
         .schema("accounting")
         .from("chart_of_accounts")
-        .select("id, account_code, account_name, parent_id, account_type, currency_id, opening_balance, is_group, is_active, is_cash, is_bank, is_tenant_group, id_number, contact_person, phone, email, country")
+        .select("id, account_code, account_name, parent_id, account_type, currency_id, opening_balance, is_group, is_active, is_cash, is_bank, is_tenant_group, sort_order, id_number, contact_person, phone, email, country")
         .eq("company_id", companyId)
         .is("deleted_at", null),
       supabase
@@ -24,10 +24,24 @@ export default async function ChartOfAccountsPage() {
         .select("is_base_currency, currencies:currency_id(id, code)")
         .eq("company_id", companyId)
         .eq("is_active", true),
+      supabase
+        .schema("reporting")
+        .from("v_ledger_entries")
+        .select("account_id, debit_amount, credit_amount")
+        .eq("company_id", companyId),
       hasPermission("chart_of_accounts", "create"),
       hasPermission("chart_of_accounts", "edit"),
       hasPermission("chart_of_accounts", "delete"),
     ]);
+
+  // Current balance per posting account, net in the base currency. Group rows
+  // roll these up on the client from their descendants.
+  const balanceById = new Map<string, number>();
+  for (const l of ledger ?? []) {
+    const k = l.account_id as string;
+    if (!k) continue;
+    balanceById.set(k, (balanceById.get(k) ?? 0) + Number(l.debit_amount) - Number(l.credit_amount));
+  }
 
   type RawAccount = {
     id: string;
@@ -42,6 +56,7 @@ export default async function ChartOfAccountsPage() {
     is_cash: boolean;
     is_bank: boolean;
     is_tenant_group: boolean;
+    sort_order: number;
     id_number: string | null;
     contact_person: string | null;
     phone: string | null;
@@ -72,6 +87,8 @@ export default async function ChartOfAccountsPage() {
     is_cash: a.is_cash,
     is_bank: a.is_bank,
     is_tenant_group: a.is_tenant_group,
+    sort_order: a.sort_order,
+    balance: balanceById.get(a.id) ?? 0,
     id_number: a.id_number,
     contact_person: a.contact_person,
     phone: a.phone,

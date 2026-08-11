@@ -69,7 +69,7 @@ export async function generatePkRentInvoice(scheduleId: string, input: GenerateP
   const { data: lease, error: leaseError } = await supabase
     .schema("rental")
     .from("pk_leases")
-    .select("currency_id, asset_id, tenant_id")
+    .select("currency_id, asset_id, tenant_id, voucher_date")
     .eq("id", schedule.lease_id)
     .single();
   if (leaseError || !lease) return { error: "Lease not found" };
@@ -107,6 +107,9 @@ export async function generatePkRentInvoice(scheduleId: string, input: GenerateP
 
   const invoiceId = crypto.randomUUID();
   const today = new Date().toISOString().slice(0, 10);
+  // The invoice is dated by the lease's voucher date (mandatory on new leases);
+  // legacy leases without one fall back to today.
+  const invoiceDate = (lease.voucher_date as string | null) ?? today;
   const netReceivable = schedule.amount + utilityTotal - advanceAdjusted;
 
   // The tenant's own account is the receivable target; fall back to the shared
@@ -129,7 +132,7 @@ export async function generatePkRentInvoice(scheduleId: string, input: GenerateP
     companyId,
     voucherType: "pk_rent_invoice",
     voucherId: invoiceId,
-    entryDate: today,
+    entryDate: invoiceDate,
     currencyId: lease.currency_id,
     narration: "Pakistan rent invoice",
     createdBy,
@@ -143,7 +146,7 @@ export async function generatePkRentInvoice(scheduleId: string, input: GenerateP
     journal_entry_id: je.journalEntryId,
     lease_id: schedule.lease_id,
     schedule_id: schedule.id,
-    invoice_date: today,
+    invoice_date: invoiceDate,
     due_date: schedule.due_date,
     rent_amount: schedule.amount,
     utility_charges: utilityTotal,

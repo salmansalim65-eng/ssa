@@ -51,6 +51,7 @@ describe("uaeLeaseSchema", () => {
     rentCycle: "monthly" as const,
     securityDeposit: 10000,
     currencyId: UUID_C,
+    voucherDate: "2026-01-01",
   };
 
   it("accepts a valid lease", () => {
@@ -65,6 +66,10 @@ describe("uaeLeaseSchema", () => {
   it("rejects an invalid rent cycle", () => {
     expect(uaeLeaseSchema.safeParse({ ...valid, rentCycle: "weekly" }).success).toBe(false);
   });
+
+  it("requires a voucher date", () => {
+    expect(uaeLeaseSchema.safeParse({ ...valid, voucherDate: "" }).success).toBe(false);
+  });
 });
 
 describe("pkLeaseSchema", () => {
@@ -78,6 +83,7 @@ describe("pkLeaseSchema", () => {
     advanceRent: 100000,
     securityDeposit: 50000,
     currencyId: UUID_C,
+    voucherDate: "2026-01-01",
   };
 
   it("accepts a valid lease", () => {
@@ -90,6 +96,10 @@ describe("pkLeaseSchema", () => {
 
   it("rejects negative advance rent", () => {
     expect(pkLeaseSchema.safeParse({ ...valid, advanceRent: -1 }).success).toBe(false);
+  });
+
+  it("requires a voucher date", () => {
+    expect(pkLeaseSchema.safeParse({ ...valid, voucherDate: "" }).success).toBe(false);
   });
 });
 

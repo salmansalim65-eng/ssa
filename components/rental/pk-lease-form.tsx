@@ -81,7 +81,7 @@ export function PkLeaseForm({
       securityDeposit: blankAmount,
       currencyId: defaultCurrencyId ?? currencies[0]?.id ?? "",
       dueDate: "",
-      voucherDate: "",
+      voucherDate: today(),
     },
   });
 
@@ -286,7 +286,7 @@ export function PkLeaseForm({
           name="voucherDate"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Voucher date (optional)</FormLabel>
+              <FormLabel>Voucher date</FormLabel>
               <FormControl>
                 <Input type="date" {...field} value={(field.value as string) ?? ""} />
               </FormControl>

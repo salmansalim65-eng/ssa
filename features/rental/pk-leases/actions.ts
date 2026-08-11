@@ -142,7 +142,7 @@ export async function copyPkLease(id: string) {
     securityDeposit: src.security_deposit,
     currencyId: src.currency_id,
     dueDate: src.due_date ?? "",
-    voucherDate: src.voucher_date ?? "",
+    voucherDate: src.voucher_date ?? new Date().toISOString().slice(0, 10),
   });
 }
 

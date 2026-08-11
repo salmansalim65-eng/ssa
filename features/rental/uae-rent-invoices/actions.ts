@@ -73,7 +73,7 @@ export async function generateUaeRentInvoice(scheduleId: string) {
   const { data: lease, error: leaseError } = await supabase
     .schema("rental")
     .from("uae_leases")
-    .select("currency_id, rent_cycle, lease_type, asset_id, tenant_id")
+    .select("currency_id, rent_cycle, lease_type, asset_id, tenant_id, voucher_date")
     .eq("id", schedule.lease_id)
     .single();
   if (leaseError || !lease) return { error: "Lease not found" };
@@ -100,13 +100,16 @@ export async function generateUaeRentInvoice(scheduleId: string) {
 
   const invoiceId = crypto.randomUUID();
   const today = new Date().toISOString().slice(0, 10);
+  // The invoice is dated by the lease's voucher date (mandatory on new leases);
+  // legacy leases without one fall back to today.
+  const invoiceDate = (lease.voucher_date as string | null) ?? today;
   const periodEnd = addPeriod(schedule.due_date, lease.rent_cycle);
 
   const je = await createJournalEntry({
     companyId,
     voucherType: "uae_rent_invoice",
     voucherId: invoiceId,
-    entryDate: today,
+    entryDate: invoiceDate,
     currencyId: lease.currency_id,
     narration: "UAE rent invoice",
     createdBy,
@@ -123,7 +126,7 @@ export async function generateUaeRentInvoice(scheduleId: string) {
     journal_entry_id: je.journalEntryId,
     lease_id: schedule.lease_id,
     schedule_id: schedule.id,
-    invoice_date: today,
+    invoice_date: invoiceDate,
     due_date: schedule.due_date,
     period_start: schedule.due_date,
     period_end: periodEnd,

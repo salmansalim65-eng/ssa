@@ -18,6 +18,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatDate, formatMoney } from "@/lib/format";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { VOUCHER_TYPE_LABELS, voucherHref } from "@/lib/vouchers/meta";
+import { isRentOverdue } from "@/lib/rental/overdue";
 import type { VoucherType } from "@/types/database.types";
 
 function today() {
@@ -162,7 +163,7 @@ export default async function DashboardPage({
     const outstanding = Number(r.outstanding_balance);
     g.billed += amount;
     g.outstanding += outstanding;
-    if (r.due_date < now) g.overdue += outstanding;
+    if (isRentOverdue(r.due_date as string, now)) g.overdue += outstanding;
     else g.due += outstanding;
   }
   const rentReceipts = (c: string) => rentByCountry[c].billed - rentByCountry[c].outstanding;
@@ -533,7 +534,7 @@ async function loadDetail(companyId: string, key: PanelKey, symbol: string) {
           {rows.map((r) => (
             <TableRow key={r.invoice_id}>
               <TableCell>{r.voucher_no ?? "Draft"}</TableCell>
-              <TableCell className={r.due_date < nowDate ? "text-destructive" : "text-muted-foreground"}>
+              <TableCell className={isRentOverdue(r.due_date as string, nowDate) ? "text-destructive" : "text-muted-foreground"}>
                 {formatDate(r.due_date)}
               </TableCell>
               <TableCell>{r.tenant_name}</TableCell>

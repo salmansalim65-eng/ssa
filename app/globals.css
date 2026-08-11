@@ -50,6 +50,9 @@
 
   /* Logo blue (#3A53A4) — used to mark group/structural rows. */
   --group: oklch(0.44 0.14 266);
+  /* Chart-of-accounts tree connector rails — deliberately stronger than --border
+     so the ├─ / └─ hierarchy reads boldly and levels are easy to trace. */
+  --tree-guide: oklch(0.64 0.06 262);
 
   /* Logo green (#7BBF41) — used for the ledger account header band. */
   --ledger: oklch(0.62 0.16 140);
@@ -95,6 +98,7 @@
   --warning: oklch(0.8 0.16 75);
   --info: oklch(0.7 0.12 240);
   --group: oklch(0.74 0.13 266);
+  --tree-guide: oklch(1 0 0 / 42%);
   --header: oklch(0.2 0.02 258);
   --header-foreground: oklch(0.96 0.004 255);
   --header-muted: oklch(0.68 0.02 255);
@@ -130,6 +134,7 @@
   --color-warning: var(--warning);
   --color-info: var(--info);
   --color-group: var(--group);
+  --color-tree-guide: var(--tree-guide);
   --color-ledger: var(--ledger);
   --color-ledger-dark: var(--ledger-dark);
   --color-header: var(--header);

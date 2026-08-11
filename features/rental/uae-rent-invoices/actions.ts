@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/auth/permissions";
 import { formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
-import { createJournalEntry, getCurrentCompanyId, postVoucher } from "@/lib/vouchers/engine";
+import { createJournalEntry, getAccountIdByName, getCurrentCompanyId, postVoucher } from "@/lib/vouchers/engine";
+import { agentRentSplit, HH_AGENT_PCT, UAE_AGENT_PCT } from "@/lib/rental/lease-accounting";
 
 async function getPostingAccount(companyId: string, accountRole: string) {
   const supabase = await createClient();
@@ -87,16 +88,25 @@ export async function generateUaeRentInvoice(scheduleId: string) {
   // Debit the tenant's own account so the invoice shows in the tenant's ledger.
   const tenantAccountId = lease.tenant_id ? await getTenantAccountId(companyId, lease.tenant_id) : null;
 
-  const [tenantReceivableId, rentalIncomeId] = await Promise.all([
+  const [tenantReceivableId, rentalIncomeId, samadRentId] = await Promise.all([
     getPostingAccount(companyId, "tenant_receivable"),
     getPostingAccount(companyId, "uae_rental_income"),
+    getAccountIdByName(companyId, "SAMAD RENT"),
   ]);
   if (!tenantReceivableId || !rentalIncomeId) {
     return { error: "Configure Posting Templates for UAE Rent Invoice first (Tenant Receivable + Rental Income accounts)." };
   }
+  if (!samadRentId) {
+    return { error: 'The "SAMAD RENT" account is missing from the Chart of Accounts; cannot post the agent share.' };
+  }
   // The tenant's own account is the receivable target; fall back to the shared
   // Tenant Receivable posting account when a tenant has no linked account.
   const receivableAccountId = tenantAccountId ?? tenantReceivableId;
+
+  // Agent share: UAE leases give SAMAD RENT 5%, HH leases 10%; the remainder is
+  // rental income (RENT INCOME DXB). Rounding keeps share + income === rent.
+  const agentPct = lease.lease_type === "hh" ? HH_AGENT_PCT : UAE_AGENT_PCT;
+  const { share: samadShare, income: rentalIncomeAmount } = agentRentSplit(schedule.amount, agentPct);
 
   const invoiceId = crypto.randomUUID();
   const today = new Date().toISOString().slice(0, 10);
@@ -115,7 +125,10 @@ export async function generateUaeRentInvoice(scheduleId: string) {
     createdBy,
     lines: [
       { accountId: receivableAccountId, costCenterId, debit: schedule.amount, credit: 0, description: "UAE rent invoice" },
-      { accountId: rentalIncomeId, costCenterId, debit: 0, credit: schedule.amount, description: "UAE rent invoice" },
+      { accountId: rentalIncomeId, costCenterId, debit: 0, credit: rentalIncomeAmount, description: "UAE rent invoice" },
+      ...(samadShare > 0
+        ? [{ accountId: samadRentId, costCenterId, debit: 0, credit: samadShare, description: "Agent share (SAMAD RENT)" }]
+        : []),
     ],
   });
   if ("error" in je) return { error: je.error };

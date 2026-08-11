@@ -74,6 +74,7 @@ describe("pkLeaseSchema", () => {
     leaseStart: "2026-01-01",
     leaseEnd: "2026-12-31",
     monthlyRent: 50000,
+    rentCycle: "monthly",
     advanceRent: 100000,
     securityDeposit: 50000,
     currencyId: UUID_C,

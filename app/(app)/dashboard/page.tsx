@@ -35,15 +35,19 @@ type PanelKey = keyof typeof BALANCE_PANELS;
 
 const money = (symbol: string, n: number) => (symbol ? `${symbol} ${formatMoney(n)}` : formatMoney(n));
 
-// The "Balances" cards exclude Cash & Bank, Fixed Asset and Tenant accounts so
-// they read as operating balances. The classification flags come from
-// reporting.v_ledger_entries.
+// The "Balances" cards read as operating balances, so they exclude Cash & Bank,
+// Fixed Asset and Tenant accounts, and also Equity, Revenue (income) and Expense
+// account types — leaving asset/liability postings. Flags and account_type come
+// from reporting.v_ledger_entries.
+const NON_BALANCE_TYPES = new Set(["equity", "income", "expense"]);
 function isExcludedFromBalances(r: {
+  account_type?: string | null;
   is_cash?: boolean | null;
   is_bank?: boolean | null;
   is_tenant_account?: boolean | null;
   is_fixed_asset_account?: boolean | null;
 }) {
+  if (r.account_type && NON_BALANCE_TYPES.has(r.account_type)) return true;
   return Boolean(r.is_cash || r.is_bank || r.is_tenant_account || r.is_fixed_asset_account);
 }
 
@@ -69,7 +73,7 @@ export default async function DashboardPage({
       .schema("reporting")
       .from("v_ledger_entries")
       .select(
-        "cost_center_country, doc_debit_amount, doc_credit_amount, is_cash, is_bank, is_tenant_account, is_fixed_asset_account",
+        "cost_center_country, account_type, doc_debit_amount, doc_credit_amount, is_cash, is_bank, is_tenant_account, is_fixed_asset_account",
       )
       .eq("company_id", companyId)
       .in("cost_center_country", ["AE", "PK"]),
@@ -82,7 +86,7 @@ export default async function DashboardPage({
     supabase
       .schema("accounting")
       .from("chart_of_accounts")
-      .select("id, account_code, account_name, currency_id")
+      .select("id, account_code, account_name, currency_id, is_cash, is_bank")
       .eq("company_id", companyId)
       .is("deleted_at", null)
       .or("is_cash.eq.true,is_bank.eq.true")
@@ -125,8 +129,10 @@ export default async function DashboardPage({
     name: a.account_name as string,
     symbol: symById(a.currency_id as string | null),
     balance: bankBalById.get(a.id as string) ?? 0,
+    isBank: Boolean(a.is_bank),
   }));
-  const bankByCurrency = [...bankAccounts.reduce((m, a) => m.set(a.symbol, (m.get(a.symbol) ?? 0) + a.balance), new Map<string, number>())];
+  // The card preview lists bank accounts only; the drill-down shows cash + bank.
+  const bankOnly = bankAccounts.filter((a) => a.isBank);
 
   // Ledger balances in each country's own currency (document amounts). The
   // balance cards reflect operating balances only, so Cash & Bank, Fixed Asset
@@ -278,14 +284,17 @@ export default async function DashboardPage({
             </div>
           }
         >
-          {bankByCurrency.length > 0 ? (
-            <div className="flex flex-wrap justify-between gap-2">
-              {bankByCurrency.map(([symbol, total]) => (
-                <StatCol key={symbol || "—"} value={money(symbol, total)} label={symbol || "Balance"} />
+          {bankOnly.length > 0 ? (
+            <div className="space-y-1 text-sm">
+              {bankOnly.map((a) => (
+                <div key={a.code} className="flex items-baseline justify-between gap-3">
+                  <span className="truncate text-muted-foreground">{a.name}</span>
+                  <span className="shrink-0 font-mono font-medium tabular-nums">{money(a.symbol, a.balance)}</span>
+                </div>
               ))}
             </div>
           ) : (
-            <div className="py-1 text-sm text-muted-foreground">No cash or bank accounts yet.</div>
+            <div className="py-1 text-sm text-muted-foreground">No bank accounts yet.</div>
           )}
         </SummaryCard>
 
@@ -422,7 +431,7 @@ async function loadDetail(companyId: string, key: PanelKey, symbol: string) {
       .schema("reporting")
       .from("v_ledger_entries")
       .select(
-        "account_code, account_name, doc_debit_amount, doc_credit_amount, is_cash, is_bank, is_tenant_account, is_fixed_asset_account",
+        "account_code, account_name, account_type, doc_debit_amount, doc_credit_amount, is_cash, is_bank, is_tenant_account, is_fixed_asset_account",
       )
       .eq("company_id", companyId)
       .eq("cost_center_country", cfg.ccCountry);

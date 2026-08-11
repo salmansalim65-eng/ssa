@@ -175,57 +175,81 @@ export default async function DashboardPage({
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard title="Balances UAE" href={cardHref("balances-uae")} active={selected === "balances-uae"}>
+        <SummaryCard
+          title="Balances UAE"
+          href={cardHref("balances-uae")}
+          active={selected === "balances-uae"}
+          footer={
+            <div className="text-center text-base font-bold tabular-nums">
+              {drCr(aed, balByCountry.AE.debit - balByCountry.AE.credit)}
+            </div>
+          }
+        >
           <div className="flex justify-between gap-2">
             <StatCol value={money(aed, balByCountry.AE.debit)} label="Debit" />
             <StatCol value={money(aed, balByCountry.AE.credit)} label="Credit" align="right" />
           </div>
-          <div className="border-t pt-2 text-center text-lg font-bold tabular-nums">
-            {drCr(aed, balByCountry.AE.debit - balByCountry.AE.credit)}
-          </div>
         </SummaryCard>
 
-        <SummaryCard title="Balances PK" href={cardHref("balances-pk")} active={selected === "balances-pk"}>
+        <SummaryCard
+          title="Balances PK"
+          href={cardHref("balances-pk")}
+          active={selected === "balances-pk"}
+          footer={
+            <div className="text-center text-base font-bold tabular-nums">
+              {drCr(pkr, balByCountry.PK.debit - balByCountry.PK.credit)}
+            </div>
+          }
+        >
           <div className="flex justify-between gap-2">
             <StatCol value={money(pkr, balByCountry.PK.debit)} label="Debit" />
             <StatCol value={money(pkr, balByCountry.PK.credit)} label="Credit" align="right" />
           </div>
-          <div className="border-t pt-2 text-center text-lg font-bold tabular-nums">
-            {drCr(pkr, balByCountry.PK.debit - balByCountry.PK.credit)}
-          </div>
         </SummaryCard>
 
-        <SummaryCard title="Rent Balance UAE" href={cardHref("rent-uae")} active={selected === "rent-uae"}>
+        <SummaryCard
+          title="Rent Balance UAE"
+          href={cardHref("rent-uae")}
+          active={selected === "rent-uae"}
+          footer={
+            <div className="flex items-center justify-between">
+              <StatCol value={money(aed, rentReceipts("UAE"))} label="Receipts" />
+              <div className="text-right text-sm font-bold tabular-nums">
+                Balance: {money(aed, rentByCountry.UAE.outstanding)}
+              </div>
+            </div>
+          }
+        >
           <div className="grid grid-cols-3 gap-2">
             <StatCol value={money(aed, rentByCountry.UAE.overdue)} label="Overdue" />
             <StatCol value={money(aed, rentByCountry.UAE.due)} label="Due" align="center" />
             <StatCol value={money(aed, rentByCountry.UAE.billed)} label="Total" align="right" />
           </div>
-          <div className="flex items-center justify-between border-t pt-2">
-            <StatCol value={money(aed, rentReceipts("UAE"))} label="Receipts" />
-            <div className="text-right text-base font-bold tabular-nums">
-              Balance: {money(aed, rentByCountry.UAE.outstanding)}
-            </div>
-          </div>
         </SummaryCard>
 
-        <SummaryCard title="Rent Balance PK" href={cardHref("rent-pk")} active={selected === "rent-pk"}>
+        <SummaryCard
+          title="Rent Balance PK"
+          href={cardHref("rent-pk")}
+          active={selected === "rent-pk"}
+          footer={
+            <div className="flex items-center justify-between">
+              <StatCol value={money(pkr, rentReceipts("PK"))} label="Receipts" />
+              <div className="text-right text-sm font-bold tabular-nums">
+                Balance: {money(pkr, rentByCountry.PK.outstanding)}
+              </div>
+            </div>
+          }
+        >
           <div className="grid grid-cols-3 gap-2">
             <StatCol value={money(pkr, rentByCountry.PK.overdue)} label="Overdue" />
             <StatCol value={money(pkr, rentByCountry.PK.due)} label="Due" align="center" />
             <StatCol value={money(pkr, rentByCountry.PK.billed)} label="Total" align="right" />
           </div>
-          <div className="flex items-center justify-between border-t pt-2">
-            <StatCol value={money(pkr, rentReceipts("PK"))} label="Receipts" />
-            <div className="text-right text-base font-bold tabular-nums">
-              Balance: {money(pkr, rentByCountry.PK.outstanding)}
-            </div>
-          </div>
         </SummaryCard>
       </div>
 
       {detail && (
-        <Card className="border-ledger/40">
+        <Card className="border-ledger-dark/40">
           <CardHeader className="border-b pb-4">
             <CardTitle>{detail.title}</CardTitle>
             <CardAction>

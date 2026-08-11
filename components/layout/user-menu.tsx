@@ -32,10 +32,10 @@ export function UserMenu({ fullName, email }: { fullName: string; email: string 
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          className="h-9 gap-2 px-1.5 text-header-foreground hover:bg-header-accent hover:text-header-foreground"
+          className="h-9 gap-2 px-1.5 text-foreground hover:bg-muted hover:text-foreground"
         >
-          <Avatar className="size-7 border border-header-border">
-            <AvatarFallback className="bg-header-accent text-xs font-semibold text-header-foreground">
+          <Avatar className="size-7 border border-border">
+            <AvatarFallback className="bg-ledger/20 text-xs font-semibold text-foreground">
               {initials(fullName || email)}
             </AvatarFallback>
           </Avatar>

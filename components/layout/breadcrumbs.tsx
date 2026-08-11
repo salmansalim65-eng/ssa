@@ -21,18 +21,18 @@ export function Breadcrumbs() {
   return (
     <nav
       aria-label="Breadcrumb"
-      className="flex items-center gap-1.5 text-sm text-white/75"
+      className="flex items-center gap-1.5 text-sm text-muted-foreground"
     >
       {segments.map((segment, index) => {
         const href = "/" + segments.slice(0, index + 1).join("/");
         const isLast = index === segments.length - 1;
         return (
           <Fragment key={href}>
-            {index > 0 && <ChevronRightIcon className="size-3.5 text-white/60" />}
+            {index > 0 && <ChevronRightIcon className="size-3.5 text-muted-foreground/70" />}
             {isLast ? (
-              <span className="font-semibold text-white">{toLabel(segment)}</span>
+              <span className="font-semibold text-foreground">{toLabel(segment)}</span>
             ) : (
-              <Link href={href} className="transition-colors hover:text-white">
+              <Link href={href} className="transition-colors hover:text-foreground">
                 {toLabel(segment)}
               </Link>
             )}

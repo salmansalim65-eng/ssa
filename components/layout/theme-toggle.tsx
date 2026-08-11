@@ -13,7 +13,7 @@ export function ThemeToggle() {
       variant="ghost"
       size="icon"
       aria-label="Toggle theme"
-      className="text-white/80 hover:bg-white/15 hover:text-white"
+      className="text-muted-foreground hover:bg-muted hover:text-foreground"
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
     >
       <SunIcon className="hidden dark:block" />

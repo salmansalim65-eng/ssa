@@ -46,10 +46,12 @@ export function Sidebar() {
           collapsed ? "w-16" : "w-64",
         )}
       >
-        {/* Logo-green brand cap at the top-left of the shell. */}
+        {/* Brand cap at the top-left of the shell. It shares the sidebar's own
+            surface so the logo section reads continuously with the nav menu
+            below it rather than as a separate coloured band. */}
         <div
           className={cn(
-            "flex h-14 shrink-0 items-center border-b border-header-border bg-ledger text-white",
+            "flex h-14 shrink-0 items-center border-b border-sidebar-border bg-sidebar text-sidebar-foreground",
             collapsed ? "justify-center px-2" : "gap-2.5 px-3",
           )}
         >
@@ -58,7 +60,7 @@ export function Sidebar() {
               type="button"
               onClick={toggle}
               aria-label="Expand sidebar"
-              className="flex size-9 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/15 hover:text-white"
+              className="flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <PanelLeftOpenIcon className="size-5" />
             </button>
@@ -66,14 +68,14 @@ export function Sidebar() {
             <>
               <Image src="/logo.svg" alt="SSA logo" width={32} height={32} priority className="size-8 shrink-0" />
               <div className="min-w-0 leading-tight">
-                <p className="truncate text-sm font-semibold text-white">Rental &amp; Accounting</p>
-                <p className="truncate text-[0.7rem] uppercase tracking-wider text-white/80">Enterprise ERP</p>
+                <p className="truncate text-sm font-semibold text-sidebar-foreground">Rental &amp; Accounting</p>
+                <p className="truncate text-[0.7rem] uppercase tracking-wider text-muted-foreground">Enterprise ERP</p>
               </div>
               <button
                 type="button"
                 onClick={toggle}
                 aria-label="Collapse sidebar"
-                className="ml-auto flex size-8 shrink-0 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/15 hover:text-white"
+                className="ml-auto flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <PanelLeftCloseIcon className="size-4.5" />
               </button>

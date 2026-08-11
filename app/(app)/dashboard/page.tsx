@@ -42,6 +42,18 @@ type PanelKey = keyof typeof BALANCE_PANELS;
 
 const money = (symbol: string, n: number) => (symbol ? `${symbol} ${formatMoney(n)}` : formatMoney(n));
 
+// The "Balances" cards exclude Cash & Bank, Fixed Asset and Tenant accounts so
+// they read as operating balances. The classification flags come from
+// reporting.v_ledger_entries.
+function isExcludedFromBalances(r: {
+  is_cash?: boolean | null;
+  is_bank?: boolean | null;
+  is_tenant_account?: boolean | null;
+  is_fixed_asset_account?: boolean | null;
+}) {
+  return Boolean(r.is_cash || r.is_bank || r.is_tenant_account || r.is_fixed_asset_account);
+}
+
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -64,7 +76,9 @@ export default async function DashboardPage({
     supabase
       .schema("reporting")
       .from("v_ledger_entries")
-      .select("cost_center_country, doc_debit_amount, doc_credit_amount")
+      .select(
+        "cost_center_country, doc_debit_amount, doc_credit_amount, is_cash, is_bank, is_tenant_account, is_fixed_asset_account",
+      )
       .eq("company_id", companyId)
       .in("cost_center_country", ["AE", "PK"]),
     supabase
@@ -115,7 +129,9 @@ export default async function DashboardPage({
   const baseSymbol =
     (baseCurrency as unknown as { currencies: { symbol: string } | null } | null)?.currencies?.symbol ?? "";
 
-  // Ledger balances in each country's own currency (document amounts).
+  // Ledger balances in each country's own currency (document amounts). The
+  // balance cards reflect operating balances only, so Cash & Bank, Fixed Asset
+  // and Tenant accounts are excluded from the totals (and the drill-down below).
   const balByCountry: Record<string, { debit: number; credit: number }> = {
     AE: { debit: 0, credit: 0 },
     PK: { debit: 0, credit: 0 },
@@ -123,6 +139,7 @@ export default async function DashboardPage({
   for (const r of ledgerRows ?? []) {
     const b = balByCountry[r.cost_center_country as string];
     if (!b) continue;
+    if (isExcludedFromBalances(r)) continue;
     b.debit += Number(r.doc_debit_amount);
     b.credit += Number(r.doc_credit_amount);
   }
@@ -301,7 +318,7 @@ export default async function DashboardPage({
         </CardHeader>
         <CardContent className="px-0">
           <Table className="[&_td]:first:pl-5 [&_td]:last:pr-5 [&_th]:first:pl-5 [&_th]:last:pr-5">
-            <TableHeader>
+            <TableHeader className="bg-ledger/10 [&_th]:border-ledger/30 [&_th]:text-foreground">
               <TableRow className="hover:bg-transparent">
                 <TableHead>Voucher No</TableHead>
                 <TableHead>Type</TableHead>
@@ -354,12 +371,15 @@ async function loadDetail(companyId: string, key: PanelKey, symbol: string) {
     const { data } = await supabase
       .schema("reporting")
       .from("v_ledger_entries")
-      .select("account_code, account_name, doc_debit_amount, doc_credit_amount")
+      .select(
+        "account_code, account_name, doc_debit_amount, doc_credit_amount, is_cash, is_bank, is_tenant_account, is_fixed_asset_account",
+      )
       .eq("company_id", companyId)
       .eq("cost_center_country", cfg.ccCountry);
 
     const byAccount = new Map<string, { name: string; debit: number; credit: number }>();
     for (const r of data ?? []) {
+      if (isExcludedFromBalances(r)) continue;
       const k = r.account_code as string;
       const a = byAccount.get(k) ?? { name: r.account_name as string, debit: 0, credit: 0 };
       a.debit += Number(r.doc_debit_amount);

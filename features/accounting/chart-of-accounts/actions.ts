@@ -92,6 +92,7 @@ async function ensureLinkedAsset(params: {
   openingBalance: number;
   existingAssetId: string | null;
   property?: PropertyFields;
+  isRental: boolean;
 }): Promise<{ assetId?: string; error?: string }> {
   const supabase = await createClient();
   const value = Number.isFinite(params.openingBalance) ? Math.max(0, params.openingBalance) : 0;
@@ -106,6 +107,7 @@ async function ensureLinkedAsset(params: {
       .update({
         asset_name: params.accountName,
         country: params.country,
+        is_rental: params.isRental,
         ...(params.property ? assetColumnsFromProperty(params.property, value) : {}),
       })
       .eq("id", params.existingAssetId);
@@ -137,6 +139,7 @@ async function ensureLinkedAsset(params: {
       country: params.country,
       currency_id: currencyId,
       cost_center_mode: "new",
+      is_rental: params.isRental,
       created_by: params.userId,
       ...assetColumns,
     })
@@ -220,7 +223,11 @@ export async function createAccount(input: AccountInput) {
 
   if (error || !account) return { error: error?.message ?? "Failed to create account" };
 
-  if (parsed.data.isRentalProperty) {
+  // Register the property in Assets when the account sits under PROPERTIES (or,
+  // for backward compatibility, when the rental flag is ticked on any asset
+  // account). The rental flag itself only controls lease visibility.
+  const isProperty = !parsed.data.isGroup && (await isPropertiesParent(parsed.data.parentId));
+  if (isProperty || parsed.data.isRentalProperty) {
     const link = await linkRentalProperty({
       accountId: account.id,
       companyId,
@@ -231,16 +238,32 @@ export async function createAccount(input: AccountInput) {
       openingBalance: parsed.data.openingBalance,
       existingAssetId: null,
       property: propertyFieldsFrom(parsed.data),
+      isRental: parsed.data.isRentalProperty,
     });
     if (link.error) {
       revalidatePath("/accounting/chart-of-accounts");
-      return { error: `Account saved, but registering it as a rental property failed: ${link.error}` };
+      return { error: `Account saved, but registering it as a property failed: ${link.error}` };
     }
     revalidatePath("/assets");
   }
 
   revalidatePath("/accounting/chart-of-accounts");
   return { success: true };
+}
+
+// True when the given parent account is the "PROPERTIES" group. Accounts created
+// under it are registered as properties in the Assets module (regardless of the
+// rental flag — that flag only controls lease visibility).
+async function isPropertiesParent(parentId: string | null | undefined): Promise<boolean> {
+  if (!parentId) return false;
+  const supabase = await createClient();
+  const { data } = await supabase
+    .schema("accounting")
+    .from("chart_of_accounts")
+    .select("account_name")
+    .eq("id", parentId)
+    .maybeSingle();
+  return (data?.account_name ?? "").trim().toUpperCase() === "PROPERTIES";
 }
 
 // Permission-guards then delegates to ensureLinkedAsset. Creating the property
@@ -255,6 +278,7 @@ async function linkRentalProperty(params: {
   openingBalance: number;
   existingAssetId: string | null;
   property?: PropertyFields;
+  isRental: boolean;
 }): Promise<{ assetId?: string; error?: string }> {
   const action = params.existingAssetId ? "edit" : "create";
   if (!(await hasPermission("assets", action))) {
@@ -337,10 +361,12 @@ export async function updateAccount(accountId: string, input: AccountInput) {
 
   if (error) return { error: error.message };
 
-  // Create the linked property on first flag, or keep an existing one in step.
-  // Unchecking never destroys the property (a lease may reference it) — the link
-  // is left intact, which is why the form keeps the box checked once linked.
-  if (parsed.data.isRentalProperty) {
+  // Register/sync the linked property when the account is under PROPERTIES, is
+  // already linked, or (legacy) has the rental flag ticked. The rental flag maps
+  // to the asset's is_rental (lease visibility) — unticking never deletes the
+  // property, only stops it appearing in new leases.
+  const isProperty = !parsed.data.isGroup && (await isPropertiesParent(parsed.data.parentId));
+  if (isProperty || existingAssetId || parsed.data.isRentalProperty) {
     const link = await linkRentalProperty({
       accountId,
       companyId,
@@ -351,10 +377,11 @@ export async function updateAccount(accountId: string, input: AccountInput) {
       openingBalance: parsed.data.openingBalance,
       existingAssetId,
       property: propertyFieldsFrom(parsed.data),
+      isRental: parsed.data.isRentalProperty,
     });
     if (link.error) {
       revalidatePath("/accounting/chart-of-accounts");
-      return { error: `Account saved, but updating its rental property failed: ${link.error}` };
+      return { error: `Account saved, but updating its property failed: ${link.error}` };
     }
     revalidatePath("/assets");
     revalidatePath(`/assets/${link.assetId}`);

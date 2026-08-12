@@ -40,7 +40,7 @@ export default async function ChartOfAccountsPage() {
         .schema("assets")
         .from("assets")
         .select(
-          "id, property_type, status, city, address, owner, official_owner, purchase_date, area_sqft, area_unit, purchase_value, current_value, title_deed_value, service_charges_rate, other_charges, estimated_rent, notes",
+          "id, is_rental, property_type, status, city, address, owner, official_owner, purchase_date, area_sqft, area_unit, purchase_value, current_value, title_deed_value, service_charges_rate, other_charges, estimated_rent, notes",
         )
         .eq("company_id", companyId)
         .is("deleted_at", null),
@@ -54,6 +54,7 @@ export default async function ChartOfAccountsPage() {
   const assetFieldsById: Record<string, LinkedAssetFields> = {};
   for (const a of (linkedAssets as unknown as (LinkedAssetFields & { id: string })[]) ?? []) {
     assetFieldsById[a.id] = {
+      is_rental: a.is_rental,
       property_type: a.property_type,
       status: a.status,
       city: a.city,

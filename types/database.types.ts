@@ -1095,6 +1095,7 @@ export interface Database {
           cost_center_mode: "new" | "none" | "existing";
           group_cost_center_id: string | null;
           title_deed_attachment_id: string | null;
+          is_rental: boolean;
           notes: string | null;
           account_id: string | null;
           created_by: string;

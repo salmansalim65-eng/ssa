@@ -66,6 +66,7 @@ export function AccountForm({
   onSubmit,
   submitLabel,
   accountId,
+  linkedProperty = false,
 }: {
   defaultValues: AccountInput;
   parentOptions: ParentOption[];
@@ -75,6 +76,8 @@ export function AccountForm({
   submitLabel: string;
   /** Present when editing an existing account — enables the document uploads. */
   accountId?: string;
+  /** True when the account already has a linked property in the Assets module. */
+  linkedProperty?: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
@@ -90,32 +93,26 @@ export function AccountForm({
   const selectedParent = parentOptions.find((p) => p.id === selectedParentId);
   const lockAccountType = Boolean(selectedParent);
 
-  // Accounts created under the "PROPERTIES" group are managed as assets straight
-  // from Chart of Accounts, so the full property field set is surfaced and the
-  // account is registered as a rental property automatically.
-  const isPropertiesParent = (selectedParent?.account_name ?? "").trim().toUpperCase() === "PROPERTIES";
+  // Accounts under the "PROPERTIES" group are managed as properties straight from
+  // Chart of Accounts: the full property field set is surfaced and the account is
+  // registered in the Assets module. The "This is a rental property" checkbox is
+  // editable and only controls whether the property is offered in leases.
+  const parentName = (selectedParent?.account_name ?? "").trim().toUpperCase();
+  const isPropertiesParent = parentName === "PROPERTIES";
 
-  // A rental property must be a postable asset account. The account is already
-  // linked to a property when editing one previously flagged — that link can't
-  // be undone from here (a lease may reference it), so the box stays checked.
+  // The Details section (party info) is only relevant for Tenant / Customers /
+  // Suppliers accounts, so it shows only under those groups.
+  const DETAILS_PARENTS = new Set(["TENANT", "TENANTS", "CUSTOMER", "CUSTOMERS", "SUPPLIER", "SUPPLIERS"]);
+  const isDetailsParent = DETAILS_PARENTS.has(parentName);
+
   const canBeRentalProperty = !isGroup && accountType === "asset";
-  const [alreadyLinked] = useState(() => defaultValues.isRentalProperty ?? false);
-  const showPropertyFields = canBeRentalProperty && (isPropertiesParent || alreadyLinked);
+  const showPropertyFields = canBeRentalProperty && (isPropertiesParent || linkedProperty);
 
-  // Clear the flag when the account stops being eligible (e.g. switched to a
-  // group or a non-asset type), unless it is already linked to a property.
+  // Clear the rental flag when the account can no longer be a property (switched
+  // to a group or a non-asset type).
   useEffect(() => {
-    if (!canBeRentalProperty && !alreadyLinked) {
-      form.setValue("isRentalProperty", false);
-    }
-  }, [canBeRentalProperty, alreadyLinked, form]);
-
-  // Under PROPERTIES, being a rental property is implied — keep the flag on.
-  useEffect(() => {
-    if (isPropertiesParent && canBeRentalProperty) {
-      form.setValue("isRentalProperty", true);
-    }
-  }, [isPropertiesParent, canBeRentalProperty, form]);
+    if (!canBeRentalProperty) form.setValue("isRentalProperty", false);
+  }, [canBeRentalProperty, form]);
 
   function handleParentChange(value: string, onChange: (value: string) => void) {
     const parentId = value === "none" ? "" : value;
@@ -281,27 +278,21 @@ export function AccountForm({
               )}
             />
           )}
-          {(canBeRentalProperty || alreadyLinked) && (
+          {showPropertyFields && (
             <FormField
               control={form.control}
               name="isRentalProperty"
               render={({ field }) => (
                 <FormItem className="flex flex-row items-start gap-2.5 rounded-lg border p-3">
                   <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                      disabled={alreadyLinked || isPropertiesParent}
-                    />
+                    <Checkbox checked={field.value} onCheckedChange={field.onChange} />
                   </FormControl>
                   <div className="space-y-1 leading-none">
                     <FormLabel>This is a rental property</FormLabel>
                     <FormDescription>
-                      {alreadyLinked
-                        ? "Linked to a property in Assets — it's selectable in this country's leases. Edit its details below."
-                        : isPropertiesParent
-                          ? "Under PROPERTIES, this account is registered as a property in the Assets module. Fill in its details below."
-                          : "Also registers this account as a property in the Assets module so it can be picked in UAE / PK / HH leases for the selected country."}
+                      Tick when this property is rented out — only rental properties are offered in
+                      leases, filtered by country (UAE → UAE &amp; HH leases, Pakistan → PK leases).
+                      The property is registered in Assets either way.
                     </FormDescription>
                     <FormMessage />
                   </div>
@@ -311,7 +302,7 @@ export function AccountForm({
           )}
         </FormSection>
 
-        {!isGroup && (
+        {!isGroup && isDetailsParent && (
           <FormSection title="Details">
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField
@@ -413,10 +404,39 @@ export function AccountForm({
         {showPropertyFields && (
           <FormSection title="Property details">
             <p className="text-xs text-muted-foreground">
-              These describe the linked property in the Assets module. Set the country in
-              the Details section above so the property appears in that country&apos;s leases.
+              These describe the linked property in the Assets module. Set the country so a
+              rental property appears in that country&apos;s leases.
             </p>
             <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="country"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Country</FormLabel>
+                    <Select
+                      onValueChange={(v) => field.onChange(v === "none" ? "" : v)}
+                      value={field.value || "none"}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">Not set</SelectItem>
+                        {countries.map((c) => (
+                          <SelectItem key={c.code} value={c.code}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>Which country&apos;s leases this property appears in.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField
                 control={form.control}
                 name="propertyType"

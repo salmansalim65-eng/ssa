@@ -109,6 +109,7 @@ type StatusFilter = "all" | "active" | "inactive";
 // The linked asset's property fields, as loaded server-side, used to prefill
 // the Property details section when editing a property account.
 export interface LinkedAssetFields {
+  is_rental: boolean | null;
   property_type: string | null;
   status: "active" | "inactive" | "sold" | null;
   city: string | null;
@@ -789,7 +790,7 @@ export function AccountTree({
                         isCash: dialog.account.is_cash,
                         isBank: dialog.account.is_bank,
                         isTenantGroup: dialog.account.is_tenant_group,
-                        isRentalProperty: dialog.account.linked_asset_id != null,
+                        isRentalProperty: linked?.is_rental ?? false,
                         idNumber: dialog.account.id_number ?? "",
                         contactPerson: dialog.account.contact_person ?? "",
                         phone: dialog.account.phone ?? "",
@@ -824,6 +825,7 @@ export function AccountTree({
               }
               submitLabel={dialog.mode === "edit" ? "Save changes" : "Add account"}
               accountId={dialog.mode === "edit" ? dialog.account.id : undefined}
+              linkedProperty={dialog.mode === "edit" && dialog.account.linked_asset_id != null}
               onSubmit={async (values) => {
                 const result =
                   dialog.mode === "edit"

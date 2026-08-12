@@ -47,29 +47,16 @@ export const accountBaseSchema = z.object({
   propertyNotes: z.string().max(1000).optional().or(z.literal("")),
 });
 
-// A rental property must be a postable asset account with a country, because
-// leases read properties from the Assets module filtered by country.
+// The rental flag only makes sense on a postable (non-group) account. It does
+// NOT require a country here — a property with no country simply won't appear in
+// any lease dropdown until one is set, rather than blocking the save. (Country
+// for a property is captured in the Property details section.)
 export const accountSchema = accountBaseSchema.superRefine((val, ctx) => {
-  if (!val.isRentalProperty) return;
-  if (val.isGroup) {
+  if (val.isRentalProperty && val.isGroup) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["isRentalProperty"],
       message: "Only posting (non-group) accounts can be rental properties.",
-    });
-  }
-  if (val.accountType !== "asset") {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["isRentalProperty"],
-      message: "Only asset-type accounts can be rental properties.",
-    });
-  }
-  if (!val.country) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["country"],
-      message: "Select a country so the property appears in that country's leases.",
     });
   }
 });

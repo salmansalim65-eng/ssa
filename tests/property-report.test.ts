@@ -31,7 +31,9 @@ function input(over: Partial<PropertyRowInput>): PropertyRowInput {
     leaseEnd: null,
     renewMonth: null,
     titleDeedAttachmentId: null,
+    titleDeedUrl: null,
     imageCount: 0,
+    images: [],
     ...over,
   };
 }

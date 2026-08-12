@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { fetchRefs } from "@/lib/supabase/hydrate";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import {
   aggregateGroup,
@@ -65,7 +66,7 @@ export default async function PropertyReportPage() {
       .eq("company_id", companyId)
       .is("deleted_at", null),
     supabase.schema("assets").from("asset_valuations").select("asset_id, valuation_date").is("deleted_at", null),
-    supabase.schema("assets").from("asset_images").select("asset_id"),
+    supabase.schema("assets").from("asset_images").select("asset_id, attachment_id, is_primary"),
     supabase.schema("core").from("countries").select("code, name").eq("company_id", companyId),
   ]);
 
@@ -131,10 +132,63 @@ export default async function PropertyReportPage() {
     if (y && (!valYearByAsset.has(k) || y > valYearByAsset.get(k)!)) valYearByAsset.set(k, y);
   }
 
+  // Hydrate image + title-deed attachments (they live in the core schema) and
+  // sign their storage paths so the detail panel can render real thumbnails.
+  const imageRows = (images ?? []) as {
+    asset_id: string;
+    attachment_id: string | null;
+    is_primary: boolean;
+  }[];
+  const attachmentsById = await fetchRefs<{
+    id: string;
+    file_name: string;
+    path: string;
+    bucket: string;
+  }>(
+    supabase,
+    "core",
+    "attachments",
+    "file_name, path, bucket",
+    [
+      ...imageRows.map((r) => r.attachment_id),
+      ...(assets ?? []).map((a) => a.title_deed_attachment_id as string | null),
+    ],
+  );
+
+  // Batch-sign every referenced path, grouped per storage bucket (1h expiry).
+  const pathsByBucket = new Map<string, Set<string>>();
+  for (const att of attachmentsById.values()) {
+    if (!pathsByBucket.has(att.bucket)) pathsByBucket.set(att.bucket, new Set());
+    pathsByBucket.get(att.bucket)!.add(att.path);
+  }
+  const urlByPath = new Map<string, string>();
+  await Promise.all(
+    [...pathsByBucket.entries()].map(async ([bucket, paths]) => {
+      const { data } = await supabase.storage.from(bucket).createSignedUrls([...paths], 60 * 60);
+      for (const row of data ?? []) {
+        if (row.signedUrl && row.path) urlByPath.set(row.path, row.signedUrl);
+      }
+    }),
+  );
+  const signedUrlFor = (attId: string | null | undefined): string | null => {
+    if (!attId) return null;
+    const att = attachmentsById.get(attId);
+    return att ? urlByPath.get(att.path) ?? null : null;
+  };
+
+  // Images per asset, primary first, with any signed URLs resolved.
+  const imagesByAsset = new Map<string, { url: string; fileName: string }[]>();
   const imageCountByAsset = new Map<string, number>();
-  for (const im of images ?? []) {
-    const k = im.asset_id as string;
-    imageCountByAsset.set(k, (imageCountByAsset.get(k) ?? 0) + 1);
+  for (const r of imageRows) {
+    imageCountByAsset.set(r.asset_id, (imageCountByAsset.get(r.asset_id) ?? 0) + 1);
+    const url = signedUrlFor(r.attachment_id);
+    if (!url) continue;
+    const att = r.attachment_id ? attachmentsById.get(r.attachment_id) : null;
+    const list = imagesByAsset.get(r.asset_id) ?? [];
+    const item = { url, fileName: att?.file_name ?? "image" };
+    if (r.is_primary) list.unshift(item);
+    else list.push(item);
+    imagesByAsset.set(r.asset_id, list);
   }
 
   const rows: PropertyRow[] = (assets ?? []).map((a) => {
@@ -164,7 +218,9 @@ export default async function PropertyReportPage() {
       leaseEnd: lease?.end ?? null,
       renewMonth: lease?.renew ?? null,
       titleDeedAttachmentId: (a.title_deed_attachment_id as string) ?? null,
+      titleDeedUrl: signedUrlFor(a.title_deed_attachment_id as string | null),
       imageCount: imageCountByAsset.get(id) ?? 0,
+      images: imagesByAsset.get(id) ?? [],
     });
   });
 

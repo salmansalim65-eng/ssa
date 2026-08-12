@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   BuildingIcon,
   ChevronDownIcon,
@@ -561,20 +562,49 @@ function PropertyDetail({ row }: { row: PropertyRow }) {
         {/* Documents / images */}
         <section>
           <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ledger-dark">Documents &amp; Images</h3>
+          {row.images.length > 0 ? (
+            <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+              {row.images.map((img, i) => (
+                <a
+                  key={i}
+                  href={img.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={img.fileName}
+                  className="group relative aspect-[4/3] overflow-hidden rounded-md border bg-muted"
+                >
+                  <Image
+                    src={img.url}
+                    alt={img.fileName}
+                    fill
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
+                    className="object-cover transition-transform duration-200 group-hover:scale-105"
+                    unoptimized
+                  />
+                </a>
+              ))}
+            </div>
+          ) : (
+            <p className="mb-3 text-sm text-muted-foreground">No images uploaded for this property.</p>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 text-sm text-muted-foreground">
               <ImageIcon className="size-4" /> {row.imageCount} image{row.imageCount === 1 ? "" : "s"}
             </span>
-            <span
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-sm",
-                row.titleDeedAttachmentId
-                  ? "bg-background text-foreground"
-                  : "bg-muted/40 text-muted-foreground",
-              )}
-            >
-              <FileTextIcon className="size-4" /> Title deed {row.titleDeedAttachmentId ? "attached" : "not attached"}
-            </span>
+            {row.titleDeedUrl ? (
+              <a
+                href={row.titleDeedUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 text-sm text-foreground transition-colors hover:bg-muted/60"
+              >
+                <FileTextIcon className="size-4" /> View title deed
+              </a>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-md border bg-muted/40 px-2.5 py-1 text-sm text-muted-foreground">
+                <FileTextIcon className="size-4" /> Title deed not attached
+              </span>
+            )}
             <Button asChild variant="outline" size="sm">
               <Link href={`/assets/${row.id}`}>Open property page</Link>
             </Button>

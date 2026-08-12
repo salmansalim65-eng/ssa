@@ -50,7 +50,14 @@ export interface PropertyRowInput {
   leaseEnd: string | null;
   renewMonth: string | null;
   titleDeedAttachmentId: string | null;
+  titleDeedUrl: string | null;
   imageCount: number;
+  images: PropertyImage[];
+}
+
+export interface PropertyImage {
+  url: string;
+  fileName: string;
 }
 
 export interface PropertyRow {
@@ -84,7 +91,9 @@ export interface PropertyRow {
   leaseEnd: string | null;
   renewMonth: string | null;
   titleDeedAttachmentId: string | null;
+  titleDeedUrl: string | null;
   imageCount: number;
+  images: PropertyImage[];
 }
 
 export function computePropertyRow(i: PropertyRowInput): PropertyRow {
@@ -128,7 +137,9 @@ export function computePropertyRow(i: PropertyRowInput): PropertyRow {
     leaseEnd: i.leaseEnd,
     renewMonth: i.renewMonth,
     titleDeedAttachmentId: i.titleDeedAttachmentId,
+    titleDeedUrl: i.titleDeedUrl,
     imageCount: i.imageCount,
+    images: i.images,
   };
 }
 

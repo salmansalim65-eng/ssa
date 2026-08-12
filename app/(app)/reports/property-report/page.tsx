@@ -37,6 +37,8 @@ export default async function PropertyReportPage() {
     { data: valuations },
     { data: images },
     { data: countryRows },
+    { data: uaeInvoices },
+    { data: pkInvoices },
   ] = await Promise.all([
     supabase
       .schema("assets")
@@ -68,6 +70,8 @@ export default async function PropertyReportPage() {
     supabase.schema("assets").from("asset_valuations").select("asset_id, valuation_date").is("deleted_at", null),
     supabase.schema("assets").from("asset_images").select("asset_id, attachment_id, is_primary"),
     supabase.schema("core").from("countries").select("code, name").eq("company_id", companyId),
+    supabase.schema("rental").from("uae_rent_invoices").select("invoice_date, amount").eq("company_id", companyId),
+    supabase.schema("rental").from("pk_rent_invoices").select("invoice_date, total_amount").eq("company_id", companyId),
   ]);
 
   const countryName = new Map((countryRows ?? []).map((c) => [c.code as string, c.name as string]));
@@ -242,12 +246,34 @@ export default async function PropertyReportPage() {
     .map((code) => ({ code, name: countryName.get(code) ?? code }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  // Monthly rental-income trend: aggregate posted lease invoices over the last
+  // 12 months (UAE + PK) into a real time series for the trend line chart.
+  const now = new Date(`${today}T00:00:00`);
+  const monthKeys: string[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    monthKeys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+  const monthTotals = new Map(monthKeys.map((k) => [k, 0]));
+  const addInvoice = (date: unknown, amount: unknown) => {
+    const k = String(date ?? "").slice(0, 7);
+    if (monthTotals.has(k)) monthTotals.set(k, monthTotals.get(k)! + (Number(amount) || 0));
+  };
+  for (const inv of uaeInvoices ?? []) addInvoice(inv.invoice_date, inv.amount);
+  for (const inv of pkInvoices ?? []) addInvoice(inv.invoice_date, inv.total_amount);
+  const monthlyTrend = monthKeys.map((k) => ({
+    month: k,
+    label: new Date(`${k}-01T00:00:00`).toLocaleString("en-GB", { month: "short" }),
+    total: Math.round(monthTotals.get(k) ?? 0),
+  }));
+
   return (
     <PropertyReportView
       groups={groups}
       countries={countries}
       totalCostCenters={rows.length}
       totalProperties={(assets ?? []).length}
+      monthlyTrend={monthlyTrend}
     />
   );
 }

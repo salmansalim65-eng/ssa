@@ -22,11 +22,26 @@ import { ReportNav } from "@/components/reports/report-nav";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { aggregateGroup, type PropertyGroupTotals, type PropertyRow } from "@/lib/reports/property-report";
+import {
+  ChartCard,
+  DonutChart,
+  HBarChart,
+  StackedBarChart,
+  LineChart,
+  CHART_COLORS,
+  compactNumber,
+} from "@/components/reports/charts";
 
 export interface PropertyGroup {
   name: string;
   totals: PropertyGroupTotals;
   rows: PropertyRow[];
+}
+
+export interface MonthlyTrendPoint {
+  month: string;
+  label: string;
+  total: number;
 }
 
 // Number / percent / rate formatters — grouped thousands, sensible decimals.
@@ -95,11 +110,13 @@ export function PropertyReportView({
   countries,
   totalCostCenters,
   totalProperties,
+  monthlyTrend,
 }: {
   groups: PropertyGroup[];
   countries: { code: string; name: string }[];
   totalCostCenters: number;
   totalProperties: number;
+  monthlyTrend: MonthlyTrendPoint[];
 }) {
   const [search, setSearch] = useState("");
   const [showFilters, setShowFilters] = useState(false);
@@ -157,6 +174,68 @@ export function PropertyReportView({
   }, [selectedId]);
   const activeFilters = [country, occupancy, propertyType].filter(Boolean).length;
 
+  // ----- Dashboard chart datasets (all recompute with the active filters) -----
+
+  // Current value share by country (donut / bar). `group` is the country name.
+  const byCountry = useMemo(() => {
+    const map = new Map<string, { code: string; label: string; value: number; count: number }>();
+    for (const r of visibleRows) {
+      const code = r.country || "—";
+      const e = map.get(code) ?? { code, label: r.group || code, value: 0, count: 0 };
+      e.value += r.currentValue;
+      e.count += 1;
+      map.set(code, e);
+    }
+    return [...map.values()].sort((a, b) => b.value - a.value);
+  }, [visibleRows]);
+
+  const countryDonut = useMemo(
+    () => byCountry.map((c, i) => ({ key: c.code, label: c.label, value: c.value, color: CHART_COLORS[i % CHART_COLORS.length] })),
+    [byCountry],
+  );
+
+  const occupancyDonut = useMemo(
+    () => [
+      { key: "occupied", label: "Occupied", value: occupiedCount, color: CHART_COLORS[0] },
+      { key: "vacant", label: "Vacant", value: vacant.length, color: CHART_COLORS[2] },
+    ],
+    [occupiedCount, vacant.length],
+  );
+
+  const topProperties = useMemo(
+    () =>
+      [...visibleRows]
+        .filter((r) => r.currentValue > 0)
+        .sort((a, b) => b.currentValue - a.currentValue)
+        .slice(0, 8)
+        .map((r) => ({ key: r.id, label: r.name, value: r.currentValue })),
+    [visibleRows],
+  );
+
+  // Net rent + service charges by property type (stacked → yearly rent).
+  const rentByType = useMemo(() => {
+    const map = new Map<string, { key: string; label: string; net: number; service: number }>();
+    for (const r of visibleRows) {
+      const t = r.propertyType || "Unspecified";
+      const e = map.get(t) ?? { key: t, label: t, net: 0, service: 0 };
+      e.net += r.netRent;
+      e.service += r.serviceCharges;
+      map.set(t, e);
+    }
+    return [...map.values()]
+      .filter((g) => g.net > 0 || g.service > 0)
+      .sort((a, b) => b.net + b.service - (a.net + a.service))
+      .map((g) => ({ key: g.key, label: g.label, values: { "Net Rent": g.net, "Service Charges": g.service } }));
+  }, [visibleRows]);
+
+  const trendTotal = useMemo(() => monthlyTrend.reduce((s, p) => s + p.total, 0), [monthlyTrend]);
+
+  // Click a chart segment to toggle the matching table filter.
+  const toggleCountry = (code: string) => setCountry((c) => (c === code ? "" : code));
+  const toggleOccupancy = (k: string) =>
+    setOccupancy((o) => (o === k ? "" : (k as "occupied" | "vacant")));
+  const toggleType = (t: string) => setPropertyType((p) => (p === t ? "" : t));
+
   const csvRows = visibleRows.map((r) => [
     r.group,
     r.name,
@@ -203,8 +282,9 @@ export function PropertyReportView({
             <p className="text-xs font-semibold uppercase tracking-wide text-primary">Reports</p>
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">Property Report</h1>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              Showing <span className="font-semibold text-foreground">{visibleRows.length}</span> Cost Centers
-              {" | "}
+              Portfolio overview and analysis ·{" "}
+              <span className="font-semibold text-foreground">{visibleRows.length}</span> Cost Centers
+              {" · "}
               <span className="font-semibold text-foreground">{totalProperties}</span> Properties
             </p>
           </div>
@@ -254,20 +334,130 @@ export function PropertyReportView({
         )}
       </div>
 
-      {/* KPI band — recomputes with the active filters */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-        <Kpi label="Properties" value={visibleRows.length.toLocaleString("en-US")} sub={`${occupiedCount} occupied · ${vacant.length} vacant`} />
-        <Kpi label="Occupancy" value={`${occupancyRate}%`} sub={`${occupiedCount} of ${visibleRows.length} let`} />
-        <Kpi label="Current Value" value={money(portfolio.currentValue)} sub={`Purchase ${money(portfolio.purchaseValue)}`} />
-        <Kpi
-          label="Difference Value"
-          value={money(portfolio.diffValue)}
-          sub={portfolio.diffValue >= 0 ? "Appreciation" : "Depreciation"}
-          tone={portfolio.diffValue >= 0 ? "up" : "down"}
-        />
-        <Kpi label="Yearly Rent" value={money(portfolio.yearlyRent)} sub={`Net ${money(portfolio.netRent)}`} />
-        <Kpi label="Avg. Yield" value={pct(portfolio.perc)} sub={`${pct(portfolio.percMonth)} / month`} />
+      {/* KPI cards — recompute with the active filters */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <Kpi label="Total Properties" value={visibleRows.length.toLocaleString("en-US")} sub={`${occupiedCount} occupied · ${vacant.length} vacant`} accent={CHART_COLORS[1]} />
+        <Kpi label="Occupied" value={occupiedCount.toLocaleString("en-US")} sub={`${occupancyRate}% of portfolio`} accent={CHART_COLORS[0]} />
+        <Kpi label="Vacant" value={vacant.length.toLocaleString("en-US")} sub={`${100 - occupancyRate}% of portfolio`} accent={CHART_COLORS[2]} />
+        <Kpi label="Current Value" value={money(portfolio.currentValue)} sub={portfolio.diffValue >= 0 ? `▲ ${money(portfolio.diffValue)} vs purchase` : `▼ ${money(-portfolio.diffValue)} vs purchase`} tone={portfolio.diffValue >= 0 ? "up" : "down"} accent={CHART_COLORS[0]} />
+        <Kpi label="Purchase Value" value={money(portfolio.purchaseValue)} sub="Original cost" accent={CHART_COLORS[6]} />
+        <Kpi label="Monthly Rent" value={money(portfolio.monthlyRent)} sub={`${money(portfolio.yearlyRent)} / year`} accent={CHART_COLORS[1]} />
+        <Kpi label="Yearly Rent" value={money(portfolio.yearlyRent)} sub={`Avg yield ${pct(portfolio.perc)}`} accent={CHART_COLORS[3]} />
+        <Kpi label="Net Rent" value={money(portfolio.netRent)} sub={`Service ${money(portfolio.serviceCharges)}`} accent={CHART_COLORS[2]} />
       </div>
+
+      {/* Dashboard charts */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ChartCard
+          title="Property Value by Country"
+          subtitle="Share of current portfolio value"
+          csv={{
+            headers: ["Country", "Current Value", "Properties", "Share %"],
+            rows: byCountry.map((c) => {
+              const total = byCountry.reduce((s, x) => s + x.value, 0);
+              return [c.label, Math.round(c.value), c.count, total ? `${((c.value / total) * 100).toFixed(1)}%` : "0%"];
+            }),
+          }}
+          chart={(h) =>
+            countryDonut.length ? (
+              <DonutChart
+                data={countryDonut}
+                height={h}
+                format={money}
+                centerTitle="Current Value"
+                centerValue={compactNumber(portfolio.currentValue)}
+                activeKey={country || null}
+                onSelect={toggleCountry}
+              />
+            ) : (
+              <EmptyChart height={h} />
+            )
+          }
+        />
+        <ChartCard
+          title="Occupancy Status"
+          subtitle="Occupied vs vacant properties"
+          csv={{
+            headers: ["Status", "Properties", "Share %"],
+            rows: [
+              ["Occupied", occupiedCount, `${occupancyRate}%`],
+              ["Vacant", vacant.length, `${100 - occupancyRate}%`],
+            ],
+          }}
+          chart={(h) =>
+            visibleRows.length ? (
+              <DonutChart
+                data={occupancyDonut}
+                height={h}
+                format={(n) => `${Math.round(n)} properties`}
+                centerTitle="Occupied"
+                centerValue={`${occupancyRate}%`}
+                activeKey={occupancy || null}
+                onSelect={toggleOccupancy}
+              />
+            ) : (
+              <EmptyChart height={h} />
+            )
+          }
+        />
+        <ChartCard
+          title="Top Properties by Current Value"
+          subtitle="Highest-valued properties (click to inspect)"
+          csv={{
+            headers: ["Property", "Current Value"],
+            rows: topProperties.map((p) => [p.label, p.value]),
+          }}
+          chart={(h) =>
+            topProperties.length ? (
+              <HBarChart data={topProperties} height={h} format={money} onSelect={(id) => setSelectedId(id)} />
+            ) : (
+              <EmptyChart height={h} />
+            )
+          }
+        />
+        <ChartCard
+          title="Rent & Service Charges by Type"
+          subtitle="Net rent and maintenance per property type"
+          csv={{
+            headers: ["Property Type", "Net Rent", "Service Charges", "Yearly Rent"],
+            rows: rentByType.map((g) => [
+              g.label,
+              Math.round(g.values["Net Rent"]),
+              Math.round(g.values["Service Charges"]),
+              Math.round(g.values["Net Rent"] + g.values["Service Charges"]),
+            ]),
+          }}
+          chart={(h) =>
+            rentByType.length ? (
+              <StackedBarChart
+                groups={rentByType}
+                series={[
+                  { name: "Net Rent", color: CHART_COLORS[0] },
+                  { name: "Service Charges", color: CHART_COLORS[2] },
+                ]}
+                height={h}
+                format={money}
+                onSelect={toggleType}
+              />
+            ) : (
+              <EmptyChart height={h} />
+            )
+          }
+        />
+      </div>
+
+      <ChartCard
+        title="Monthly Rental Income Trend"
+        subtitle="Invoiced lease income over the last 12 months"
+        csv={{ headers: ["Month", "Rental Income"], rows: monthlyTrend.map((p) => [p.label, p.total]) }}
+        chart={(h) =>
+          trendTotal > 0 ? (
+            <LineChart points={monthlyTrend.map((p) => ({ label: p.label, value: p.total }))} height={h} format={money} />
+          ) : (
+            <EmptyChart height={h} label="No invoiced rental income in the last 12 months." />
+          )
+        }
+      />
 
       {/* Total cost centers banner */}
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ledger/30 bg-ledger/10 px-4 py-2.5">
@@ -444,14 +634,17 @@ function Kpi({
   value,
   sub,
   tone,
+  accent,
 }: {
   label: string;
   value: string;
   sub?: string;
   tone?: "up" | "down";
+  accent?: string;
 }) {
   return (
-    <div className="rounded-lg border bg-card px-3.5 py-3 shadow-xs">
+    <div className="relative overflow-hidden rounded-xl border bg-card px-4 py-3.5 shadow-xs">
+      {accent && <span className="absolute inset-y-0 left-0 w-1" style={{ background: accent }} />}
       <p className="truncate text-[0.68rem] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
       <p
         className={cn(
@@ -464,6 +657,17 @@ function Kpi({
         {value}
       </p>
       {sub && <p className="mt-0.5 truncate text-xs text-muted-foreground">{sub}</p>}
+    </div>
+  );
+}
+
+function EmptyChart({ height, label = "No data available." }: { height: number; label?: string }) {
+  return (
+    <div
+      className="flex items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground"
+      style={{ minHeight: height }}
+    >
+      {label}
     </div>
   );
 }

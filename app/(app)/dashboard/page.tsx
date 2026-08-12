@@ -132,8 +132,9 @@ export default async function DashboardPage({
     balance: bankBalById.get(a.id as string) ?? 0,
     isBank: Boolean(a.is_bank),
   }));
-  // The card preview lists bank accounts only; the drill-down shows cash + bank.
+  // Split cash and bank so each has its own dashboard card.
   const bankOnly = bankAccounts.filter((a) => a.isBank);
+  const cashOnly = bankAccounts.filter((a) => !a.isBank);
 
   // Ledger balances in each country's own currency (document amounts). The
   // balance cards reflect operating balances only, so Cash & Bank, Fixed Asset
@@ -172,17 +173,20 @@ export default async function DashboardPage({
   const rentReceipts = (c: string) => rentByCountry[c].billed - rentByCountry[c].outstanding;
 
   const isBank = panel === "bank";
+  const isCash = panel === "cash";
   const isRecent = panel === "recent";
   const selected = (panel in BALANCE_PANELS ? panel : "") as PanelKey | "";
   const detail = selected
     ? await loadDetail(companyId, selected, sym(BALANCE_PANELS[selected].currency))
     : isBank
-      ? bankDetail(bankAccounts)
-      : isRecent
-        ? recentDetail((recentVouchers ?? []) as unknown as RecentVoucherRow[], symById)
-        : null;
+      ? bankDetail(bankOnly, "Bank Balances")
+      : isCash
+        ? bankDetail(cashOnly, "Cash Balances")
+        : isRecent
+          ? recentDetail((recentVouchers ?? []) as unknown as RecentVoucherRow[], symById)
+          : null;
 
-  function cardHref(key: PanelKey | "bank" | "recent") {
+  function cardHref(key: PanelKey | "bank" | "cash" | "recent") {
     return panel === key ? "/dashboard" : `/dashboard?panel=${key}`;
   }
 
@@ -268,12 +272,12 @@ export default async function DashboardPage({
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
-          title="Bank & Balance"
+          title="Bank"
           href={cardHref("bank")}
           active={isBank}
           footer={
             <div className="text-center text-xs font-medium text-muted-foreground">
-              {bankAccounts.length} cash &amp; bank account{bankAccounts.length === 1 ? "" : "s"} — click for detail
+              {bankOnly.length} bank account{bankOnly.length === 1 ? "" : "s"} — click for detail
             </div>
           }
         >
@@ -288,6 +292,30 @@ export default async function DashboardPage({
             </div>
           ) : (
             <div className="py-1 text-sm text-muted-foreground">No bank accounts yet.</div>
+          )}
+        </SummaryCard>
+
+        <SummaryCard
+          title="Cash"
+          href={cardHref("cash")}
+          active={isCash}
+          footer={
+            <div className="text-center text-xs font-medium text-muted-foreground">
+              {cashOnly.length} cash account{cashOnly.length === 1 ? "" : "s"} — click for detail
+            </div>
+          }
+        >
+          {cashOnly.length > 0 ? (
+            <div className="space-y-1 text-sm">
+              {cashOnly.map((a) => (
+                <div key={a.code} className="flex items-baseline justify-between gap-3">
+                  <span className="truncate text-muted-foreground">{a.name}</span>
+                  <span className="shrink-0 font-mono font-medium tabular-nums">{money(a.symbol, a.balance)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-1 text-sm text-muted-foreground">No cash accounts yet.</div>
           )}
         </SummaryCard>
 
@@ -364,11 +392,14 @@ export default async function DashboardPage({
   );
 }
 
-// Bank & Balance drill-down — each cash/bank account and its balance, shown in
-// that account's own currency with its symbol.
-function bankDetail(accounts: { code: string; name: string; symbol: string; balance: number }[]) {
+// Cash / Bank drill-down — each account and its balance, shown in that
+// account's own currency with its symbol.
+function bankDetail(
+  accounts: { code: string; name: string; symbol: string; balance: number }[],
+  title: string,
+) {
   return {
-    title: "Cash & Bank Balances",
+    title,
     body: (
       <Table className="[&_td]:first:pl-5 [&_td]:last:pr-5 [&_th]:first:pl-5 [&_th]:last:pr-5">
         <TableHeader>

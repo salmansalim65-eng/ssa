@@ -75,6 +75,8 @@ export async function createPurchaseVoucher(input: PurchaseVoucherInput) {
     cost_center_id: l.costCenterId || null,
     fixed_asset_account_id: l.fixedAssetAccountId,
     gross: l.gross,
+    tax: l.tax,
+    commission: l.commission,
     due_date: l.dueDate || null,
     installment_month: l.installmentMonth || null,
     remarks: l.remarks || null,
@@ -187,6 +189,8 @@ export async function updatePurchaseVoucher(id: string, input: PurchaseVoucherIn
     cost_center_id: l.costCenterId || null,
     fixed_asset_account_id: l.fixedAssetAccountId,
     gross: l.gross,
+    tax: l.tax,
+    commission: l.commission,
     due_date: l.dueDate || null,
     installment_month: l.installmentMonth || null,
     remarks: l.remarks || null,
@@ -238,7 +242,7 @@ export async function copyPurchaseVoucher(id: string) {
   const { data: lines } = await supabase
     .schema("accounting")
     .from("purchase_voucher_lines")
-    .select("cost_center_id, fixed_asset_account_id, gross, due_date, installment_month, remarks")
+    .select("cost_center_id, fixed_asset_account_id, gross, tax, commission, due_date, installment_month, remarks")
     .eq("voucher_id", id)
     .order("line_no");
 
@@ -254,6 +258,8 @@ export async function copyPurchaseVoucher(id: string) {
       costCenterId: l.cost_center_id ?? "",
       fixedAssetAccountId: l.fixed_asset_account_id,
       gross: l.gross,
+      tax: l.tax ?? 0,
+      commission: l.commission ?? 0,
       dueDate: l.due_date ?? "",
       installmentMonth: l.installment_month ?? "",
       remarks: l.remarks ?? "",

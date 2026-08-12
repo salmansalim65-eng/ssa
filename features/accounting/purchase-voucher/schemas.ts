@@ -5,6 +5,8 @@ export const purchaseVoucherLineSchema = z.object({
   costCenterId: z.string().uuid().optional().or(z.literal("")),
   fixedAssetAccountId: z.string().uuid("Select the fixed asset account"),
   gross: z.coerce.number().nonnegative("Must be zero or more"),
+  tax: z.coerce.number().nonnegative("Must be zero or more").default(0),
+  commission: z.coerce.number().nonnegative("Must be zero or more").default(0),
   dueDate: z.string().date("Enter a valid date").optional().or(z.literal("")),
   installmentMonth: z.string().trim().max(50, "Keep it under 50 characters").optional().or(z.literal("")),
   remarks: z.string().trim().max(200, "Keep it under 200 characters").optional().or(z.literal("")),

@@ -90,11 +90,17 @@ export function AccountForm({
   const selectedParent = parentOptions.find((p) => p.id === selectedParentId);
   const lockAccountType = Boolean(selectedParent);
 
+  // Accounts created under the "PROPERTIES" group are managed as assets straight
+  // from Chart of Accounts, so the full property field set is surfaced and the
+  // account is registered as a rental property automatically.
+  const isPropertiesParent = (selectedParent?.account_name ?? "").trim().toUpperCase() === "PROPERTIES";
+
   // A rental property must be a postable asset account. The account is already
   // linked to a property when editing one previously flagged — that link can't
   // be undone from here (a lease may reference it), so the box stays checked.
   const canBeRentalProperty = !isGroup && accountType === "asset";
   const [alreadyLinked] = useState(() => defaultValues.isRentalProperty ?? false);
+  const showPropertyFields = canBeRentalProperty && (isPropertiesParent || alreadyLinked);
 
   // Clear the flag when the account stops being eligible (e.g. switched to a
   // group or a non-asset type), unless it is already linked to a property.
@@ -103,6 +109,13 @@ export function AccountForm({
       form.setValue("isRentalProperty", false);
     }
   }, [canBeRentalProperty, alreadyLinked, form]);
+
+  // Under PROPERTIES, being a rental property is implied — keep the flag on.
+  useEffect(() => {
+    if (isPropertiesParent && canBeRentalProperty) {
+      form.setValue("isRentalProperty", true);
+    }
+  }, [isPropertiesParent, canBeRentalProperty, form]);
 
   function handleParentChange(value: string, onChange: (value: string) => void) {
     const parentId = value === "none" ? "" : value;
@@ -278,15 +291,17 @@ export function AccountForm({
                     <Checkbox
                       checked={field.value}
                       onCheckedChange={field.onChange}
-                      disabled={alreadyLinked}
+                      disabled={alreadyLinked || isPropertiesParent}
                     />
                   </FormControl>
                   <div className="space-y-1 leading-none">
                     <FormLabel>This is a rental property</FormLabel>
                     <FormDescription>
                       {alreadyLinked
-                        ? "Linked to a property in Assets — it's selectable in this country's leases. Manage its details under Assets."
-                        : "Also registers this account as a property in the Assets module so it can be picked in UAE / PK / HH leases for the selected country."}
+                        ? "Linked to a property in Assets — it's selectable in this country's leases. Edit its details below."
+                        : isPropertiesParent
+                          ? "Under PROPERTIES, this account is registered as a property in the Assets module. Fill in its details below."
+                          : "Also registers this account as a property in the Assets module so it can be picked in UAE / PK / HH leases for the selected country."}
                     </FormDescription>
                     <FormMessage />
                   </div>
@@ -392,6 +407,236 @@ export function AccountForm({
                 Save the account first to attach ID, police verification and rent agreement documents.
               </p>
             )}
+          </FormSection>
+        )}
+
+        {showPropertyFields && (
+          <FormSection title="Property details">
+            <p className="text-xs text-muted-foreground">
+              These describe the linked property in the Assets module. Set the country in
+              the Details section above so the property appears in that country&apos;s leases.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="propertyType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Property type</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Apartment / Villa / Office" {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="propertyStatus"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Status</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                        <SelectItem value="sold">Sold</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="city"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>City</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="address"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Address</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="owner"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Owner</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="officialOwner"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Official owner</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="purchaseDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Purchase date</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="areaSqft"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Area</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" {...field} value={amountValue(field.value)} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="areaUnit"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Unit</FormLabel>
+                      <FormControl>
+                        <Input placeholder="sqft / sqm / marla" {...field} value={field.value ?? ""} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={form.control}
+                name="purchaseValue"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Purchase value</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" {...field} value={amountValue(field.value)} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="currentValue"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Current value</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" {...field} value={amountValue(field.value)} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="titleDeedValue"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Title deed value</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" {...field} value={amountValue(field.value)} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="serviceChargesRate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Service charges</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" {...field} value={amountValue(field.value)} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="otherCharges"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Other charges</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" {...field} value={amountValue(field.value)} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="estimatedRent"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Estimated rent</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" {...field} value={amountValue(field.value)} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <FormField
+              control={form.control}
+              name="propertyNotes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Notes</FormLabel>
+                  <FormControl>
+                    <Input {...field} value={field.value ?? ""} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </FormSection>
         )}
 

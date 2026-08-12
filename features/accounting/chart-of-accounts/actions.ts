@@ -6,6 +6,54 @@ import { hasPermission, requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { accountSchema, type AccountInput } from "./schemas";
 
+// Descriptive property fields captured on the CoA form (when the account sits
+// under PROPERTIES) and written through to the linked asset. Empty/zero values
+// simply carry through — on create they seed the asset, on re-sync they align it
+// (the form prefills these from the asset, so an overwrite is not destructive).
+interface PropertyFields {
+  propertyType?: string;
+  status: "active" | "inactive" | "sold";
+  city?: string;
+  address?: string;
+  owner?: string;
+  officialOwner?: string;
+  purchaseDate?: string;
+  areaSqft?: number;
+  areaUnit?: string;
+  purchaseValue?: number;
+  currentValue?: number;
+  titleDeedValue?: number;
+  serviceChargesRate?: number;
+  otherCharges?: number;
+  estimatedRent?: number;
+  notes?: string;
+}
+
+// Maps the CoA property fields onto assets.assets columns. `fallbackValue` (the
+// account opening balance) seeds the asset value when no purchase value is set.
+function assetColumnsFromProperty(p: PropertyFields | undefined, fallbackValue: number) {
+  const purchase = p?.purchaseValue && p.purchaseValue > 0 ? p.purchaseValue : fallbackValue;
+  const current = p?.currentValue && p.currentValue > 0 ? p.currentValue : purchase;
+  return {
+    property_type: p?.propertyType || "Property",
+    city: p?.city || null,
+    address: p?.address || null,
+    owner: p?.owner || null,
+    official_owner: p?.officialOwner || null,
+    purchase_date: p?.purchaseDate || null,
+    area_sqft: p?.areaSqft ?? 0,
+    area_unit: p?.areaUnit || null,
+    purchase_value: purchase,
+    current_value: current,
+    title_deed_value: p?.titleDeedValue ?? 0,
+    service_charges_rate: p?.serviceChargesRate ?? 0,
+    other_charges: p?.otherCharges ?? 0,
+    estimated_rent: p?.estimatedRent ?? 0,
+    status: p?.status ?? "active",
+    notes: p?.notes || null,
+  };
+}
+
 async function getCurrentCompanyId() {
   const supabase = await createClient();
   const { data, error } = await supabase.schema("core").rpc("current_company_id");
@@ -43,16 +91,23 @@ async function ensureLinkedAsset(params: {
   currencyId: string | null;
   openingBalance: number;
   existingAssetId: string | null;
+  property?: PropertyFields;
 }): Promise<{ assetId?: string; error?: string }> {
   const supabase = await createClient();
+  const value = Number.isFinite(params.openingBalance) ? Math.max(0, params.openingBalance) : 0;
 
-  // Already linked → keep the property's identifying fields aligned with the
-  // account. The asset→cost-centre trigger propagates the change onward.
+  // Already linked → keep the property aligned with the account: identifying
+  // fields plus any descriptive property details edited on the CoA form. The
+  // asset→cost-centre trigger propagates name/country onward.
   if (params.existingAssetId) {
     const { error } = await supabase
       .schema("assets")
       .from("assets")
-      .update({ asset_name: params.accountName, country: params.country })
+      .update({
+        asset_name: params.accountName,
+        country: params.country,
+        ...(params.property ? assetColumnsFromProperty(params.property, value) : {}),
+      })
       .eq("id", params.existingAssetId);
     if (error) return { error: error.message };
     return { assetId: params.existingAssetId };
@@ -66,11 +121,11 @@ async function ensureLinkedAsset(params: {
   });
   if (codeError || !assetCode) return { error: codeError?.message ?? "Failed to generate asset code" };
 
-  // Seed the property from what the account already knows: its opening balance
-  // becomes the starting value, its currency (or the base currency) the asset
-  // currency. Everything else is refined later in the Assets module.
-  const value = Number.isFinite(params.openingBalance) ? Math.max(0, params.openingBalance) : 0;
+  // Seed the property from what the account knows: descriptive fields from the
+  // CoA form when supplied, else its opening balance as the starting value; its
+  // currency (or the base currency) as the asset currency.
   const currencyId = await resolveOpeningBalanceCurrencyId(params.companyId, params.currencyId);
+  const assetColumns = assetColumnsFromProperty(params.property, value);
 
   const { data: asset, error } = await supabase
     .schema("assets")
@@ -79,25 +134,23 @@ async function ensureLinkedAsset(params: {
       company_id: params.companyId,
       asset_code: assetCode,
       asset_name: params.accountName,
-      property_type: "Property",
       country: params.country,
-      purchase_value: value,
-      current_value: value,
       currency_id: currencyId,
-      status: "active",
       cost_center_mode: "new",
       created_by: params.userId,
+      ...assetColumns,
     })
     .select("id")
     .single();
   if (error || !asset) return { error: error?.message ?? "Failed to create the linked property" };
 
   // Seed the opening value into the asset's value history (previous = null).
-  if (value > 0) {
+  const seededValue = assetColumns.current_value;
+  if (seededValue > 0) {
     await supabase.schema("assets").rpc("fn_log_value_change", {
       p_asset_id: asset.id,
       p_previous: null,
-      p_new: value,
+      p_new: seededValue,
       p_effective_date: null,
       p_remarks: "Created from Chart of Accounts",
     });
@@ -177,6 +230,7 @@ export async function createAccount(input: AccountInput) {
       currencyId,
       openingBalance: parsed.data.openingBalance,
       existingAssetId: null,
+      property: propertyFieldsFrom(parsed.data),
     });
     if (link.error) {
       revalidatePath("/accounting/chart-of-accounts");
@@ -200,12 +254,35 @@ async function linkRentalProperty(params: {
   currencyId: string | null;
   openingBalance: number;
   existingAssetId: string | null;
+  property?: PropertyFields;
 }): Promise<{ assetId?: string; error?: string }> {
   const action = params.existingAssetId ? "edit" : "create";
   if (!(await hasPermission("assets", action))) {
     return { error: `you need the Assets "${action}" permission.` };
   }
   return ensureLinkedAsset(params);
+}
+
+// Pulls the descriptive property fields out of a validated account form.
+function propertyFieldsFrom(d: AccountInput): PropertyFields {
+  return {
+    propertyType: d.propertyType,
+    status: d.propertyStatus,
+    city: d.city,
+    address: d.address,
+    owner: d.owner,
+    officialOwner: d.officialOwner,
+    purchaseDate: d.purchaseDate,
+    areaSqft: d.areaSqft,
+    areaUnit: d.areaUnit,
+    purchaseValue: d.purchaseValue,
+    currentValue: d.currentValue,
+    titleDeedValue: d.titleDeedValue,
+    serviceChargesRate: d.serviceChargesRate,
+    otherCharges: d.otherCharges,
+    estimatedRent: d.estimatedRent,
+    notes: d.propertyNotes,
+  };
 }
 
 export async function updateAccount(accountId: string, input: AccountInput) {
@@ -273,6 +350,7 @@ export async function updateAccount(accountId: string, input: AccountInput) {
       currencyId,
       openingBalance: parsed.data.openingBalance,
       existingAssetId,
+      property: propertyFieldsFrom(parsed.data),
     });
     if (link.error) {
       revalidatePath("/accounting/chart-of-accounts");

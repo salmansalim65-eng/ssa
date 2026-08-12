@@ -106,6 +106,27 @@ type TypeFilter = "all" | AccountRow["account_type"];
 type LevelFilter = "all" | "group" | "posting";
 type StatusFilter = "all" | "active" | "inactive";
 
+// The linked asset's property fields, as loaded server-side, used to prefill
+// the Property details section when editing a property account.
+export interface LinkedAssetFields {
+  property_type: string | null;
+  status: "active" | "inactive" | "sold" | null;
+  city: string | null;
+  address: string | null;
+  owner: string | null;
+  official_owner: string | null;
+  purchase_date: string | null;
+  area_sqft: number | null;
+  area_unit: string | null;
+  purchase_value: number | null;
+  current_value: number | null;
+  title_deed_value: number | null;
+  service_charges_rate: number | null;
+  other_charges: number | null;
+  estimated_rent: number | null;
+  notes: string | null;
+}
+
 const emptyValues: AccountInput = {
   accountName: "",
   parentId: "",
@@ -122,6 +143,22 @@ const emptyValues: AccountInput = {
   phone: "",
   email: "",
   country: "",
+  propertyType: "",
+  propertyStatus: "active",
+  city: "",
+  address: "",
+  owner: "",
+  officialOwner: "",
+  purchaseDate: "",
+  areaSqft: blankAmount,
+  areaUnit: "",
+  purchaseValue: blankAmount,
+  currentValue: blankAmount,
+  titleDeedValue: blankAmount,
+  serviceChargesRate: blankAmount,
+  otherCharges: blankAmount,
+  estimatedRent: blankAmount,
+  propertyNotes: "",
 };
 
 const typeBadgeClass: Record<AccountRow["account_type"], string> = {
@@ -172,6 +209,7 @@ export function AccountTree({
   canCreate,
   canEdit,
   canDelete,
+  assetFieldsById = {},
 }: {
   accounts: AccountRow[];
   currencies: CurrencyOption[];
@@ -179,6 +217,9 @@ export function AccountTree({
   canCreate: boolean;
   canEdit: boolean;
   canDelete: boolean;
+  /** Property fields of each linked asset, keyed by asset id — prefills the
+   *  Property details section when editing a property account. */
+  assetFieldsById?: Record<string, LinkedAssetFields>;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(accounts.filter((a) => a.is_group).map((a) => a.id)),
@@ -733,23 +774,47 @@ export function AccountTree({
               }
               defaultValues={
                 dialog.mode === "edit"
-                  ? {
-                      accountName: dialog.account.account_name,
-                      parentId: dialog.account.parent_id ?? "",
-                      accountType: dialog.account.account_type,
-                      currencyId: dialog.account.currency_id ?? "",
-                      isGroup: dialog.account.is_group,
-                      openingBalance: dialog.account.opening_balance,
-                      isCash: dialog.account.is_cash,
-                      isBank: dialog.account.is_bank,
-                      isTenantGroup: dialog.account.is_tenant_group,
-                      isRentalProperty: dialog.account.linked_asset_id != null,
-                      idNumber: dialog.account.id_number ?? "",
-                      contactPerson: dialog.account.contact_person ?? "",
-                      phone: dialog.account.phone ?? "",
-                      email: dialog.account.email ?? "",
-                      country: dialog.account.country ?? "",
-                    }
+                  ? (() => {
+                      const linked = dialog.account.linked_asset_id
+                        ? assetFieldsById[dialog.account.linked_asset_id]
+                        : undefined;
+                      return {
+                        ...emptyValues,
+                        accountName: dialog.account.account_name,
+                        parentId: dialog.account.parent_id ?? "",
+                        accountType: dialog.account.account_type,
+                        currencyId: dialog.account.currency_id ?? "",
+                        isGroup: dialog.account.is_group,
+                        openingBalance: dialog.account.opening_balance,
+                        isCash: dialog.account.is_cash,
+                        isBank: dialog.account.is_bank,
+                        isTenantGroup: dialog.account.is_tenant_group,
+                        isRentalProperty: dialog.account.linked_asset_id != null,
+                        idNumber: dialog.account.id_number ?? "",
+                        contactPerson: dialog.account.contact_person ?? "",
+                        phone: dialog.account.phone ?? "",
+                        email: dialog.account.email ?? "",
+                        country: dialog.account.country ?? "",
+                        // Property details prefilled from the linked asset so an
+                        // edit shows current values (and never overwrites with blanks).
+                        propertyType: linked?.property_type ?? "",
+                        propertyStatus: linked?.status ?? "active",
+                        city: linked?.city ?? "",
+                        address: linked?.address ?? "",
+                        owner: linked?.owner ?? "",
+                        officialOwner: linked?.official_owner ?? "",
+                        purchaseDate: linked?.purchase_date ?? "",
+                        areaSqft: linked?.area_sqft ?? blankAmount,
+                        areaUnit: linked?.area_unit ?? "",
+                        purchaseValue: linked?.purchase_value ?? blankAmount,
+                        currentValue: linked?.current_value ?? blankAmount,
+                        titleDeedValue: linked?.title_deed_value ?? blankAmount,
+                        serviceChargesRate: linked?.service_charges_rate ?? blankAmount,
+                        otherCharges: linked?.other_charges ?? blankAmount,
+                        estimatedRent: linked?.estimated_rent ?? blankAmount,
+                        propertyNotes: linked?.notes ?? "",
+                      };
+                    })()
                   : {
                       ...emptyValues,
                       parentId: dialog.parentId ?? "",

@@ -141,6 +141,10 @@ export function PropertyReportView({
 
   const visibleRows = useMemo(() => filteredGroups.flatMap((g) => g.rows), [filteredGroups]);
   const vacant = useMemo(() => visibleRows.filter((r) => !r.occupied), [visibleRows]);
+  // Portfolio KPIs recompute from whatever the current filters leave visible.
+  const portfolio = useMemo(() => aggregateGroup(visibleRows), [visibleRows]);
+  const occupiedCount = visibleRows.length - vacant.length;
+  const occupancyRate = visibleRows.length ? Math.round((occupiedCount / visibleRows.length) * 100) : 0;
   const selected = useMemo(
     () => visibleRows.find((r) => r.id === selectedId) ?? null,
     [visibleRows, selectedId],
@@ -246,6 +250,21 @@ export function PropertyReportView({
         )}
       </div>
 
+      {/* KPI band — recomputes with the active filters */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+        <Kpi label="Properties" value={visibleRows.length.toLocaleString("en-US")} sub={`${occupiedCount} occupied · ${vacant.length} vacant`} />
+        <Kpi label="Occupancy" value={`${occupancyRate}%`} sub={`${occupiedCount} of ${visibleRows.length} let`} />
+        <Kpi label="Current Value" value={money(portfolio.currentValue)} sub={`Purchase ${money(portfolio.purchaseValue)}`} />
+        <Kpi
+          label="Difference Value"
+          value={money(portfolio.diffValue)}
+          sub={portfolio.diffValue >= 0 ? "Appreciation" : "Depreciation"}
+          tone={portfolio.diffValue >= 0 ? "up" : "down"}
+        />
+        <Kpi label="Yearly Rent" value={money(portfolio.yearlyRent)} sub={`Net ${money(portfolio.netRent)}`} />
+        <Kpi label="Avg. Yield" value={pct(portfolio.perc)} sub={`${pct(portfolio.percMonth)} / month`} />
+      </div>
+
       {/* Total cost centers banner */}
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ledger/30 bg-ledger/10 px-4 py-2.5">
         <p className="text-sm font-bold uppercase tracking-wide text-ledger-dark">
@@ -255,7 +274,7 @@ export function PropertyReportView({
           )}
         </p>
         <p className="text-xs text-muted-foreground">
-          {vacant.length} vacant · {visibleRows.length - vacant.length} occupied
+          {vacant.length} vacant · {occupiedCount} occupied
         </p>
       </div>
 
@@ -402,6 +421,35 @@ export function PropertyReportView({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function Kpi({
+  label,
+  value,
+  sub,
+  tone,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  tone?: "up" | "down";
+}) {
+  return (
+    <div className="rounded-lg border bg-card px-3.5 py-3 shadow-xs">
+      <p className="truncate text-[0.68rem] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p
+        className={cn(
+          "mt-1 truncate font-mono text-xl font-bold tabular-nums",
+          tone === "up" && "text-ledger-dark",
+          tone === "down" && "text-destructive",
+          !tone && "text-foreground",
+        )}
+      >
+        {value}
+      </p>
+      {sub && <p className="mt-0.5 truncate text-xs text-muted-foreground">{sub}</p>}
     </div>
   );
 }

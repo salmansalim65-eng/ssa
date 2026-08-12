@@ -1,9 +1,8 @@
 import { Fragment } from "react";
 import Link from "next/link";
-import { HomeIcon, PlusIcon } from "lucide-react";
+import { HomeIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import {
@@ -17,7 +16,6 @@ import {
 import { AssetFilters } from "@/components/assets/asset-filters";
 import { CsvExportButton } from "@/components/reports/csv-export-button";
 import { PrintButton } from "@/components/vouchers/print-button";
-import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { formatMoney } from "@/lib/format";
 import { formatArea, areaUnitLabel } from "@/lib/assets/area-units";
@@ -49,7 +47,7 @@ export default async function AssetsPage({
     .eq("company_id", companyId);
   if (countryFilter) assetQuery = assetQuery.eq("country", countryFilter);
 
-  const [{ data: assetRows }, { data: countries }, { data: currencyRows }, canCreate] = await Promise.all([
+  const [{ data: assetRows }, { data: countries }, { data: currencyRows }] = await Promise.all([
     assetQuery.order("asset_code"),
     supabase
       .schema("core")
@@ -59,7 +57,6 @@ export default async function AssetsPage({
       .eq("is_active", true)
       .order("name"),
     supabase.schema("core").from("currencies").select("id, code, symbol"),
-    hasPermission("assets", "create"),
   ]);
 
   const rows = assetRows ?? [];
@@ -135,13 +132,6 @@ export default async function AssetsPage({
               />
             )}
             <PrintButton />
-            {canCreate && (
-              <Button asChild>
-                <Link href="/assets/new">
-                  <PlusIcon /> New asset
-                </Link>
-              </Button>
-            )}
           </>
         }
       />
@@ -163,17 +153,8 @@ export default async function AssetsPage({
             title={countryFilter ? "No assets in this country" : "No assets registered yet"}
             description={
               countryFilter
-                ? "Try a different country filter, or register a new asset."
-                : "Register a property or asset to start tracking it here."
-            }
-            action={
-              canCreate && (
-                <Button asChild>
-                  <Link href="/assets/new">
-                    <PlusIcon /> New asset
-                  </Link>
-                </Button>
-              )
+                ? "Try a different country filter."
+                : "Add a property under the PROPERTIES group in Chart of Accounts — it appears here automatically."
             }
           />
         ) : (

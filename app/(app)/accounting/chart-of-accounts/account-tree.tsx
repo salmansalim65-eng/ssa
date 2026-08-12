@@ -739,8 +739,8 @@ export function AccountTree({
             }
           />
         ) : (
-          <Table>
-            <TableHeader>
+          <Table containerClassName="max-h-[70vh] overflow-auto">
+            <TableHeader className="sticky top-0 z-20">
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-[28%]">Account Code</TableHead>
                 <TableHead>Account Name</TableHead>

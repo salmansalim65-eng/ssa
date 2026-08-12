@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { PlusIcon } from "lucide-react";
@@ -35,7 +35,6 @@ import {
 import { assetSchema, type AssetFormValues, type AssetInput } from "@/features/assets/schemas";
 import { createCountry } from "@/features/assets/countries/actions";
 import { amountValue } from "@/lib/forms/amount";
-import { formatMoney } from "@/lib/format";
 import { AREA_UNITS, convertedArea } from "@/lib/assets/area-units";
 
 // A newly-picked country pre-selects its currency (if the company has it).
@@ -92,19 +91,6 @@ export function AssetForm({
     resolver: zodResolver(assetSchema),
     defaultValues,
   });
-
-  // Live Total Property Value = Current + Title Deed + Service Charges + Other.
-  const [current, titleDeed, service, other, currencyId] = useWatch({
-    control: form.control,
-    name: ["currentValue", "titleDeedValue", "serviceChargesRate", "otherCharges", "currencyId"],
-  });
-  const total =
-    (Number(current) || 0) + (Number(titleDeed) || 0) + (Number(service) || 0) + (Number(other) || 0);
-  const currencyLabel = useMemo(() => {
-    const c = currencies.find((x) => x.id === currencyId);
-    return c ? c.symbol || c.code : "";
-  }, [currencies, currencyId]);
-  const money = (n: number) => `${currencyLabel ? `${currencyLabel} ` : ""}${formatMoney(n)}`;
 
   const areaUnit = useWatch({ control: form.control, name: "areaUnit" });
   const areaSqft = useWatch({ control: form.control, name: "areaSqft" });
@@ -388,8 +374,10 @@ export function AssetForm({
           control={form.control}
           name="purchaseValue"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel>Purchase value</FormLabel>
+            <FormItem className="sm:col-span-2 rounded-lg border-2 border-ledger/40 bg-ledger/10 px-4 py-3">
+              <FormLabel className="text-sm font-semibold uppercase tracking-wide text-ledger">
+                Purchase value
+              </FormLabel>
               <FormControl>
                 <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
               </FormControl>
@@ -490,14 +478,6 @@ export function AssetForm({
             </FormItem>
           )}
         />
-
-        {/* Prominent live total */}
-        <div className="sm:col-span-2 flex items-center justify-between rounded-lg border-2 border-ledger/40 bg-ledger/10 px-4 py-3">
-          <span className="text-sm font-semibold uppercase tracking-wide text-ledger">
-            Total property value
-          </span>
-          <span className="font-mono text-lg font-bold tabular-nums text-foreground">{money(total)}</span>
-        </div>
 
         {/* OTHER --------------------------------------------------------------- */}
         <SectionHeading>Other</SectionHeading>

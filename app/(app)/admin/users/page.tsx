@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { hasPermission } from "@/lib/auth/permissions";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { AddUserDialog } from "./add-user-dialog";
@@ -22,41 +23,45 @@ export default async function UsersPage() {
 
   const companyId = await getCurrentCompanyId();
 
-  const [{ data: memberships }, { data: roles }, canCreate, canEdit, canDelete] =
+  const [{ data: memberships }, { data: roles }, { data: userRoles }, canCreate, canEdit, canDelete] =
     await Promise.all([
-      supabase
-        .schema("core")
-        .from("user_companies")
-        .select("user_id, user_profiles:user_id(id, full_name, email, username, phone, is_active)")
-        .eq("company_id", companyId),
+      supabase.schema("core").from("user_companies").select("user_id").eq("company_id", companyId),
       supabase.schema("core").from("roles").select("id, name").eq("company_id", companyId),
+      supabase.schema("core").from("user_roles").select("user_id, role_id").eq("company_id", companyId),
       hasPermission("users", "create"),
       hasPermission("users", "edit"),
       hasPermission("users", "delete"),
     ]);
 
-  const { data: userRoles } = await supabase
-    .schema("core")
-    .from("user_roles")
-    .select("user_id, role_id")
-    .eq("company_id", companyId);
+  // Load the member profiles with the service-role client: the RLS-embedded
+  // read of core.user_profiles is gated on the viewer's users.view permission
+  // and silently returns null for other users, which hid newly-added members.
+  // We've already scoped to this company's memberships above, so this is safe.
+  const memberIds = (memberships ?? []).map((m) => m.user_id as string);
+  const admin = createAdminClient();
+  const { data: profiles } = memberIds.length
+    ? await admin
+        .schema("core")
+        .from("user_profiles")
+        .select("id, full_name, email, username, phone, is_active")
+        .in("id", memberIds)
+    : { data: [] };
 
   const roleByUser = new Map(userRoles?.map((ur) => [ur.user_id, ur.role_id]));
   const roleNameById = new Map(roles?.map((r) => [r.id, r.name]));
 
-  type MembershipRow = {
-    user_id: string;
-    user_profiles: {
-      id: string;
-      full_name: string;
-      email: string;
-      username: string | null;
-      phone: string | null;
-      is_active: boolean;
-    } | null;
+  type ProfileRow = {
+    id: string;
+    full_name: string;
+    email: string;
+    username: string | null;
+    phone: string | null;
+    is_active: boolean;
   };
 
-  const rows = (memberships as unknown as MembershipRow[] | null) ?? [];
+  const rows = ((profiles as unknown as ProfileRow[] | null) ?? []).sort((a, b) =>
+    a.full_name.localeCompare(b.full_name),
+  );
 
   return (
     <div className="space-y-5">
@@ -88,9 +93,7 @@ export default async function UsersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((m) => {
-                const profile = m.user_profiles;
-                if (!profile) return null;
+              {rows.map((profile) => {
                 const roleId = roleByUser.get(profile.id) ?? null;
                 return (
                   <TableRow key={profile.id}>

@@ -1,14 +1,16 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -58,6 +60,8 @@ export function CostCenterForm({
     resolver: zodResolver(costCenterSchema),
     defaultValues,
   });
+
+  const isGroup = useWatch({ control: form.control, name: "isGroup" });
 
   function handleSubmit(values: CostCenterInput) {
     setFormError(null);
@@ -111,6 +115,26 @@ export function CostCenterForm({
             </FormItem>
           )}
         />
+        <FormField
+          control={form.control}
+          name="isGroup"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-start gap-2.5 rounded-lg border p-3 sm:col-span-2">
+              <FormControl>
+                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+              </FormControl>
+              <div className="space-y-1 leading-none">
+                <FormLabel>Group / header cost centre</FormLabel>
+                <FormDescription>
+                  A group organises other cost centres under it (e.g. a Properties group with
+                  country subgroups) and isn&apos;t posted to directly.
+                </FormDescription>
+              </div>
+            </FormItem>
+          )}
+        />
+        {!isGroup && (
+          <>
         <FormField
           control={form.control}
           name="country"
@@ -213,6 +237,8 @@ export function CostCenterForm({
             </FormItem>
           )}
         />
+          </>
+        )}
         {formError && <p className="text-sm text-destructive sm:col-span-2">{formError}</p>}
         <Button type="submit" disabled={isPending} className="sm:col-span-2 sm:w-fit">
           {isPending ? "Saving…" : submitLabel}

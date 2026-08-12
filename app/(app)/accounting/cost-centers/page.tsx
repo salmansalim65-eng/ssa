@@ -125,6 +125,7 @@ export default async function CostCentersPage() {
               parentOptions={rowParentOptions}
               defaultValues={{
                 name: cc.name,
+                isGroup: cc.is_group ?? false,
                 parentId: cc.parent_id ?? "",
                 country: cc.country ?? "",
                 city: cc.city ?? "",

@@ -423,6 +423,7 @@ export interface Database {
           company_id: string;
           code: string;
           name: string;
+          is_group: boolean;
           parent_id: string | null;
           asset_id: string | null;
           country: string | null;

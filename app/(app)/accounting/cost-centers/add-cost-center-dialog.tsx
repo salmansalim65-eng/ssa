@@ -18,6 +18,7 @@ import { CostCenterForm, type CostCenterParentOption } from "./cost-center-form"
 
 const emptyValues: CostCenterInput = {
   name: "",
+  isGroup: false,
   parentId: "",
   country: "",
   city: "",

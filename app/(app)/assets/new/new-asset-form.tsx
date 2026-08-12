@@ -31,6 +31,7 @@ const emptyValues: AssetFormValues = {
   currentValue: blankAmount,
   currencyId: "",
   serviceChargesRate: blankAmount,
+  propertyTax: blankAmount,
   titleDeedValue: blankAmount,
   otherCharges: blankAmount,
   estimatedRent: blankAmount,

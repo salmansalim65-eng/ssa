@@ -17,6 +17,7 @@ export const assetSchema = z.object({
   currentValue: z.coerce.number().nonnegative(),
   currencyId: z.string().uuid().optional().or(z.literal("")),
   serviceChargesRate: z.coerce.number().nonnegative(),
+  propertyTax: z.coerce.number().nonnegative().default(0),
   titleDeedValue: z.coerce.number().nonnegative(),
   otherCharges: z.coerce.number().nonnegative(),
   estimatedRent: z.coerce.number().nonnegative(),

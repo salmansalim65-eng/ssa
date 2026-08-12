@@ -96,6 +96,13 @@ export function AssetForm({
   const areaSqft = useWatch({ control: form.control, name: "areaSqft" });
   const areaConverted = convertedArea(Number(areaSqft) || 0, areaUnit || null);
 
+  // Country-conditional charges: UAE properties carry a Service Charges Rate and
+  // a computed Service Charges Amount (rate × area); Pakistan properties carry a
+  // Property Tax. The amount is stored as a generated column server-side.
+  const country = useWatch({ control: form.control, name: "country" });
+  const serviceChargesRate = useWatch({ control: form.control, name: "serviceChargesRate" });
+  const serviceChargesAmount = (Number(serviceChargesRate) || 0) * (Number(areaSqft) || 0);
+
   // Single "Cost center" dropdown backed by two fields: costCenterMode
   // ('new' | 'none' | 'existing') and, for 'existing', groupCostCenterId.
   const costCenterMode = useWatch({ control: form.control, name: "costCenterMode" });
@@ -439,19 +446,52 @@ export function AssetForm({
             </FormItem>
           )}
         />
-        <FormField
-          control={form.control}
-          name="serviceChargesRate"
-          render={({ field }) => (
+        {country === "AE" && (
+          <>
+            <FormField
+              control={form.control}
+              name="serviceChargesRate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Service Charges Rate</FormLabel>
+                  <FormControl>
+                    <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
+                  </FormControl>
+                  <FormDescription>Per unit of area.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormItem>
-              <FormLabel>Service charges</FormLabel>
+              <FormLabel>Service Charges Amount</FormLabel>
               <FormControl>
-                <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
+                <Input
+                  type="number"
+                  readOnly
+                  value={serviceChargesAmount || ""}
+                  className="bg-muted/50"
+                  tabIndex={-1}
+                />
               </FormControl>
-              <FormMessage />
+              <FormDescription>Rate × area, calculated automatically.</FormDescription>
             </FormItem>
-          )}
-        />
+          </>
+        )}
+        {country === "PK" && (
+          <FormField
+            control={form.control}
+            name="propertyTax"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Property Tax</FormLabel>
+                <FormControl>
+                  <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
         <FormField
           control={form.control}
           name="otherCharges"

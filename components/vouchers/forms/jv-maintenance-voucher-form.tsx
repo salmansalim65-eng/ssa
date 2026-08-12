@@ -43,6 +43,9 @@ import {
 export interface CostCenterOption {
   id: string;
   name: string;
+  /** Auto-fill amount for a line: the asset's Service Charges Amount (UAE) or
+   *  Property Tax (Pakistan). */
+  chargeAmount?: number;
 }
 
 function today() {
@@ -226,7 +229,19 @@ export function JvMaintenanceVoucherForm({
                           <FormItem>
                             <Select
                               value={field.value ? field.value : "none"}
-                              onValueChange={(v) => field.onChange(v === "none" ? "" : v)}
+                              onValueChange={(v) => {
+                                const id = v === "none" ? "" : v;
+                                field.onChange(id);
+                                // Auto-fill the line amount from the selected
+                                // cost centre's asset charge (service charges /
+                                // property tax), when it has one.
+                                const cc = costCenters.find((c) => c.id === id);
+                                if (cc?.chargeAmount && cc.chargeAmount > 0) {
+                                  form.setValue(`lines.${index}.amount`, cc.chargeAmount, {
+                                    shouldValidate: true,
+                                  });
+                                }
+                              }}
                             >
                               <FormControl>
                                 <SelectTrigger className="w-full">

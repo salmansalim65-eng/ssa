@@ -32,6 +32,7 @@ export default async function UaeLeasesPage() {
       .from("uae_leases")
       .select("id, asset_id, lease_start, lease_end, rental_amount, rent_cycle, status, tenants:tenant_id(name)")
       .eq("company_id", companyId)
+      .or("lease_type.is.null,lease_type.neq.hh")
       .is("deleted_at", null)
       .order("created_at", { ascending: false }),
     hasPermission("uae_rent_invoice", "create"),

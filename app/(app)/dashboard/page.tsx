@@ -19,7 +19,7 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { VOUCHER_TYPE_LABELS, voucherHref } from "@/lib/vouchers/meta";
 import { isRentOverdue } from "@/lib/rental/overdue";
-import type { VoucherType } from "@/types/database.types";
+import type { JournalEntryStatus, VoucherType } from "@/types/database.types";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -81,7 +81,7 @@ export default async function DashboardPage({
     supabase
       .schema("reporting")
       .from("v_rental_income")
-      .select("country, amount, outstanding_balance, due_date, exchange_rate")
+      .select("country, amount, outstanding_balance, net_amount, net_outstanding, due_date, exchange_rate")
       .eq("company_id", companyId)
       .in("country", ["UAE", "PK"]),
     supabase
@@ -150,7 +150,10 @@ export default async function DashboardPage({
     b.credit += Number(r.doc_credit_amount);
   }
 
-  // Rent figures in each country's own currency (document amounts).
+  // Rent figures in each country's own currency (document amounts), NET of the
+  // agent/commission share — the owner's rent, not the gross billed to the
+  // tenant. (v_rental_income.net_amount = amount − agent_share; net_outstanding
+  // is that net reduced pro-rata as the tenant pays.)
   const rentByCountry: Record<string, { billed: number; outstanding: number; overdue: number; due: number }> = {
     UAE: { billed: 0, outstanding: 0, overdue: 0, due: 0 },
     PK: { billed: 0, outstanding: 0, overdue: 0, due: 0 },
@@ -159,24 +162,27 @@ export default async function DashboardPage({
   for (const r of rentRows ?? []) {
     const g = rentByCountry[r.country as string];
     if (!g) continue;
-    const amount = Number(r.amount);
-    const outstanding = Number(r.outstanding_balance);
-    g.billed += amount;
-    g.outstanding += outstanding;
-    if (isRentOverdue(r.due_date as string, now)) g.overdue += outstanding;
-    else g.due += outstanding;
+    const netAmount = Number(r.net_amount);
+    const netOutstanding = Number(r.net_outstanding);
+    g.billed += netAmount;
+    g.outstanding += netOutstanding;
+    if (isRentOverdue(r.due_date as string, now)) g.overdue += netOutstanding;
+    else g.due += netOutstanding;
   }
   const rentReceipts = (c: string) => rentByCountry[c].billed - rentByCountry[c].outstanding;
 
   const isBank = panel === "bank";
+  const isRecent = panel === "recent";
   const selected = (panel in BALANCE_PANELS ? panel : "") as PanelKey | "";
   const detail = selected
     ? await loadDetail(companyId, selected, sym(BALANCE_PANELS[selected].currency))
     : isBank
       ? bankDetail(bankAccounts)
-      : null;
+      : isRecent
+        ? recentDetail((recentVouchers ?? []) as unknown as RecentVoucherRow[], symById)
+        : null;
 
-  function cardHref(key: PanelKey | "bank") {
+  function cardHref(key: PanelKey | "bank" | "recent") {
     return panel === key ? "/dashboard" : `/dashboard?panel=${key}`;
   }
 
@@ -260,21 +266,7 @@ export default async function DashboardPage({
         </SummaryCard>
       </div>
 
-      {detail && (
-        <Card className="border-ledger-dark/40">
-          <CardHeader className="border-b pb-4">
-            <CardTitle>{detail.title}</CardTitle>
-            <CardAction>
-              <Button asChild variant="outline" size="sm">
-                <Link href="/dashboard">Close</Link>
-              </Button>
-            </CardAction>
-          </CardHeader>
-          <CardContent className="px-0">{detail.body}</CardContent>
-        </Card>
-      )}
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
           title="Bank & Balance"
           href={cardHref("bank")}
@@ -321,65 +313,53 @@ export default async function DashboardPage({
           tone={(pendingApprovals ?? 0) > 0 ? "warning" : undefined}
           href="/accounting/voucher-register"
         />
+
+        <SummaryCard
+          title="Recent Transactions"
+          href={cardHref("recent")}
+          active={isRecent}
+          footer={
+            <div className="text-center text-xs font-medium text-muted-foreground">
+              {(recentVouchers ?? []).length > 0
+                ? "Latest vouchers — click for detail"
+                : "No transactions yet"}
+            </div>
+          }
+        >
+          {(recentVouchers ?? []).length > 0 ? (
+            <div className="space-y-1 text-sm">
+              {(recentVouchers ?? []).slice(0, 3).map((row) => (
+                <div
+                  key={`${row.voucher_type}-${row.voucher_id}`}
+                  className="flex items-baseline justify-between gap-3"
+                >
+                  <span className="truncate font-mono text-muted-foreground">{row.voucher_no ?? "Draft"}</span>
+                  <span className="shrink-0 font-mono font-medium tabular-nums">
+                    {money(symById(row.currency_id), Number(row.doc_amount ?? row.amount))}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-1 text-sm text-muted-foreground">No transactions yet.</div>
+          )}
+        </SummaryCard>
       </div>
 
-      <Card className="overflow-hidden border-ledger-dark pt-0">
-        <CardHeader className="flex-row items-center gap-2 space-y-0 border-b-2 border-ledger-dark bg-ledger-dark px-5 py-2.5 text-white">
-          <CardTitle className="text-white">Recent transactions</CardTitle>
-          <CardAction className="self-auto">
-            <Button
-              asChild
-              variant="outline"
-              size="sm"
-              className="border-white/30 bg-transparent text-white hover:bg-white/15 hover:text-white"
-            >
-              <Link href="/accounting/voucher-register">View all</Link>
-            </Button>
-          </CardAction>
-        </CardHeader>
-        <CardContent className="px-0">
-          <Table className="[&_td]:first:pl-5 [&_td]:last:pr-5 [&_th]:first:pl-5 [&_th]:last:pr-5">
-            <TableHeader className="bg-ledger/10 [&_th]:border-ledger/30 [&_th]:text-foreground">
-              <TableRow className="hover:bg-transparent">
-                <TableHead>Voucher No</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead className="w-36">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {(recentVouchers ?? []).map((row) => (
-                <TableRow key={`${row.voucher_type}-${row.voucher_id}`}>
-                  <TableCell>
-                    <Link
-                      href={voucherHref(row.voucher_type as VoucherType, row.voucher_id)}
-                      className="font-mono font-medium text-primary hover:underline"
-                    >
-                      {row.voucher_no ?? "Draft"}
-                    </Link>
-                  </TableCell>
-                  <TableCell>{VOUCHER_TYPE_LABELS[row.voucher_type as VoucherType]}</TableCell>
-                  <TableCell className="text-muted-foreground">{formatDate(row.entry_date)}</TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">
-                    {money(symById(row.currency_id), Number(row.doc_amount ?? row.amount))}
-                  </TableCell>
-                  <TableCell>
-                    <VoucherStatusBadge status={row.status} />
-                  </TableCell>
-                </TableRow>
-              ))}
-              {(recentVouchers ?? []).length === 0 && (
-                <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
-                    No transactions yet.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      {/* The selected tab's detail/report renders here — below ALL the cards. */}
+      {detail && (
+        <Card className="border-ledger-dark/40">
+          <CardHeader className="border-b pb-4">
+            <CardTitle>{detail.title}</CardTitle>
+            <CardAction>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/dashboard">Close</Link>
+              </Button>
+            </CardAction>
+          </CardHeader>
+          <CardContent className="px-0">{detail.body}</CardContent>
+        </Card>
+      )}
     </div>
   );
 }
@@ -412,6 +392,67 @@ function bankDetail(accounts: { code: string; name: string; symbol: string; bala
             <TableRow className="hover:bg-transparent">
               <TableCell colSpan={3} className="py-10 text-center text-muted-foreground">
                 No cash or bank accounts yet.
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+    ),
+  };
+}
+
+interface RecentVoucherRow {
+  voucher_type: string;
+  voucher_id: string;
+  voucher_no: string | null;
+  entry_date: string;
+  currency_id: string | null;
+  doc_amount: number | null;
+  amount: number | null;
+  status: JournalEntryStatus;
+}
+
+// Recent Transactions drill-down — the latest vouchers, opened in the detail
+// slot from the dashboard tab (mirrors the standalone list it replaced).
+function recentDetail(rows: RecentVoucherRow[], symById: (id: string | null) => string) {
+  return {
+    title: "Recent Transactions",
+    body: (
+      <Table className="[&_td]:first:pl-5 [&_td]:last:pr-5 [&_th]:first:pl-5 [&_th]:last:pr-5">
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            <TableHead>Voucher No</TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead>Date</TableHead>
+            <TableHead className="text-right">Amount</TableHead>
+            <TableHead className="w-36">Status</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((row) => (
+            <TableRow key={`${row.voucher_type}-${row.voucher_id}`}>
+              <TableCell>
+                <Link
+                  href={voucherHref(row.voucher_type as VoucherType, row.voucher_id)}
+                  className="font-mono font-medium text-primary hover:underline"
+                >
+                  {row.voucher_no ?? "Draft"}
+                </Link>
+              </TableCell>
+              <TableCell>{VOUCHER_TYPE_LABELS[row.voucher_type as VoucherType]}</TableCell>
+              <TableCell className="text-muted-foreground">{formatDate(row.entry_date)}</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">
+                {money(symById(row.currency_id), Number(row.doc_amount ?? row.amount))}
+              </TableCell>
+              <TableCell>
+                <VoucherStatusBadge status={row.status} />
+              </TableCell>
+            </TableRow>
+          ))}
+          {rows.length === 0 && (
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                No transactions yet.
               </TableCell>
             </TableRow>
           )}
@@ -504,35 +545,56 @@ async function loadDetail(companyId: string, key: PanelKey, symbol: string) {
   }
 
   // Rent detail — outstanding invoices for the country, in the country currency.
+  // Rent is the gross billed to the tenant; Commission/Share is the agent
+  // (SAMAD RENT) cut; Balance Rent is the owner's net rent; Outstanding is the
+  // still-uncollected net rent.
   const { data } = await supabase
     .schema("reporting")
     .from("v_rental_income")
-    .select("invoice_id, voucher_no, due_date, tenant_name, asset_code, asset_name, outstanding_balance")
+    .select(
+      "invoice_id, voucher_no, invoice_date, due_date, tenant_name, asset_code, asset_name, amount, agent_share, net_amount, net_outstanding",
+    )
     .eq("company_id", companyId)
     .eq("country", cfg.rentCountry)
-    .gt("outstanding_balance", 0)
+    .gt("net_outstanding", 0)
     .order("due_date");
 
   const rows = data ?? [];
-  const totalOutstanding = rows.reduce((s, r) => s + Number(r.outstanding_balance), 0);
   const nowDate = today();
+  const totals = rows.reduce(
+    (acc, r) => ({
+      rent: acc.rent + Number(r.amount),
+      share: acc.share + Number(r.agent_share),
+      net: acc.net + Number(r.net_amount),
+      outstanding: acc.outstanding + Number(r.net_outstanding),
+    }),
+    { rent: 0, share: 0, net: 0, outstanding: 0 },
+  );
 
   return {
     title: `Rent Balance — ${cfg.label}`,
     body: (
-      <Table className="[&_td]:first:pl-5 [&_td]:last:pr-5 [&_th]:first:pl-5 [&_th]:last:pr-5">
+      <Table
+        className="min-w-[900px] [&_td]:first:pl-5 [&_td]:last:pr-5 [&_th]:first:pl-5 [&_th]:last:pr-5"
+        containerClassName="overflow-x-auto"
+      >
         <TableHeader>
           <TableRow className="hover:bg-transparent">
+            <TableHead>Date</TableHead>
             <TableHead>Voucher No</TableHead>
-            <TableHead>Due date</TableHead>
+            <TableHead>Due Date</TableHead>
             <TableHead>Tenant</TableHead>
             <TableHead>Property</TableHead>
+            <TableHead className="text-right">Rent</TableHead>
+            <TableHead className="text-right">Commission/Share</TableHead>
+            <TableHead className="text-right">Balance Rent</TableHead>
             <TableHead className="text-right">Outstanding</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.map((r) => (
             <TableRow key={r.invoice_id}>
+              <TableCell className="text-muted-foreground">{formatDate(r.invoice_date)}</TableCell>
               <TableCell>{r.voucher_no ?? "Draft"}</TableCell>
               <TableCell className={isRentOverdue(r.due_date as string, nowDate) ? "text-destructive" : "text-muted-foreground"}>
                 {formatDate(r.due_date)}
@@ -541,12 +603,15 @@ async function loadDetail(companyId: string, key: PanelKey, symbol: string) {
               <TableCell>
                 <span className="font-mono text-xs text-muted-foreground">{r.asset_code}</span> {r.asset_name}
               </TableCell>
-              <TableCell className="text-right font-mono tabular-nums">{fmt(Number(r.outstanding_balance))}</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">{fmt(Number(r.amount))}</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">{fmt(Number(r.agent_share))}</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">{fmt(Number(r.net_amount))}</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">{fmt(Number(r.net_outstanding))}</TableCell>
             </TableRow>
           ))}
           {rows.length === 0 && (
             <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+              <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
                 No outstanding rent for {cfg.label}.
               </TableCell>
             </TableRow>
@@ -555,10 +620,13 @@ async function loadDetail(companyId: string, key: PanelKey, symbol: string) {
         {rows.length > 0 && (
           <tfoot className="border-t bg-muted/40">
             <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={4} className="font-medium">
-                Total outstanding
+              <TableCell colSpan={5} className="font-medium">
+                Total
               </TableCell>
-              <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totalOutstanding)}</TableCell>
+              <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.rent)}</TableCell>
+              <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.share)}</TableCell>
+              <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.net)}</TableCell>
+              <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.outstanding)}</TableCell>
             </TableRow>
           </tfoot>
         )}

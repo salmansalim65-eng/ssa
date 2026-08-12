@@ -1718,6 +1718,10 @@ export interface Database {
           currency_code: string;
           status: JournalEntryStatus;
           exchange_rate: number;
+          lease_type: string | null;
+          agent_share: number;
+          net_amount: number;
+          net_outstanding: number;
         };
       };
       v_outstanding_rent: {

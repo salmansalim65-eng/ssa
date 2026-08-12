@@ -25,6 +25,26 @@ export const accountBaseSchema = z.object({
   phone: z.string().max(50).optional().or(z.literal("")),
   email: z.string().max(200).optional().or(z.literal("")),
   country: z.string().max(10).optional().or(z.literal("")),
+  // Property (asset) details — surfaced in the form when the account sits under
+  // the PROPERTIES group (or is already a linked property), so a property can be
+  // fully described and managed from Chart of Accounts. These are written
+  // through to the linked asset in the Assets module.
+  propertyType: z.string().max(100).optional().or(z.literal("")),
+  propertyStatus: z.enum(["active", "inactive", "sold"]).default("active"),
+  city: z.string().max(200).optional().or(z.literal("")),
+  address: z.string().max(500).optional().or(z.literal("")),
+  owner: z.string().max(200).optional().or(z.literal("")),
+  officialOwner: z.string().max(200).optional().or(z.literal("")),
+  purchaseDate: z.string().optional().or(z.literal("")),
+  areaSqft: z.coerce.number().nonnegative().default(0),
+  areaUnit: z.string().max(50).optional().or(z.literal("")),
+  purchaseValue: z.coerce.number().nonnegative().default(0),
+  currentValue: z.coerce.number().nonnegative().default(0),
+  titleDeedValue: z.coerce.number().nonnegative().default(0),
+  serviceChargesRate: z.coerce.number().nonnegative().default(0),
+  otherCharges: z.coerce.number().nonnegative().default(0),
+  estimatedRent: z.coerce.number().nonnegative().default(0),
+  propertyNotes: z.string().max(1000).optional().or(z.literal("")),
 });
 
 // A rental property must be a postable asset account with a country, because

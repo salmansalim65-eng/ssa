@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon, ChevronsDownUpIcon, ChevronsUpDownIcon } from "lucide-react";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -45,6 +45,15 @@ function toggleSectionPref(label: string) {
   if (typeof window !== "undefined") window.localStorage.setItem(SECTIONS_KEY, JSON.stringify([...current]));
   for (const l of sectionListeners) l();
 }
+// Collapse-all / expand-all: overwrite the expanded set outright (empty to
+// collapse every heading, all labels to expand them).
+function setAllSectionsPref(labels: string[]) {
+  if (typeof window !== "undefined") window.localStorage.setItem(SECTIONS_KEY, JSON.stringify(labels));
+  for (const l of sectionListeners) l();
+}
+
+// The labels of every collapsible (labelled) nav section.
+const collapsibleSectionLabels = navSections.filter((s) => s.label).map((s) => s.label!);
 
 export function SidebarNav({
   onNavigate,
@@ -56,6 +65,7 @@ export function SidebarNav({
   const pathname = usePathname();
   const expandedList = useSyncExternalStore(subscribeSections, getExpandedSnapshot, getExpandedServerSnapshot);
   const expandedSections = new Set(expandedList);
+  const allExpanded = collapsibleSectionLabels.every((l) => expandedSections.has(l));
 
   function isActive(href: string) {
     return pathname === href || pathname.startsWith(href + "/");
@@ -108,6 +118,23 @@ export function SidebarNav({
 
   return (
     <nav className={cn("flex flex-col gap-2 py-4", collapsed ? "px-2" : "px-3")}>
+      {!collapsed && (
+        <button
+          type="button"
+          onClick={() => setAllSectionsPref(allExpanded ? [] : [...collapsibleSectionLabels])}
+          className="mb-1 flex items-center justify-center gap-1.5 self-end rounded-md px-2 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
+        >
+          {allExpanded ? (
+            <>
+              <ChevronsDownUpIcon className="size-3.5" /> Collapse all
+            </>
+          ) : (
+            <>
+              <ChevronsUpDownIcon className="size-3.5" /> Expand all
+            </>
+          )}
+        </button>
+      )}
       {navSections.map((section, sectionIndex) => {
         // Unlabelled group (e.g. Dashboard) and the icon-rail mode are never
         // collapsible — they always render their items.

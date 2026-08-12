@@ -3,15 +3,22 @@ import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
 import { loadReportCountries } from "@/lib/reports/countries";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
-import { AccountTree, type AccountRow } from "./account-tree";
+import { AccountTree, type AccountRow, type LinkedAssetFields } from "./account-tree";
 
 export default async function ChartOfAccountsPage() {
   const supabase = await createClient();
 
   const companyId = await getCurrentCompanyId();
 
-  const [{ data: accounts }, { data: companyCurrencies }, { data: ledger }, canCreate, canEdit, canDelete] =
-    await Promise.all([
+  const [
+    { data: accounts },
+    { data: companyCurrencies },
+    { data: ledger },
+    { data: linkedAssets },
+    canCreate,
+    canEdit,
+    canDelete,
+  ] = await Promise.all([
       supabase
         .schema("accounting")
         .from("chart_of_accounts")
@@ -29,10 +36,42 @@ export default async function ChartOfAccountsPage() {
         .from("v_ledger_entries")
         .select("account_id, debit_amount, credit_amount")
         .eq("company_id", companyId),
+      supabase
+        .schema("assets")
+        .from("assets")
+        .select(
+          "id, property_type, status, city, address, owner, official_owner, purchase_date, area_sqft, area_unit, purchase_value, current_value, title_deed_value, service_charges_rate, other_charges, estimated_rent, notes",
+        )
+        .eq("company_id", companyId)
+        .is("deleted_at", null),
       hasPermission("chart_of_accounts", "create"),
       hasPermission("chart_of_accounts", "edit"),
       hasPermission("chart_of_accounts", "delete"),
     ]);
+
+  // Property fields of each asset, keyed by id, to prefill the CoA Property
+  // details section when editing a linked property account.
+  const assetFieldsById: Record<string, LinkedAssetFields> = {};
+  for (const a of (linkedAssets as unknown as (LinkedAssetFields & { id: string })[]) ?? []) {
+    assetFieldsById[a.id] = {
+      property_type: a.property_type,
+      status: a.status,
+      city: a.city,
+      address: a.address,
+      owner: a.owner,
+      official_owner: a.official_owner,
+      purchase_date: a.purchase_date,
+      area_sqft: a.area_sqft,
+      area_unit: a.area_unit,
+      purchase_value: a.purchase_value,
+      current_value: a.current_value,
+      title_deed_value: a.title_deed_value,
+      service_charges_rate: a.service_charges_rate,
+      other_charges: a.other_charges,
+      estimated_rent: a.estimated_rent,
+      notes: a.notes,
+    };
+  }
 
   // Current balance per posting account, net in the base currency. Group rows
   // roll these up on the client from their descendants.
@@ -113,6 +152,7 @@ export default async function ChartOfAccountsPage() {
       canCreate={canCreate}
       canEdit={canEdit}
       canDelete={canDelete}
+      assetFieldsById={assetFieldsById}
     />
   );
 }

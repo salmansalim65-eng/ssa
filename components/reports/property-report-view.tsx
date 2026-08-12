@@ -10,7 +10,6 @@ import {
   ImageIcon,
   SearchIcon,
   SlidersHorizontalIcon,
-  XIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -143,8 +142,10 @@ export function PropertyReportView({
   const portfolio = useMemo(() => aggregateGroup(visibleRows), [visibleRows]);
   const occupiedCount = visibleRows.length - vacant.length;
   const occupancyRate = visibleRows.length ? Math.round((occupiedCount / visibleRows.length) * 100) : 0;
+  // The detail panel is always open: use the clicked row, or fall back to the
+  // first visible property so there is always something to show.
   const selected = useMemo(
-    () => visibleRows.find((r) => r.id === selectedId) ?? null,
+    () => visibleRows.find((r) => r.id === selectedId) ?? visibleRows[0] ?? null,
     [visibleRows, selectedId],
   );
   const detailRef = useRef<HTMLDivElement>(null);
@@ -280,10 +281,10 @@ export function PropertyReportView({
         </p>
       </div>
 
-      {/* Selected property detail — shown above the table */}
+      {/* Property detail — always open above the table */}
       {selected && (
         <div ref={detailRef} className="scroll-mt-4">
-          <PropertyDetail row={selected} onClose={() => setSelectedId(null)} />
+          <PropertyDetail row={selected} />
         </div>
       )}
 
@@ -507,7 +508,7 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
-function PropertyDetail({ row, onClose }: { row: PropertyRow; onClose: () => void }) {
+function PropertyDetail({ row }: { row: PropertyRow }) {
   return (
     <div className="rounded-xl border border-ledger-dark/40 bg-card shadow-xs">
       <div className="flex items-center justify-between gap-2 border-b border-ledger-dark bg-ledger-dark px-5 py-2.5 text-white">
@@ -517,20 +518,15 @@ function PropertyDetail({ row, onClose }: { row: PropertyRow; onClose: () => voi
             {[row.assetCode, row.propertyType, row.group].filter(Boolean).join(" · ")}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Badge
-            variant="outline"
-            className={cn(
-              "border-white/40 text-white",
-              row.occupied ? "bg-white/15" : "bg-amber-500/30",
-            )}
-          >
-            {row.occupied ? "Occupied" : "Vacant"}
-          </Badge>
-          <Button variant="outline" size="icon" onClick={onClose} className="border-white/30 bg-transparent text-white hover:bg-white/15 hover:text-white">
-            <XIcon />
-          </Button>
-        </div>
+        <Badge
+          variant="outline"
+          className={cn(
+            "border-white/40 text-white",
+            row.occupied ? "bg-white/15" : "bg-amber-500/30",
+          )}
+        >
+          {row.occupied ? "Occupied" : "Vacant"}
+        </Badge>
       </div>
 
       <div className="space-y-5 p-5">

@@ -65,7 +65,7 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
   const { data: lines } = await supabase
     .schema("accounting")
     .from("purchase_voucher_lines")
-    .select("id, line_no, cost_center_id, fixed_asset_account_id, gross, due_date, installment_month, remarks")
+    .select("id, line_no, cost_center_id, fixed_asset_account_id, gross, tax, commission, due_date, installment_month, remarks")
     .eq("voucher_id", id)
     .order("line_no");
 
@@ -75,6 +75,8 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
     cost_center_id: string | null;
     fixed_asset_account_id: string;
     gross: number;
+    tax: number;
+    commission: number;
     due_date: string | null;
     installment_month: string | null;
     remarks: string | null;
@@ -211,6 +213,8 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
               <TableHead>Cost Center</TableHead>
               <TableHead>Fixed Asset Account (Dr)</TableHead>
               <TableHead className="text-right">Gross</TableHead>
+              <TableHead className="text-right">Tax</TableHead>
+              <TableHead className="text-right">Commission</TableHead>
               <TableHead>Due Date</TableHead>
               <TableHead>Installment Month</TableHead>
               <TableHead>Remarks</TableHead>
@@ -224,6 +228,8 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
                   <TableCell>{l.cost_center_id ? costCentersById.get(l.cost_center_id)?.name ?? "—" : "—"}</TableCell>
                   <TableCell className="font-medium">{accountsById.get(l.fixed_asset_account_id)?.account_name ?? "—"}</TableCell>
                   <TableCell className="text-right font-mono tabular-nums">{formatMoney(l.gross)}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">{formatMoney(l.tax)}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">{formatMoney(l.commission)}</TableCell>
                   <TableCell>{l.due_date ? formatDate(l.due_date) : "—"}</TableCell>
                   <TableCell>{l.installment_month ?? "—"}</TableCell>
                   <TableCell>{l.remarks ?? "—"}</TableCell>
@@ -237,7 +243,7 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
               <TableCell className="text-right font-mono font-medium tabular-nums">
                 {formatMoney(voucher.total_value)} {currencyCode}
               </TableCell>
-              <TableCell colSpan={3} />
+              <TableCell colSpan={5} />
             </TableRow>
           </TableBody>
         </Table>

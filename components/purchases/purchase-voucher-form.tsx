@@ -45,7 +45,16 @@ export interface CostCenterOption {
 }
 
 function emptyLine() {
-  return { costCenterId: "", fixedAssetAccountId: "", gross: blankAmount, dueDate: "", installmentMonth: "", remarks: "" };
+  return {
+    costCenterId: "",
+    fixedAssetAccountId: "",
+    gross: blankAmount,
+    tax: blankAmount,
+    commission: blankAmount,
+    dueDate: "",
+    installmentMonth: "",
+    remarks: "",
+  };
 }
 
 export function PurchaseVoucherForm({
@@ -223,6 +232,8 @@ export function PurchaseVoucherForm({
                   <th className="w-44">Cost Center</th>
                   <th className="min-w-[200px]">Fixed Asset Account (Dr)</th>
                   <th className="w-32">Gross</th>
+                  <th className="w-28">Tax</th>
+                  <th className="w-28">Commission</th>
                   <th className="w-40">Due Date</th>
                   <th className="w-32">Installment Month</th>
                   <th className="min-w-[150px]">Remarks</th>
@@ -278,6 +289,34 @@ export function PurchaseVoucherForm({
                       <FormField
                         control={form.control}
                         name={`lines.${index}.gross`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </td>
+                    <td>
+                      <FormField
+                        control={form.control}
+                        name={`lines.${index}.tax`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </td>
+                    <td>
+                      <FormField
+                        control={form.control}
+                        name={`lines.${index}.commission`}
                         render={({ field }) => (
                           <FormItem>
                             <FormControl>

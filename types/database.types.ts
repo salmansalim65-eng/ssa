@@ -996,6 +996,8 @@ export interface Database {
           cost_center_id: string | null;
           fixed_asset_account_id: string;
           gross: number;
+          tax: number;
+          commission: number;
           due_date: string | null;
           installment_month: string | null;
           remarks: string | null;

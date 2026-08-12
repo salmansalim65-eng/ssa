@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
@@ -85,9 +85,24 @@ export function AccountForm({
   });
 
   const isGroup = useWatch({ control: form.control, name: "isGroup" });
+  const accountType = useWatch({ control: form.control, name: "accountType" });
   const selectedParentId = useWatch({ control: form.control, name: "parentId" });
   const selectedParent = parentOptions.find((p) => p.id === selectedParentId);
   const lockAccountType = Boolean(selectedParent);
+
+  // A rental property must be a postable asset account. The account is already
+  // linked to a property when editing one previously flagged — that link can't
+  // be undone from here (a lease may reference it), so the box stays checked.
+  const canBeRentalProperty = !isGroup && accountType === "asset";
+  const [alreadyLinked] = useState(() => defaultValues.isRentalProperty ?? false);
+
+  // Clear the flag when the account stops being eligible (e.g. switched to a
+  // group or a non-asset type), unless it is already linked to a property.
+  useEffect(() => {
+    if (!canBeRentalProperty && !alreadyLinked) {
+      form.setValue("isRentalProperty", false);
+    }
+  }, [canBeRentalProperty, alreadyLinked, form]);
 
   function handleParentChange(value: string, onChange: (value: string) => void) {
     const parentId = value === "none" ? "" : value;
@@ -248,6 +263,32 @@ export function AccountForm({
                     <FormDescription>
                       Accounts under this group are the tenant master that leases pick tenants from.
                     </FormDescription>
+                  </div>
+                </FormItem>
+              )}
+            />
+          )}
+          {(canBeRentalProperty || alreadyLinked) && (
+            <FormField
+              control={form.control}
+              name="isRentalProperty"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start gap-2.5 rounded-lg border p-3">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      disabled={alreadyLinked}
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>This is a rental property</FormLabel>
+                    <FormDescription>
+                      {alreadyLinked
+                        ? "Linked to a property in Assets — it's selectable in this country's leases. Manage its details under Assets."
+                        : "Also registers this account as a property in the Assets module so it can be picked in UAE / PK / HH leases for the selected country."}
+                    </FormDescription>
+                    <FormMessage />
                   </div>
                 </FormItem>
               )}

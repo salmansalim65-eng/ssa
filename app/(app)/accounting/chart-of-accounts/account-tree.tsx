@@ -77,6 +77,7 @@ export interface AccountRow {
   is_cash: boolean;
   is_bank: boolean;
   is_tenant_group: boolean;
+  linked_asset_id: string | null;
   sort_order: number;
   balance: number;
   id_number: string | null;
@@ -115,6 +116,7 @@ const emptyValues: AccountInput = {
   isCash: false,
   isBank: false,
   isTenantGroup: false,
+  isRentalProperty: false,
   idNumber: "",
   contactPerson: "",
   phone: "",
@@ -741,6 +743,7 @@ export function AccountTree({
                       isCash: dialog.account.is_cash,
                       isBank: dialog.account.is_bank,
                       isTenantGroup: dialog.account.is_tenant_group,
+                      isRentalProperty: dialog.account.linked_asset_id != null,
                       idNumber: dialog.account.id_number ?? "",
                       contactPerson: dialog.account.contact_person ?? "",
                       phone: dialog.account.phone ?? "",

@@ -361,6 +361,9 @@ export default async function GeneralLedgerPage({
             <TableBody>
               {sections.map((s) => {
                 const money = (n: number) => `${s.symbol} ${formatMoney(n)}`;
+                const sectionDebit = round2(s.rows.reduce((a, r) => a + r.debit_amount, 0));
+                const sectionCredit = round2(s.rows.reduce((a, r) => a + r.credit_amount, 0));
+                const closing = s.rows.length ? s.rows[s.rows.length - 1].balance : s.opening;
                 return (
                 <Fragment key={s.account.id}>
                   <TableRow className="bg-ledger/10">
@@ -407,6 +410,22 @@ export default async function GeneralLedgerPage({
                     <TableRow className="hover:bg-transparent">
                       <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                         No transactions match the filters in this period.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {s.rows.length > 0 && (
+                    <TableRow className="border-t-2 border-ledger/50 bg-ledger/10 hover:bg-ledger/10">
+                      <TableCell colSpan={5} className="text-right font-semibold text-foreground">
+                        Total — {s.account.account_code} {s.account.account_name}
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-semibold tabular-nums">
+                        {money(sectionDebit)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-semibold tabular-nums">
+                        {money(sectionCredit)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-semibold tabular-nums">
+                        {money(closing)}
                       </TableCell>
                     </TableRow>
                   )}

@@ -29,6 +29,7 @@ function toRow(input: AssetInput) {
     current_value: input.currentValue,
     currency_id: input.currencyId || null,
     service_charges_rate: input.serviceChargesRate,
+    property_tax: input.propertyTax,
     title_deed_value: input.titleDeedValue,
     other_charges: input.otherCharges,
     estimated_rent: input.estimatedRent,

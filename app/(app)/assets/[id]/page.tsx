@@ -203,6 +203,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
     currentValue: asset.current_value ?? blankAmount,
     currencyId: asset.currency_id ?? "",
     serviceChargesRate: asset.service_charges_rate ?? blankAmount,
+    propertyTax: asset.property_tax ?? blankAmount,
     titleDeedValue: asset.title_deed_value ?? blankAmount,
     otherCharges: asset.other_charges ?? blankAmount,
     estimatedRent: asset.estimated_rent ?? blankAmount,

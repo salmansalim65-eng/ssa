@@ -49,7 +49,7 @@ export default async function NewVoucherPage({
     supabase
       .schema("accounting")
       .from("cost_centers")
-      .select("id, name")
+      .select("id, name, asset_id")
       .eq("company_id", companyId)
       .eq("is_active", true)
       .is("deleted_at", null)
@@ -57,7 +57,34 @@ export default async function NewVoucherPage({
   ]);
 
   const accountOptions = accounts ?? [];
-  const costCenterOptions = costCenters ?? [];
+
+  // Enrich cost centres with the JV Service Charges auto-fill amount: the linked
+  // asset's Service Charges Amount (UAE) or Property Tax (Pakistan).
+  const ccAssetIds = [
+    ...new Set((costCenters ?? []).map((c) => c.asset_id as string | null).filter(Boolean)),
+  ] as string[];
+  const { data: chargeAssets } = ccAssetIds.length
+    ? await supabase
+        .schema("assets")
+        .from("assets")
+        .select("id, country, service_charges_amount, property_tax")
+        .in("id", ccAssetIds)
+    : { data: [] };
+  const chargeByAsset = new Map(
+    (chargeAssets ?? []).map((a) => [
+      a.id as string,
+      a.country === "AE"
+        ? Number(a.service_charges_amount ?? 0)
+        : a.country === "PK"
+          ? Number(a.property_tax ?? 0)
+          : 0,
+    ]),
+  );
+  const costCenterOptions = (costCenters ?? []).map((c) => ({
+    id: c.id as string,
+    name: c.name as string,
+    chargeAmount: c.asset_id ? chargeByAsset.get(c.asset_id as string) ?? 0 : 0,
+  }));
   const today = new Date().toISOString().slice(0, 10);
   // Options are ordered base-currency-first so each voucher form defaults its
   // currency to the system base currency (dynamic — see mapVoucherCurrencies).

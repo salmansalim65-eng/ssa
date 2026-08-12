@@ -1087,6 +1087,8 @@ export interface Database {
           current_value: number | null;
           currency_id: string | null;
           service_charges_rate: number | null;
+          service_charges_amount: number | null;
+          property_tax: number;
           title_deed_value: number | null;
           other_charges: number | null;
           total_property_value: number | null;

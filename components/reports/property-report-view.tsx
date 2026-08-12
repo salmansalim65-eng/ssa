@@ -1,0 +1,530 @@
+"use client";
+
+import { Fragment, useMemo, useState } from "react";
+import Link from "next/link";
+import {
+  BuildingIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  FileTextIcon,
+  ImageIcon,
+  SearchIcon,
+  SlidersHorizontalIcon,
+  XIcon,
+} from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { CsvExportButton } from "@/components/reports/csv-export-button";
+import { PrintButton } from "@/components/vouchers/print-button";
+import { ReportNav } from "@/components/reports/report-nav";
+import { formatDate } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import { aggregateGroup, type PropertyGroupTotals, type PropertyRow } from "@/lib/reports/property-report";
+
+export interface PropertyGroup {
+  name: string;
+  totals: PropertyGroupTotals;
+  rows: PropertyRow[];
+}
+
+// Number / percent / rate formatters — grouped thousands, sensible decimals.
+const money = (n: number) => Math.round(n).toLocaleString("en-US");
+const rate = (n: number) => (n ? n.toLocaleString("en-US", { maximumFractionDigits: 2 }) : "");
+const pct = (n: number) => `${n.toFixed(2)}%`;
+const dash = "—";
+
+// The numeric columns after Group Name (in display order). Title Deed Owner is
+// rendered separately as the trailing text column.
+const NUM_COLS: {
+  key: keyof PropertyGroupTotals;
+  label: string;
+  full: string;
+  kind: "money" | "rate" | "pct";
+}[] = [
+  { key: "estRent", label: "Est. Rent", full: "Estimated Rent (monthly)", kind: "money" },
+  { key: "monthlyRent", label: "Monthly Rent", full: "Monthly Rent (from lease)", kind: "money" },
+  { key: "yearlyRent", label: "Yearly Rent", full: "Yearly Rent (Monthly × 12)", kind: "money" },
+  { key: "diffEstVsYearly", label: "Diff. Est/Yr", full: "Difference: Estimated × 12 − Yearly", kind: "money" },
+  { key: "sqFt", label: "Sq. Ft", full: "Area (square feet)", kind: "money" },
+  { key: "sqFtValue", label: "Sq. Ft Value", full: "Purchase Value ÷ Sq. Ft", kind: "rate" },
+  { key: "serviceCharges", label: "Service Charges", full: "Service Rate × Sq. Ft", kind: "money" },
+  { key: "netRent", label: "Net Rent", full: "Yearly Rent − Service Charges", kind: "money" },
+  { key: "currentValue", label: "Current Value", full: "Current property value", kind: "money" },
+  { key: "perc", label: "Perc%", full: "Yield: Net Rent ÷ Current Value", kind: "pct" },
+  { key: "percMonth", label: "% Month", full: "Monthly yield: Perc% ÷ 12", kind: "pct" },
+  { key: "purchaseValue", label: "Purchase Value", full: "Original purchase value", kind: "money" },
+  { key: "diffValue", label: "Difference Value", full: "Current Value − Purchase Value", kind: "money" },
+  { key: "maintenancePct", label: "Maintenance%", full: "Service Charges ÷ Yearly Rent", kind: "pct" },
+];
+
+function fmt(kind: "money" | "rate" | "pct", n: number): string {
+  if (kind === "pct") return pct(n);
+  if (kind === "rate") return rate(n) || dash;
+  return money(n);
+}
+
+// Service Rate sits between Sq. Ft Value and Service Charges but has no group
+// total, so it's rendered from the row directly (not from NUM_COLS totals).
+const CSV_HEADERS = [
+  "Group Name",
+  "Property",
+  "Country",
+  "Est. Rent",
+  "Monthly Rent",
+  "Yearly Rent",
+  "Diff. Est vs Yearly",
+  "Sq. Ft",
+  "Sq. Ft Value",
+  "Service Rate",
+  "Service Charges",
+  "Net Rent",
+  "Current Value",
+  "Perc%",
+  "% Month",
+  "Purchase Value",
+  "Difference Value",
+  "Maintenance%",
+  "Title Deed Owner",
+  "Occupancy",
+];
+
+export function PropertyReportView({
+  groups,
+  countries,
+  totalCostCenters,
+  totalProperties,
+}: {
+  groups: PropertyGroup[];
+  countries: { code: string; name: string }[];
+  totalCostCenters: number;
+  totalProperties: number;
+}) {
+  const [search, setSearch] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [country, setCountry] = useState("");
+  const [occupancy, setOccupancy] = useState<"" | "occupied" | "vacant">("");
+  const [group, setGroup] = useState("");
+  const [propertyType, setPropertyType] = useState("");
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const propertyTypes = useMemo(
+    () =>
+      [...new Set(groups.flatMap((g) => g.rows.map((r) => r.propertyType)).filter(Boolean))].sort(),
+    [groups],
+  );
+
+  // Apply filters + search, then recompute each group's totals from what remains.
+  const filteredGroups = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const match = (r: PropertyRow) => {
+      if (country && r.country !== country) return false;
+      if (occupancy === "occupied" && !r.occupied) return false;
+      if (occupancy === "vacant" && r.occupied) return false;
+      if (group && r.group !== group) return false;
+      if (propertyType && r.propertyType !== propertyType) return false;
+      if (q) {
+        const hay = `${r.name} ${r.assetCode} ${r.titleDeedOwner} ${r.group} ${r.country}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    };
+    return groups
+      .map((g) => {
+        const rows = g.rows.filter(match);
+        return { name: g.name, rows, totals: aggregateGroup(rows) };
+      })
+      .filter((g) => g.rows.length > 0);
+  }, [groups, search, country, occupancy, group, propertyType]);
+
+  const visibleRows = useMemo(() => filteredGroups.flatMap((g) => g.rows), [filteredGroups]);
+  const vacant = useMemo(() => visibleRows.filter((r) => !r.occupied), [visibleRows]);
+  const selected = useMemo(
+    () => visibleRows.find((r) => r.id === selectedId) ?? null,
+    [visibleRows, selectedId],
+  );
+  const activeFilters = [country, occupancy, group, propertyType].filter(Boolean).length;
+
+  const csvRows = visibleRows.map((r) => [
+    r.group,
+    r.name,
+    r.country,
+    r.estRent,
+    r.monthlyRent,
+    r.yearlyRent,
+    r.diffEstVsYearly,
+    r.sqFt,
+    r.sqFtValue,
+    r.serviceRate,
+    r.serviceCharges,
+    r.netRent,
+    r.currentValue,
+    r.perc,
+    r.percMonth,
+    r.purchaseValue,
+    r.diffValue,
+    r.maintenancePct,
+    r.titleDeedOwner,
+    r.occupied ? "Occupied" : "Vacant",
+  ]);
+
+  function toggleGroup(name: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
+
+  // Column count for the frozen first column + numeric cols + service rate + owner.
+  const totalCols = 1 + NUM_COLS.length + 2; // group + numeric + serviceRate + owner
+
+  return (
+    <div className="space-y-4">
+      <ReportNav className="print:hidden" />
+
+      {/* Header */}
+      <div className="rounded-xl border bg-card px-5 py-4 shadow-xs print:border-0 print:px-0 print:shadow-none">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary">Reports</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Property Report</h1>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Showing <span className="font-semibold text-foreground">{visibleRows.length}</span> Cost Centers
+              {" | "}
+              <span className="font-semibold text-foreground">{totalProperties}</span> Properties
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 print:hidden">
+            <div className="relative">
+              <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search property, code, owner…"
+                className="w-64 pl-8"
+              />
+            </div>
+            <Button
+              variant={showFilters || activeFilters > 0 ? "default" : "outline"}
+              onClick={() => setShowFilters((s) => !s)}
+            >
+              <SlidersHorizontalIcon /> Filters
+              {activeFilters > 0 && (
+                <span className="ml-1 rounded bg-white/25 px-1.5 text-xs">{activeFilters}</span>
+              )}
+            </Button>
+            <CsvExportButton filename="property-report.csv" headers={CSV_HEADERS} rows={csvRows} />
+            <PrintButton />
+          </div>
+        </div>
+
+        {showFilters && (
+          <div className="mt-4 grid gap-3 border-t pt-4 sm:grid-cols-2 lg:grid-cols-4 print:hidden">
+            <FilterSelect label="Country" value={country} onChange={setCountry} options={countries.map((c) => ({ value: c.code, label: c.name }))} allLabel="All countries" />
+            <FilterSelect label="Occupancy" value={occupancy} onChange={(v) => setOccupancy(v as "" | "occupied" | "vacant")} options={[{ value: "occupied", label: "Occupied" }, { value: "vacant", label: "Vacant" }]} allLabel="All" />
+            <FilterSelect label="Group" value={group} onChange={setGroup} options={groups.map((g) => ({ value: g.name, label: g.name }))} allLabel="All groups" />
+            <FilterSelect label="Property type" value={propertyType} onChange={setPropertyType} options={propertyTypes.map((t) => ({ value: t, label: t }))} allLabel="All types" />
+            {activeFilters > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCountry("");
+                  setOccupancy("");
+                  setGroup("");
+                  setPropertyType("");
+                }}
+                className="self-end text-sm font-medium text-primary hover:underline"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Total cost centers banner */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ledger/30 bg-ledger/10 px-4 py-2.5">
+        <p className="text-sm font-bold uppercase tracking-wide text-ledger-dark">
+          Total Cost Centers: {visibleRows.length}
+          {visibleRows.length !== totalCostCenters && (
+            <span className="font-medium normal-case text-muted-foreground"> of {totalCostCenters}</span>
+          )}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {vacant.length} vacant · {visibleRows.length - vacant.length} occupied
+        </p>
+      </div>
+
+      {/* Main grouped table */}
+      <div className="max-h-[70vh] overflow-auto rounded-lg border bg-card shadow-xs">
+        <table className="min-w-[1500px] w-full border-collapse text-sm">
+          <thead className="sticky top-0 z-20">
+            <tr className="bg-header text-header-foreground [&>th]:border-r [&>th]:border-header-border [&>th]:px-3 [&>th]:py-2 [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide">
+              <th className="sticky left-0 z-30 min-w-[240px] bg-header text-left">Group Name</th>
+              {NUM_COLS.slice(0, 6).map((c) => (
+                <th key={c.key} title={c.full} className="whitespace-nowrap text-right">
+                  {c.label}
+                </th>
+              ))}
+              <th title="Service Charges Rate" className="whitespace-nowrap text-right">
+                Service Rate
+              </th>
+              {NUM_COLS.slice(6).map((c) => (
+                <th key={c.key} title={c.full} className="whitespace-nowrap text-right">
+                  {c.label}
+                </th>
+              ))}
+              <th className="whitespace-nowrap text-left">Title Deed Owner</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredGroups.map((g) => {
+              const isCollapsed = collapsed.has(g.name);
+              return (
+                <Fragment key={g.name}>
+                  {/* Group total row */}
+                  <tr
+                    className="cursor-pointer border-b border-ledger-dark/30 bg-ledger-dark text-white hover:bg-ledger-dark/90 [&>td]:px-3 [&>td]:py-2"
+                    onClick={() => toggleGroup(g.name)}
+                  >
+                    <td className="sticky left-0 z-10 min-w-[240px] bg-ledger-dark font-semibold">
+                      <span className="inline-flex items-center gap-1.5">
+                        {isCollapsed ? <ChevronRightIcon className="size-4" /> : <ChevronDownIcon className="size-4" />}
+                        {g.name}
+                        <span className="ml-1 rounded bg-white/20 px-1.5 text-[0.7rem] font-medium">
+                          {g.rows.length}
+                        </span>
+                      </span>
+                    </td>
+                    {NUM_COLS.slice(0, 6).map((c) => (
+                      <td key={c.key} className="text-right font-mono font-semibold tabular-nums">
+                        {fmt(c.kind, g.totals[c.key])}
+                      </td>
+                    ))}
+                    <td className="text-right font-mono tabular-nums text-white/60">{dash}</td>
+                    {NUM_COLS.slice(6).map((c) => (
+                      <td key={c.key} className="text-right font-mono font-semibold tabular-nums">
+                        {fmt(c.kind, g.totals[c.key])}
+                      </td>
+                    ))}
+                    <td className="text-white/70">{dash}</td>
+                  </tr>
+
+                  {/* Child property rows */}
+                  {!isCollapsed &&
+                    g.rows.map((r) => (
+                      <tr
+                        key={r.id}
+                        onClick={() => setSelectedId(r.id)}
+                        className={cn(
+                          "cursor-pointer border-b border-border/60 [&>td]:px-3 [&>td]:py-2",
+                          selectedId === r.id ? "bg-primary/[0.07]" : "hover:bg-primary/[0.03]",
+                        )}
+                      >
+                        <td
+                          className={cn(
+                            "sticky left-0 z-10 min-w-[240px] border-r border-border/60 pl-8",
+                            selectedId === r.id ? "bg-primary/[0.07]" : "bg-card",
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="truncate font-medium text-foreground" title={r.name}>
+                              {r.name}
+                            </span>
+                            {!r.occupied && (
+                              <Badge variant="outline" className="shrink-0 border-amber-400/60 text-amber-600 dark:text-amber-400">
+                                Vacant
+                              </Badge>
+                            )}
+                          </div>
+                          <span className="font-mono text-[0.7rem] text-muted-foreground">
+                            {r.assetCode} · {r.country}
+                          </span>
+                        </td>
+                        {NUM_COLS.slice(0, 6).map((c) => (
+                          <td key={c.key} className="text-right font-mono tabular-nums">
+                            {fmt(c.kind, r[c.key as keyof PropertyRow] as number)}
+                          </td>
+                        ))}
+                        <td className="text-right font-mono tabular-nums">{rate(r.serviceRate) || dash}</td>
+                        {NUM_COLS.slice(6).map((c) => (
+                          <td key={c.key} className="text-right font-mono tabular-nums">
+                            {fmt(c.kind, r[c.key as keyof PropertyRow] as number)}
+                          </td>
+                        ))}
+                        <td className="max-w-[160px] truncate" title={r.titleDeedOwner}>
+                          {r.titleDeedOwner || dash}
+                        </td>
+                      </tr>
+                    ))}
+                </Fragment>
+              );
+            })}
+            {filteredGroups.length === 0 && (
+              <tr>
+                <td colSpan={totalCols} className="py-12 text-center text-muted-foreground">
+                  No properties match the current filters.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Selected property detail */}
+      {selected && <PropertyDetail row={selected} onClose={() => setSelectedId(null)} />}
+
+      {/* Vacant cost centers */}
+      <div className="rounded-lg border bg-card p-4 shadow-xs">
+        <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-ledger-dark">
+          Vacant Cost Centers ({vacant.length})
+        </h2>
+        {vacant.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No vacant properties.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {vacant.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => setSelectedId(r.id)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-amber-400/50 bg-amber-50 px-2.5 py-1 text-sm text-amber-800 transition-colors hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300"
+              >
+                <BuildingIcon className="size-3.5" />
+                <span className="truncate">{r.name}</span>
+                <span className="font-mono text-[0.7rem] opacity-70">{r.country}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+  allLabel,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+  allLabel: string;
+}) {
+  return (
+    <label className="space-y-1 text-sm">
+      <span className="font-medium text-foreground">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <option value="">{allLabel}</option>
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function Field({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border bg-background px-3 py-2">
+      <p className="text-[0.68rem] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-0.5 font-mono text-sm font-semibold tabular-nums text-foreground">{value || dash}</p>
+    </div>
+  );
+}
+
+function PropertyDetail({ row, onClose }: { row: PropertyRow; onClose: () => void }) {
+  return (
+    <div className="rounded-xl border border-ledger-dark/40 bg-card shadow-xs">
+      <div className="flex items-center justify-between gap-2 border-b border-ledger-dark bg-ledger-dark px-5 py-2.5 text-white">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold">{row.name}</p>
+          <p className="font-mono text-[0.7rem] text-white/70">
+            {row.assetCode} · {row.group} · {row.country}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge
+            variant="outline"
+            className={cn(
+              "border-white/40 text-white",
+              row.occupied ? "bg-white/15" : "bg-amber-500/30",
+            )}
+          >
+            {row.occupied ? "Occupied" : "Vacant"}
+          </Badge>
+          <Button variant="outline" size="icon" onClick={onClose} className="border-white/30 bg-transparent text-white hover:bg-white/15 hover:text-white">
+            <XIcon />
+          </Button>
+        </div>
+      </div>
+
+      <div className="space-y-5 p-5">
+        {/* Property value information */}
+        <section>
+          <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ledger-dark">Property Value Information</h3>
+          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
+            <Field label="Pur. Date" value={row.purchaseDate ? formatDate(row.purchaseDate) : ""} />
+            <Field label="Pur. Value" value={money(row.purchaseValue)} />
+            <Field label="Current Value" value={money(row.currentValue)} />
+            <Field label="Val. Year" value={row.valuationYear ? String(row.valuationYear) : ""} />
+            <Field label="Sq. Ft" value={money(row.sqFt)} />
+            <Field label="T. Deed Value" value={money(row.titleDeedValue)} />
+            <Field label="T. Deed Owner" value={row.titleDeedOwner} />
+            <Field label="Sq. Ft Value" value={rate(row.sqFtValue)} />
+          </div>
+        </section>
+
+        {/* Rental information */}
+        <section>
+          <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ledger-dark">Rental Information</h3>
+          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+            <Field label="Est. Rent" value={money(row.estRent)} />
+            <Field label="Monthly Rent" value={money(row.monthlyRent)} />
+            <Field label="Yearly Rent" value={money(row.yearlyRent)} />
+            <Field label="Start Date" value={row.leaseStart ? formatDate(row.leaseStart) : ""} />
+            <Field label="End Date" value={row.leaseEnd ? formatDate(row.leaseEnd) : ""} />
+            <Field label="Renew Month" value={row.renewMonth ?? ""} />
+          </div>
+        </section>
+
+        {/* Documents / images */}
+        <section>
+          <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ledger-dark">Documents &amp; Images</h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 text-sm text-muted-foreground">
+              <ImageIcon className="size-4" /> {row.imageCount} image{row.imageCount === 1 ? "" : "s"}
+            </span>
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-sm",
+                row.titleDeedAttachmentId
+                  ? "bg-background text-foreground"
+                  : "bg-muted/40 text-muted-foreground",
+              )}
+            >
+              <FileTextIcon className="size-4" /> Title deed {row.titleDeedAttachmentId ? "attached" : "not attached"}
+            </span>
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/assets/${row.id}`}>Open property page</Link>
+            </Button>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}

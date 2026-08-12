@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboardIcon,
   Building2Icon,
+  BuildingIcon,
   UsersIcon,
   ShieldIcon,
   CoinsIcon,
@@ -118,6 +119,7 @@ export const navSections: NavSection[] = [
       { label: "Profit & Loss", href: "/reports/profit-and-loss", icon: LineChartIcon },
       { label: "Cash Book", href: "/reports/cash-book", icon: CoinsIcon },
       { label: "Bank Book", href: "/reports/bank-book", icon: Building2Icon },
+      { label: "Property Report", href: "/reports/property-report", icon: BuildingIcon },
       { label: "Asset Register", href: "/reports/asset-register", icon: HomeIcon },
       { label: "Asset Valuation", href: "/reports/asset-valuation", icon: TrendingUpIcon },
       { label: "Purchase Report", href: "/reports/purchase-report", icon: ShoppingCartIcon },

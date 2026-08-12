@@ -68,9 +68,9 @@ function fmt(kind: "money" | "rate" | "pct", n: number): string {
 // Service Rate sits between Sq. Ft Value and Service Charges but has no group
 // total, so it's rendered from the row directly (not from NUM_COLS totals).
 const CSV_HEADERS = [
-  "Group Name",
-  "Property",
   "Country",
+  "Property",
+  "Country Code",
   "Est. Rent",
   "Monthly Rent",
   "Yearly Rent",
@@ -105,7 +105,6 @@ export function PropertyReportView({
   const [showFilters, setShowFilters] = useState(false);
   const [country, setCountry] = useState("");
   const [occupancy, setOccupancy] = useState<"" | "occupied" | "vacant">("");
-  const [group, setGroup] = useState("");
   const [propertyType, setPropertyType] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -123,7 +122,6 @@ export function PropertyReportView({
       if (country && r.country !== country) return false;
       if (occupancy === "occupied" && !r.occupied) return false;
       if (occupancy === "vacant" && r.occupied) return false;
-      if (group && r.group !== group) return false;
       if (propertyType && r.propertyType !== propertyType) return false;
       if (q) {
         const hay = `${r.name} ${r.assetCode} ${r.titleDeedOwner} ${r.group} ${r.country}`.toLowerCase();
@@ -137,7 +135,7 @@ export function PropertyReportView({
         return { name: g.name, rows, totals: aggregateGroup(rows) };
       })
       .filter((g) => g.rows.length > 0);
-  }, [groups, search, country, occupancy, group, propertyType]);
+  }, [groups, search, country, occupancy, propertyType]);
 
   const visibleRows = useMemo(() => filteredGroups.flatMap((g) => g.rows), [filteredGroups]);
   const vacant = useMemo(() => visibleRows.filter((r) => !r.occupied), [visibleRows]);
@@ -149,7 +147,7 @@ export function PropertyReportView({
     () => visibleRows.find((r) => r.id === selectedId) ?? null,
     [visibleRows, selectedId],
   );
-  const activeFilters = [country, occupancy, group, propertyType].filter(Boolean).length;
+  const activeFilters = [country, occupancy, propertyType].filter(Boolean).length;
 
   const csvRows = visibleRows.map((r) => [
     r.group,
@@ -227,10 +225,9 @@ export function PropertyReportView({
         </div>
 
         {showFilters && (
-          <div className="mt-4 grid gap-3 border-t pt-4 sm:grid-cols-2 lg:grid-cols-4 print:hidden">
+          <div className="mt-4 grid gap-3 border-t pt-4 sm:grid-cols-2 lg:grid-cols-3 print:hidden">
             <FilterSelect label="Country" value={country} onChange={setCountry} options={countries.map((c) => ({ value: c.code, label: c.name }))} allLabel="All countries" />
             <FilterSelect label="Occupancy" value={occupancy} onChange={(v) => setOccupancy(v as "" | "occupied" | "vacant")} options={[{ value: "occupied", label: "Occupied" }, { value: "vacant", label: "Vacant" }]} allLabel="All" />
-            <FilterSelect label="Group" value={group} onChange={setGroup} options={groups.map((g) => ({ value: g.name, label: g.name }))} allLabel="All groups" />
             <FilterSelect label="Property type" value={propertyType} onChange={setPropertyType} options={propertyTypes.map((t) => ({ value: t, label: t }))} allLabel="All types" />
             {activeFilters > 0 && (
               <button
@@ -238,7 +235,6 @@ export function PropertyReportView({
                 onClick={() => {
                   setCountry("");
                   setOccupancy("");
-                  setGroup("");
                   setPropertyType("");
                 }}
                 className="self-end text-sm font-medium text-primary hover:underline"
@@ -283,7 +279,7 @@ export function PropertyReportView({
         <table className="min-w-[1500px] w-full border-collapse text-sm">
           <thead className="sticky top-0 z-20">
             <tr className="bg-header text-header-foreground [&>th]:border-r [&>th]:border-header-border [&>th]:px-3 [&>th]:py-2 [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide">
-              <th className="sticky left-0 z-30 min-w-[240px] bg-header text-left">Group Name</th>
+              <th className="sticky left-0 z-30 min-w-[240px] bg-header text-left">Country / Property</th>
               {NUM_COLS.slice(0, 6).map((c) => (
                 <th key={c.key} title={c.full} className="whitespace-nowrap text-right">
                   {c.label}

@@ -8,7 +8,7 @@ import {
 } from "@/lib/reports/property-report";
 import { PropertyReportView, type PropertyGroup } from "@/components/reports/property-report-view";
 
-const UNGROUPED = "Ungrouped";
+const UNSPECIFIED = "Unspecified";
 
 function yearOf(date: string | null | undefined): number | null {
   if (!date) return null;
@@ -49,7 +49,7 @@ export default async function PropertyReportPage() {
     supabase
       .schema("accounting")
       .from("cost_centers")
-      .select("id, code, name, asset_id, parent_id, is_group")
+      .select("id, code, name, asset_id")
       .eq("company_id", companyId)
       .is("deleted_at", null),
     supabase
@@ -71,25 +71,10 @@ export default async function PropertyReportPage() {
 
   const countryName = new Map((countryRows ?? []).map((c) => [c.code as string, c.name as string]));
 
-  // Cost centres: by id (for group walk) and by asset id (for grouping + name).
-  const ccById = new Map((costCenters ?? []).map((c) => [c.id as string, c]));
+  // Cost centres by asset id (for the cost-centre name shown per property).
   const ccByAsset = new Map(
     (costCenters ?? []).filter((c) => c.asset_id).map((c) => [c.asset_id as string, c]),
   );
-
-  function groupNameForAsset(assetId: string): string {
-    const cc = ccByAsset.get(assetId);
-    let parentId = cc?.parent_id as string | null | undefined;
-    let guard = 0;
-    while (parentId && guard < 20) {
-      const parent = ccById.get(parentId);
-      if (!parent) break;
-      if (parent.is_group) return parent.name as string;
-      parentId = parent.parent_id as string | null | undefined;
-      guard += 1;
-    }
-    return UNGROUPED;
-  }
 
   // Active lease per asset (today within period, or any lease when dates are open).
   interface ActiveLease {
@@ -155,12 +140,13 @@ export default async function PropertyReportPage() {
   const rows: PropertyRow[] = (assets ?? []).map((a) => {
     const id = a.id as string;
     const lease = leaseByAsset.get(id);
+    const countryCode = (a.country as string) ?? "";
     return computePropertyRow({
       id,
-      group: groupNameForAsset(id),
+      group: countryCode ? countryName.get(countryCode) ?? countryCode : UNSPECIFIED,
       name: (ccByAsset.get(id)?.name as string) ?? (a.asset_name as string),
       assetCode: a.asset_code as string,
-      country: (a.country as string) ?? "",
+      country: countryCode,
       propertyType: (a.property_type as string) ?? "",
       estimatedRentMonthly: Number(a.estimated_rent) || 0,
       monthlyRent: lease?.monthly ?? 0,
@@ -182,14 +168,14 @@ export default async function PropertyReportPage() {
     });
   });
 
-  // Group rows, ordered with Ungrouped last.
+  // Group rows by country, ordered alphabetically with Unspecified last.
   const byGroup = new Map<string, PropertyRow[]>();
   for (const r of rows) {
     if (!byGroup.has(r.group)) byGroup.set(r.group, []);
     byGroup.get(r.group)!.push(r);
   }
   const groups: PropertyGroup[] = [...byGroup.entries()]
-    .sort((a, b) => (a[0] === UNGROUPED ? 1 : b[0] === UNGROUPED ? -1 : a[0].localeCompare(b[0])))
+    .sort((a, b) => (a[0] === UNSPECIFIED ? 1 : b[0] === UNSPECIFIED ? -1 : a[0].localeCompare(b[0])))
     .map(([name, groupRows]) => ({
       name,
       totals: aggregateGroup(groupRows),

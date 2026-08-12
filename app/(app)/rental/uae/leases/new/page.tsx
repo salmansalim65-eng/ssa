@@ -21,6 +21,7 @@ export default async function NewUaeLeasePage() {
       .select("id, asset_code, asset_name")
       .eq("company_id", companyId)
       .eq("country", "AE")
+      .eq("is_rental", true)
       .is("deleted_at", null)
       .order("asset_code"),
     // UAE tenants come from the Chart of Accounts tenant group (country = AE).

@@ -24,6 +24,7 @@ export default async function EditPkLeasePage({ params }: { params: Promise<{ id
       .select("id, asset_code, asset_name")
       .eq("company_id", companyId)
       .eq("country", "PK")
+      .eq("is_rental", true)
       .is("deleted_at", null)
       .order("asset_code"),
     loadTenantAccounts(companyId, "PK"),

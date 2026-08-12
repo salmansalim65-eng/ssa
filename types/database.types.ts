@@ -395,6 +395,7 @@ export interface Database {
           is_bank: boolean;
           is_tenant_group: boolean;
           linked_asset_id: string | null;
+          opening_balance_je_id: string | null;
           sort_order: number;
           id_number: string | null;
           contact_person: string | null;

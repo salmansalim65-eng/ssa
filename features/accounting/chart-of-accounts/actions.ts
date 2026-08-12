@@ -4,7 +4,159 @@ import { revalidatePath } from "next/cache";
 
 import { hasPermission, requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { createJournalEntry, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { accountSchema, type AccountInput } from "./schemas";
+
+function round2(n: number) {
+  return Math.round(n * 100) / 100;
+}
+
+const DEBIT_NORMAL_TYPES = new Set(["asset", "expense"]);
+
+// Finds (or creates) the "Opening Balance Equity" contra account used to balance
+// auto-posted opening-balance entries.
+async function resolveOpeningBalanceEquityId(companyId: string, userId: string): Promise<string | null> {
+  const supabase = await createClient();
+  const { data: existing } = await supabase
+    .schema("accounting")
+    .from("chart_of_accounts")
+    .select("id")
+    .eq("company_id", companyId)
+    .eq("account_type", "equity")
+    .is("deleted_at", null)
+    .ilike("account_name", "Opening Balance Equity")
+    .maybeSingle();
+  if (existing) return existing.id as string;
+
+  const { data: code } = await supabase.schema("core").rpc("fn_next_master_code", {
+    p_company_id: companyId,
+    p_module_key: "chart_of_accounts",
+    p_default_prefix: "AC",
+    p_default_padding: 6,
+  });
+  if (!code) return null;
+  const { data: created } = await supabase
+    .schema("accounting")
+    .from("chart_of_accounts")
+    .insert({
+      company_id: companyId,
+      account_code: code,
+      account_name: "Opening Balance Equity",
+      account_type: "equity",
+      is_group: false,
+      created_by: userId,
+    })
+    .select("id")
+    .single();
+  return (created?.id as string | undefined) ?? null;
+}
+
+// Brings an account's posted opening balance to the target by posting only the
+// DELTA needed (account vs Opening Balance Equity contra). Posted journal
+// entries are immutable, so we never edit prior entries — create sets it, an
+// edit posts the difference, and clearing it posts a reversing difference. A
+// zero delta is a no-op, so this is safe to call on every save.
+async function syncAccountOpeningBalance(params: {
+  accountId: string;
+  companyId: string;
+  userId: string;
+  accountType: AccountInput["accountType"];
+  openingBalance: number;
+  currencyId: string | null;
+}): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const isDebitNormal = DEBIT_NORMAL_TYPES.has(params.accountType);
+  // Desired net (debit − credit, document amounts) from opening-balance entries.
+  const target = round2(
+    isDebitNormal ? Number(params.openingBalance) || 0 : -(Number(params.openingBalance) || 0),
+  );
+
+  // Current posted opening-balance net for this account.
+  const { data: obJes } = await supabase
+    .schema("accounting")
+    .from("journal_entries")
+    .select("id")
+    .eq("company_id", params.companyId)
+    .eq("voucher_type", "opening_balance_voucher")
+    .eq("status", "posted");
+  const obJeIds = (obJes ?? []).map((j) => j.id as string);
+  let currentNet = 0;
+  if (obJeIds.length) {
+    const { data: lines } = await supabase
+      .schema("accounting")
+      .from("journal_entry_lines")
+      .select("debit_amount, credit_amount")
+      .eq("account_id", params.accountId)
+      .in("journal_entry_id", obJeIds);
+    currentNet = round2(
+      (lines ?? []).reduce((s, l) => s + Number(l.debit_amount) - Number(l.credit_amount), 0),
+    );
+  }
+
+  const delta = round2(target - currentNet);
+  if (delta === 0) return {};
+
+  const contraId = await resolveOpeningBalanceEquityId(params.companyId, params.userId);
+  if (!contraId) return { error: "Could not resolve the Opening Balance Equity account" };
+  const currencyId = await resolveOpeningBalanceCurrencyId(params.companyId, params.currencyId);
+  if (!currencyId) return { error: "No currency configured for the opening balance" };
+
+  const amt = Math.abs(delta);
+  const accountDebit = delta > 0 ? amt : 0;
+  const accountCredit = delta > 0 ? 0 : amt;
+  const lines: EntryLineInput[] = [
+    { accountId: params.accountId, debit: accountDebit, credit: accountCredit, description: "Opening balance" },
+    { accountId: contraId, debit: accountCredit, credit: accountDebit, description: "Opening balance" },
+  ];
+  const asOfDate = `${new Date().getFullYear()}-01-01`;
+  const voucherId = crypto.randomUUID();
+
+  const je = await createJournalEntry({
+    companyId: params.companyId,
+    voucherType: "opening_balance_voucher",
+    voucherId,
+    entryDate: asOfDate,
+    currencyId,
+    narration: "Opening balance",
+    createdBy: params.userId,
+    lines,
+  });
+  if ("error" in je) return { error: je.error };
+
+  await supabase.schema("accounting").from("opening_balance_vouchers").insert({
+    id: voucherId,
+    company_id: params.companyId,
+    journal_entry_id: je.journalEntryId,
+    as_of_date: asOfDate,
+    contra_account_id: contraId,
+    cost_center_id: null,
+    currency_id: currencyId,
+    exchange_rate: je.exchangeRate,
+    narration: "Opening balance",
+    total_amount: amt,
+    created_by: params.userId,
+  });
+  await supabase.schema("accounting").from("opening_balance_voucher_lines").insert({
+    voucher_id: voucherId,
+    line_no: 1,
+    account_id: params.accountId,
+    debit: accountDebit,
+    credit: accountCredit,
+  });
+
+  const posted = await postVoucher({
+    companyId: params.companyId,
+    voucherType: "opening_balance_voucher",
+    journalEntryId: je.journalEntryId,
+  });
+  if ("error" in posted) return { error: posted.error };
+  await supabase
+    .schema("accounting")
+    .from("opening_balance_vouchers")
+    .update({ voucher_no: posted.voucherNo })
+    .eq("id", voucherId);
+  return {};
+}
 
 // Descriptive property fields captured on the CoA form (when the account sits
 // under PROPERTIES) and written through to the linked asset. Empty/zero values
@@ -247,6 +399,22 @@ export async function createAccount(input: AccountInput) {
     revalidatePath("/assets");
   }
 
+  // Post the opening balance to the ledger (account vs Opening Balance Equity).
+  if (!parsed.data.isGroup) {
+    const ob = await syncAccountOpeningBalance({
+      accountId: account.id,
+      companyId,
+      userId: user.user!.id,
+      accountType: parsed.data.accountType,
+      openingBalance: parsed.data.openingBalance,
+      currencyId,
+    });
+    if (ob.error) {
+      revalidatePath("/accounting/chart-of-accounts");
+      return { error: `Account saved, but posting its opening balance failed: ${ob.error}` };
+    }
+  }
+
   revalidatePath("/accounting/chart-of-accounts");
   return { success: true };
 }
@@ -385,6 +553,21 @@ export async function updateAccount(accountId: string, input: AccountInput) {
     }
     revalidatePath("/assets");
     revalidatePath(`/assets/${link.assetId}`);
+  }
+
+  // Keep the account's opening-balance ledger entry in step (create / update /
+  // remove). Groups can't post, so any stray entry is removed.
+  const ob = await syncAccountOpeningBalance({
+    accountId,
+    companyId,
+    userId: user.user!.id,
+    accountType: parsed.data.accountType,
+    openingBalance: parsed.data.isGroup ? 0 : parsed.data.openingBalance,
+    currencyId,
+  });
+  if (ob.error) {
+    revalidatePath("/accounting/chart-of-accounts");
+    return { error: `Account saved, but updating its opening balance failed: ${ob.error}` };
   }
 
   revalidatePath("/accounting/chart-of-accounts");

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   BuildingIcon,
@@ -147,6 +147,12 @@ export function PropertyReportView({
     () => visibleRows.find((r) => r.id === selectedId) ?? null,
     [visibleRows, selectedId],
   );
+  const detailRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (selectedId && detailRef.current) {
+      detailRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [selectedId]);
   const activeFilters = [country, occupancy, propertyType].filter(Boolean).length;
 
   const csvRows = visibleRows.map((r) => [
@@ -274,6 +280,13 @@ export function PropertyReportView({
         </p>
       </div>
 
+      {/* Selected property detail — shown above the table */}
+      {selected && (
+        <div ref={detailRef} className="scroll-mt-4">
+          <PropertyDetail row={selected} onClose={() => setSelectedId(null)} />
+        </div>
+      )}
+
       {/* Main grouped table */}
       <div className="max-h-[70vh] overflow-auto rounded-lg border bg-card shadow-xs">
         <table className="min-w-[1500px] w-full border-collapse text-sm">
@@ -331,19 +344,24 @@ export function PropertyReportView({
 
                   {/* Child property rows */}
                   {!isCollapsed &&
-                    g.rows.map((r) => (
+                    g.rows.map((r, i) => {
+                      const isSel = selectedId === r.id;
+                      const rowBg = isSel ? "bg-primary/10" : i % 2 ? "bg-muted/40" : "bg-card";
+                      return (
                       <tr
                         key={r.id}
                         onClick={() => setSelectedId(r.id)}
                         className={cn(
-                          "cursor-pointer border-b border-border/60 [&>td]:px-3 [&>td]:py-2",
-                          selectedId === r.id ? "bg-primary/[0.07]" : "hover:bg-primary/[0.03]",
+                          "group/row cursor-pointer border-b border-border/50 [&>td]:px-3 [&>td]:py-2.5",
+                          rowBg,
+                          !isSel && "hover:bg-primary/[0.06]",
                         )}
                       >
                         <td
                           className={cn(
-                            "sticky left-0 z-10 min-w-[240px] border-r border-border/60 pl-8",
-                            selectedId === r.id ? "bg-primary/[0.07]" : "bg-card",
+                            "sticky left-0 z-10 min-w-[240px] border-r border-border/50 pl-8",
+                            rowBg,
+                            !isSel && "group-hover/row:bg-primary/[0.06]",
                           )}
                         >
                           <div className="flex items-center gap-2">
@@ -375,7 +393,8 @@ export function PropertyReportView({
                           {r.titleDeedOwner || dash}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                 </Fragment>
               );
             })}
@@ -389,9 +408,6 @@ export function PropertyReportView({
           </tbody>
         </table>
       </div>
-
-      {/* Selected property detail */}
-      {selected && <PropertyDetail row={selected} onClose={() => setSelectedId(null)} />}
 
       {/* Vacant cost centers */}
       <div className="rounded-lg border bg-card p-4 shadow-xs">
@@ -498,7 +514,7 @@ function PropertyDetail({ row, onClose }: { row: PropertyRow; onClose: () => voi
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{row.name}</p>
           <p className="font-mono text-[0.7rem] text-white/70">
-            {row.assetCode} · {row.group} · {row.country}
+            {[row.assetCode, row.propertyType, row.group].filter(Boolean).join(" · ")}
           </p>
         </div>
         <div className="flex items-center gap-2">

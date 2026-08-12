@@ -6,7 +6,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -274,19 +273,6 @@ export default async function GeneralLedgerPage({
     ]),
   );
 
-  // Grand totals across every selected account's period rows. When all accounts
-  // resolve to the same currency the totals carry that symbol; mixed currencies
-  // show the numbers without a symbol (a single sum would be meaningless).
-  const grandDebit = round2(
-    sections.reduce((s, sec) => s + sec.rows.reduce((a, r) => a + r.debit_amount, 0), 0),
-  );
-  const grandCredit = round2(
-    sections.reduce((s, sec) => s + sec.rows.reduce((a, r) => a + r.credit_amount, 0), 0),
-  );
-  const totalSymbols = new Set(sections.map((s) => s.symbol));
-  const totalSymbol = totalSymbols.size === 1 ? [...totalSymbols][0] : "";
-  const totalMoney = (n: number) => (totalSymbol ? `${totalSymbol} ${formatMoney(n)}` : formatMoney(n));
-
   return (
     <div className="space-y-5">
       <ReportNav className="print:hidden" />
@@ -414,7 +400,7 @@ export default async function GeneralLedgerPage({
                     </TableRow>
                   )}
                   {s.rows.length > 0 && (
-                    <TableRow className="border-t-2 border-ledger/50 bg-ledger/10 hover:bg-ledger/10">
+                    <TableRow className="border-t-2 border-ledger/50 bg-ledger/25 hover:bg-ledger/25">
                       <TableCell colSpan={5} className="text-right font-semibold text-foreground">
                         Total — {s.account.account_code} {s.account.account_name}
                       </TableCell>
@@ -433,20 +419,6 @@ export default async function GeneralLedgerPage({
                 );
               })}
             </TableBody>
-            <TableFooter className="sticky bottom-0 z-20 border-t-2 border-header-border bg-header text-header-foreground">
-              <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={5} className="font-semibold text-header-foreground">
-                  Total
-                </TableCell>
-                <TableCell className="text-right font-mono font-semibold tabular-nums text-header-foreground">
-                  {totalMoney(grandDebit)}
-                </TableCell>
-                <TableCell className="text-right font-mono font-semibold tabular-nums text-header-foreground">
-                  {totalMoney(grandCredit)}
-                </TableCell>
-                <TableCell />
-              </TableRow>
-            </TableFooter>
           </Table>
       )}
     </div>

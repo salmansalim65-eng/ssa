@@ -204,7 +204,7 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard
           title="Balances UAE"
           href={cardHref("balances-uae")}
@@ -278,7 +278,7 @@ export default async function DashboardPage({
         </SummaryCard>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <SummaryCard
           title="Bank"
           href={cardHref("bank")}

@@ -63,7 +63,8 @@ describe("computePropertyRow — reference formulas", () => {
   it("Yearly Rent = Monthly × 12", () => expect(r.yearlyRent).toBe(30060));
   it("Diff Est vs Yearly = Est×12 − Yearly", () => expect(r.diffEstVsYearly).toBe(19140));
   it("Sq Ft Value = Purchase / Sq Ft", () => expect(r.sqFtValue).toBe(1000));
-  it("Net Rent = Yearly − Service Charges", () => expect(r.netRent).toBe(21093));
+  it("Net Rent (monthly) = Monthly Rent − Service Charges / 12", () =>
+    expect(r.netRent).toBe(1757.75));
   it("Perc% = Net Rent / Current Value × 100", () => expect(r.perc).toBe(3.84));
   it("% Month = Perc% / 12", () => expect(r.percMonth).toBe(0.32));
   it("Difference Value = Current − Purchase", () => expect(r.diffValue).toBe(25000));

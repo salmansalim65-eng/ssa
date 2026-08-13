@@ -47,6 +47,7 @@ export default async function PropertyReportPage() {
         "id, asset_code, asset_name, country, area_sqft, purchase_value, current_value, service_charges_rate, service_charges_amount, title_deed_value, estimated_rent, owner, official_owner, purchase_date, property_type, title_deed_attachment_id",
       )
       .eq("company_id", companyId)
+      .eq("is_rental", true)
       .is("deleted_at", null)
       .order("asset_code"),
     supabase

@@ -299,6 +299,10 @@ async function ensureLinkedAsset(params: {
       cost_center_mode: "new",
       is_rental: params.isRental,
       created_by: params.userId,
+      // Point the asset at THIS Chart-of-Accounts account so the
+      // trg_link_asset_account trigger doesn't auto-create a second, duplicate
+      // GL account under "ASSETS" (the property account already is its account).
+      account_id: params.accountId,
       ...assetColumns,
     })
     .select("id")

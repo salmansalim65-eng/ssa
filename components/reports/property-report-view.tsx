@@ -108,25 +108,55 @@ export function PropertyReportView({
   totalCostCenters,
   totalProperties,
   monthlyTrend,
+  currencies,
+  rateToBase,
 }: {
   groups: PropertyGroup[];
   countries: { code: string; name: string }[];
   totalCostCenters: number;
   totalProperties: number;
   monthlyTrend: MonthlyTrendPoint[];
+  currencies: { id: string; code: string; symbol: string }[];
+  rateToBase: Record<string, number>;
 }) {
   const [search, setSearch] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [country, setCountry] = useState("");
   const [occupancy, setOccupancy] = useState<"" | "occupied" | "vacant">("");
   const [propertyType, setPropertyType] = useState("");
+  const [currency, setCurrency] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  // When a display currency is chosen, convert every property's money fields
+  // from its own currency into the target (property→base→target). By default
+  // (no currency) figures stay in each property's original currency.
+  const selectedCurrency = currencies.find((c) => c.id === currency) ?? null;
+  const curGroups = useMemo(() => {
+    if (!currency) return groups;
+    const target = rateToBase[currency] || 0;
+    if (!target) return groups;
+    const MONEY_FIELDS: (keyof PropertyRow)[] = [
+      "estRent", "monthlyRent", "yearlyRent", "diffEstVsYearly", "sqFtValue",
+      "serviceCharges", "netRent", "currentValue", "purchaseValue", "titleDeedValue", "diffValue",
+    ];
+    return groups.map((g) => ({
+      ...g,
+      rows: g.rows.map((r) => {
+        const src = r.currencyId ? rateToBase[r.currencyId] : undefined;
+        if (!src) return r;
+        const f = src / target;
+        const out = { ...r } as PropertyRow;
+        for (const k of MONEY_FIELDS) (out[k] as number) = (r[k] as number) * f;
+        return out;
+      }),
+    }));
+  }, [groups, currency, rateToBase]);
+
   const propertyTypes = useMemo(
     () =>
-      [...new Set(groups.flatMap((g) => g.rows.map((r) => r.propertyType)).filter(Boolean))].sort(),
-    [groups],
+      [...new Set(curGroups.flatMap((g) => g.rows.map((r) => r.propertyType)).filter(Boolean))].sort(),
+    [curGroups],
   );
 
   // Apply filters + search, then recompute each group's totals from what remains.
@@ -143,13 +173,13 @@ export function PropertyReportView({
       }
       return true;
     };
-    return groups
+    return curGroups
       .map((g) => {
         const rows = g.rows.filter(match);
         return { name: g.name, rows, totals: aggregateGroup(rows) };
       })
       .filter((g) => g.rows.length > 0);
-  }, [groups, search, country, occupancy, propertyType]);
+  }, [curGroups, search, country, occupancy, propertyType]);
 
   const visibleRows = useMemo(() => filteredGroups.flatMap((g) => g.rows), [filteredGroups]);
   const vacant = useMemo(() => visibleRows.filter((r) => !r.occupied), [visibleRows]);
@@ -168,7 +198,7 @@ export function PropertyReportView({
       detailRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }, [selectedId]);
-  const activeFilters = [country, occupancy, propertyType].filter(Boolean).length;
+  const activeFilters = [country, occupancy, propertyType, currency].filter(Boolean).length;
 
   // ----- Dashboard chart datasets (all recompute with the active filters) -----
 
@@ -399,6 +429,11 @@ export function PropertyReportView({
               <span className="font-semibold text-foreground">{visibleRows.length}</span> of{" "}
               <span className="font-semibold text-foreground">{totalProperties}</span> rental properties
             </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {selectedCurrency
+                ? `Figures converted to ${selectedCurrency.code} (${selectedCurrency.symbol})`
+                : "Figures shown in each property's own currency"}
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 print:hidden">
             <div className="relative">
@@ -425,10 +460,11 @@ export function PropertyReportView({
         </div>
 
         {showFilters && (
-          <div className="mt-4 grid gap-3 border-t pt-4 sm:grid-cols-2 lg:grid-cols-3 print:hidden">
+          <div className="mt-4 grid gap-3 border-t pt-4 sm:grid-cols-2 lg:grid-cols-4 print:hidden">
             <FilterSelect label="Country" value={country} onChange={setCountry} options={countries.map((c) => ({ value: c.code, label: c.name }))} allLabel="All countries" />
             <FilterSelect label="Occupancy" value={occupancy} onChange={(v) => setOccupancy(v as "" | "occupied" | "vacant")} options={[{ value: "occupied", label: "Occupied" }, { value: "vacant", label: "Vacant" }]} allLabel="All" />
             <FilterSelect label="Property type" value={propertyType} onChange={setPropertyType} options={propertyTypes.map((t) => ({ value: t, label: t }))} allLabel="All types" />
+            <FilterSelect label="Display currency" value={currency} onChange={setCurrency} options={currencies.map((c) => ({ value: c.id, label: `${c.code} (${c.symbol})` }))} allLabel="Original currency" />
             {activeFilters > 0 && (
               <button
                 type="button"
@@ -436,6 +472,7 @@ export function PropertyReportView({
                   setCountry("");
                   setOccupancy("");
                   setPropertyType("");
+                  setCurrency("");
                 }}
                 className="self-end text-sm font-medium text-primary hover:underline"
               >

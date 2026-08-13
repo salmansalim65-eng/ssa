@@ -15,6 +15,8 @@ function input(over: Partial<PropertyRowInput>): PropertyRowInput {
     assetCode: "AST-1",
     country: "AE",
     propertyType: "APARTMENT",
+    currencyId: null,
+    currencyCode: "",
     estimatedRentMonthly: 0,
     monthlyRent: 0,
     areaSqft: 0,

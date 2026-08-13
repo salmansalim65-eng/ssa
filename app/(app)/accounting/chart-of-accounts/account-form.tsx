@@ -90,6 +90,9 @@ export function AccountForm({
   const isGroup = useWatch({ control: form.control, name: "isGroup" });
   const accountType = useWatch({ control: form.control, name: "accountType" });
   const selectedParentId = useWatch({ control: form.control, name: "parentId" });
+  const scRate = useWatch({ control: form.control, name: "serviceChargesRate" });
+  const scArea = useWatch({ control: form.control, name: "areaSqft" });
+  const serviceChargesAmount = (Number(scRate) || 0) * (Number(scArea) || 0);
   const selectedParent = parentOptions.find((p) => p.id === selectedParentId);
   const lockAccountType = Boolean(selectedParent);
 
@@ -609,14 +612,22 @@ export function AccountForm({
                 name="serviceChargesRate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Service charges</FormLabel>
+                    <FormLabel>Service charges rate</FormLabel>
                     <FormControl>
                       <Input type="number" step="0.01" {...field} value={amountValue(field.value)} />
                     </FormControl>
+                    <FormDescription>Per unit of area.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+              <FormItem>
+                <FormLabel>Service charges value</FormLabel>
+                <FormControl>
+                  <Input type="number" readOnly value={serviceChargesAmount || ""} className="bg-muted/50" tabIndex={-1} />
+                </FormControl>
+                <FormDescription>Rate × area, calculated automatically.</FormDescription>
+              </FormItem>
               <FormField
                 control={form.control}
                 name="otherCharges"

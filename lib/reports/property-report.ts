@@ -33,6 +33,8 @@ export interface PropertyRowInput {
   assetCode: string;
   country: string;
   propertyType: string;
+  currencyId: string | null;
+  currencyCode: string;
   estimatedRentMonthly: number; // asset.estimated_rent (monthly)
   monthlyRent: number; // normalised from the active lease (0 if none)
   areaSqft: number;
@@ -67,6 +69,8 @@ export interface PropertyRow {
   assetCode: string;
   country: string;
   propertyType: string;
+  currencyId: string | null;
+  currencyCode: string;
   estRent: number;
   monthlyRent: number;
   yearlyRent: number;
@@ -115,6 +119,8 @@ export function computePropertyRow(i: PropertyRowInput): PropertyRow {
     assetCode: i.assetCode,
     country: i.country,
     propertyType: i.propertyType,
+    currencyId: i.currencyId,
+    currencyCode: i.currencyCode,
     estRent,
     monthlyRent,
     yearlyRent,

@@ -216,8 +216,8 @@ export default async function DashboardPage({
           }
         >
           <div className="flex justify-between gap-2">
-            <StatCol value={money(aed, balByCountry.AE.debit)} label="Debit" />
-            <StatCol value={money(aed, balByCountry.AE.credit)} label="Credit" align="right" />
+            <StatCol value={money("", balByCountry.AE.debit)} label="Debit" />
+            <StatCol value={money("", balByCountry.AE.credit)} label="Credit" align="right" />
           </div>
         </SummaryCard>
 
@@ -232,8 +232,8 @@ export default async function DashboardPage({
           }
         >
           <div className="flex justify-between gap-2">
-            <StatCol value={money(pkr, balByCountry.PK.debit)} label="Debit" />
-            <StatCol value={money(pkr, balByCountry.PK.credit)} label="Credit" align="right" />
+            <StatCol value={money("", balByCountry.PK.debit)} label="Debit" />
+            <StatCol value={money("", balByCountry.PK.credit)} label="Credit" align="right" />
           </div>
         </SummaryCard>
 
@@ -251,9 +251,9 @@ export default async function DashboardPage({
           }
         >
           <div className="grid grid-cols-3 gap-2">
-            <StatCol value={money(aed, rentByCountry.UAE.overdue)} label="Overdue" />
-            <StatCol value={money(aed, rentByCountry.UAE.due)} label="Due" align="center" />
-            <StatCol value={money(aed, rentByCountry.UAE.billed)} label="Total" align="right" />
+            <StatCol value={money("", rentByCountry.UAE.overdue)} label="Overdue" />
+            <StatCol value={money("", rentByCountry.UAE.due)} label="Due" align="center" />
+            <StatCol value={money("", rentByCountry.UAE.billed)} label="Total" align="right" />
           </div>
         </SummaryCard>
 
@@ -271,9 +271,9 @@ export default async function DashboardPage({
           }
         >
           <div className="grid grid-cols-3 gap-2">
-            <StatCol value={money(pkr, rentByCountry.PK.overdue)} label="Overdue" />
-            <StatCol value={money(pkr, rentByCountry.PK.due)} label="Due" align="center" />
-            <StatCol value={money(pkr, rentByCountry.PK.billed)} label="Total" align="right" />
+            <StatCol value={money("", rentByCountry.PK.overdue)} label="Overdue" />
+            <StatCol value={money("", rentByCountry.PK.due)} label="Due" align="center" />
+            <StatCol value={money("", rentByCountry.PK.billed)} label="Total" align="right" />
           </div>
         </SummaryCard>
       </div>

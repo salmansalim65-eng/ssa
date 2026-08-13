@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 
-import { hasPermission, requirePermission } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createJournalEntry, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { accountSchema, type AccountInput } from "./schemas";
 
@@ -246,7 +247,11 @@ async function ensureLinkedAsset(params: {
   property?: PropertyFields;
   isRental: boolean;
 }): Promise<{ assetId?: string; error?: string }> {
-  const supabase = await createClient();
+  // Service-role client: properties are managed from Chart of Accounts, so this
+  // internal asset sync must not be blocked by the Assets-module RLS. The caller
+  // is already gated by requirePermission("chart_of_accounts", …); every write
+  // stays scoped to params.companyId.
+  const supabase = createAdminClient();
   const value = Number.isFinite(params.openingBalance) ? Math.max(0, params.openingBalance) : 0;
 
   // Already linked → keep the property aligned with the account: identifying
@@ -262,7 +267,8 @@ async function ensureLinkedAsset(params: {
         is_rental: params.isRental,
         ...(params.property ? assetColumnsFromProperty(params.property, value) : {}),
       })
-      .eq("id", params.existingAssetId);
+      .eq("id", params.existingAssetId)
+      .eq("company_id", params.companyId);
     if (error) return { error: error.message };
     return { assetId: params.existingAssetId };
   }
@@ -434,8 +440,11 @@ async function isPropertiesParent(parentId: string | null | undefined): Promise<
   return (data?.account_name ?? "").trim().toUpperCase() === "PROPERTIES";
 }
 
-// Permission-guards then delegates to ensureLinkedAsset. Creating the property
-// needs Assets "create"; re-syncing an already-linked one needs Assets "edit".
+// Delegates to ensureLinkedAsset. Properties are managed from Chart of Accounts,
+// so the caller's chart_of_accounts create/edit permission (already checked in
+// createAccount/updateAccount) is the authority here — the linked asset is an
+// internal detail and is synced with the service-role client, without demanding
+// a separate Assets-module permission.
 async function linkRentalProperty(params: {
   accountId: string;
   companyId: string;
@@ -448,10 +457,6 @@ async function linkRentalProperty(params: {
   property?: PropertyFields;
   isRental: boolean;
 }): Promise<{ assetId?: string; error?: string }> {
-  const action = params.existingAssetId ? "edit" : "create";
-  if (!(await hasPermission("assets", action))) {
-    return { error: `you need the Assets "${action}" permission.` };
-  }
   return ensureLinkedAsset(params);
 }
 

@@ -39,12 +39,15 @@ export default async function PropertyReportPage() {
     { data: countryRows },
     { data: uaeInvoices },
     { data: pkInvoices },
+    { data: currencyRows },
+    { data: companyCurrencies },
+    { data: exchangeRates },
   ] = await Promise.all([
     supabase
       .schema("assets")
       .from("assets")
       .select(
-        "id, asset_code, asset_name, country, area_sqft, purchase_value, current_value, service_charges_rate, service_charges_amount, title_deed_value, estimated_rent, owner, official_owner, purchase_date, property_type, title_deed_attachment_id",
+        "id, asset_code, asset_name, country, currency_id, area_sqft, purchase_value, current_value, service_charges_rate, service_charges_amount, title_deed_value, estimated_rent, owner, official_owner, purchase_date, property_type, title_deed_attachment_id",
       )
       .eq("company_id", companyId)
       .eq("is_rental", true)
@@ -73,9 +76,51 @@ export default async function PropertyReportPage() {
     supabase.schema("core").from("countries").select("code, name").eq("company_id", companyId),
     supabase.schema("rental").from("uae_rent_invoices").select("invoice_date, amount").eq("company_id", companyId),
     supabase.schema("rental").from("pk_rent_invoices").select("invoice_date, total_amount").eq("company_id", companyId),
+    supabase.schema("core").from("currencies").select("id, code, symbol"),
+    supabase
+      .schema("core")
+      .from("company_currencies")
+      .select("currency_id, is_base_currency, is_active")
+      .eq("company_id", companyId)
+      .eq("is_active", true),
+    supabase
+      .schema("core")
+      .from("exchange_rates")
+      .select("currency_id, rate_to_base, rate_date")
+      .eq("company_id", companyId)
+      .lte("rate_date", today)
+      .order("rate_date", { ascending: false }),
   ]);
 
   const countryName = new Map((countryRows ?? []).map((c) => [c.code as string, c.name as string]));
+
+  // Currency plumbing: resolve each property's currency, build a base-rate map
+  // for optional conversion, and the list of currencies the report can display.
+  const currencyById = new Map(
+    (currencyRows ?? []).map((c) => [c.id as string, { code: c.code as string, symbol: c.symbol as string }]),
+  );
+  const currencyIdByCode = new Map((currencyRows ?? []).map((c) => [c.code as string, c.id as string]));
+  // Fallback currency by country when an asset has no explicit currency_id.
+  const currencyIdByCountry = (code: string): string | null => {
+    const map: Record<string, string> = { PK: "PKR", AE: "AED", SA: "SAR" };
+    const cur = map[code];
+    return cur ? currencyIdByCode.get(cur) ?? null : null;
+  };
+  const baseCurrencyId = ((companyCurrencies ?? []).find((c) => c.is_base_currency)?.currency_id as string) ?? null;
+  // rate_to_base per currency (base = 1); latest row wins (already ordered desc).
+  const rateToBase: Record<string, number> = {};
+  if (baseCurrencyId) rateToBase[baseCurrencyId] = 1;
+  for (const r of exchangeRates ?? []) {
+    const id = r.currency_id as string;
+    if (!(id in rateToBase)) rateToBase[id] = Number(r.rate_to_base) || 0;
+  }
+  // Currencies the report can convert to: active company currencies that have a
+  // usable rate (or are the base currency).
+  const currencyOptions = (companyCurrencies ?? [])
+    .map((c) => c.currency_id as string)
+    .filter((id) => id in rateToBase && (rateToBase[id] ?? 0) > 0)
+    .map((id) => ({ id, code: currencyById.get(id)?.code ?? id, symbol: currencyById.get(id)?.symbol ?? "" }))
+    .sort((a, b) => a.code.localeCompare(b.code));
 
   // Cost centres by asset id (for the cost-centre name shown per property).
   const ccByAsset = new Map(
@@ -200,6 +245,7 @@ export default async function PropertyReportPage() {
     const id = a.id as string;
     const lease = leaseByAsset.get(id);
     const countryCode = (a.country as string) ?? "";
+    const curId = ((a.currency_id as string) ?? null) || currencyIdByCountry(countryCode);
     return computePropertyRow({
       id,
       group: countryCode ? countryName.get(countryCode) ?? countryCode : UNSPECIFIED,
@@ -207,6 +253,8 @@ export default async function PropertyReportPage() {
       assetCode: a.asset_code as string,
       country: countryCode,
       propertyType: (a.property_type as string) ?? "",
+      currencyId: curId,
+      currencyCode: curId ? currencyById.get(curId)?.code ?? "" : "",
       estimatedRentMonthly: Number(a.estimated_rent) || 0,
       monthlyRent: lease?.monthly ?? 0,
       areaSqft: Number(a.area_sqft) || 0,
@@ -275,6 +323,8 @@ export default async function PropertyReportPage() {
       totalCostCenters={rows.length}
       totalProperties={(assets ?? []).length}
       monthlyTrend={monthlyTrend}
+      currencies={currencyOptions}
+      rateToBase={rateToBase}
     />
   );
 }

@@ -438,7 +438,7 @@ export function AssetForm({
           name="titleDeedValue"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Title deed value</FormLabel>
+              <FormLabel>{country === "PK" ? "Official value" : "Title deed value"}</FormLabel>
               <FormControl>
                 <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
               </FormControl>

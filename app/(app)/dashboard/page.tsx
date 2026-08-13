@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertCircleIcon, Building2Icon } from "lucide-react";
+import { AlertCircleIcon, Building2Icon, CalendarRangeIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -204,7 +204,7 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <SummaryCard
           title="Balances UAE"
           href={cardHref("balances-uae")}
@@ -328,16 +328,34 @@ export default async function DashboardPage({
         </SummaryCard>
 
         <SummaryCard
-          title="Rent Report"
-          href="/reports/rent-report"
+          title="Rental Reports"
           footer={
             <div className="text-center text-xs font-medium text-muted-foreground">
-              Cost-centre-wise, month-wise rent — open report
+              Property &amp; rent analysis
             </div>
           }
         >
-          <div className="py-1 text-sm text-muted-foreground">
-            UAE and Pakistan rent, per cost centre and month.
+          <div className="space-y-1">
+            <Link
+              href="/reports/property-report"
+              className="flex items-center justify-between gap-2 rounded px-1 py-1 transition-colors hover:bg-muted/60"
+            >
+              <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                <Building2Icon className="size-4 text-ledger-dark" /> Rental Property Report
+              </span>
+              <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                {(rentalPropertyCount ?? 0).toLocaleString()}
+              </span>
+            </Link>
+            <Link
+              href="/reports/rent-report"
+              className="flex items-center justify-between gap-2 rounded px-1 py-1 transition-colors hover:bg-muted/60"
+            >
+              <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                <CalendarRangeIcon className="size-4 text-ledger-dark" /> Rent Report
+              </span>
+              <span className="shrink-0 font-mono text-xs text-muted-foreground">monthly</span>
+            </Link>
           </div>
         </SummaryCard>
 
@@ -348,14 +366,6 @@ export default async function DashboardPage({
           icon={AlertCircleIcon}
           tone={(pendingApprovals ?? 0) > 0 ? "warning" : undefined}
           href="/accounting/voucher-register"
-        />
-
-        <KpiCard
-          label="Rental Property Report"
-          value={(rentalPropertyCount ?? 0).toLocaleString()}
-          subtext="Rental properties — open report"
-          icon={Building2Icon}
-          href="/reports/property-report"
         />
 
         <SummaryCard

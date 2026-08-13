@@ -3,12 +3,17 @@ import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
 import { loadReportCountries } from "@/lib/reports/countries";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
+import { healStrayAssetAccounts } from "@/features/accounting/chart-of-accounts/actions";
 import { AccountTree, type AccountRow, type LinkedAssetFields } from "./account-tree";
 
 export default async function ChartOfAccountsPage() {
   const supabase = await createClient();
 
   const companyId = await getCurrentCompanyId();
+
+  // Heal any legacy stray duplicate asset GL accounts before rendering the tree
+  // (idempotent no-op once the data is clean; no-ops for non-editors).
+  await healStrayAssetAccounts();
 
   const [
     { data: accounts },

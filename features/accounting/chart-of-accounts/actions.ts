@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { requirePermission } from "@/lib/auth/permissions";
+import { hasPermission, requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createJournalEntry, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
@@ -486,6 +486,108 @@ function propertyFieldsFrom(d: AccountInput): PropertyFields {
   };
 }
 
+// Heals the duplicate-GL-account problem (see migration 0089): when a property
+// is saved, remove any stray same-named account auto-created under the "ASSETS"
+// group by trg_link_asset_account. Only true strays are touched — a non-group
+// account directly under ASSETS, not deleted, with no linked_asset_id and no
+// ledger lines. Any asset still pointing at the stray is repointed to the kept
+// (property) account first. Uses the service-role client (runtime, RLS-free).
+async function purgeStrayAssetAccounts(companyId: string, accountName: string, keepAccountId: string) {
+  const admin = createAdminClient();
+  const { data: group } = await admin
+    .schema("accounting")
+    .from("chart_of_accounts")
+    .select("id")
+    .eq("company_id", companyId)
+    .eq("is_group", true)
+    .is("deleted_at", null)
+    .ilike("account_name", "ASSETS")
+    .maybeSingle();
+  if (!group) return;
+
+  const target = accountName.trim().toLowerCase();
+  const { data: candidates } = await admin
+    .schema("accounting")
+    .from("chart_of_accounts")
+    .select("id, account_name, linked_asset_id")
+    .eq("company_id", companyId)
+    .eq("parent_id", group.id)
+    .eq("is_group", false)
+    .is("deleted_at", null);
+
+  for (const c of candidates ?? []) {
+    const id = c.id as string;
+    if (id === keepAccountId) continue;
+    if (c.linked_asset_id) continue;
+    if ((c.account_name as string).trim().toLowerCase() !== target) continue;
+    const { count } = await admin
+      .schema("accounting")
+      .from("journal_entry_lines")
+      .select("id", { count: "exact", head: true })
+      .eq("account_id", id);
+    if ((count ?? 0) > 0) continue;
+    await admin.schema("assets").from("assets").update({ account_id: keepAccountId }).eq("account_id", id);
+    await admin
+      .schema("accounting")
+      .from("chart_of_accounts")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", id);
+  }
+}
+
+// One-shot healer for existing data: removes every stray duplicate asset GL
+// account for a company (the ASSETS-group twin of a linked property account,
+// with no ledger lines). Idempotent — a no-op once the data is clean — so it is
+// safe to call on the Chart of Accounts page load. Uses the service-role client.
+// Exported as a server action, so it derives the company from the session and
+// no-ops for non-editors (never trusts a client-supplied company).
+export async function healStrayAssetAccounts() {
+  if (!(await hasPermission("chart_of_accounts", "edit"))) return;
+  const companyId = await getCurrentCompanyId();
+  const admin = createAdminClient();
+  const { data: group } = await admin
+    .schema("accounting")
+    .from("chart_of_accounts")
+    .select("id")
+    .eq("company_id", companyId)
+    .eq("is_group", true)
+    .is("deleted_at", null)
+    .ilike("account_name", "ASSETS")
+    .maybeSingle();
+  if (!group) return;
+
+  const { data: all } = await admin
+    .schema("accounting")
+    .from("chart_of_accounts")
+    .select("id, account_name, parent_id, linked_asset_id, is_group")
+    .eq("company_id", companyId)
+    .is("deleted_at", null);
+  const rows = all ?? [];
+  const norm = (n: unknown) => String(n ?? "").trim().toLowerCase();
+  // name -> a real account (has linked_asset_id) with that name.
+  const linkedByName = new Map<string, string>();
+  for (const r of rows) if (r.linked_asset_id) linkedByName.set(norm(r.account_name), r.id as string);
+
+  const strays = rows.filter(
+    (r) => !r.is_group && !r.linked_asset_id && r.parent_id === (group.id as string) && linkedByName.has(norm(r.account_name)),
+  );
+  for (const s of strays) {
+    const keep = linkedByName.get(norm(s.account_name))!;
+    const { count } = await admin
+      .schema("accounting")
+      .from("journal_entry_lines")
+      .select("id", { count: "exact", head: true })
+      .eq("account_id", s.id);
+    if ((count ?? 0) > 0) continue;
+    await admin.schema("assets").from("assets").update({ account_id: keep }).eq("account_id", s.id);
+    await admin
+      .schema("accounting")
+      .from("chart_of_accounts")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", s.id as string);
+  }
+}
+
 export async function updateAccount(accountId: string, input: AccountInput) {
   const parsed = accountSchema.safeParse(input);
   if (!parsed.success) {
@@ -495,6 +597,14 @@ export async function updateAccount(accountId: string, input: AccountInput) {
   await requirePermission("chart_of_accounts", "edit");
   const companyId = await getCurrentCompanyId();
   const currencyId = parsed.data.currencyId || null;
+
+  const isProperty = !parsed.data.isGroup && (await isPropertiesParent(parsed.data.parentId));
+
+  // For a property, first clear any stray duplicate GL account auto-created
+  // under ASSETS for it, so the duplicate-name guard below doesn't block the save.
+  if (isProperty || parsed.data.isRentalProperty) {
+    await purgeStrayAssetAccounts(companyId, parsed.data.accountName, accountId);
+  }
 
   if (await isDuplicateAccountName(companyId, parsed.data.accountName, accountId)) {
     return { error: "An account with this name already exists." };
@@ -542,7 +652,6 @@ export async function updateAccount(accountId: string, input: AccountInput) {
   // already linked, or (legacy) has the rental flag ticked. The rental flag maps
   // to the asset's is_rental (lease visibility) — unticking never deletes the
   // property, only stops it appearing in new leases.
-  const isProperty = !parsed.data.isGroup && (await isPropertiesParent(parsed.data.parentId));
   if (isProperty || existingAssetId || parsed.data.isRentalProperty) {
     const link = await linkRentalProperty({
       accountId,

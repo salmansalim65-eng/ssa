@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertCircleIcon } from "lucide-react";
+import { AlertCircleIcon, Building2Icon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -69,6 +69,7 @@ export default async function DashboardPage({
     { count: pendingApprovals },
     { data: currencies },
     { data: recentVouchers },
+    { count: rentalPropertyCount },
   ] = await Promise.all([
     supabase
       .schema("reporting")
@@ -112,6 +113,13 @@ export default async function DashboardPage({
       .eq("company_id", companyId)
       .order("created_at", { ascending: false })
       .limit(8),
+    supabase
+      .schema("assets")
+      .from("assets")
+      .select("id", { count: "exact", head: true })
+      .eq("company_id", companyId)
+      .eq("is_rental", true)
+      .is("deleted_at", null),
   ]);
 
   const symbolByCode = new Map((currencies ?? []).map((c) => [c.code as string, c.symbol as string]));
@@ -340,6 +348,14 @@ export default async function DashboardPage({
           icon={AlertCircleIcon}
           tone={(pendingApprovals ?? 0) > 0 ? "warning" : undefined}
           href="/accounting/voucher-register"
+        />
+
+        <KpiCard
+          label="Rental Property Report"
+          value={(rentalPropertyCount ?? 0).toLocaleString()}
+          subtext="Rental properties — open report"
+          icon={Building2Icon}
+          href="/reports/property-report"
         />
 
         <SummaryCard

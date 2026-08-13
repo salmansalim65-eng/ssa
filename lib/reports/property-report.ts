@@ -5,9 +5,9 @@
 //   Yearly Rent      = Monthly Rent × 12
 //   Diff Est/Yearly  = Est Rent × 12 − Yearly Rent      (annualised estimate vs actual)
 //   Sq Ft Value      = Purchase Value / Sq Ft
-//   Service Charges  = Service Rate × Sq Ft             (stored on the asset)
-//   Net Rent         = Yearly Rent − Service Charges
-//   Perc%            = Net Rent / Current Value × 100    (yield)
+//   Service Charges  = Service Rate × Sq Ft             (stored on the asset; = "Maintenance")
+//   Net Rent (month) = Monthly Rent − Service Charges / 12
+//   Perc%            = Net Rent × 12 / Current Value × 100    (annualised yield)
 //   % Month          = Perc% / 12
 //   Difference Value = Current Value − Purchase Value
 //   Maintenance%     = Service Charges / Yearly Rent × 100
@@ -105,7 +105,9 @@ export function computePropertyRow(i: PropertyRowInput): PropertyRow {
   const purchaseValue = round2(i.purchaseValue);
   const currentValue = round2(i.currentValue);
   const serviceCharges = round2(i.serviceCharges);
-  const netRent = round2(yearlyRent - serviceCharges);
+  // Net Rent is a monthly figure: monthly rent less the monthly share of the
+  // annual service charge (which the user also refers to as "maintenance").
+  const netRent = round2(monthlyRent - serviceCharges / 12);
   return {
     id: i.id,
     group: i.group,
@@ -123,8 +125,8 @@ export function computePropertyRow(i: PropertyRowInput): PropertyRow {
     serviceCharges,
     netRent,
     currentValue,
-    perc: currentValue > 0 ? round2((netRent / currentValue) * 100) : 0,
-    percMonth: currentValue > 0 ? round2((netRent / currentValue) * 100 / 12) : 0,
+    perc: currentValue > 0 ? round2(((netRent * 12) / currentValue) * 100) : 0,
+    percMonth: currentValue > 0 ? round2(((netRent * 12) / currentValue) * 100 / 12) : 0,
     purchaseValue,
     diffValue: round2(currentValue - purchaseValue),
     maintenancePct: yearlyRent > 0 ? round2((serviceCharges / yearlyRent) * 100) : 0,
@@ -182,8 +184,8 @@ export function aggregateGroup(rows: PropertyRow[]): PropertyGroupTotals {
     serviceCharges,
     netRent,
     currentValue,
-    perc: currentValue > 0 ? round2((netRent / currentValue) * 100) : 0,
-    percMonth: currentValue > 0 ? round2((netRent / currentValue) * 100 / 12) : 0,
+    perc: currentValue > 0 ? round2(((netRent * 12) / currentValue) * 100) : 0,
+    percMonth: currentValue > 0 ? round2(((netRent * 12) / currentValue) * 100 / 12) : 0,
     purchaseValue,
     diffValue: round2(currentValue - purchaseValue),
     maintenancePct: yearlyRent > 0 ? round2((serviceCharges / yearlyRent) * 100) : 0,

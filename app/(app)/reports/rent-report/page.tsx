@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/table";
 import { PageHeader } from "@/components/ui/page-header";
 import { CsvExportButton } from "@/components/reports/csv-export-button";
+import { ReportNav } from "@/components/reports/report-nav";
 import { ReportSelectFilter } from "@/components/reports/report-select-filter";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
@@ -43,23 +44,12 @@ export default async function RentReportPage({
   const currentYear = new Date().getFullYear();
   const { year: yearParam = "" } = await searchParams;
   const year = Number(yearParam) || currentYear;
-  const from = `${year}-01-01`;
-  const to = `${year}-12-31`;
 
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
 
-  const [{ data: rentLines }, { data: costCenters }, { data: pkLeases }, { data: uaeLeases }, { data: currencies }] =
+  const [{ data: costCenters }, { data: pkLeases }, { data: uaeLeases }, { data: currencies }] =
     await Promise.all([
-      supabase
-        .schema("reporting")
-        .from("v_ledger_entries")
-        .select("cost_center_id, cost_center_country, doc_debit_amount, doc_credit_amount, entry_date")
-        .eq("company_id", companyId)
-        .in("voucher_type", ["uae_rent_invoice", "pk_rent_invoice"])
-        .eq("account_type", "income")
-        .gte("entry_date", from)
-        .lte("entry_date", to),
       supabase
         .schema("accounting")
         .from("cost_centers")
@@ -71,14 +61,14 @@ export default async function RentReportPage({
       supabase
         .schema("rental")
         .from("pk_leases")
-        .select("asset_id, monthly_rent")
+        .select("asset_id, monthly_rent, lease_start, lease_end")
         .eq("company_id", companyId)
         .eq("status", "active")
         .is("deleted_at", null),
       supabase
         .schema("rental")
         .from("uae_leases")
-        .select("asset_id, rental_amount, rent_cycle")
+        .select("asset_id, rental_amount, rent_cycle, lease_start, lease_end")
         .eq("company_id", companyId)
         .eq("status", "active")
         .is("deleted_at", null),
@@ -87,40 +77,61 @@ export default async function RentReportPage({
 
   const symbolByCode = new Map((currencies ?? []).map((c) => [c.code as string, c.symbol as string]));
 
-  // Estimated monthly rent per asset, from the active lease.
-  const estByAsset = new Map<string, number>();
+  // Active lease per asset: monthly rent + period, so a monthly lease shows its
+  // monthly rent in EVERY month it covers (not a lump where its invoice posted).
+  interface AssetLease {
+    monthly: number;
+    start: string | null;
+    end: string | null;
+  }
+  const leaseByAsset = new Map<string, AssetLease>();
   for (const l of pkLeases ?? []) {
-    if (l.asset_id) estByAsset.set(l.asset_id as string, Number(l.monthly_rent));
+    if (!l.asset_id) continue;
+    leaseByAsset.set(l.asset_id as string, {
+      monthly: Number(l.monthly_rent) || 0,
+      start: (l.lease_start as string) ?? null,
+      end: (l.lease_end as string) ?? null,
+    });
   }
   for (const l of uaeLeases ?? []) {
     if (!l.asset_id) continue;
-    const monthly = l.rent_cycle === "yearly" ? Number(l.rental_amount) / 12 : Number(l.rental_amount);
-    estByAsset.set(l.asset_id as string, monthly);
+    const monthly = l.rent_cycle === "yearly" ? Number(l.rental_amount) / 12 : Number(l.rental_amount) || 0;
+    leaseByAsset.set(l.asset_id as string, {
+      monthly,
+      start: (l.lease_start as string) ?? null,
+      end: (l.lease_end as string) ?? null,
+    });
   }
 
-  // One accumulator per cost centre.
+  // Month boundaries for the selected year (YYYY-MM-DD, safe for string compare).
+  const monthStart = (m: number) => `${year}-${String(m + 1).padStart(2, "0")}-01`;
+  const monthEnd = (m: number) => `${year}-${String(m + 1).padStart(2, "0")}-${String(new Date(year, m + 1, 0).getDate())}`;
+
+  // One accumulator per cost centre, spreading the lease monthly across the
+  // months of the year it is active.
   const rows = new Map<string, CcRow>();
   for (const cc of costCenters ?? []) {
+    const lease = cc.asset_id ? leaseByAsset.get(cc.asset_id as string) : undefined;
+    const months = Array(12).fill(0) as number[];
+    let total = 0;
+    if (lease && lease.monthly > 0) {
+      for (let m = 0; m < 12; m++) {
+        const active = (!lease.start || lease.start <= monthEnd(m)) && (!lease.end || lease.end >= monthStart(m));
+        if (active) {
+          months[m] = lease.monthly;
+          total += lease.monthly;
+        }
+      }
+    }
     rows.set(cc.id as string, {
       id: cc.id as string,
       code: cc.code as string,
       name: cc.name as string,
       country: (cc.country as string) ?? "",
-      est: cc.asset_id ? estByAsset.get(cc.asset_id as string) ?? 0 : 0,
-      months: Array(12).fill(0),
-      total: 0,
+      est: lease?.monthly ?? 0,
+      months,
+      total,
     });
-  }
-  for (const l of rentLines ?? []) {
-    const ccId = l.cost_center_id as string | null;
-    if (!ccId) continue;
-    const row = rows.get(ccId);
-    if (!row) continue;
-    const month = Number((l.entry_date as string).slice(5, 7)) - 1;
-    if (month < 0 || month > 11) continue;
-    const amount = Number(l.doc_credit_amount) - Number(l.doc_debit_amount);
-    row.months[month] += amount;
-    row.total += amount;
   }
 
   // Group cost centres by country, keeping only rows with an estimate or any
@@ -153,10 +164,11 @@ export default async function RentReportPage({
 
   return (
     <div className="space-y-5">
+      <ReportNav className="print:hidden" />
       <PageHeader
         eyebrow="Reports"
         title="Rent Report"
-        description={`Cost-centre-wise, month-wise rent billed for ${year}. UAE and Pakistan shown separately, each in its own currency.`}
+        description={`Cost-centre-wise, month-wise rent for ${year} — each active lease's monthly rent shown across the months it covers. UAE and Pakistan shown separately, each in its own currency.`}
         className="print:hidden"
         actions={
           <>

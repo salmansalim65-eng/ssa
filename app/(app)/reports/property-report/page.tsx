@@ -62,7 +62,7 @@ export default async function PropertyReportPage() {
     supabase
       .schema("rental")
       .from("uae_leases")
-      .select("asset_id, rental_amount, rent_cycle, lease_start, lease_end, rent_month")
+      .select("asset_id, rental_amount, rent_cycle, lease_start, lease_end, rent_month, lease_type")
       .eq("company_id", companyId)
       .is("deleted_at", null),
     supabase
@@ -130,6 +130,7 @@ export default async function PropertyReportPage() {
   // Active lease per asset (today within period, or any lease when dates are open).
   interface ActiveLease {
     monthly: number;
+    commissionMonthly: number; // agent commission (5% UAE / 10% HH / 0 PK)
     start: string | null;
     end: string | null;
     renew: string | null;
@@ -142,12 +143,15 @@ export default async function PropertyReportPage() {
     start: string | null,
     end: string | null,
     rentMonth: string | null,
+    commissionPct: number,
   ) => {
     if (!assetId) return;
     const active = (!start || start <= today) && (!end || end >= today);
     if (!active && leaseByAsset.has(assetId)) return;
+    const monthly = monthlyFromCycle(amount, cycle);
     leaseByAsset.set(assetId, {
-      monthly: monthlyFromCycle(amount, cycle),
+      monthly,
+      commissionMonthly: Math.round(monthly * commissionPct * 100) / 100,
       start,
       end,
       renew: rentMonth || monthLabel(end),
@@ -161,6 +165,8 @@ export default async function PropertyReportPage() {
       l.lease_start as string | null,
       l.lease_end as string | null,
       l.rent_month as string | null,
+      // Agent commission: HH lease 10%, standard UAE lease 5% (see lib/rental/lease-accounting.ts).
+      l.lease_type === "hh" ? 0.1 : 0.05,
     );
   }
   for (const l of pkLeases ?? []) {
@@ -171,6 +177,7 @@ export default async function PropertyReportPage() {
       l.lease_start as string | null,
       l.lease_end as string | null,
       l.rent_month as string | null,
+      0, // no agent commission on PK leases
     );
   }
 
@@ -260,6 +267,7 @@ export default async function PropertyReportPage() {
       areaSqft: Number(a.area_sqft) || 0,
       serviceRate: Number(a.service_charges_rate) || 0,
       serviceCharges: Number(a.service_charges_amount) || 0,
+      commissionMonthly: lease?.commissionMonthly ?? 0,
       purchaseValue: Number(a.purchase_value) || 0,
       currentValue: Number(a.current_value) || 0,
       titleDeedValue: Number(a.title_deed_value) || 0,

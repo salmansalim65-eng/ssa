@@ -39,7 +39,8 @@ export interface PropertyRowInput {
   monthlyRent: number; // normalised from the active lease (0 if none)
   areaSqft: number;
   serviceRate: number; // asset.service_charges_rate
-  serviceCharges: number; // asset.service_charges_amount (rate × area)
+  serviceCharges: number; // asset.service_charges_amount (rate × area), ANNUAL
+  commissionMonthly: number; // agent commission per month (5% UAE / 10% HH / 0 PK)
   purchaseValue: number;
   currentValue: number;
   titleDeedValue: number;
@@ -78,8 +79,10 @@ export interface PropertyRow {
   sqFt: number;
   sqFtValue: number;
   serviceRate: number;
-  serviceCharges: number;
-  netRent: number;
+  serviceCharges: number; // annual (kept for reference)
+  serviceMonthly: number; // monthly service charge = serviceCharges / 12
+  commission: number; // monthly agent commission
+  netRent: number; // monthly: monthlyRent − serviceMonthly − commission
   currentValue: number;
   perc: number;
   percMonth: number;
@@ -108,10 +111,12 @@ export function computePropertyRow(i: PropertyRowInput): PropertyRow {
   const sqFt = round2(i.areaSqft);
   const purchaseValue = round2(i.purchaseValue);
   const currentValue = round2(i.currentValue);
-  const serviceCharges = round2(i.serviceCharges);
-  // Net Rent is a monthly figure: monthly rent less the monthly share of the
-  // annual service charge (which the user also refers to as "maintenance").
-  const netRent = round2(monthlyRent - serviceCharges / 12);
+  const serviceCharges = round2(i.serviceCharges); // annual
+  const serviceMonthly = round2(serviceCharges / 12);
+  const commission = round2(i.commissionMonthly);
+  // Net Rent is monthly: monthly rent less monthly service charge and the
+  // monthly agent commission.
+  const netRent = round2(monthlyRent - serviceMonthly - commission);
   return {
     id: i.id,
     group: i.group,
@@ -129,6 +134,8 @@ export function computePropertyRow(i: PropertyRowInput): PropertyRow {
     sqFtValue: sqFt > 0 ? round2(purchaseValue / sqFt) : 0,
     serviceRate: round2(i.serviceRate),
     serviceCharges,
+    serviceMonthly,
+    commission,
     netRent,
     currentValue,
     perc: currentValue > 0 ? round2(((netRent * 12) / currentValue) * 100) : 0,
@@ -159,6 +166,8 @@ export interface PropertyGroupTotals {
   sqFt: number;
   sqFtValue: number;
   serviceCharges: number;
+  serviceMonthly: number;
+  commission: number;
   netRent: number;
   currentValue: number;
   perc: number;
@@ -177,6 +186,8 @@ export function aggregateGroup(rows: PropertyRow[]): PropertyGroupTotals {
   const yearlyRent = sum((r) => r.yearlyRent);
   const sqFt = sum((r) => r.sqFt);
   const serviceCharges = sum((r) => r.serviceCharges);
+  const serviceMonthly = sum((r) => r.serviceMonthly);
+  const commission = sum((r) => r.commission);
   const netRent = sum((r) => r.netRent);
   const currentValue = sum((r) => r.currentValue);
   const purchaseValue = sum((r) => r.purchaseValue);
@@ -188,6 +199,8 @@ export function aggregateGroup(rows: PropertyRow[]): PropertyGroupTotals {
     sqFt,
     sqFtValue: sqFt > 0 ? round2(purchaseValue / sqFt) : 0,
     serviceCharges,
+    serviceMonthly,
+    commission,
     netRent,
     currentValue,
     perc: currentValue > 0 ? round2(((netRent * 12) / currentValue) * 100) : 0,

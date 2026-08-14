@@ -42,6 +42,7 @@ export const accountBaseSchema = z.object({
   currentValue: z.coerce.number().nonnegative().default(0),
   titleDeedValue: z.coerce.number().nonnegative().default(0),
   serviceChargesRate: z.coerce.number().nonnegative().default(0),
+  propertyTax: z.coerce.number().nonnegative().default(0),
   otherCharges: z.coerce.number().nonnegative().default(0),
   estimatedRent: z.coerce.number().nonnegative().default(0),
   propertyNotes: z.string().max(1000).optional().or(z.literal("")),

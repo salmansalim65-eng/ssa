@@ -45,7 +45,7 @@ export default async function ChartOfAccountsPage() {
         .schema("assets")
         .from("assets")
         .select(
-          "id, is_rental, property_type, status, city, address, owner, official_owner, purchase_date, area_sqft, area_unit, purchase_value, current_value, title_deed_value, service_charges_rate, other_charges, estimated_rent, notes",
+          "id, is_rental, property_type, status, city, address, owner, official_owner, purchase_date, area_sqft, area_unit, purchase_value, current_value, title_deed_value, service_charges_rate, property_tax, other_charges, estimated_rent, notes",
         )
         .eq("company_id", companyId)
         .is("deleted_at", null),
@@ -73,6 +73,7 @@ export default async function ChartOfAccountsPage() {
       current_value: a.current_value,
       title_deed_value: a.title_deed_value,
       service_charges_rate: a.service_charges_rate,
+      property_tax: a.property_tax,
       other_charges: a.other_charges,
       estimated_rent: a.estimated_rent,
       notes: a.notes,

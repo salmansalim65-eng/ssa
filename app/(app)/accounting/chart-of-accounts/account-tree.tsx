@@ -123,6 +123,7 @@ export interface LinkedAssetFields {
   current_value: number | null;
   title_deed_value: number | null;
   service_charges_rate: number | null;
+  property_tax: number | null;
   other_charges: number | null;
   estimated_rent: number | null;
   notes: string | null;
@@ -157,6 +158,7 @@ const emptyValues: AccountInput = {
   currentValue: blankAmount,
   titleDeedValue: blankAmount,
   serviceChargesRate: blankAmount,
+  propertyTax: blankAmount,
   otherCharges: blankAmount,
   estimatedRent: blankAmount,
   propertyNotes: "",
@@ -758,7 +760,7 @@ export function AccountTree({
       </div>
 
       <Dialog open={dialog !== null} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>{dialog?.mode === "edit" ? "Edit account" : "Add account"}</DialogTitle>
           </DialogHeader>
@@ -811,6 +813,7 @@ export function AccountTree({
                         currentValue: linked?.current_value ?? blankAmount,
                         titleDeedValue: linked?.title_deed_value ?? blankAmount,
                         serviceChargesRate: linked?.service_charges_rate ?? blankAmount,
+                        propertyTax: linked?.property_tax ?? blankAmount,
                         otherCharges: linked?.other_charges ?? blankAmount,
                         estimatedRent: linked?.estimated_rent ?? blankAmount,
                         propertyNotes: linked?.notes ?? "",

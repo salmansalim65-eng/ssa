@@ -22,6 +22,7 @@ function input(over: Partial<PropertyRowInput>): PropertyRowInput {
     areaSqft: 0,
     serviceRate: 0,
     serviceCharges: 0,
+    commissionMonthly: 0,
     purchaseValue: 0,
     currentValue: 0,
     titleDeedValue: 0,

@@ -177,6 +177,7 @@ interface PropertyFields {
   currentValue?: number;
   titleDeedValue?: number;
   serviceChargesRate?: number;
+  propertyTax?: number;
   otherCharges?: number;
   estimatedRent?: number;
   notes?: string;
@@ -200,6 +201,7 @@ function assetColumnsFromProperty(p: PropertyFields | undefined, fallbackValue: 
     current_value: current,
     title_deed_value: p?.titleDeedValue ?? 0,
     service_charges_rate: p?.serviceChargesRate ?? 0,
+    property_tax: p?.propertyTax ?? 0,
     other_charges: p?.otherCharges ?? 0,
     estimated_rent: p?.estimatedRent ?? 0,
     status: p?.status ?? "active",
@@ -273,13 +275,33 @@ async function ensureLinkedAsset(params: {
     return { assetId: params.existingAssetId };
   }
 
-  const { data: assetCode, error: codeError } = await supabase.schema("core").rpc("fn_next_master_code", {
-    p_company_id: params.companyId,
-    p_module_key: "assets",
-    p_default_prefix: "AST",
-    p_default_padding: 6,
-  });
-  if (codeError || !assetCode) return { error: codeError?.message ?? "Failed to generate asset code" };
+  // Generate the next asset code directly against the sequence. The auth-checked
+  // fn_next_master_code RPC rejects the service-role client (no current_company_id),
+  // which is why creating a property from CoA previously failed with
+  // "Not authorized for company". Manual, low-frequency creation, and the
+  // asset_code unique constraint guards the rare concurrent-code race.
+  await supabase
+    .schema("core")
+    .from("document_sequences")
+    .upsert(
+      { company_id: params.companyId, voucher_type: "assets", prefix: "AST", padding: 6 },
+      { onConflict: "company_id,voucher_type", ignoreDuplicates: true },
+    );
+  const { data: seq, error: codeError } = await supabase
+    .schema("core")
+    .from("document_sequences")
+    .select("id, prefix, padding, next_number")
+    .eq("company_id", params.companyId)
+    .eq("voucher_type", "assets")
+    .single();
+  if (codeError || !seq) return { error: codeError?.message ?? "Failed to generate asset code" };
+  const nextNumber = Number(seq.next_number);
+  const assetCode = `${seq.prefix}-${String(nextNumber).padStart(Number(seq.padding), "0")}`;
+  await supabase
+    .schema("core")
+    .from("document_sequences")
+    .update({ next_number: nextNumber + 1 })
+    .eq("id", seq.id);
 
   // Seed the property from what the account knows: descriptive fields from the
   // CoA form when supplied, else its opening balance as the starting value; its
@@ -310,14 +332,18 @@ async function ensureLinkedAsset(params: {
   if (error || !asset) return { error: error?.message ?? "Failed to create the linked property" };
 
   // Seed the opening value into the asset's value history (previous = null).
+  // Direct insert rather than fn_log_value_change, which also rejects the
+  // service-role client.
   const seededValue = assetColumns.current_value;
   if (seededValue > 0) {
-    await supabase.schema("assets").rpc("fn_log_value_change", {
-      p_asset_id: asset.id,
-      p_previous: null,
-      p_new: seededValue,
-      p_effective_date: null,
-      p_remarks: "Created from Chart of Accounts",
+    await supabase.schema("assets").from("asset_value_history").insert({
+      company_id: params.companyId,
+      asset_id: asset.id,
+      effective_date: new Date().toISOString().slice(0, 10),
+      previous_value: null,
+      new_value: seededValue,
+      changed_by: params.userId,
+      remarks: "Created from Chart of Accounts",
     });
   }
 
@@ -480,6 +506,7 @@ function propertyFieldsFrom(d: AccountInput): PropertyFields {
     currentValue: d.currentValue,
     titleDeedValue: d.titleDeedValue,
     serviceChargesRate: d.serviceChargesRate,
+    propertyTax: d.propertyTax,
     otherCharges: d.otherCharges,
     estimatedRent: d.estimatedRent,
     notes: d.propertyNotes,

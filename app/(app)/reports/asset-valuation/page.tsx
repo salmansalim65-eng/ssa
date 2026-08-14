@@ -11,6 +11,7 @@ import { CsvExportButton } from "@/components/reports/csv-export-button";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { ReportCountryFilter } from "@/components/reports/report-country-filter";
 import { ReportSelectFilter } from "@/components/reports/report-select-filter";
+import { ReportNav } from "@/components/reports/report-nav";
 import { loadReportCountries } from "@/lib/reports/countries";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
@@ -147,6 +148,7 @@ export default async function AssetValuationReportPage({
 
   return (
     <div className="space-y-5">
+      <ReportNav className="print:hidden" />
       <PageHeader
         eyebrow="Reports"
         title="Asset Valuation Report"

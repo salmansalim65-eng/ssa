@@ -92,6 +92,7 @@ export function AccountForm({
   const selectedParentId = useWatch({ control: form.control, name: "parentId" });
   const scRate = useWatch({ control: form.control, name: "serviceChargesRate" });
   const scArea = useWatch({ control: form.control, name: "areaSqft" });
+  const propertyCountry = useWatch({ control: form.control, name: "country" });
   const serviceChargesAmount = (Number(scRate) || 0) * (Number(scArea) || 0);
   const selectedParent = parentOptions.find((p) => p.id === selectedParentId);
   const lockAccountType = Boolean(selectedParent);
@@ -599,7 +600,7 @@ export function AccountForm({
                 name="titleDeedValue"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Title deed value</FormLabel>
+                    <FormLabel>{propertyCountry === "PK" ? "Official value" : "Title deed value"}</FormLabel>
                     <FormControl>
                       <Input type="number" step="0.01" {...field} value={amountValue(field.value)} />
                     </FormControl>
@@ -607,27 +608,46 @@ export function AccountForm({
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="serviceChargesRate"
-                render={({ field }) => (
+              {propertyCountry === "AE" && (
+                <>
+                  <FormField
+                    control={form.control}
+                    name="serviceChargesRate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Service charges rate</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.01" {...field} value={amountValue(field.value)} />
+                        </FormControl>
+                        <FormDescription>Per unit of area.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                   <FormItem>
-                    <FormLabel>Service charges rate</FormLabel>
+                    <FormLabel>Service charges value</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" {...field} value={amountValue(field.value)} />
+                      <Input type="number" readOnly value={serviceChargesAmount || ""} className="bg-muted/50" tabIndex={-1} />
                     </FormControl>
-                    <FormDescription>Per unit of area.</FormDescription>
-                    <FormMessage />
+                    <FormDescription>Rate × area, calculated automatically.</FormDescription>
                   </FormItem>
-                )}
-              />
-              <FormItem>
-                <FormLabel>Service charges value</FormLabel>
-                <FormControl>
-                  <Input type="number" readOnly value={serviceChargesAmount || ""} className="bg-muted/50" tabIndex={-1} />
-                </FormControl>
-                <FormDescription>Rate × area, calculated automatically.</FormDescription>
-              </FormItem>
+                </>
+              )}
+              {propertyCountry === "PK" && (
+                <FormField
+                  control={form.control}
+                  name="propertyTax"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Property tax</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" {...field} value={amountValue(field.value)} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
               <FormField
                 control={form.control}
                 name="otherCharges"

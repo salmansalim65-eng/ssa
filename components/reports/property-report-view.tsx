@@ -62,8 +62,9 @@ const NUM_COLS: {
   { key: "yearlyRent", label: "Yearly Rent", full: "Yearly Rent (Monthly × 12)", kind: "money" },
   { key: "diffEstVsYearly", label: "Diff. Est/Yr", full: "Difference: Estimated × 12 − Yearly", kind: "money" },
   { key: "sqFt", label: "Sq. Ft", full: "Area (square feet)", kind: "money" },
-  { key: "serviceCharges", label: "Maintenance", full: "Maintenance / service charges (Rate × Sq. Ft)", kind: "money" },
-  { key: "netRent", label: "Net Rent", full: "Monthly: Monthly Rent − Service Charges ÷ 12", kind: "money" },
+  { key: "serviceMonthly", label: "Service Charges", full: "Monthly service charge (Rate × Sq. Ft ÷ 12)", kind: "money" },
+  { key: "commission", label: "Commission", full: "Monthly agent commission (5% UAE / 10% HH / 0 PK)", kind: "money" },
+  { key: "netRent", label: "Net Rent", full: "Monthly: Monthly Rent − Service Charges − Commission", kind: "money" },
   { key: "currentValue", label: "Current Value", full: "Current property value", kind: "money" },
   { key: "perc", label: "Perc%", full: "Annualised yield: Net Rent × 12 ÷ Current Value", kind: "pct" },
   { key: "percMonth", label: "% Month", full: "Monthly yield: Perc% ÷ 12", kind: "pct" },
@@ -138,7 +139,8 @@ export function PropertyReportView({
     if (!target) return groups;
     const MONEY_FIELDS: (keyof PropertyRow)[] = [
       "estRent", "monthlyRent", "yearlyRent", "diffEstVsYearly", "sqFtValue",
-      "serviceCharges", "netRent", "currentValue", "purchaseValue", "titleDeedValue", "diffValue",
+      "serviceCharges", "serviceMonthly", "commission", "netRent", "currentValue",
+      "purchaseValue", "titleDeedValue", "diffValue",
     ];
     return groups.map((g) => ({
       ...g,
@@ -238,20 +240,26 @@ export function PropertyReportView({
     [visibleRows],
   );
 
-  // Annual net rent + maintenance by property type (stacked → yearly rent).
+  // Annual net rent + service charges + commission by property type
+  // (stacked → yearly rent).
   const rentByType = useMemo(() => {
-    const map = new Map<string, { key: string; label: string; net: number; service: number }>();
+    const map = new Map<string, { key: string; label: string; net: number; service: number; commission: number }>();
     for (const r of visibleRows) {
       const t = r.propertyType || "Unspecified";
-      const e = map.get(t) ?? { key: t, label: t, net: 0, service: 0 };
-      e.net += Math.max(0, r.yearlyRent - r.serviceCharges); // annual net rent
-      e.service += r.serviceCharges; // maintenance
+      const e = map.get(t) ?? { key: t, label: t, net: 0, service: 0, commission: 0 };
+      e.net += Math.max(0, r.netRent * 12); // annual net rent
+      e.service += r.serviceCharges; // annual service charge
+      e.commission += r.commission * 12; // annual commission
       map.set(t, e);
     }
     return [...map.values()]
-      .filter((g) => g.net > 0 || g.service > 0)
-      .sort((a, b) => b.net + b.service - (a.net + a.service))
-      .map((g) => ({ key: g.key, label: g.label, values: { "Net Rent": g.net, Maintenance: g.service } }));
+      .filter((g) => g.net > 0 || g.service > 0 || g.commission > 0)
+      .sort((a, b) => b.net + b.service + b.commission - (a.net + a.service + a.commission))
+      .map((g) => ({
+        key: g.key,
+        label: g.label,
+        values: { "Net Rent": g.net, "Service Charges": g.service, Commission: g.commission },
+      }));
   }, [visibleRows]);
 
   const trendTotal = useMemo(() => monthlyTrend.reduce((s, p) => s + p.total, 0), [monthlyTrend]);
@@ -369,15 +377,16 @@ export function PropertyReportView({
           }
         />
         <ChartCard
-          title="Rent & Maintenance by Type"
-          subtitle="Annual net rent and maintenance per property type"
+          title="Rent, Service & Commission by Type"
+          subtitle="Annual net rent, service charges and commission per property type"
           csv={{
-            headers: ["Property Type", "Net Rent", "Maintenance", "Yearly Rent"],
+            headers: ["Property Type", "Net Rent", "Service Charges", "Commission", "Yearly Rent"],
             rows: rentByType.map((g) => [
               g.label,
               Math.round(g.values["Net Rent"]),
-              Math.round(g.values["Maintenance"]),
-              Math.round(g.values["Net Rent"] + g.values["Maintenance"]),
+              Math.round(g.values["Service Charges"]),
+              Math.round(g.values["Commission"]),
+              Math.round(g.values["Net Rent"] + g.values["Service Charges"] + g.values["Commission"]),
             ]),
           }}
           chart={(h) =>
@@ -386,7 +395,8 @@ export function PropertyReportView({
                 groups={rentByType}
                 series={[
                   { name: "Net Rent", color: CHART_COLORS[0] },
-                  { name: "Maintenance", color: CHART_COLORS[2] },
+                  { name: "Service Charges", color: CHART_COLORS[2] },
+                  { name: "Commission", color: CHART_COLORS[1] },
                 ]}
                 height={h}
                 format={money}
@@ -492,7 +502,7 @@ export function PropertyReportView({
         <Kpi label="Purchase Value" value={money(portfolio.purchaseValue)} sub="Original cost" accent={CHART_COLORS[6]} />
         <Kpi label="Monthly Rent" value={money(portfolio.monthlyRent)} sub={`${money(portfolio.yearlyRent)} / year`} accent={CHART_COLORS[1]} />
         <Kpi label="Yearly Rent" value={money(portfolio.yearlyRent)} sub={`Avg yield ${pct(portfolio.perc)}`} accent={CHART_COLORS[3]} />
-        <Kpi label="Net Rent" value={money(portfolio.netRent)} sub={`Service ${money(portfolio.serviceCharges)}`} accent={CHART_COLORS[2]} />
+        <Kpi label="Net Rent /mo" value={money(portfolio.netRent)} sub={`Commission ${money(portfolio.commission)}/mo`} accent={CHART_COLORS[2]} />
       </div>
 
       {/* Total cost centers banner */}
@@ -821,14 +831,15 @@ function PropertyDetail({ row, onClear }: { row: PropertyRow; onClear: () => voi
         </section>
 
         <section>
-          <h3 className="mb-1.5 text-[0.7rem] font-bold uppercase tracking-wide text-ledger-dark">Rental &amp; Maintenance</h3>
+          <h3 className="mb-1.5 text-[0.7rem] font-bold uppercase tracking-wide text-ledger-dark">Rental &amp; Charges</h3>
           <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-6">
             <Field label="Est. Rent" value={money(row.estRent)} />
             <Field label="Monthly Rent" value={money(row.monthlyRent)} />
-            <Field label="Yearly Rent" value={money(row.yearlyRent)} />
+            <Field label="Service /mo" value={money(row.serviceMonthly)} />
+            <Field label="Commission /mo" value={money(row.commission)} />
             <Field label="Net Rent /mo" value={money(row.netRent)} />
+            <Field label="Yearly Rent" value={money(row.yearlyRent)} />
             <Field label="Service Rate" value={rate(row.serviceRate)} />
-            <Field label="Maint. %" value={pct(row.maintenancePct)} />
             <Field label="Start Date" value={row.leaseStart ? formatDate(row.leaseStart) : ""} />
             <Field label="End Date" value={row.leaseEnd ? formatDate(row.leaseEnd) : ""} />
             <Field label="Renew Month" value={row.renewMonth ?? ""} />
@@ -876,9 +887,9 @@ function PortfolioDetail({
           <Field label="Purchase Value" value={money(totals.purchaseValue)} />
           <Field label="Diff. Value" value={money(totals.diffValue)} tone={totals.diffValue >= 0 ? "up" : "down"} />
           <Field label="Monthly Rent" value={money(totals.monthlyRent)} />
-          <Field label="Yearly Rent" value={money(totals.yearlyRent)} />
+          <Field label="Service /mo" value={money(totals.serviceMonthly)} />
+          <Field label="Commission /mo" value={money(totals.commission)} />
           <Field label="Net Rent /mo" value={money(totals.netRent)} />
-          <Field label="Maintenance" value={money(totals.serviceCharges)} />
           <Field label="Avg. Yield" value={pct(totals.perc)} />
         </div>
       </div>

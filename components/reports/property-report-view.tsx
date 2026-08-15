@@ -432,12 +432,12 @@ export function PropertyReportView({
 
   return (
     <div className="space-y-4">
-      <ReportNav className="print:hidden" />
-
-      {/* Toolbar — the report name is shown by the breadcrumb, so no heading box.
+      {/* Toolbar — home/back, search, country, currency, filters, export and print
+          on one line (the report name is shown by the breadcrumb, so no heading box).
           Search + Country + Currency are inline; Filters holds occupancy / type. */}
       <div className="flex flex-wrap items-end justify-between gap-3 print:hidden">
         <div className="flex flex-wrap items-end gap-3">
+          <ReportNav className="pb-2" />
           <div className="space-y-1">
             <span className="block text-sm font-medium text-foreground">Search</span>
             <div className="relative">
@@ -755,8 +755,8 @@ function FilterSelect({
 
 function Field({ label, value, tone }: { label: string; value: string; tone?: "up" | "down" }) {
   return (
-    <div className="rounded-md border bg-muted/30 px-2.5 py-1.5">
-      <p className="truncate text-[0.6rem] font-semibold uppercase tracking-wide text-ledger-dark">{label}</p>
+    <div className="rounded-md border border-ledger/30 bg-ledger/[0.07] px-2.5 py-1.5">
+      <p className="truncate border-b border-ledger/20 pb-1 text-[0.6rem] font-semibold uppercase tracking-wide text-ledger-dark">{label}</p>
       <p
         className={cn(
           "mt-0.5 truncate font-mono text-[0.8rem] font-semibold tabular-nums",

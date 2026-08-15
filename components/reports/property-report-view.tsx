@@ -775,7 +775,7 @@ function PropertyDetail({ row, onClear }: { row: PropertyRow; onClear: () => voi
   return (
     <div className="rounded-xl border border-ledger/40 bg-card shadow-xs">
       {/* Header — name, meta, and the documents / images strip (kept here to save space) */}
-      <div className="flex flex-col gap-2 border-b border-ledger/40 bg-ledger/15 px-4 py-2.5 text-ledger-dark lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-2 border-b border-ledger/40 bg-ledger/30 px-4 py-2.5 text-ledger-dark lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <p className="truncate text-sm font-semibold text-foreground">{row.name}</p>
@@ -885,15 +885,15 @@ function PortfolioDetail({
   totals: PropertyGroupTotals;
 }) {
   return (
-    <div className="rounded-xl border border-ledger-dark/40 bg-card shadow-xs">
-      <div className="flex items-center justify-between gap-2 border-b border-ledger-dark bg-ledger-dark px-4 py-2.5 text-white">
+    <div className="rounded-xl border border-ledger/40 bg-card shadow-xs">
+      <div className="flex items-center justify-between gap-2 border-b border-ledger/40 bg-ledger/30 px-4 py-2.5 text-ledger-dark">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">All Properties</p>
-          <p className="truncate font-mono text-[0.7rem] text-white/70">
+          <p className="truncate text-sm font-semibold text-foreground">All Properties</p>
+          <p className="truncate font-mono text-[0.7rem] text-ledger-dark/70">
             {count} properties · {occupied} occupied · {vacant} vacant
           </p>
         </div>
-        <Badge variant="outline" className="border-white/40 bg-white/15 text-white">
+        <Badge variant="outline" className="border-ledger/40 bg-ledger/15 text-ledger-dark">
           Portfolio summary
         </Badge>
       </div>

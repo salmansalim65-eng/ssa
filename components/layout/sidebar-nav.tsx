@@ -77,6 +77,9 @@ export function SidebarNav({
         {items.map((item) => {
           const active = isActive(item.href);
           const Icon = item.icon;
+          // The Dashboard entry is a standout logo-blue button (filled), distinct
+          // from the green active-item styling used by every other nav link.
+          const isDashboard = item.href === "/dashboard";
 
           const link = (
             <Link
@@ -87,18 +90,32 @@ export function SidebarNav({
               className={cn(
                 "relative flex items-center rounded-md text-sm transition-colors",
                 collapsed ? "size-9 justify-center" : "gap-2.5 px-3 py-2",
-                active
-                  ? "bg-ledger/15 font-semibold text-ledger-dark"
-                  : "font-medium text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground",
+                isDashboard
+                  ? cn(
+                      "bg-primary font-semibold text-primary-foreground hover:bg-primary/90",
+                      active && "ring-2 ring-primary/40 ring-offset-1 ring-offset-sidebar",
+                    )
+                  : active
+                    ? "bg-ledger/15 font-semibold text-ledger-dark"
+                    : "font-medium text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground",
               )}
             >
-              {active && (
+              {active && !isDashboard && (
                 <span
                   className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-ledger"
                   aria-hidden
                 />
               )}
-              <Icon className={cn("size-4 shrink-0", active ? "text-ledger-dark" : "text-muted-foreground/80")} />
+              <Icon
+                className={cn(
+                  "size-4 shrink-0",
+                  isDashboard
+                    ? "text-primary-foreground"
+                    : active
+                      ? "text-ledger-dark"
+                      : "text-muted-foreground/80",
+                )}
+              />
               {!collapsed && <span className="truncate">{item.label}</span>}
             </Link>
           );

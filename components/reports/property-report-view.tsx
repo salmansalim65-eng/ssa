@@ -106,7 +106,6 @@ const CSV_HEADERS = [
 export function PropertyReportView({
   groups,
   countries,
-  totalProperties,
   monthlyTrend,
   currencies,
   rateToBase,
@@ -114,7 +113,6 @@ export function PropertyReportView({
 }: {
   groups: PropertyGroup[];
   countries: { code: string; name: string }[];
-  totalProperties: number;
   monthlyTrend: MonthlyTrendPoint[];
   currencies: { id: string; code: string; symbol: string }[];
   rateToBase: Record<string, number>;
@@ -134,7 +132,6 @@ export function PropertyReportView({
   // When a display currency is chosen, convert every property's money fields
   // from its own currency into the target (property→base→target). By default
   // (no currency) figures stay in each property's original currency.
-  const selectedCurrency = currencies.find((c) => c.id === currency) ?? null;
   const curGroups = useMemo(() => {
     if (!currency) return groups;
     const target = rateToBase[currency] || 0;
@@ -502,15 +499,6 @@ export function PropertyReportView({
         </div>
       )}
 
-      {/* Currency note */}
-      <p className="text-xs text-muted-foreground print:hidden">
-        {selectedCurrency
-          ? `Figures converted to ${selectedCurrency.code} (${selectedCurrency.symbol})`
-          : "Figures shown in each property's own currency"}
-        {" · "}
-        <span className="font-semibold text-foreground">{visibleRows.length}</span> of {totalProperties} rental properties
-      </p>
-
       {/* KPI cards — recompute with the active filters */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         <Kpi label="Total Properties" value={visibleRows.length.toLocaleString("en-US")} sub={`${occupiedCount} occupied · ${vacant.length} vacant`} accent={CHART_COLORS[1]} />
@@ -521,6 +509,32 @@ export function PropertyReportView({
         <Kpi label="Monthly Rent" value={money(portfolio.monthlyRent)} sub={`${money(portfolio.yearlyRent)} / year`} accent={CHART_COLORS[1]} />
         <Kpi label="Yearly Rent" value={money(portfolio.yearlyRent)} sub={`Avg yield ${pct(portfolio.perc)}`} accent={CHART_COLORS[3]} />
         <Kpi label="Net Rent /mo" value={money(portfolio.netRent)} sub={`Commission ${money(portfolio.commission)}/mo`} accent={CHART_COLORS[2]} />
+      </div>
+
+      {/* Portfolio summary strip — a single elegant headline for the detail area */}
+      <div className="flex flex-wrap items-center gap-x-8 gap-y-3 rounded-xl border border-ledger/30 bg-gradient-to-r from-ledger/[0.12] via-ledger/[0.05] to-transparent px-5 py-3.5 shadow-xs">
+        <div className="flex items-center gap-2.5">
+          <div className="flex size-9 items-center justify-center rounded-lg bg-ledger/20 text-ledger-dark">
+            <BuildingIcon className="size-[18px]" />
+          </div>
+          <div>
+            <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-ledger-dark">Total Rental Properties</p>
+            <p className="font-mono text-2xl font-bold leading-none tabular-nums text-foreground">{visibleRows.length}</p>
+          </div>
+        </div>
+        <span className="hidden h-9 w-px bg-ledger/25 sm:block" aria-hidden />
+        <div className="flex items-baseline gap-2">
+          <span className="font-mono text-xl font-bold tabular-nums text-ledger-dark">{occupiedCount}</span>
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Occupied</span>
+        </div>
+        <div className="flex items-baseline gap-2">
+          <span className="font-mono text-xl font-bold tabular-nums text-amber-600 dark:text-amber-400">{vacant.length}</span>
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Vacant</span>
+        </div>
+        <div className="flex items-baseline gap-2">
+          <span className="font-mono text-xl font-bold tabular-nums text-foreground">{occupancyRate}%</span>
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Occupancy</span>
+        </div>
       </div>
 
       {/* Detail panel — portfolio summary by default, one property when clicked */}
@@ -740,11 +754,14 @@ function FilterSelect({
 
 function Field({ label, value, tone }: { label: string; value: string; tone?: "up" | "down" }) {
   return (
-    <div className="rounded-md border border-ledger/30 bg-ledger/[0.07] px-2.5 py-1.5">
-      <p className="truncate border-b border-ledger/20 pb-1 text-[0.6rem] font-semibold uppercase tracking-wide text-ledger-dark">{label}</p>
+    <div className="overflow-hidden rounded-md border border-ledger/30">
+      {/* Label sits on a darker green band; the value below stays on a plain surface. */}
+      <p className="truncate bg-ledger/25 px-2.5 py-1 text-[0.6rem] font-semibold uppercase tracking-wide text-ledger-dark">
+        {label}
+      </p>
       <p
         className={cn(
-          "mt-0.5 truncate font-mono text-[0.8rem] font-semibold tabular-nums",
+          "truncate bg-card px-2.5 py-1.5 font-mono text-[0.8rem] font-semibold tabular-nums",
           tone === "up" && "text-ledger-dark",
           tone === "down" && "text-destructive",
           !tone && "text-foreground",
@@ -874,16 +891,12 @@ function PortfolioDetail({
       <div className="flex items-center justify-between gap-2 border-b border-ledger/40 bg-ledger/30 px-4 py-2.5 text-ledger-dark">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-foreground">All Properties</p>
-          <p className="truncate font-mono text-[0.7rem] text-ledger-dark/70">
-            {count} properties · {occupied} occupied · {vacant} vacant
-          </p>
         </div>
         <Badge variant="outline" className="border-ledger/40 bg-ledger/15 text-ledger-dark">
           Portfolio summary
         </Badge>
       </div>
       <div className="space-y-3 p-4">
-        <p className="text-[0.7rem] text-muted-foreground">Click any property row for its full detail.</p>
         <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-6">
           <Field label="Properties" value={count.toLocaleString("en-US")} />
           <Field label="Occupied" value={occupied.toLocaleString("en-US")} />

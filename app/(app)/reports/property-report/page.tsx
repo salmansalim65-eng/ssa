@@ -336,7 +336,6 @@ export default async function PropertyReportPage() {
     <PropertyReportView
       groups={groups}
       countries={countries}
-      totalProperties={(assets ?? []).length}
       monthlyTrend={monthlyTrend}
       currencies={currencyOptions}
       rateToBase={rateToBase}

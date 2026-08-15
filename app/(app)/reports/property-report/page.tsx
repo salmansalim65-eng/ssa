@@ -333,6 +333,7 @@ export default async function PropertyReportPage() {
       monthlyTrend={monthlyTrend}
       currencies={currencyOptions}
       rateToBase={rateToBase}
+      baseCurrencyId={baseCurrencyId}
     />
   );
 }

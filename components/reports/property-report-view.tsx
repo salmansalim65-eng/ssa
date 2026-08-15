@@ -106,7 +106,6 @@ const CSV_HEADERS = [
 export function PropertyReportView({
   groups,
   countries,
-  totalCostCenters,
   totalProperties,
   monthlyTrend,
   currencies,
@@ -115,7 +114,6 @@ export function PropertyReportView({
 }: {
   groups: PropertyGroup[];
   countries: { code: string; name: string }[];
-  totalCostCenters: number;
   totalProperties: number;
   monthlyTrend: MonthlyTrendPoint[];
   currencies: { id: string; code: string; symbol: string }[];
@@ -523,19 +521,6 @@ export function PropertyReportView({
         <Kpi label="Monthly Rent" value={money(portfolio.monthlyRent)} sub={`${money(portfolio.yearlyRent)} / year`} accent={CHART_COLORS[1]} />
         <Kpi label="Yearly Rent" value={money(portfolio.yearlyRent)} sub={`Avg yield ${pct(portfolio.perc)}`} accent={CHART_COLORS[3]} />
         <Kpi label="Net Rent /mo" value={money(portfolio.netRent)} sub={`Commission ${money(portfolio.commission)}/mo`} accent={CHART_COLORS[2]} />
-      </div>
-
-      {/* Total cost centers banner */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ledger/30 bg-ledger/10 px-4 py-2.5">
-        <p className="text-sm font-bold uppercase tracking-wide text-ledger-dark">
-          Total Rental Properties: {visibleRows.length}
-          {visibleRows.length !== totalCostCenters && (
-            <span className="font-medium normal-case text-muted-foreground"> of {totalCostCenters}</span>
-          )}
-        </p>
-        <p className="text-xs text-muted-foreground">
-          {vacant.length} vacant · {occupiedCount} occupied
-        </p>
       </div>
 
       {/* Detail panel — portfolio summary by default, one property when clicked */}

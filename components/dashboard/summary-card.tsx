@@ -25,18 +25,18 @@ export function SummaryCard({
   const inner = (
     <div
       className={cn(
-        "flex h-full flex-col overflow-hidden rounded-md border-2 border-ledger-dark bg-card shadow-sm",
+        "flex h-full flex-col overflow-hidden rounded-md border-2 border-primary bg-card shadow-sm",
         href && "transition-shadow hover:shadow-md",
-        active && "ring-2 ring-ledger-dark ring-offset-2 ring-offset-background",
+        active && "ring-2 ring-primary ring-offset-2 ring-offset-background",
       )}
     >
-      <div className="truncate border-b-2 border-ledger-dark bg-ledger-dark px-3 py-1.5 text-center text-xs font-bold uppercase tracking-wide text-white">
+      <div className="truncate border-b-2 border-primary bg-primary px-3 py-1.5 text-center text-xs font-bold uppercase tracking-wide text-primary-foreground">
         {title}
       </div>
       <div className="flex flex-1 flex-col">
         <div className="px-3 py-2">{children}</div>
         {footer && (
-          <div className="mt-auto border-t border-ledger/40 bg-ledger/10 px-3 py-2">{footer}</div>
+          <div className="mt-auto border-t border-primary/40 bg-primary/10 px-3 py-2">{footer}</div>
         )}
       </div>
     </div>

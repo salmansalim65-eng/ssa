@@ -23,11 +23,11 @@ export function KpiCard({
   const card = (
     <div
       className={cn(
-        "flex h-full flex-col overflow-hidden rounded-md border-2 border-ledger-dark bg-card shadow-sm",
+        "flex h-full flex-col overflow-hidden rounded-md border-2 border-primary bg-card shadow-sm",
         href && "transition-shadow hover:shadow-md",
       )}
     >
-      <div className="truncate border-b-2 border-ledger-dark bg-ledger-dark px-3 py-1.5 text-center text-[0.7rem] font-bold uppercase tracking-wide text-white">
+      <div className="truncate border-b-2 border-primary bg-primary px-3 py-1.5 text-center text-[0.7rem] font-bold uppercase tracking-wide text-primary-foreground">
         {label}
       </div>
       <div className="flex flex-1 items-center justify-between gap-3 p-4">
@@ -50,7 +50,7 @@ export function KpiCard({
             tone === "success" && "bg-success/12 text-success",
             tone === "destructive" && "bg-destructive/10 text-destructive",
             tone === "warning" && "bg-warning/15 text-warning",
-            !tone && "bg-ledger/12 text-ledger-dark",
+            !tone && "bg-primary/12 text-primary",
           )}
         >
           <Icon className="size-4.5" />

@@ -111,6 +111,7 @@ export function PropertyReportView({
   monthlyTrend,
   currencies,
   rateToBase,
+  baseCurrencyId,
 }: {
   groups: PropertyGroup[];
   countries: { code: string; name: string }[];
@@ -119,13 +120,16 @@ export function PropertyReportView({
   monthlyTrend: MonthlyTrendPoint[];
   currencies: { id: string; code: string; symbol: string }[];
   rateToBase: Record<string, number>;
+  baseCurrencyId: string | null;
 }) {
   const [search, setSearch] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [country, setCountry] = useState("");
   const [occupancy, setOccupancy] = useState<"" | "occupied" | "vacant">("");
   const [propertyType, setPropertyType] = useState("");
-  const [currency, setCurrency] = useState("");
+  // Default to the company base currency so mixed-currency portfolios sum in one
+  // currency (converted), instead of naively adding e.g. PKR + SAR.
+  const [currency, setCurrency] = useState(baseCurrencyId ?? "");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -200,7 +204,9 @@ export function PropertyReportView({
       detailRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }, [selectedId]);
-  const activeFilters = [country, occupancy, propertyType, currency].filter(Boolean).length;
+  // Country + Currency are surfaced as inline dropdowns; the Filters button only
+  // holds the occupancy / property-type selectors, so it counts just those.
+  const activeFilters = [occupancy, propertyType].filter(Boolean).length;
 
   // ----- Dashboard chart datasets (all recompute with the active filters) -----
 
@@ -428,70 +434,84 @@ export function PropertyReportView({
     <div className="space-y-4">
       <ReportNav className="print:hidden" />
 
-      {/* Header */}
-      <div className="rounded-xl border bg-card px-5 py-4 shadow-xs print:border-0 print:px-0 print:shadow-none">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-primary">Reports</p>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Rental Property Report</h1>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              Portfolio overview and analysis ·{" "}
-              <span className="font-semibold text-foreground">{visibleRows.length}</span> of{" "}
-              <span className="font-semibold text-foreground">{totalProperties}</span> rental properties
-            </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {selectedCurrency
-                ? `Figures converted to ${selectedCurrency.code} (${selectedCurrency.symbol})`
-                : "Figures shown in each property's own currency"}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 print:hidden">
+      {/* Toolbar — the report name is shown by the breadcrumb, so no heading box.
+          Search + Country + Currency are inline; Filters holds occupancy / type. */}
+      <div className="flex flex-wrap items-end justify-between gap-3 print:hidden">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="space-y-1">
+            <span className="block text-sm font-medium text-foreground">Search</span>
             <div className="relative">
               <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search property, code, owner…"
-                className="w-64 pl-8"
+                placeholder="Property, code, owner…"
+                className="w-60 pl-8"
               />
             </div>
-            <Button
-              variant={showFilters || activeFilters > 0 ? "default" : "outline"}
-              onClick={() => setShowFilters((s) => !s)}
-            >
-              <SlidersHorizontalIcon /> Filters
-              {activeFilters > 0 && (
-                <span className="ml-1 rounded bg-white/25 px-1.5 text-xs">{activeFilters}</span>
-              )}
-            </Button>
-            <CsvExportButton filename="property-report.csv" headers={CSV_HEADERS} rows={csvRows} />
-            <PrintButton />
+          </div>
+          <div className="w-44">
+            <FilterSelect
+              label="Country"
+              value={country}
+              onChange={setCountry}
+              options={countries.map((c) => ({ value: c.code, label: c.name }))}
+              allLabel="All countries"
+            />
+          </div>
+          <div className="w-44">
+            <FilterSelect
+              label="Currency"
+              value={currency}
+              onChange={setCurrency}
+              options={currencies.map((c) => ({ value: c.id, label: `${c.code} (${c.symbol})` }))}
+              allLabel="Original currency"
+            />
           </div>
         </div>
-
-        {showFilters && (
-          <div className="mt-4 grid gap-3 border-t pt-4 sm:grid-cols-2 lg:grid-cols-4 print:hidden">
-            <FilterSelect label="Country" value={country} onChange={setCountry} options={countries.map((c) => ({ value: c.code, label: c.name }))} allLabel="All countries" />
-            <FilterSelect label="Occupancy" value={occupancy} onChange={(v) => setOccupancy(v as "" | "occupied" | "vacant")} options={[{ value: "occupied", label: "Occupied" }, { value: "vacant", label: "Vacant" }]} allLabel="All" />
-            <FilterSelect label="Property type" value={propertyType} onChange={setPropertyType} options={propertyTypes.map((t) => ({ value: t, label: t }))} allLabel="All types" />
-            <FilterSelect label="Display currency" value={currency} onChange={setCurrency} options={currencies.map((c) => ({ value: c.id, label: `${c.code} (${c.symbol})` }))} allLabel="Original currency" />
+        <div className="flex items-center gap-2">
+          <Button
+            variant={showFilters || activeFilters > 0 ? "default" : "outline"}
+            onClick={() => setShowFilters((s) => !s)}
+          >
+            <SlidersHorizontalIcon /> Filters
             {activeFilters > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  setCountry("");
-                  setOccupancy("");
-                  setPropertyType("");
-                  setCurrency("");
-                }}
-                className="self-end text-sm font-medium text-primary hover:underline"
-              >
-                Clear filters
-              </button>
+              <span className="ml-1 rounded bg-white/25 px-1.5 text-xs">{activeFilters}</span>
             )}
-          </div>
-        )}
+          </Button>
+          <CsvExportButton filename="property-report.csv" headers={CSV_HEADERS} rows={csvRows} />
+          <PrintButton />
+        </div>
       </div>
+
+      {/* Extra filters (occupancy / property type) */}
+      {showFilters && (
+        <div className="grid gap-3 rounded-xl border bg-card p-4 shadow-xs sm:grid-cols-2 lg:grid-cols-4 print:hidden">
+          <FilterSelect label="Occupancy" value={occupancy} onChange={(v) => setOccupancy(v as "" | "occupied" | "vacant")} options={[{ value: "occupied", label: "Occupied" }, { value: "vacant", label: "Vacant" }]} allLabel="All" />
+          <FilterSelect label="Property type" value={propertyType} onChange={setPropertyType} options={propertyTypes.map((t) => ({ value: t, label: t }))} allLabel="All types" />
+          {activeFilters > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setOccupancy("");
+                setPropertyType("");
+              }}
+              className="self-end text-sm font-medium text-primary hover:underline"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Currency note */}
+      <p className="text-xs text-muted-foreground print:hidden">
+        {selectedCurrency
+          ? `Figures converted to ${selectedCurrency.code} (${selectedCurrency.symbol})`
+          : "Figures shown in each property's own currency"}
+        {" · "}
+        <span className="font-semibold text-foreground">{visibleRows.length}</span> of {totalProperties} rental properties
+      </p>
 
       {/* KPI cards — recompute with the active filters */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -751,24 +771,25 @@ function Field({ label, value, tone }: { label: string; value: string; tone?: "u
   );
 }
 
-const detailWhite = "border-white/30 bg-transparent text-white hover:bg-white/15 hover:text-white";
-
 function PropertyDetail({ row, onClear }: { row: PropertyRow; onClear: () => void }) {
   return (
-    <div className="rounded-xl border border-ledger-dark/40 bg-card shadow-xs">
+    <div className="rounded-xl border border-ledger/40 bg-card shadow-xs">
       {/* Header — name, meta, and the documents / images strip (kept here to save space) */}
-      <div className="flex flex-col gap-2 border-b border-ledger-dark bg-ledger-dark px-4 py-2.5 text-white lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-2 border-b border-ledger/40 bg-ledger/15 px-4 py-2.5 text-ledger-dark lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <p className="truncate text-sm font-semibold">{row.name}</p>
+            <p className="truncate text-sm font-semibold text-foreground">{row.name}</p>
             <Badge
               variant="outline"
-              className={cn("border-white/40 text-white", row.occupied ? "bg-white/15" : "bg-amber-500/30")}
+              className={cn(
+                "border-ledger/40",
+                row.occupied ? "bg-ledger/15 text-ledger-dark" : "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+              )}
             >
               {row.occupied ? "Occupied" : "Vacant"}
             </Badge>
           </div>
-          <p className="truncate font-mono text-[0.7rem] text-white/70">
+          <p className="truncate font-mono text-[0.7rem] text-ledger-dark/70">
             {[row.assetCode, row.propertyType, row.group].filter(Boolean).join(" · ")}
           </p>
         </div>
@@ -780,18 +801,18 @@ function PropertyDetail({ row, onClear }: { row: PropertyRow; onClear: () => voi
               target="_blank"
               rel="noreferrer"
               title={img.fileName}
-              className="relative size-9 overflow-hidden rounded-md border border-white/25"
+              className="relative size-9 overflow-hidden rounded-md border border-ledger/30"
             >
               <Image src={img.url} alt={img.fileName} fill sizes="36px" className="object-cover" unoptimized />
             </a>
           ))}
           {row.imageCount > 4 && (
-            <span className="inline-flex size-9 items-center justify-center rounded-md border border-white/25 bg-white/10 text-[0.7rem]">
+            <span className="inline-flex size-9 items-center justify-center rounded-md border border-ledger/30 bg-ledger/10 text-[0.7rem]">
               +{row.imageCount - 4}
             </span>
           )}
           {row.imageCount === 0 && (
-            <span className="inline-flex items-center gap-1 rounded-md border border-white/20 px-2 py-1 text-[0.7rem] text-white/70">
+            <span className="inline-flex items-center gap-1 rounded-md border border-ledger/30 px-2 py-1 text-[0.7rem] text-ledger-dark/70">
               <ImageIcon className="size-3.5" /> No images
             </span>
           )}
@@ -800,15 +821,15 @@ function PropertyDetail({ row, onClear }: { row: PropertyRow; onClear: () => voi
               href={row.titleDeedUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 rounded-md border border-white/25 bg-white/10 px-2 py-1 text-[0.7rem] transition-colors hover:bg-white/20"
+              className="inline-flex items-center gap-1 rounded-md border border-ledger/30 bg-ledger/10 px-2 py-1 text-[0.7rem] text-ledger-dark transition-colors hover:bg-ledger/20"
             >
               <FileTextIcon className="size-3.5" /> Title deed
             </a>
           )}
-          <Button asChild variant="outline" size="sm" className={cn("h-8", detailWhite)}>
+          <Button asChild variant="outline" size="sm" className="h-8">
             <Link href={`/assets/${row.id}`}>Open</Link>
           </Button>
-          <Button variant="outline" size="sm" onClick={onClear} className={cn("h-8", detailWhite)}>
+          <Button variant="outline" size="sm" onClick={onClear} className="h-8">
             All properties
           </Button>
         </div>

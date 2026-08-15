@@ -1,7 +1,6 @@
 import { Fragment, Suspense } from "react";
 
 import { cn } from "@/lib/utils";
-import { PageHeader } from "@/components/ui/page-header";
 import { CsvExportButton } from "@/components/reports/csv-export-button";
 import { ReportNav } from "@/components/reports/report-nav";
 import { ReportSelectFilter } from "@/components/reports/report-select-filter";
@@ -160,24 +159,8 @@ export default async function RentReportPage({
   return (
     <div className="space-y-5">
       <ReportNav className="print:hidden" />
-      <PageHeader
-        eyebrow="Reports"
-        title="Rent Report"
-        description={`Cost-centre-wise, month-wise rent for ${year} — each active lease's monthly rent shown across the months it covers. UAE and Pakistan shown separately, each in its own currency.`}
-        className="print:hidden"
-        actions={
-          <>
-            <CsvExportButton
-              filename={`rent-report-${year}.csv`}
-              headers={["Country", "Code", "Cost centre", "Est. Rent", ...MONTHS, "Total"]}
-              rows={exportRows}
-            />
-            <PrintButton />
-          </>
-        }
-      />
-
-      <div className="flex flex-wrap items-end gap-3">
+      {/* Toolbar — the report name is shown by the breadcrumb, so no heading box */}
+      <div className="flex flex-wrap items-end justify-between gap-3 print:hidden">
         <Suspense>
           <ReportSelectFilter
             label="Year"
@@ -188,6 +171,14 @@ export default async function RentReportPage({
             width="w-40"
           />
         </Suspense>
+        <div className="flex items-center gap-2">
+          <CsvExportButton
+            filename={`rent-report-${year}.csv`}
+            headers={["Country", "Code", "Cost centre", "Est. Rent", ...MONTHS, "Total"]}
+            rows={exportRows}
+          />
+          <PrintButton />
+        </div>
       </div>
 
       {/* Per-country annual-rent summary */}
@@ -213,11 +204,11 @@ export default async function RentReportPage({
       <div className="max-h-[72vh] overflow-auto rounded-xl border bg-card shadow-xs">
         <table className="w-full min-w-[1080px] border-collapse text-sm">
           <thead className="sticky top-0 z-20">
-            <tr className="bg-header text-header-foreground [&>th]:border-r [&>th]:border-header-border [&>th]:px-3 [&>th]:py-2.5 [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide">
-              <th className="sticky left-0 z-30 min-w-[240px] bg-header text-left">Cost centre</th>
+            <tr className="bg-primary text-primary-foreground [&>th]:border-r [&>th]:border-primary/40 [&>th]:px-3 [&>th]:py-2.5 [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide">
+              <th className="sticky left-0 z-30 min-w-[240px] bg-primary text-left">Cost centre</th>
               <th className="whitespace-nowrap text-right">Est. Rent</th>
               {MONTHS.map((m, i) => (
-                <th key={m} className={cn("whitespace-nowrap text-right", i === thisMonth && "bg-white/10")}>
+                <th key={m} className={cn("whitespace-nowrap text-right", i === thisMonth && "bg-white/15")}>
                   {m}
                 </th>
               ))}
@@ -276,11 +267,11 @@ export default async function RentReportPage({
                     );
                   })}
                   {/* Country total */}
-                  <tr className="border-y border-ledger/40 bg-ledger/15 font-semibold text-ledger-dark [&>td]:px-3 [&>td]:py-2">
-                    <td className="sticky left-0 z-10 bg-ledger/15 text-xs uppercase tracking-wide">Total — {label}</td>
+                  <tr className="bg-primary font-semibold text-primary-foreground [&>td]:px-3 [&>td]:py-2">
+                    <td className="sticky left-0 z-10 bg-primary text-xs uppercase tracking-wide">Total — {label}</td>
                     <td className="text-right font-mono tabular-nums">{secEst ? money(secEst) : dash}</td>
                     {secMonths.map((v, i) => (
-                      <td key={i} className={cn("text-right font-mono tabular-nums", i === thisMonth && "bg-ledger/10")}>
+                      <td key={i} className={cn("text-right font-mono tabular-nums", i === thisMonth && "bg-white/15")}>
                         {v ? money(v) : dash}
                       </td>
                     ))}

@@ -25,8 +25,10 @@
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.24 0.028 258);
 
-  /* Single professional-blue brand colour for primary actions & accents. */
-  --primary: oklch(0.47 0.125 256);
+  /* Single professional-blue brand colour for primary actions & accents — a
+     deep navy matching the application header band so blue reads consistently
+     dark across the ERP. */
+  --primary: oklch(0.30 0.06 258);
   --primary-foreground: oklch(0.99 0 0);
 
   --secondary: oklch(0.965 0.006 255);
@@ -81,8 +83,8 @@
   --card-foreground: oklch(0.96 0.003 258);
   --popover: oklch(0.215 0.014 258);
   --popover-foreground: oklch(0.96 0.003 258);
-  --primary: oklch(0.72 0.13 256);
-  --primary-foreground: oklch(0.17 0.02 258);
+  --primary: oklch(0.46 0.10 258);
+  --primary-foreground: oklch(0.98 0.003 255);
   --secondary: oklch(0.27 0.014 258);
   --secondary-foreground: oklch(0.96 0.003 258);
   --muted: oklch(0.27 0.014 258);

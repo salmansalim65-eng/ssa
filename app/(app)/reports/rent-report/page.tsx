@@ -158,19 +158,22 @@ export default async function RentReportPage({
 
   return (
     <div className="space-y-5">
-      <ReportNav className="print:hidden" />
-      {/* Toolbar — the report name is shown by the breadcrumb, so no heading box */}
+      {/* Toolbar — home/back, year, export and print on one line (the report name
+          is shown by the breadcrumb, so there's no heading box) */}
       <div className="flex flex-wrap items-end justify-between gap-3 print:hidden">
-        <Suspense>
-          <ReportSelectFilter
-            label="Year"
-            param="year"
-            allLabel={String(currentYear)}
-            options={yearOptions}
-            selected={yearParam}
-            width="w-40"
-          />
-        </Suspense>
+        <div className="flex flex-wrap items-end gap-3">
+          <ReportNav className="pb-1.5" />
+          <Suspense>
+            <ReportSelectFilter
+              label="Year"
+              param="year"
+              allLabel={String(currentYear)}
+              options={yearOptions}
+              selected={yearParam}
+              width="w-40"
+            />
+          </Suspense>
+        </div>
         <div className="flex items-center gap-2">
           <CsvExportButton
             filename={`rent-report-${year}.csv`}
@@ -289,10 +292,11 @@ export default async function RentReportPage({
 
 function Kpi({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-xl border bg-card px-4 py-3 shadow-xs">
-      <p className="truncate text-[0.68rem] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-1 truncate font-mono text-lg font-bold tabular-nums text-foreground">{value}</p>
-      {sub && <p className="mt-0.5 truncate text-xs text-muted-foreground">{sub}</p>}
+    <div className="relative overflow-hidden rounded-xl border border-primary/20 bg-gradient-to-br from-primary/[0.07] to-transparent px-4 py-3.5 shadow-xs transition-shadow hover:shadow-md">
+      <span className="absolute inset-y-0 left-0 w-1 bg-primary" aria-hidden />
+      <p className="truncate pl-1.5 text-[0.68rem] font-semibold uppercase tracking-wide text-primary">{label}</p>
+      <p className="mt-1 truncate pl-1.5 font-mono text-xl font-bold tabular-nums text-foreground">{value}</p>
+      {sub && <p className="mt-0.5 truncate pl-1.5 text-xs text-muted-foreground">{sub}</p>}
     </div>
   );
 }

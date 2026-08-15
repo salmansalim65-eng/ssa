@@ -285,15 +285,23 @@ export default async function PropertyReportPage() {
     });
   });
 
-  // Group rows by country, ordered alphabetically with Unspecified last.
+  // Group rows by country: UAE first, then Pakistan, then any other country
+  // alphabetically, with Unspecified always last.
   const byGroup = new Map<string, PropertyRow[]>();
   for (const r of rows) {
     if (!byGroup.has(r.group)) byGroup.set(r.group, []);
     byGroup.get(r.group)!.push(r);
   }
+  const countryRank = (name: string, code: string) =>
+    name === UNSPECIFIED ? 3 : code === "AE" ? 0 : code === "PK" ? 1 : 2;
   const groups: PropertyGroup[] = [...byGroup.entries()]
-    .sort((a, b) => (a[0] === UNSPECIFIED ? 1 : b[0] === UNSPECIFIED ? -1 : a[0].localeCompare(b[0])))
-    .map(([name, groupRows]) => ({
+    .map(([name, groupRows]) => ({ name, groupRows, code: groupRows[0]?.country ?? "" }))
+    .sort((a, b) => {
+      const ra = countryRank(a.name, a.code);
+      const rb = countryRank(b.name, b.code);
+      return ra !== rb ? ra - rb : a.name.localeCompare(b.name);
+    })
+    .map(({ name, groupRows }) => ({
       name,
       totals: aggregateGroup(groupRows),
       rows: groupRows.sort((a, b) => a.name.localeCompare(b.name)),

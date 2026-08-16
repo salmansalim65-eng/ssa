@@ -1777,6 +1777,7 @@ export interface Database {
           net_amount: number;
           other_expenses: number;
           net_outstanding: number;
+          tenant_account_id: string | null;
         };
       };
       v_outstanding_rent: {

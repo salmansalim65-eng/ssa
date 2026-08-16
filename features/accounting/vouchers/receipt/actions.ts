@@ -18,6 +18,36 @@ function lineDescription(rentMonth?: string, remarks?: string) {
   return parts.length ? parts.join(" — ") : "Receipt";
 }
 
+type ReceiptSupabase = Awaited<ReturnType<typeof createClient>>;
+type ReceiptLine = ReceiptVoucherInput["lines"][number];
+
+// Write the per-line bill adjustments into receipt_invoice_allocations, whose
+// trigger reduces each invoice's outstanding balance. Returns an error message
+// or null. No-op when no line has allocations.
+async function writeReceiptAllocations(
+  supabase: ReceiptSupabase,
+  companyId: string,
+  voucherId: string,
+  lines: ReceiptLine[],
+  insertedLines: { id: string; line_no: number }[],
+) {
+  const idByLineNo = new Map(insertedLines.map((l) => [l.line_no, l.id]));
+  const rows = lines.flatMap((l, index) =>
+    (l.allocations ?? []).map((a) => ({
+      company_id: companyId,
+      receipt_voucher_id: voucherId,
+      receipt_line_id: idByLineNo.get(index + 1) ?? null,
+      country: a.country,
+      uae_invoice_id: a.country === "UAE" ? a.invoiceId : null,
+      pk_invoice_id: a.country === "PK" ? a.invoiceId : null,
+      amount: a.amount,
+    })),
+  );
+  if (!rows.length) return null;
+  const { error } = await supabase.schema("rental").from("receipt_invoice_allocations").insert(rows);
+  return error ? error.message : null;
+}
+
 export async function createReceiptVoucher(input: ReceiptVoucherInput, options?: { autoPostIfAdmin?: boolean }) {
   const parsed = receiptVoucherSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -88,15 +118,16 @@ export async function createReceiptVoucher(input: ReceiptVoucherInput, options?:
     amount: l.amount,
     rent_month: l.rentMonth || null,
     remarks: l.remarks || null,
-    applied_country: l.invoiceId ? l.invoiceCountry || null : null,
-    applied_uae_invoice_id: l.invoiceId && l.invoiceCountry === "UAE" ? l.invoiceId : null,
-    applied_pk_invoice_id: l.invoiceId && l.invoiceCountry === "PK" ? l.invoiceId : null,
   }));
-  const { error: linesError } = await supabase
+  const { data: insertedLines, error: linesError } = await supabase
     .schema("accounting")
     .from("receipt_voucher_lines")
-    .insert(lineRows);
+    .insert(lineRows)
+    .select("id, line_no");
   if (linesError) return { error: linesError.message };
+
+  const allocErr = await writeReceiptAllocations(supabase, companyId, voucherId, lines, insertedLines ?? []);
+  if (allocErr) return { error: allocErr };
 
   revalidatePath("/accounting/vouchers/receipt_voucher");
   if (options?.autoPostIfAdmin !== false && (await isCurrentUserAdmin())) {
@@ -209,15 +240,18 @@ export async function updateReceiptVoucher(id: string, input: ReceiptVoucherInpu
     amount: l.amount,
     rent_month: l.rentMonth || null,
     remarks: l.remarks || null,
-    applied_country: l.invoiceId ? l.invoiceCountry || null : null,
-    applied_uae_invoice_id: l.invoiceId && l.invoiceCountry === "UAE" ? l.invoiceId : null,
-    applied_pk_invoice_id: l.invoiceId && l.invoiceCountry === "PK" ? l.invoiceId : null,
   }));
-  const { error: insLines } = await supabase
+  const { data: insertedLines, error: insLines } = await supabase
     .schema("accounting")
     .from("receipt_voucher_lines")
-    .insert(lineRows);
+    .insert(lineRows)
+    .select("id, line_no");
   if (insLines) return { error: insLines.message };
+
+  // Deleting the old lines above cascaded their allocations away (restoring
+  // outstanding); write the new adjustments here.
+  const allocErr = await writeReceiptAllocations(supabase, companyId, id, lines, insertedLines ?? []);
+  if (allocErr) return { error: allocErr };
 
   const { error: vErr } = await supabase
     .schema("accounting")
@@ -254,31 +288,6 @@ export async function postReceiptVoucher(id: string, journalEntryId: string) {
     .update({ voucher_no: result.voucherNo })
     .eq("id", id);
   if (error) return { error: error.message };
-
-  // Apply any lines tagged with a rental invoice: writing an allocation row fires
-  // the DB trigger that reduces the invoice's outstanding balance. Idempotent —
-  // clears any prior allocations for this voucher first so a re-post can't double.
-  await supabase.schema("rental").from("receipt_invoice_allocations").delete().eq("receipt_voucher_id", id);
-  const { data: appliedLines } = await supabase
-    .schema("accounting")
-    .from("receipt_voucher_lines")
-    .select("id, amount, applied_country, applied_uae_invoice_id, applied_pk_invoice_id")
-    .eq("voucher_id", id)
-    .not("applied_country", "is", null);
-  const allocations = (appliedLines ?? [])
-    .filter((l) => Number(l.amount) > 0 && (l.applied_uae_invoice_id || l.applied_pk_invoice_id))
-    .map((l) => ({
-      company_id: companyId,
-      receipt_voucher_id: id,
-      receipt_line_id: l.id as string,
-      country: l.applied_country as string,
-      uae_invoice_id: (l.applied_uae_invoice_id as string | null) ?? null,
-      pk_invoice_id: (l.applied_pk_invoice_id as string | null) ?? null,
-      amount: Number(l.amount),
-    }));
-  if (allocations.length) {
-    await supabase.schema("rental").from("receipt_invoice_allocations").insert(allocations);
-  }
 
   revalidatePath("/accounting/vouchers/receipt_voucher");
   return { success: true, voucherNo: result.voucherNo };

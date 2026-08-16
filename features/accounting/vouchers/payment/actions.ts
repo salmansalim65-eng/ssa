@@ -16,6 +16,35 @@ function lineDescription(remarks?: string) {
   return parts.length ? parts.join(" — ") : "Payment";
 }
 
+type PaymentSupabase = Awaited<ReturnType<typeof createClient>>;
+type PaymentLine = PaymentVoucherInput["lines"][number];
+
+// Write the per-line bill adjustments into payment_invoice_expenses (an "other
+// expense" against each invoice). Returns an error message or null.
+async function writePaymentExpenses(
+  supabase: PaymentSupabase,
+  companyId: string,
+  voucherId: string,
+  lines: PaymentLine[],
+  insertedLines: { id: string; line_no: number }[],
+) {
+  const idByLineNo = new Map(insertedLines.map((l) => [l.line_no, l.id]));
+  const rows = lines.flatMap((l, index) =>
+    (l.allocations ?? []).map((a) => ({
+      company_id: companyId,
+      payment_voucher_id: voucherId,
+      payment_line_id: idByLineNo.get(index + 1) ?? null,
+      country: a.country,
+      uae_invoice_id: a.country === "UAE" ? a.invoiceId : null,
+      pk_invoice_id: a.country === "PK" ? a.invoiceId : null,
+      amount: a.amount,
+    })),
+  );
+  if (!rows.length) return null;
+  const { error } = await supabase.schema("rental").from("payment_invoice_expenses").insert(rows);
+  return error ? error.message : null;
+}
+
 export async function createPaymentVoucher(input: PaymentVoucherInput, options?: { autoPostIfAdmin?: boolean }) {
   const parsed = paymentVoucherSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -84,15 +113,16 @@ export async function createPaymentVoucher(input: PaymentVoucherInput, options?:
     account_id: l.accountId,
     amount: l.amount,
     remarks: l.remarks || null,
-    applied_country: l.invoiceId ? l.invoiceCountry || null : null,
-    applied_uae_invoice_id: l.invoiceId && l.invoiceCountry === "UAE" ? l.invoiceId : null,
-    applied_pk_invoice_id: l.invoiceId && l.invoiceCountry === "PK" ? l.invoiceId : null,
   }));
-  const { error: linesError } = await supabase
+  const { data: insertedLines, error: linesError } = await supabase
     .schema("accounting")
     .from("payment_voucher_lines")
-    .insert(lineRows);
+    .insert(lineRows)
+    .select("id, line_no");
   if (linesError) return { error: linesError.message };
+
+  const expErr = await writePaymentExpenses(supabase, companyId, voucherId, lines, insertedLines ?? []);
+  if (expErr) return { error: expErr };
 
   revalidatePath("/accounting/vouchers/payment_voucher");
   if (options?.autoPostIfAdmin !== false && (await isCurrentUserAdmin())) {
@@ -202,15 +232,16 @@ export async function updatePaymentVoucher(id: string, input: PaymentVoucherInpu
     account_id: l.accountId,
     amount: l.amount,
     remarks: l.remarks || null,
-    applied_country: l.invoiceId ? l.invoiceCountry || null : null,
-    applied_uae_invoice_id: l.invoiceId && l.invoiceCountry === "UAE" ? l.invoiceId : null,
-    applied_pk_invoice_id: l.invoiceId && l.invoiceCountry === "PK" ? l.invoiceId : null,
   }));
-  const { error: insLines } = await supabase
+  const { data: insertedLines, error: insLines } = await supabase
     .schema("accounting")
     .from("payment_voucher_lines")
-    .insert(lineRows);
+    .insert(lineRows)
+    .select("id, line_no");
   if (insLines) return { error: insLines.message };
+
+  const expErr = await writePaymentExpenses(supabase, companyId, id, lines, insertedLines ?? []);
+  if (expErr) return { error: expErr };
 
   const { error: vErr } = await supabase
     .schema("accounting")
@@ -246,31 +277,6 @@ export async function postPaymentVoucher(id: string, journalEntryId: string) {
     .update({ voucher_no: result.voucherNo })
     .eq("id", id);
   if (error) return { error: error.message };
-
-  // Record any lines tagged with a rental invoice as an "other expense" on that
-  // invoice (reduces the owner's balance rent in the Rent Balance report).
-  // Idempotent — clears prior expenses for this voucher first.
-  await supabase.schema("rental").from("payment_invoice_expenses").delete().eq("payment_voucher_id", id);
-  const { data: appliedLines } = await supabase
-    .schema("accounting")
-    .from("payment_voucher_lines")
-    .select("id, amount, applied_country, applied_uae_invoice_id, applied_pk_invoice_id")
-    .eq("voucher_id", id)
-    .not("applied_country", "is", null);
-  const expenses = (appliedLines ?? [])
-    .filter((l) => Number(l.amount) > 0 && (l.applied_uae_invoice_id || l.applied_pk_invoice_id))
-    .map((l) => ({
-      company_id: companyId,
-      payment_voucher_id: id,
-      payment_line_id: l.id as string,
-      country: l.applied_country as string,
-      uae_invoice_id: (l.applied_uae_invoice_id as string | null) ?? null,
-      pk_invoice_id: (l.applied_pk_invoice_id as string | null) ?? null,
-      amount: Number(l.amount),
-    }));
-  if (expenses.length) {
-    await supabase.schema("rental").from("payment_invoice_expenses").insert(expenses);
-  }
 
   revalidatePath("/accounting/vouchers/payment_voucher");
   return { success: true, voucherNo: result.voucherNo };

@@ -168,8 +168,7 @@ export default async function EditVoucherPage({
     amount: number;
     rentMonth: string;
     remarks: string;
-    invoiceId?: string;
-    invoiceCountry?: "" | "UAE" | "PK";
+    allocations?: { invoiceId: string; country: "UAE" | "PK"; amount: number }[];
   }[] = [];
   let obLines: { accountId: string; debit: number; credit: number; remarks: string }[] = [];
   if (isHeaderDoc || isOpeningBalance || isMultiLine || isJvMaintenance) {
@@ -203,28 +202,50 @@ export default async function EditVoucherPage({
     const { data: dlines } = await supabase
       .schema("accounting")
       .from(HEADER_DOC_LINES[voucherType])
-      .select("account_id, amount, rent_month, remarks")
+      .select("id, account_id, amount, rent_month, remarks")
       .eq("voucher_id", id)
       .order("line_no");
+    const lineIds = (dlines ?? []).map((l) => l.id as string);
     docLines = (dlines ?? []).map((l) => ({
       accountId: l.account_id,
       amount: l.amount,
       rentMonth: l.rent_month ?? "",
       remarks: l.remarks ?? "",
+      allocations: [],
     }));
-    // Round-trip the per-line "applied to invoice" selection (receipt & payment).
-    if (voucherType === "receipt_voucher" || voucherType === "payment_voucher") {
-      const { data: applied } = await supabase
-        .schema("accounting")
-        .from(voucherType === "receipt_voucher" ? "receipt_voucher_lines" : "payment_voucher_lines")
-        .select("applied_country, applied_uae_invoice_id, applied_pk_invoice_id")
-        .eq("voucher_id", id)
-        .order("line_no");
-      docLines = docLines.map((dl, i) => ({
-        ...dl,
-        invoiceId: (applied?.[i]?.applied_uae_invoice_id ?? applied?.[i]?.applied_pk_invoice_id ?? "") as string,
-        invoiceCountry: (applied?.[i]?.applied_country ?? "") as "" | "UAE" | "PK",
-      }));
+    // Round-trip existing bill adjustments (receipt & payment), keyed by line id.
+    const byLine = new Map<string, { invoiceId: string; country: "UAE" | "PK"; amount: number }[]>();
+    if (voucherType === "receipt_voucher") {
+      const { data: allocs } = await supabase
+        .schema("rental")
+        .from("receipt_invoice_allocations")
+        .select("receipt_line_id, country, uae_invoice_id, pk_invoice_id, amount")
+        .eq("receipt_voucher_id", id);
+      for (const a of allocs ?? []) {
+        const key = a.receipt_line_id as string | null;
+        const invoiceId = (a.uae_invoice_id ?? a.pk_invoice_id) as string | null;
+        if (!key || !invoiceId) continue;
+        const list = byLine.get(key) ?? [];
+        list.push({ invoiceId, country: a.country as "UAE" | "PK", amount: Number(a.amount) });
+        byLine.set(key, list);
+      }
+    } else if (voucherType === "payment_voucher") {
+      const { data: allocs } = await supabase
+        .schema("rental")
+        .from("payment_invoice_expenses")
+        .select("payment_line_id, country, uae_invoice_id, pk_invoice_id, amount")
+        .eq("payment_voucher_id", id);
+      for (const a of allocs ?? []) {
+        const key = a.payment_line_id as string | null;
+        const invoiceId = (a.uae_invoice_id ?? a.pk_invoice_id) as string | null;
+        if (!key || !invoiceId) continue;
+        const list = byLine.get(key) ?? [];
+        list.push({ invoiceId, country: a.country as "UAE" | "PK", amount: Number(a.amount) });
+        byLine.set(key, list);
+      }
+    }
+    if (byLine.size) {
+      docLines = docLines.map((dl, i) => ({ ...dl, allocations: byLine.get(lineIds[i]) ?? [] }));
     }
   }
   if (isOpeningBalance) {
@@ -242,19 +263,30 @@ export default async function EditVoucherPage({
     }));
   }
 
-  // Open rental invoices a receipt/payment line can be applied against.
-  let openInvoices: { id: string; country: "UAE" | "PK"; label: string }[] = [];
+  // Outstanding rental bills a receipt/payment line can be adjusted against.
+  let outstandingBills: {
+    id: string;
+    country: "UAE" | "PK";
+    accountId: string | null;
+    reference: string;
+    dueDate: string | null;
+    billAmount: number;
+  }[] = [];
   if (voucherType === "receipt_voucher" || voucherType === "payment_voucher") {
     const { data: inv } = await supabase
       .schema("reporting")
       .from("v_outstanding_rent")
-      .select("invoice_id, country, voucher_no, tenant_name, asset_name, outstanding_balance, currency_code")
+      .select("invoice_id, country, tenant_account_id, voucher_no, tenant_name, asset_name, due_date, outstanding_balance")
       .eq("company_id", companyId)
+      .gt("outstanding_balance", 0)
       .order("due_date");
-    openInvoices = (inv ?? []).map((r) => ({
+    outstandingBills = (inv ?? []).map((r) => ({
       id: r.invoice_id as string,
       country: r.country as "UAE" | "PK",
-      label: `${r.voucher_no ?? "Draft"} · ${r.tenant_name ?? ""} · ${r.asset_name ?? ""} — ${r.currency_code ?? ""} ${Math.round(Number(r.outstanding_balance)).toLocaleString("en-US")}`,
+      accountId: (r.tenant_account_id as string | null) ?? null,
+      reference: [r.voucher_no ?? "Draft", r.tenant_name, r.asset_name].filter(Boolean).join(" · "),
+      dueDate: (r.due_date as string | null) ?? null,
+      billAmount: Number(r.outstanding_balance),
     }));
   }
 
@@ -276,7 +308,7 @@ export default async function EditVoucherPage({
           accounts={accountOptions}
           currencies={docCurrencies}
           costCenters={docCostCenters}
-          openInvoices={openInvoices}
+          outstandingBills={outstandingBills}
           voucherId={id}
           initialValues={{
             receiptDate: v.receipt_date as string,
@@ -294,7 +326,7 @@ export default async function EditVoucherPage({
           accounts={accountOptions}
           currencies={docCurrencies}
           costCenters={docCostCenters}
-          openInvoices={openInvoices}
+          outstandingBills={outstandingBills}
           voucherId={id}
           initialValues={{
             paymentDate: v.payment_date as string,
@@ -308,8 +340,7 @@ export default async function EditVoucherPage({
                   accountId: l.accountId,
                   amount: l.amount,
                   remarks: l.remarks,
-                  invoiceId: l.invoiceId ?? "",
-                  invoiceCountry: l.invoiceCountry ?? "",
+                  allocations: l.allocations ?? [],
                 }))
               : [{ accountId: "", amount: 0, remarks: "" }],
           }}

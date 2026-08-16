@@ -77,6 +77,7 @@ with uae as (
     je.status,
     uri.exchange_rate,
     ul.lease_type,
+    t.account_id as tenant_account_id,
     round(uri.amount * (case when ul.lease_type = 'hh' then 0.10 else 0.05 end), 2) as agent_share,
     coalesce(ul.expense_amount, 0)
       + coalesce((select sum(pe.amount) from rental.payment_invoice_expenses pe where pe.uae_invoice_id = uri.id), 0)
@@ -99,7 +100,8 @@ select
   case
     when amount > 0 then round(outstanding_balance * (amount - agent_share) / amount, 2)
     else outstanding_balance
-  end as net_outstanding
+  end as net_outstanding,
+  tenant_account_id
 from uae
 union all
 select
@@ -121,7 +123,8 @@ select
   0::numeric as agent_share,
   pri.total_amount as net_amount,
   coalesce((select sum(pe.amount) from rental.payment_invoice_expenses pe where pe.pk_invoice_id = pri.id), 0) as other_expenses,
-  pri.outstanding_amount as net_outstanding
+  pri.outstanding_amount as net_outstanding,
+  t.account_id as tenant_account_id
 from rental.pk_rent_invoices pri
   join rental.pk_leases pl on pl.id = pri.lease_id
   join assets.assets a on a.id = pl.asset_id

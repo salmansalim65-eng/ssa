@@ -212,11 +212,11 @@ export default async function EditVoucherPage({
       rentMonth: l.rent_month ?? "",
       remarks: l.remarks ?? "",
     }));
-    // Round-trip the per-line "applied to invoice" selection (receipt only).
-    if (voucherType === "receipt_voucher") {
+    // Round-trip the per-line "applied to invoice" selection (receipt & payment).
+    if (voucherType === "receipt_voucher" || voucherType === "payment_voucher") {
       const { data: applied } = await supabase
         .schema("accounting")
-        .from("receipt_voucher_lines")
+        .from(voucherType === "receipt_voucher" ? "receipt_voucher_lines" : "payment_voucher_lines")
         .select("applied_country, applied_uae_invoice_id, applied_pk_invoice_id")
         .eq("voucher_id", id)
         .order("line_no");
@@ -242,9 +242,9 @@ export default async function EditVoucherPage({
     }));
   }
 
-  // Open rental invoices a receipt line can be applied against.
+  // Open rental invoices a receipt/payment line can be applied against.
   let openInvoices: { id: string; country: "UAE" | "PK"; label: string }[] = [];
-  if (voucherType === "receipt_voucher") {
+  if (voucherType === "receipt_voucher" || voucherType === "payment_voucher") {
     const { data: inv } = await supabase
       .schema("reporting")
       .from("v_outstanding_rent")
@@ -294,6 +294,7 @@ export default async function EditVoucherPage({
           accounts={accountOptions}
           currencies={docCurrencies}
           costCenters={docCostCenters}
+          openInvoices={openInvoices}
           voucherId={id}
           initialValues={{
             paymentDate: v.payment_date as string,
@@ -303,7 +304,13 @@ export default async function EditVoucherPage({
             exchangeRate: v.exchange_rate as number,
             narration: (v.narration as string | null) ?? "",
             lines: docLines.length
-              ? docLines.map((l) => ({ accountId: l.accountId, amount: l.amount, remarks: l.remarks }))
+              ? docLines.map((l) => ({
+                  accountId: l.accountId,
+                  amount: l.amount,
+                  remarks: l.remarks,
+                  invoiceId: l.invoiceId ?? "",
+                  invoiceCountry: l.invoiceCountry ?? "",
+                }))
               : [{ accountId: "", amount: 0, remarks: "" }],
           }}
         />

@@ -97,7 +97,7 @@ export default async function NewVoucherPage({
   // Open rental invoices a receipt line can be applied against (reduces
   // outstanding when the receipt posts).
   let openInvoices: { id: string; country: "UAE" | "PK"; label: string }[] = [];
-  if (voucherType === "receipt_voucher") {
+  if (voucherType === "receipt_voucher" || voucherType === "payment_voucher") {
     const { data: inv } = await supabase
       .schema("reporting")
       .from("v_outstanding_rent")
@@ -168,6 +168,7 @@ export default async function NewVoucherPage({
           accounts={accountOptions}
           currencies={currencyOptions}
           costCenters={costCenterOptions}
+          openInvoices={openInvoices}
         />
       )}
       {voucherType === "pdc_payment_voucher" && (

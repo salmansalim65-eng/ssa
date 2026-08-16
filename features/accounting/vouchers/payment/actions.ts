@@ -84,6 +84,9 @@ export async function createPaymentVoucher(input: PaymentVoucherInput, options?:
     account_id: l.accountId,
     amount: l.amount,
     remarks: l.remarks || null,
+    applied_country: l.invoiceId ? l.invoiceCountry || null : null,
+    applied_uae_invoice_id: l.invoiceId && l.invoiceCountry === "UAE" ? l.invoiceId : null,
+    applied_pk_invoice_id: l.invoiceId && l.invoiceCountry === "PK" ? l.invoiceId : null,
   }));
   const { error: linesError } = await supabase
     .schema("accounting")
@@ -199,6 +202,9 @@ export async function updatePaymentVoucher(id: string, input: PaymentVoucherInpu
     account_id: l.accountId,
     amount: l.amount,
     remarks: l.remarks || null,
+    applied_country: l.invoiceId ? l.invoiceCountry || null : null,
+    applied_uae_invoice_id: l.invoiceId && l.invoiceCountry === "UAE" ? l.invoiceId : null,
+    applied_pk_invoice_id: l.invoiceId && l.invoiceCountry === "PK" ? l.invoiceId : null,
   }));
   const { error: insLines } = await supabase
     .schema("accounting")
@@ -240,6 +246,31 @@ export async function postPaymentVoucher(id: string, journalEntryId: string) {
     .update({ voucher_no: result.voucherNo })
     .eq("id", id);
   if (error) return { error: error.message };
+
+  // Record any lines tagged with a rental invoice as an "other expense" on that
+  // invoice (reduces the owner's balance rent in the Rent Balance report).
+  // Idempotent — clears prior expenses for this voucher first.
+  await supabase.schema("rental").from("payment_invoice_expenses").delete().eq("payment_voucher_id", id);
+  const { data: appliedLines } = await supabase
+    .schema("accounting")
+    .from("payment_voucher_lines")
+    .select("id, amount, applied_country, applied_uae_invoice_id, applied_pk_invoice_id")
+    .eq("voucher_id", id)
+    .not("applied_country", "is", null);
+  const expenses = (appliedLines ?? [])
+    .filter((l) => Number(l.amount) > 0 && (l.applied_uae_invoice_id || l.applied_pk_invoice_id))
+    .map((l) => ({
+      company_id: companyId,
+      payment_voucher_id: id,
+      payment_line_id: l.id as string,
+      country: l.applied_country as string,
+      uae_invoice_id: (l.applied_uae_invoice_id as string | null) ?? null,
+      pk_invoice_id: (l.applied_pk_invoice_id as string | null) ?? null,
+      amount: Number(l.amount),
+    }));
+  if (expenses.length) {
+    await supabase.schema("rental").from("payment_invoice_expenses").insert(expenses);
+  }
 
   revalidatePath("/accounting/vouchers/payment_voucher");
   return { success: true, voucherNo: result.voucherNo };

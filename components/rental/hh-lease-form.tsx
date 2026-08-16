@@ -45,7 +45,7 @@ function today() {
 }
 
 function emptyLine() {
-  return { assetId: "", rentalAmount: blankAmount, leaseStart: today(), leaseEnd: today(), remarks: "" };
+  return { assetId: "", rentalAmount: blankAmount, leaseStart: today(), leaseEnd: today(), expenseAmount: blankAmount, remarks: "" };
 }
 
 export function HhLeaseForm({
@@ -189,6 +189,7 @@ export function HhLeaseForm({
                   <th className="w-32">Rent</th>
                   <th className="w-40">Lease Start</th>
                   <th className="w-40">Lease End</th>
+                  <th className="w-32">Expenses</th>
                   <th className="min-w-[160px]">Remarks</th>
                   <th className="w-10" />
                 </tr>
@@ -258,6 +259,20 @@ export function HhLeaseForm({
                           <FormItem>
                             <FormControl>
                               <Input type="date" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </td>
+                    <td>
+                      <FormField
+                        control={form.control}
+                        name={`lines.${index}.expenseAmount`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>

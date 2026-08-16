@@ -130,6 +130,7 @@ export async function createReceiptVoucher(input: ReceiptVoucherInput, options?:
   if (allocErr) return { error: allocErr };
 
   revalidatePath("/accounting/vouchers/receipt_voucher");
+  revalidatePath("/dashboard");
   if (options?.autoPostIfAdmin !== false && (await isCurrentUserAdmin())) {
     try {
       await postReceiptVoucher(voucherId, je.journalEntryId);
@@ -270,6 +271,7 @@ export async function updateReceiptVoucher(id: string, input: ReceiptVoucherInpu
   if (vErr) return { error: vErr.message };
 
   revalidatePath("/accounting/vouchers/receipt_voucher");
+  revalidatePath("/dashboard");
   revalidatePath(`/accounting/vouchers/receipt_voucher/${id}`);
   return { success: true, id };
 }
@@ -290,5 +292,6 @@ export async function postReceiptVoucher(id: string, journalEntryId: string) {
   if (error) return { error: error.message };
 
   revalidatePath("/accounting/vouchers/receipt_voucher");
+  revalidatePath("/dashboard");
   return { success: true, voucherNo: result.voucherNo };
 }

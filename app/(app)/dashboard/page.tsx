@@ -179,11 +179,11 @@ export default async function DashboardPage({
     const dueDate = String(r.due_date ?? "").slice(0, 10);
     g.billed += netAmount;
     g.outstanding += netOutstanding;
-    // Bucket by due date: overdue once the due month has passed; "Due" only once
-    // the due date has actually arrived; anything with a future due date is
-    // upcoming (still part of the outstanding balance, but not yet due).
+    // Bucket by due MONTH (not exact day): overdue once the due month has fully
+    // passed; "Due" during its due month; anything whose due month hasn't started
+    // yet is upcoming (still part of the outstanding balance, but not yet due).
     if (isRentOverdue(dueDate, now)) g.overdue += netOutstanding;
-    else if (dueDate && dueDate <= now) g.due += netOutstanding;
+    else if (dueDate && dueDate.slice(0, 7) <= now.slice(0, 7)) g.due += netOutstanding;
     else g.upcoming += netOutstanding;
   }
   const rentReceipts = (c: string) => rentByCountry[c].billed - rentByCountry[c].outstanding;

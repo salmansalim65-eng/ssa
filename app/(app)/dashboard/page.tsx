@@ -55,9 +55,11 @@ function isExcludedFromBalances(r: {
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ panel?: string }>;
+  searchParams: Promise<{ panel?: string; from?: string; to?: string }>;
 }) {
-  const { panel = "" } = await searchParams;
+  const { panel = "", from = "", to = "" } = await searchParams;
+  const dateFrom = from || null;
+  const dateTo = to || null;
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
 
@@ -193,14 +195,17 @@ export default async function DashboardPage({
   const isRecent = panel === "recent";
   const selected = (panel in BALANCE_PANELS ? panel : "") as PanelKey | "";
   const detail = selected
-    ? await loadDetail(companyId, selected, sym(BALANCE_PANELS[selected].currency))
+    ? await loadDetail(companyId, selected, sym(BALANCE_PANELS[selected].currency), dateFrom, dateTo)
     : isBank
       ? bankDetail(bankOnly, "Bank Balances")
       : isCash
         ? bankDetail(cashOnly, "Cash Balances")
         : isRecent
-          ? recentDetail((recentVouchers ?? []) as unknown as RecentVoucherRow[], symById)
+          ? recentDetail((recentVouchers ?? []) as unknown as RecentVoucherRow[], symById, dateFrom, dateTo)
           : null;
+  // The rent-balance and recent-transactions detail panels support a date range.
+  const detailPanelKey = selected || (isRecent ? "recent" : "");
+  const showDateRange = detail !== null && detailPanelKey !== "";
 
   function cardHref(key: PanelKey | "bank" | "cash" | "recent") {
     return panel === key ? "/dashboard" : `/dashboard?panel=${key}`;
@@ -413,7 +418,38 @@ export default async function DashboardPage({
         <Card className="border-ledger-dark/40">
           <CardHeader className="border-b pb-4">
             <CardTitle>{detail.title}</CardTitle>
-            <CardAction>
+            <CardAction className="flex flex-wrap items-end gap-2">
+              {showDateRange && (
+                <form method="get" action="/dashboard" className="flex flex-wrap items-end gap-2">
+                  <input type="hidden" name="panel" value={detailPanelKey} />
+                  <label className="flex flex-col text-[0.7rem] font-medium text-muted-foreground">
+                    From
+                    <input
+                      type="date"
+                      name="from"
+                      defaultValue={dateFrom ?? ""}
+                      className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                    />
+                  </label>
+                  <label className="flex flex-col text-[0.7rem] font-medium text-muted-foreground">
+                    To
+                    <input
+                      type="date"
+                      name="to"
+                      defaultValue={dateTo ?? ""}
+                      className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                    />
+                  </label>
+                  <Button type="submit" variant="outline" size="sm">
+                    Apply
+                  </Button>
+                  {(dateFrom || dateTo) && (
+                    <Button asChild variant="ghost" size="sm">
+                      <Link href={`/dashboard?panel=${detailPanelKey}`}>Clear</Link>
+                    </Button>
+                  )}
+                </form>
+              )}
               <Button asChild variant="outline" size="sm">
                 <Link href="/dashboard">Close</Link>
               </Button>
@@ -479,7 +515,18 @@ interface RecentVoucherRow {
 
 // Recent Transactions drill-down — the latest vouchers, opened in the detail
 // slot from the dashboard tab (mirrors the standalone list it replaced).
-function recentDetail(rows: RecentVoucherRow[], symById: (id: string | null) => string) {
+function recentDetail(
+  allRows: RecentVoucherRow[],
+  symById: (id: string | null) => string,
+  dateFrom: string | null,
+  dateTo: string | null,
+) {
+  const rows = allRows.filter((r) => {
+    const d = String(r.entry_date ?? "").slice(0, 10);
+    if (dateFrom && d < dateFrom) return false;
+    if (dateTo && d > dateTo) return false;
+    return true;
+  });
   return {
     title: "Recent Transactions",
     body: (
@@ -528,7 +575,13 @@ function recentDetail(rows: RecentVoucherRow[], symById: (id: string | null) => 
 }
 
 // Detail report for a selected card — figures in the country's own currency.
-async function loadDetail(companyId: string, key: PanelKey, symbol: string) {
+async function loadDetail(
+  companyId: string,
+  key: PanelKey,
+  symbol: string,
+  dateFrom: string | null,
+  dateTo: string | null,
+) {
   const supabase = await createClient();
   const cfg = BALANCE_PANELS[key];
   const fmt = (n: number) => money(symbol, n);
@@ -613,7 +666,7 @@ async function loadDetail(companyId: string, key: PanelKey, symbol: string) {
   // Rent is the gross billed to the tenant; Commission/Share is the agent
   // (SAMAD RENT) cut; Balance Rent is the owner's net rent; Outstanding is the
   // still-uncollected net rent.
-  const { data } = await supabase
+  let rentQuery = supabase
     .schema("reporting")
     .from("v_rental_income")
     .select(
@@ -621,8 +674,10 @@ async function loadDetail(companyId: string, key: PanelKey, symbol: string) {
     )
     .eq("company_id", companyId)
     .eq("country", cfg.rentCountry)
-    .gt("net_outstanding", 0)
-    .order("due_date");
+    .gt("net_outstanding", 0);
+  if (dateFrom) rentQuery = rentQuery.gte("invoice_date", dateFrom);
+  if (dateTo) rentQuery = rentQuery.lte("invoice_date", dateTo);
+  const { data } = await rentQuery.order("due_date");
 
   const rows = data ?? [];
   const nowDate = today();

@@ -88,6 +88,9 @@ export async function createReceiptVoucher(input: ReceiptVoucherInput, options?:
     amount: l.amount,
     rent_month: l.rentMonth || null,
     remarks: l.remarks || null,
+    applied_country: l.invoiceId ? l.invoiceCountry || null : null,
+    applied_uae_invoice_id: l.invoiceId && l.invoiceCountry === "UAE" ? l.invoiceId : null,
+    applied_pk_invoice_id: l.invoiceId && l.invoiceCountry === "PK" ? l.invoiceId : null,
   }));
   const { error: linesError } = await supabase
     .schema("accounting")
@@ -206,6 +209,9 @@ export async function updateReceiptVoucher(id: string, input: ReceiptVoucherInpu
     amount: l.amount,
     rent_month: l.rentMonth || null,
     remarks: l.remarks || null,
+    applied_country: l.invoiceId ? l.invoiceCountry || null : null,
+    applied_uae_invoice_id: l.invoiceId && l.invoiceCountry === "UAE" ? l.invoiceId : null,
+    applied_pk_invoice_id: l.invoiceId && l.invoiceCountry === "PK" ? l.invoiceId : null,
   }));
   const { error: insLines } = await supabase
     .schema("accounting")
@@ -248,6 +254,31 @@ export async function postReceiptVoucher(id: string, journalEntryId: string) {
     .update({ voucher_no: result.voucherNo })
     .eq("id", id);
   if (error) return { error: error.message };
+
+  // Apply any lines tagged with a rental invoice: writing an allocation row fires
+  // the DB trigger that reduces the invoice's outstanding balance. Idempotent —
+  // clears any prior allocations for this voucher first so a re-post can't double.
+  await supabase.schema("rental").from("receipt_invoice_allocations").delete().eq("receipt_voucher_id", id);
+  const { data: appliedLines } = await supabase
+    .schema("accounting")
+    .from("receipt_voucher_lines")
+    .select("id, amount, applied_country, applied_uae_invoice_id, applied_pk_invoice_id")
+    .eq("voucher_id", id)
+    .not("applied_country", "is", null);
+  const allocations = (appliedLines ?? [])
+    .filter((l) => Number(l.amount) > 0 && (l.applied_uae_invoice_id || l.applied_pk_invoice_id))
+    .map((l) => ({
+      company_id: companyId,
+      receipt_voucher_id: id,
+      receipt_line_id: l.id as string,
+      country: l.applied_country as string,
+      uae_invoice_id: (l.applied_uae_invoice_id as string | null) ?? null,
+      pk_invoice_id: (l.applied_pk_invoice_id as string | null) ?? null,
+      amount: Number(l.amount),
+    }));
+  if (allocations.length) {
+    await supabase.schema("rental").from("receipt_invoice_allocations").insert(allocations);
+  }
 
   revalidatePath("/accounting/vouchers/receipt_voucher");
   return { success: true, voucherNo: result.voucherNo };

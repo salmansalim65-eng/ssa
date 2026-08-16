@@ -163,7 +163,14 @@ export default async function EditVoucherPage({
   const isOpeningBalance = voucherType === "opening_balance_voucher";
   let docCostCenters: { id: string; name: string }[] = [];
   let docCurrencies: { id: string; code: string; rate: number }[] = [];
-  let docLines: { accountId: string; amount: number; rentMonth: string; remarks: string }[] = [];
+  let docLines: {
+    accountId: string;
+    amount: number;
+    rentMonth: string;
+    remarks: string;
+    invoiceId?: string;
+    invoiceCountry?: "" | "UAE" | "PK";
+  }[] = [];
   let obLines: { accountId: string; debit: number; credit: number; remarks: string }[] = [];
   if (isHeaderDoc || isOpeningBalance || isMultiLine || isJvMaintenance) {
     const today = new Date().toISOString().slice(0, 10);
@@ -205,6 +212,20 @@ export default async function EditVoucherPage({
       rentMonth: l.rent_month ?? "",
       remarks: l.remarks ?? "",
     }));
+    // Round-trip the per-line "applied to invoice" selection (receipt only).
+    if (voucherType === "receipt_voucher") {
+      const { data: applied } = await supabase
+        .schema("accounting")
+        .from("receipt_voucher_lines")
+        .select("applied_country, applied_uae_invoice_id, applied_pk_invoice_id")
+        .eq("voucher_id", id)
+        .order("line_no");
+      docLines = docLines.map((dl, i) => ({
+        ...dl,
+        invoiceId: (applied?.[i]?.applied_uae_invoice_id ?? applied?.[i]?.applied_pk_invoice_id ?? "") as string,
+        invoiceCountry: (applied?.[i]?.applied_country ?? "") as "" | "UAE" | "PK",
+      }));
+    }
   }
   if (isOpeningBalance) {
     const { data: obl } = await supabase
@@ -218,6 +239,22 @@ export default async function EditVoucherPage({
       debit: l.debit,
       credit: l.credit,
       remarks: l.remarks ?? "",
+    }));
+  }
+
+  // Open rental invoices a receipt line can be applied against.
+  let openInvoices: { id: string; country: "UAE" | "PK"; label: string }[] = [];
+  if (voucherType === "receipt_voucher") {
+    const { data: inv } = await supabase
+      .schema("reporting")
+      .from("v_outstanding_rent")
+      .select("invoice_id, country, voucher_no, tenant_name, asset_name, outstanding_balance, currency_code")
+      .eq("company_id", companyId)
+      .order("due_date");
+    openInvoices = (inv ?? []).map((r) => ({
+      id: r.invoice_id as string,
+      country: r.country as "UAE" | "PK",
+      label: `${r.voucher_no ?? "Draft"} · ${r.tenant_name ?? ""} · ${r.asset_name ?? ""} — ${r.currency_code ?? ""} ${Math.round(Number(r.outstanding_balance)).toLocaleString("en-US")}`,
     }));
   }
 
@@ -239,6 +276,7 @@ export default async function EditVoucherPage({
           accounts={accountOptions}
           currencies={docCurrencies}
           costCenters={docCostCenters}
+          openInvoices={openInvoices}
           voucherId={id}
           initialValues={{
             receiptDate: v.receipt_date as string,

@@ -7,6 +7,10 @@ export const receiptVoucherLineSchema = z.object({
   amount: z.coerce.number().nonnegative("Must be zero or more"),
   rentMonth: z.string().date("Enter a valid date").optional().or(z.literal("")),
   remarks: z.string().trim().max(200, "Keep it under 200 characters").optional().or(z.literal("")),
+  // Optional adjustment: the rental invoice this line is collected against. When
+  // set, posting the receipt reduces that invoice's outstanding balance.
+  invoiceId: z.string().uuid().optional().or(z.literal("")),
+  invoiceCountry: z.enum(["UAE", "PK"]).optional().or(z.literal("")),
 });
 
 export const receiptVoucherSchema = z.object({

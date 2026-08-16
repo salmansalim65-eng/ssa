@@ -630,6 +630,9 @@ export interface Database {
           amount: number;
           rent_month: string | null;
           remarks: string | null;
+          applied_country: string | null;
+          applied_uae_invoice_id: string | null;
+          applied_pk_invoice_id: string | null;
           created_at: string;
         };
         Insert: Partial<Database["accounting"]["Tables"]["receipt_voucher_lines"]["Row"]> & {
@@ -1310,6 +1313,26 @@ export interface Database {
   };
   rental: {
     Tables: {
+      receipt_invoice_allocations: {
+        Row: {
+          id: string;
+          company_id: string;
+          receipt_voucher_id: string;
+          receipt_line_id: string | null;
+          country: string;
+          uae_invoice_id: string | null;
+          pk_invoice_id: string | null;
+          amount: number;
+          created_at: string;
+        };
+        Insert: Partial<Database["rental"]["Tables"]["receipt_invoice_allocations"]["Row"]> & {
+          company_id: string;
+          receipt_voucher_id: string;
+          country: string;
+          amount: number;
+        };
+        Update: Partial<Database["rental"]["Tables"]["receipt_invoice_allocations"]["Row"]>;
+      };
       tenants: {
         Row: {
           id: string;

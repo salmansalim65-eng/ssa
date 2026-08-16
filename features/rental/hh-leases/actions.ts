@@ -85,5 +85,6 @@ export async function createHhLease(input: HhLeaseInput) {
   }
 
   revalidatePath("/rental/uae/leases");
+  revalidatePath("/dashboard");
   return { success: true, documentNo: documentNo as string, count: rows.length, invoiceWarning };
 }

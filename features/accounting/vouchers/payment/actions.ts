@@ -125,6 +125,7 @@ export async function createPaymentVoucher(input: PaymentVoucherInput, options?:
   if (expErr) return { error: expErr };
 
   revalidatePath("/accounting/vouchers/payment_voucher");
+  revalidatePath("/dashboard");
   if (options?.autoPostIfAdmin !== false && (await isCurrentUserAdmin())) {
     try {
       await postPaymentVoucher(voucherId, je.journalEntryId);
@@ -259,6 +260,7 @@ export async function updatePaymentVoucher(id: string, input: PaymentVoucherInpu
   if (vErr) return { error: vErr.message };
 
   revalidatePath("/accounting/vouchers/payment_voucher");
+  revalidatePath("/dashboard");
   revalidatePath(`/accounting/vouchers/payment_voucher/${id}`);
   return { success: true, id };
 }
@@ -279,5 +281,6 @@ export async function postPaymentVoucher(id: string, journalEntryId: string) {
   if (error) return { error: error.message };
 
   revalidatePath("/accounting/vouchers/payment_voucher");
+  revalidatePath("/dashboard");
   return { success: true, voucherNo: result.voucherNo };
 }

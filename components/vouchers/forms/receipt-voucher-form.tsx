@@ -42,24 +42,33 @@ export interface CostCenterOption {
   name: string;
 }
 
+// An open rental invoice a receipt line can be applied against.
+export interface OpenInvoiceOption {
+  id: string;
+  country: "UAE" | "PK";
+  label: string;
+}
+
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
 function emptyLine() {
-  return { accountId: "", amount: blankAmount, rentMonth: "", remarks: "" };
+  return { accountId: "", amount: blankAmount, rentMonth: "", remarks: "", invoiceId: "", invoiceCountry: "" as "" | "UAE" | "PK" };
 }
 
 export function ReceiptVoucherForm({
   accounts,
   currencies,
   costCenters,
+  openInvoices = [],
   voucherId,
   initialValues,
 }: {
   accounts: AccountOption[];
   currencies: CurrencyOption[];
   costCenters: CostCenterOption[];
+  openInvoices?: OpenInvoiceOption[];
   voucherId?: string;
   initialValues?: ReceiptVoucherFormValues;
 }) {
@@ -238,6 +247,7 @@ export function ReceiptVoucherForm({
                   <th className="w-40 text-right">Amount</th>
                   <th className="w-40">Rent Month</th>
                   <th className="min-w-[150px]">Remarks</th>
+                  {openInvoices.length > 0 && <th className="min-w-[220px]">Apply to invoice</th>}
                   <th className="w-10" />
                 </tr>
               </thead>
@@ -306,6 +316,44 @@ export function ReceiptVoucherForm({
                         )}
                       />
                     </td>
+                    {openInvoices.length > 0 && (
+                      <td>
+                        <FormField
+                          control={form.control}
+                          name={`lines.${index}.invoiceId`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <Select
+                                value={(field.value as string) || "none"}
+                                onValueChange={(v) => {
+                                  const id = v === "none" ? "" : v;
+                                  field.onChange(id);
+                                  form.setValue(
+                                    `lines.${index}.invoiceCountry`,
+                                    id ? openInvoices.find((o) => o.id === id)?.country ?? "" : "",
+                                  );
+                                }}
+                              >
+                                <FormControl>
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="None" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="none">None</SelectItem>
+                                  {openInvoices.map((o) => (
+                                    <SelectItem key={o.id} value={o.id}>
+                                      {o.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </td>
+                    )}
                     <td className="pt-1">
                       <Button
                         type="button"

@@ -94,6 +94,23 @@ export default async function NewVoucherPage({
     companyCurrencies as unknown as RawCompanyCurrency[],
   );
 
+  // Open rental invoices a receipt line can be applied against (reduces
+  // outstanding when the receipt posts).
+  let openInvoices: { id: string; country: "UAE" | "PK"; label: string }[] = [];
+  if (voucherType === "receipt_voucher") {
+    const { data: inv } = await supabase
+      .schema("reporting")
+      .from("v_outstanding_rent")
+      .select("invoice_id, country, voucher_no, tenant_name, asset_name, outstanding_balance, currency_code")
+      .eq("company_id", companyId)
+      .order("due_date");
+    openInvoices = (inv ?? []).map((r) => ({
+      id: r.invoice_id as string,
+      country: r.country as "UAE" | "PK",
+      label: `${r.voucher_no ?? "Draft"} · ${r.tenant_name ?? ""} · ${r.asset_name ?? ""} — ${r.currency_code ?? ""} ${Math.round(Number(r.outstanding_balance)).toLocaleString("en-US")}`,
+    }));
+  }
+
   let extra: { pdcOptions?: ReturnablePdcOption[] } = {};
 
   if (voucherType === "cheque_return_voucher") {
@@ -143,6 +160,7 @@ export default async function NewVoucherPage({
           accounts={accountOptions}
           currencies={currencyOptions}
           costCenters={costCenterOptions}
+          openInvoices={openInvoices}
         />
       )}
       {voucherType === "payment_voucher" && (

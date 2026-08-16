@@ -163,9 +163,12 @@ export default async function DashboardPage({
   // agent/commission share — the owner's rent, not the gross billed to the
   // tenant. (v_rental_income.net_amount = amount − agent_share; net_outstanding
   // is that net reduced pro-rata as the tenant pays.)
-  const rentByCountry: Record<string, { billed: number; outstanding: number; overdue: number; due: number }> = {
-    UAE: { billed: 0, outstanding: 0, overdue: 0, due: 0 },
-    PK: { billed: 0, outstanding: 0, overdue: 0, due: 0 },
+  const rentByCountry: Record<
+    string,
+    { billed: number; outstanding: number; overdue: number; due: number; upcoming: number }
+  > = {
+    UAE: { billed: 0, outstanding: 0, overdue: 0, due: 0, upcoming: 0 },
+    PK: { billed: 0, outstanding: 0, overdue: 0, due: 0, upcoming: 0 },
   };
   const now = today();
   for (const r of rentRows ?? []) {
@@ -173,10 +176,15 @@ export default async function DashboardPage({
     if (!g) continue;
     const netAmount = Number(r.net_amount);
     const netOutstanding = Number(r.net_outstanding);
+    const dueDate = String(r.due_date ?? "").slice(0, 10);
     g.billed += netAmount;
     g.outstanding += netOutstanding;
-    if (isRentOverdue(r.due_date as string, now)) g.overdue += netOutstanding;
-    else g.due += netOutstanding;
+    // Bucket by due date: overdue once the due month has passed; "Due" only once
+    // the due date has actually arrived; anything with a future due date is
+    // upcoming (still part of the outstanding balance, but not yet due).
+    if (isRentOverdue(dueDate, now)) g.overdue += netOutstanding;
+    else if (dueDate && dueDate <= now) g.due += netOutstanding;
+    else g.upcoming += netOutstanding;
   }
   const rentReceipts = (c: string) => rentByCountry[c].billed - rentByCountry[c].outstanding;
 

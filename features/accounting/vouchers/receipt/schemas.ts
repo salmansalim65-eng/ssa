@@ -11,7 +11,6 @@ export const receiptVoucherLineSchema = z.object({
 
 export const receiptVoucherSchema = z.object({
   receiptDate: z.string().date("Enter a valid date"),
-  dueDate: z.string().date("Enter a valid date").optional().or(z.literal("")),
   debitAccountId: z.string().uuid("Select the cash/bank account"),
   costCenterId: z.string().uuid("Select a cost center").optional().or(z.literal("")),
   currencyId: z.string().uuid("Select a currency"),

@@ -651,13 +651,16 @@ async function loadDetail(companyId: string, key: PanelKey, symbol: string) {
             <TableHead>Tenant</TableHead>
             <TableHead>Property</TableHead>
             <TableHead className="text-right">Rent</TableHead>
-            <TableHead className="text-right">Commission/Share</TableHead>
+            <TableHead className="text-right">Management</TableHead>
             <TableHead className="text-right">Balance Rent</TableHead>
+            <TableHead className="text-right">Receipt</TableHead>
             <TableHead className="text-right">Outstanding</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((r) => (
+          {rows.map((r) => {
+            const received = Number(r.net_amount) - Number(r.net_outstanding);
+            return (
             <TableRow key={r.invoice_id}>
               <TableCell className="text-muted-foreground">{formatDate(r.invoice_date)}</TableCell>
               <TableCell>{r.voucher_no ?? "Draft"}</TableCell>
@@ -671,12 +674,14 @@ async function loadDetail(companyId: string, key: PanelKey, symbol: string) {
               <TableCell className="text-right font-mono tabular-nums">{fmt(Number(r.amount))}</TableCell>
               <TableCell className="text-right font-mono tabular-nums">{fmt(Number(r.agent_share))}</TableCell>
               <TableCell className="text-right font-mono tabular-nums">{fmt(Number(r.net_amount))}</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">{fmt(received)}</TableCell>
               <TableCell className="text-right font-mono tabular-nums">{fmt(Number(r.net_outstanding))}</TableCell>
             </TableRow>
-          ))}
+            );
+          })}
           {rows.length === 0 && (
             <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+              <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
                 No outstanding rent for {cfg.label}.
               </TableCell>
             </TableRow>
@@ -691,6 +696,7 @@ async function loadDetail(companyId: string, key: PanelKey, symbol: string) {
               <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.rent)}</TableCell>
               <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.share)}</TableCell>
               <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.net)}</TableCell>
+              <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.net - totals.outstanding)}</TableCell>
               <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.outstanding)}</TableCell>
             </TableRow>
           </tfoot>

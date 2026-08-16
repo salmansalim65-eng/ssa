@@ -89,7 +89,6 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
         .order("line_no");
       return createReceiptVoucher({
         receiptDate: today,
-        dueDate: v.due_date ?? "",
         debitAccountId: v.debit_account_id ?? "",
         costCenterId: v.cost_center_id ?? "",
         currencyId: v.currency_id,

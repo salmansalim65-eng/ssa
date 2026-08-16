@@ -242,7 +242,6 @@ export default async function EditVoucherPage({
           voucherId={id}
           initialValues={{
             receiptDate: v.receipt_date as string,
-            dueDate: (v.due_date as string | null) ?? "",
             debitAccountId: v.debit_account_id as string,
             costCenterId: (v.cost_center_id as string | null) ?? "",
             currencyId: v.currency_id as string,

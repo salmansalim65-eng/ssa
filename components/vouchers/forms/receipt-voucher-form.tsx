@@ -72,7 +72,6 @@ export function ReceiptVoucherForm({
     resolver: zodResolver(receiptVoucherSchema),
     defaultValues: initialValues ?? {
       receiptDate: today(),
-      dueDate: "",
       debitAccountId: "",
       costCenterId: "",
       currencyId: currencies[0]?.id ?? "",
@@ -127,19 +126,6 @@ export function ReceiptVoucherForm({
                   <FormLabel>Date</FormLabel>
                   <FormControl>
                     <DateInput {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="dueDate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Due Date</FormLabel>
-                  <FormControl>
-                    <DateInput {...field} value={(field.value as string) ?? ""} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

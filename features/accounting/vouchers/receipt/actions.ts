@@ -70,7 +70,7 @@ export async function createReceiptVoucher(input: ReceiptVoucherInput, options?:
     company_id: companyId,
     journal_entry_id: je.journalEntryId,
     receipt_date: parsed.data.receiptDate,
-    due_date: parsed.data.dueDate || null,
+    due_date: null,
     debit_account_id: parsed.data.debitAccountId,
     cost_center_id: costCenterId,
     currency_id: parsed.data.currencyId,
@@ -218,7 +218,7 @@ export async function updateReceiptVoucher(id: string, input: ReceiptVoucherInpu
     .from("receipt_vouchers")
     .update({
       receipt_date: parsed.data.receiptDate,
-      due_date: parsed.data.dueDate || null,
+      due_date: null,
       debit_account_id: parsed.data.debitAccountId,
       cost_center_id: costCenterId,
       currency_id: parsed.data.currencyId,

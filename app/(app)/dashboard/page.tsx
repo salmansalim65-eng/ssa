@@ -617,7 +617,7 @@ async function loadDetail(companyId: string, key: PanelKey, symbol: string) {
     .schema("reporting")
     .from("v_rental_income")
     .select(
-      "invoice_id, voucher_no, invoice_date, due_date, tenant_name, asset_code, asset_name, amount, agent_share, net_amount, net_outstanding",
+      "invoice_id, voucher_no, invoice_date, due_date, tenant_name, asset_code, asset_name, amount, agent_share, net_amount, other_expenses, net_outstanding",
     )
     .eq("company_id", companyId)
     .eq("country", cfg.rentCountry)
@@ -630,10 +630,11 @@ async function loadDetail(companyId: string, key: PanelKey, symbol: string) {
     (acc, r) => ({
       rent: acc.rent + Number(r.amount),
       share: acc.share + Number(r.agent_share),
+      expenses: acc.expenses + Number(r.other_expenses),
       net: acc.net + Number(r.net_amount),
       outstanding: acc.outstanding + Number(r.net_outstanding),
     }),
-    { rent: 0, share: 0, net: 0, outstanding: 0 },
+    { rent: 0, share: 0, expenses: 0, net: 0, outstanding: 0 },
   );
 
   return {
@@ -652,6 +653,7 @@ async function loadDetail(companyId: string, key: PanelKey, symbol: string) {
             <TableHead>Property</TableHead>
             <TableHead className="text-right">Rent</TableHead>
             <TableHead className="text-right">Management</TableHead>
+            <TableHead className="text-right">Other Expenses</TableHead>
             <TableHead className="text-right">Balance Rent</TableHead>
             <TableHead className="text-right">Receipt</TableHead>
             <TableHead className="text-right">Outstanding</TableHead>
@@ -660,6 +662,7 @@ async function loadDetail(companyId: string, key: PanelKey, symbol: string) {
         <TableBody>
           {rows.map((r) => {
             const received = Number(r.net_amount) - Number(r.net_outstanding);
+            const balanceRent = Number(r.net_amount) - Number(r.other_expenses);
             return (
             <TableRow key={r.invoice_id}>
               <TableCell className="text-muted-foreground">{formatDate(r.invoice_date)}</TableCell>
@@ -673,7 +676,8 @@ async function loadDetail(companyId: string, key: PanelKey, symbol: string) {
               </TableCell>
               <TableCell className="text-right font-mono tabular-nums">{fmt(Number(r.amount))}</TableCell>
               <TableCell className="text-right font-mono tabular-nums">{fmt(Number(r.agent_share))}</TableCell>
-              <TableCell className="text-right font-mono tabular-nums">{fmt(Number(r.net_amount))}</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">{fmt(Number(r.other_expenses))}</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">{fmt(balanceRent)}</TableCell>
               <TableCell className="text-right font-mono tabular-nums">{fmt(received)}</TableCell>
               <TableCell className="text-right font-mono tabular-nums">{fmt(Number(r.net_outstanding))}</TableCell>
             </TableRow>
@@ -681,7 +685,7 @@ async function loadDetail(companyId: string, key: PanelKey, symbol: string) {
           })}
           {rows.length === 0 && (
             <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
+              <TableCell colSpan={11} className="py-10 text-center text-muted-foreground">
                 No outstanding rent for {cfg.label}.
               </TableCell>
             </TableRow>
@@ -695,7 +699,8 @@ async function loadDetail(companyId: string, key: PanelKey, symbol: string) {
               </TableCell>
               <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.rent)}</TableCell>
               <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.share)}</TableCell>
-              <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.net)}</TableCell>
+              <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.expenses)}</TableCell>
+              <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.net - totals.expenses)}</TableCell>
               <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.net - totals.outstanding)}</TableCell>
               <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.outstanding)}</TableCell>
             </TableRow>

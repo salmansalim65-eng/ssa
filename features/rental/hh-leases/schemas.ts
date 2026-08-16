@@ -8,6 +8,9 @@ export const hhLeaseLineSchema = z
     rentalAmount: z.coerce.number().positive("Must be greater than zero"),
     leaseStart: z.string().date("Enter a valid date"),
     leaseEnd: z.string().date("Enter a valid date"),
+    // Monthly other-expense for this property; feeds the Rent Balance report's
+    // Other Expenses column and reduces the owner's balance rent each month.
+    expenseAmount: z.coerce.number().nonnegative("Must be zero or more").optional(),
     remarks: z.string().trim().max(200, "Keep it under 200 characters").optional().or(z.literal("")),
   })
   .refine((d) => d.leaseEnd > d.leaseStart, {

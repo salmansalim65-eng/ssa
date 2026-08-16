@@ -682,6 +682,9 @@ export interface Database {
           amount: number;
           rent_month: string | null;
           remarks: string | null;
+          applied_country: string | null;
+          applied_uae_invoice_id: string | null;
+          applied_pk_invoice_id: string | null;
           created_at: string;
         };
         Insert: Partial<Database["accounting"]["Tables"]["payment_voucher_lines"]["Row"]> & {
@@ -1333,6 +1336,26 @@ export interface Database {
         };
         Update: Partial<Database["rental"]["Tables"]["receipt_invoice_allocations"]["Row"]>;
       };
+      payment_invoice_expenses: {
+        Row: {
+          id: string;
+          company_id: string;
+          payment_voucher_id: string;
+          payment_line_id: string | null;
+          country: string;
+          uae_invoice_id: string | null;
+          pk_invoice_id: string | null;
+          amount: number;
+          created_at: string;
+        };
+        Insert: Partial<Database["rental"]["Tables"]["payment_invoice_expenses"]["Row"]> & {
+          company_id: string;
+          payment_voucher_id: string;
+          country: string;
+          amount: number;
+        };
+        Update: Partial<Database["rental"]["Tables"]["payment_invoice_expenses"]["Row"]>;
+      };
       tenants: {
         Row: {
           id: string;
@@ -1377,6 +1400,7 @@ export interface Database {
           document_no: string | null;
           document_date: string | null;
           lease_type: "standard" | "hh";
+          expense_amount: number;
           created_by: string;
           created_at: string;
           updated_by: string | null;
@@ -1751,6 +1775,7 @@ export interface Database {
           lease_type: string | null;
           agent_share: number;
           net_amount: number;
+          other_expenses: number;
           net_outstanding: number;
         };
       };

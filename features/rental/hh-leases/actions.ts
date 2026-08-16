@@ -50,6 +50,7 @@ export async function createHhLease(input: HhLeaseInput) {
     security_deposit: 0,
     currency_id: parsed.data.currencyId,
     rent_month: null,
+    expense_amount: line.expenseAmount ?? 0,
     remarks: line.remarks || null,
     document_no: documentNo as string,
     document_date: parsed.data.documentDate,

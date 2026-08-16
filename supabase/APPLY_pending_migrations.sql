@@ -1,5 +1,5 @@
 -- Combined pending migrations: run once in Supabase → SQL Editor.
--- Safe to re-run (idempotent: if-not-exists / create-or-replace).
+-- Safe to re-run (idempotent: if-not-exists / drop-if-exists / create).
 
 -- ============ 0090 ============
 -- Receipt Voucher → rental invoice allocation.
@@ -159,8 +159,15 @@ drop policy if exists payment_exp_delete on rental.payment_invoice_expenses;
 create policy payment_exp_delete on rental.payment_invoice_expenses
   for delete using (company_id = core.current_company_id());
 
--- 3. Rebuild the rental income view with an `other_expenses` column.
-create or replace view reporting.v_rental_income
+-- 3. Rebuild the rental income view with `other_expenses` + `tenant_account_id`.
+-- CREATE OR REPLACE can only append columns, and reporting.v_outstanding_rent
+-- (which froze `select *` at its creation) depends on this view — so drop both
+-- and recreate them, then rebuild v_outstanding_rent so its `*` picks up the new
+-- columns too.
+drop view if exists reporting.v_outstanding_rent;
+drop view if exists reporting.v_rental_income;
+
+create view reporting.v_rental_income
 with (security_invoker = on) as
 with uae as (
   select
@@ -234,3 +241,15 @@ from rental.pk_rent_invoices pri
   join core.currencies cur on cur.id = pri.currency_id
   join accounting.journal_entries je on je.id = pri.journal_entry_id
 where je.status = 'posted'::text;
+
+-- 4. Recreate the dependent outstanding-rent view (mirrors migration 0080) so its
+-- `*` includes other_expenses + tenant_account_id.
+create view reporting.v_outstanding_rent
+with (security_invoker = on) as
+select
+  *,
+  (current_date
+     - (date_trunc('month', due_date) + interval '1 month' - interval '1 day')::date
+  ) as days_overdue
+from reporting.v_rental_income
+where outstanding_balance > 0;

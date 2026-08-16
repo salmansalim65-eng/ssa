@@ -26,6 +26,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  InvoiceAdjustDialog,
+  type BillAllocation,
+  type OutstandingBill,
+} from "@/components/vouchers/invoice-adjust-dialog";
 import { AccountCombobox, type AccountOption } from "@/components/vouchers/account-combobox";
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
 import { DateInput } from "@/components/vouchers/date-input";
@@ -42,33 +47,26 @@ export interface CostCenterOption {
   name: string;
 }
 
-// An open rental invoice a payment line can be tagged to as an expense.
-export interface OpenInvoiceOption {
-  id: string;
-  country: "UAE" | "PK";
-  label: string;
-}
-
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
 function emptyLine() {
-  return { accountId: "", amount: blankAmount, remarks: "", invoiceId: "", invoiceCountry: "" as "" | "UAE" | "PK" };
+  return { accountId: "", amount: blankAmount, remarks: "", allocations: [] as BillAllocation[] };
 }
 
 export function PaymentVoucherForm({
   accounts,
   currencies,
   costCenters,
-  openInvoices = [],
+  outstandingBills = [],
   voucherId,
   initialValues,
 }: {
   accounts: AccountOption[];
   currencies: CurrencyOption[];
   costCenters: CostCenterOption[];
-  openInvoices?: OpenInvoiceOption[];
+  outstandingBills?: OutstandingBill[];
   voucherId?: string;
   initialValues?: PaymentVoucherFormValues;
 }) {
@@ -76,6 +74,7 @@ export function PaymentVoucherForm({
   const isEdit = !!voucherId;
   const [isPending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
+  const [adjustLine, setAdjustLine] = useState<number | null>(null);
 
   const form = useForm<PaymentVoucherFormValues, unknown, PaymentVoucherInput>({
     resolver: zodResolver(paymentVoucherSchema),
@@ -246,7 +245,7 @@ export function PaymentVoucherForm({
                   <th className="min-w-[240px]">Account (Dr)</th>
                   <th className="w-40 text-right">Amount</th>
                   <th className="min-w-[150px]">Remarks</th>
-                  {openInvoices.length > 0 && <th className="min-w-[220px]">Expense against invoice</th>}
+                  {outstandingBills.length > 0 && <th className="w-32">Adjustment</th>}
                   <th className="w-10" />
                 </tr>
               </thead>
@@ -301,42 +300,23 @@ export function PaymentVoucherForm({
                         )}
                       />
                     </td>
-                    {openInvoices.length > 0 && (
-                      <td>
-                        <FormField
-                          control={form.control}
-                          name={`lines.${index}.invoiceId`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <Select
-                                value={(field.value as string) || "none"}
-                                onValueChange={(v) => {
-                                  const id = v === "none" ? "" : v;
-                                  field.onChange(id);
-                                  form.setValue(
-                                    `lines.${index}.invoiceCountry`,
-                                    id ? openInvoices.find((o) => o.id === id)?.country ?? "" : "",
-                                  );
-                                }}
-                              >
-                                <FormControl>
-                                  <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="None" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="none">None</SelectItem>
-                                  {openInvoices.map((o) => (
-                                    <SelectItem key={o.id} value={o.id}>
-                                      {o.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                    {outstandingBills.length > 0 && (
+                      <td className="pt-1">
+                        {(() => {
+                          const allocs = (watchedLines?.[index]?.allocations ?? []) as BillAllocation[];
+                          const adjusted = allocs.reduce((s, a) => s + (Number(a.amount) || 0), 0);
+                          return (
+                            <Button
+                              type="button"
+                              variant={adjusted > 0 ? "default" : "outline"}
+                              size="sm"
+                              className="w-full"
+                              onClick={() => setAdjustLine(index)}
+                            >
+                              {adjusted > 0 ? `Adj ${adjusted.toLocaleString("en-US")}` : "Adjust"}
+                            </Button>
+                          );
+                        })()}
                       </td>
                     )}
                     <td className="pt-1">
@@ -384,6 +364,18 @@ export function PaymentVoucherForm({
             {isPending ? (isEdit ? "Saving…" : "Creating…") : isEdit ? "Save changes" : "Create payment voucher"}
           </Button>
         </div>
+
+        {adjustLine !== null && (
+          <InvoiceAdjustDialog
+            open={adjustLine !== null}
+            onOpenChange={(v) => !v && setAdjustLine(null)}
+            lineAmount={Number(watchedLines?.[adjustLine]?.amount) || 0}
+            currencyCode={currencyCode}
+            bills={outstandingBills.filter((b) => b.accountId === watchedLines?.[adjustLine]?.accountId)}
+            value={(watchedLines?.[adjustLine]?.allocations ?? []) as BillAllocation[]}
+            onSave={(allocations) => form.setValue(`lines.${adjustLine}.allocations`, allocations)}
+          />
+        )}
       </form>
     </Form>
   );

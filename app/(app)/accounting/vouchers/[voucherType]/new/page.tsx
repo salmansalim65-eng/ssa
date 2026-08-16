@@ -94,20 +94,31 @@ export default async function NewVoucherPage({
     companyCurrencies as unknown as RawCompanyCurrency[],
   );
 
-  // Open rental invoices a receipt line can be applied against (reduces
-  // outstanding when the receipt posts).
-  let openInvoices: { id: string; country: "UAE" | "PK"; label: string }[] = [];
+  // Outstanding rental bills a receipt/payment line can be adjusted against,
+  // grouped by the party (tenant) account so the dialog shows only that account.
+  let outstandingBills: {
+    id: string;
+    country: "UAE" | "PK";
+    accountId: string | null;
+    reference: string;
+    dueDate: string | null;
+    billAmount: number;
+  }[] = [];
   if (voucherType === "receipt_voucher" || voucherType === "payment_voucher") {
     const { data: inv } = await supabase
       .schema("reporting")
       .from("v_outstanding_rent")
-      .select("invoice_id, country, voucher_no, tenant_name, asset_name, outstanding_balance, currency_code")
+      .select("invoice_id, country, tenant_account_id, voucher_no, tenant_name, asset_name, due_date, outstanding_balance")
       .eq("company_id", companyId)
+      .gt("outstanding_balance", 0)
       .order("due_date");
-    openInvoices = (inv ?? []).map((r) => ({
+    outstandingBills = (inv ?? []).map((r) => ({
       id: r.invoice_id as string,
       country: r.country as "UAE" | "PK",
-      label: `${r.voucher_no ?? "Draft"} · ${r.tenant_name ?? ""} · ${r.asset_name ?? ""} — ${r.currency_code ?? ""} ${Math.round(Number(r.outstanding_balance)).toLocaleString("en-US")}`,
+      accountId: (r.tenant_account_id as string | null) ?? null,
+      reference: [r.voucher_no ?? "Draft", r.tenant_name, r.asset_name].filter(Boolean).join(" · "),
+      dueDate: (r.due_date as string | null) ?? null,
+      billAmount: Number(r.outstanding_balance),
     }));
   }
 
@@ -160,7 +171,7 @@ export default async function NewVoucherPage({
           accounts={accountOptions}
           currencies={currencyOptions}
           costCenters={costCenterOptions}
-          openInvoices={openInvoices}
+          outstandingBills={outstandingBills}
         />
       )}
       {voucherType === "payment_voucher" && (
@@ -168,7 +179,7 @@ export default async function NewVoucherPage({
           accounts={accountOptions}
           currencies={currencyOptions}
           costCenters={costCenterOptions}
-          openInvoices={openInvoices}
+          outstandingBills={outstandingBills}
         />
       )}
       {voucherType === "pdc_payment_voucher" && (

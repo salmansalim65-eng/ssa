@@ -6,10 +6,18 @@ export const paymentVoucherLineSchema = z.object({
   accountId: z.string().uuid("Select the account"),
   amount: z.coerce.number().nonnegative("Must be zero or more"),
   remarks: z.string().trim().max(200, "Keep it under 200 characters").optional().or(z.literal("")),
-  // Optional adjustment: a rental invoice this payment line is an expense
-  // against. When set, posting records it as an "other expense" on that invoice.
-  invoiceId: z.string().uuid().optional().or(z.literal("")),
-  invoiceCountry: z.enum(["UAE", "PK"]).optional().or(z.literal("")),
+  // Optional bill adjustments: how the line amount is split across the party's
+  // outstanding rental invoices as an expense (entered through the dialog).
+  allocations: z
+    .array(
+      z.object({
+        invoiceId: z.string().uuid(),
+        country: z.enum(["UAE", "PK"]),
+        amount: z.coerce.number().positive(),
+      }),
+    )
+    .optional()
+    .default([]),
 });
 
 export const paymentVoucherSchema = z.object({

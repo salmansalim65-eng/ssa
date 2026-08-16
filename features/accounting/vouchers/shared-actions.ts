@@ -99,6 +99,7 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
           amount: l.amount,
           rentMonth: l.rent_month ?? "",
           remarks: l.remarks ?? "",
+          allocations: [],
         })),
       }, { autoPostIfAdmin: false });
     }
@@ -126,6 +127,7 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
           accountId: l.account_id,
           amount: l.amount,
           remarks: l.remarks ?? "",
+          allocations: [],
         })),
       }, { autoPostIfAdmin: false });
     }

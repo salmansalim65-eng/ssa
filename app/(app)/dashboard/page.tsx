@@ -716,8 +716,10 @@ async function loadDetail(
         </TableHeader>
         <TableBody>
           {rows.map((r) => {
-            const received = Number(r.net_amount) - Number(r.net_outstanding);
-            const balanceRent = Number(r.net_amount) - Number(r.other_expenses);
+            // net_amount is already the Balance Rent (Rent − Management − Other
+            // Expenses); Outstanding = Balance Rent − receipts.
+            const balanceRent = Number(r.net_amount);
+            const received = balanceRent - Number(r.net_outstanding);
             return (
             <TableRow key={r.invoice_id}>
               <TableCell className="text-muted-foreground">{formatDate(r.invoice_date)}</TableCell>
@@ -755,7 +757,7 @@ async function loadDetail(
               <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.rent)}</TableCell>
               <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.share)}</TableCell>
               <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.expenses)}</TableCell>
-              <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.net - totals.expenses)}</TableCell>
+              <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.net)}</TableCell>
               <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.net - totals.outstanding)}</TableCell>
               <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.outstanding)}</TableCell>
             </TableRow>

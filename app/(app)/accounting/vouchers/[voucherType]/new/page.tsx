@@ -108,9 +108,9 @@ export default async function NewVoucherPage({
     const { data: inv } = await supabase
       .schema("reporting")
       .from("v_outstanding_rent")
-      .select("invoice_id, country, tenant_account_id, voucher_no, tenant_name, asset_name, due_date, outstanding_balance")
+      .select("invoice_id, country, tenant_account_id, voucher_no, tenant_name, asset_name, due_date, net_outstanding")
       .eq("company_id", companyId)
-      .gt("outstanding_balance", 0)
+      .gt("net_outstanding", 0)
       .order("due_date");
     outstandingBills = (inv ?? []).map((r) => ({
       id: r.invoice_id as string,
@@ -118,7 +118,7 @@ export default async function NewVoucherPage({
       accountId: (r.tenant_account_id as string | null) ?? null,
       reference: [r.voucher_no ?? "Draft", r.tenant_name, r.asset_name].filter(Boolean).join(" · "),
       dueDate: (r.due_date as string | null) ?? null,
-      billAmount: Number(r.outstanding_balance),
+      billAmount: Number(r.net_outstanding),
     }));
   }
 

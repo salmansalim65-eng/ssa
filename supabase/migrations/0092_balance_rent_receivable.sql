@@ -1,7 +1,3 @@
--- Pending migration: run once in Supabase → SQL Editor.
--- (0090 and 0091 were already applied.) Safe to re-run.
-
--- ============ 0092 ============
 -- Rental receivable = the owner's Balance Rent, not the gross rent.
 --
 -- A rental invoice's collectible is now Rent − Management (agent share) − Other

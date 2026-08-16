@@ -97,8 +97,26 @@ export function ReceiptVoucherForm({
   const total = (watchedLines ?? []).reduce((sum, l) => sum + (Number(l?.amount) || 0), 0);
   const currencyCode = currencies.find((c) => c.id === currencyId)?.code ?? "";
 
+  // Outstanding bills belonging to a given account (the party the line credits).
+  const billsFor = (accountId?: string) =>
+    accountId ? outstandingBills.filter((b) => b.accountId === accountId) : [];
+
   function onSubmit(values: ReceiptVoucherInput) {
     setFormError(null);
+    // A line whose account has outstanding bills must be fully adjusted against
+    // them before the voucher can be saved.
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    for (let i = 0; i < values.lines.length; i++) {
+      const line = values.lines[i];
+      const amt = Number(line.amount) || 0;
+      if (amt <= 0 || billsFor(line.accountId).length === 0) continue;
+      const adjusted = round2((line.allocations ?? []).reduce((s, a) => s + (Number(a.amount) || 0), 0));
+      if (adjusted !== round2(amt)) {
+        setFormError(`Line ${i + 1}: adjust the full amount against the outstanding bills before saving.`);
+        setAdjustLine(i);
+        return;
+      }
+    }
     startTransition(async () => {
       const result = isEdit
         ? await updateReceiptVoucher(voucherId!, values)
@@ -246,7 +264,6 @@ export function ReceiptVoucherForm({
                   <th className="w-40 text-right">Amount</th>
                   <th className="w-40">Rent Month</th>
                   <th className="min-w-[150px]">Remarks</th>
-                  {outstandingBills.length > 0 && <th className="w-32">Adjustment</th>}
                   <th className="w-10" />
                 </tr>
               </thead>
@@ -260,7 +277,15 @@ export function ReceiptVoucherForm({
                         name={`lines.${index}.accountId`}
                         render={({ field }) => (
                           <FormItem>
-                            <AccountCombobox accounts={accounts} value={field.value} onValueChange={field.onChange} />
+                            <AccountCombobox
+                              accounts={accounts}
+                              value={field.value}
+                              onValueChange={(v) => {
+                                field.onChange(v);
+                                const amt = Number(watchedLines?.[index]?.amount) || 0;
+                                if (amt > 0 && billsFor(v).length > 0) setAdjustLine(index);
+                              }}
+                            />
                             <FormMessage />
                           </FormItem>
                         )}
@@ -280,6 +305,13 @@ export function ReceiptVoucherForm({
                                 className="text-right tabular-nums"
                                 {...field}
                                 value={amountValue(field.value)}
+                                onBlur={(e) => {
+                                  field.onBlur();
+                                  const amt = Number(e.target.value) || 0;
+                                  if (amt > 0 && billsFor(watchedLines?.[index]?.accountId).length > 0) {
+                                    setAdjustLine(index);
+                                  }
+                                }}
                               />
                             </FormControl>
                             <FormMessage />
@@ -315,25 +347,6 @@ export function ReceiptVoucherForm({
                         )}
                       />
                     </td>
-                    {outstandingBills.length > 0 && (
-                      <td className="pt-1">
-                        {(() => {
-                          const allocs = (watchedLines?.[index]?.allocations ?? []) as BillAllocation[];
-                          const adjusted = allocs.reduce((s, a) => s + (Number(a.amount) || 0), 0);
-                          return (
-                            <Button
-                              type="button"
-                              variant={adjusted > 0 ? "default" : "outline"}
-                              size="sm"
-                              className="w-full"
-                              onClick={() => setAdjustLine(index)}
-                            >
-                              {adjusted > 0 ? `Adj ${adjusted.toLocaleString("en-US")}` : "Adjust"}
-                            </Button>
-                          );
-                        })()}
-                      </td>
-                    )}
                     <td className="pt-1">
                       <Button
                         type="button"

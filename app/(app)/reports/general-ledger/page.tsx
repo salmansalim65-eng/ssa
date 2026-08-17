@@ -19,7 +19,7 @@ import { computeRunningBalances } from "@/lib/reports/ledger-balance";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatAccountCode, formatDate, formatMoney } from "@/lib/format";
 import { voucherHref } from "@/lib/vouchers/meta";
 import type { AccountType, VoucherType } from "@/types/database.types";
 
@@ -264,7 +264,7 @@ export default async function GeneralLedgerPage({
       formatDate(r.entry_date),
       r.due_date ? formatDate(r.due_date) : "",
       r.voucher_no ?? "",
-      `${s.account.account_code} - ${s.account.account_name}`,
+      `${formatAccountCode(s.account.account_code)} - ${s.account.account_name}`,
       s.currencyCode,
       r.description || r.narration || "",
       r.debit_amount,
@@ -354,7 +354,7 @@ export default async function GeneralLedgerPage({
                 <Fragment key={s.account.id}>
                   <TableRow className="bg-ledger/10">
                     <TableCell colSpan={3} className="font-medium">
-                      <span className="font-mono text-xs text-muted-foreground">{s.account.account_code}</span>{" "}
+                      <span className="font-mono text-xs text-muted-foreground">{formatAccountCode(s.account.account_code)}</span>{" "}
                       <span className="font-semibold text-foreground">{s.account.account_name}</span>{" "}
                       <span className="font-normal text-muted-foreground">({s.currencyCode})</span>
                     </TableCell>
@@ -402,7 +402,7 @@ export default async function GeneralLedgerPage({
                   {s.rows.length > 0 && (
                     <TableRow className="border-t-2 border-ledger/50 bg-ledger/25 hover:bg-ledger/25">
                       <TableCell colSpan={5} className="text-right font-semibold text-foreground">
-                        Total — {s.account.account_code} {s.account.account_name}
+                        Total — {formatAccountCode(s.account.account_code)} {s.account.account_name}
                       </TableCell>
                       <TableCell className="text-right font-mono font-semibold tabular-nums">
                         {money(sectionDebit)}

@@ -17,7 +17,7 @@ import {
 } from "@/components/reports/report-country-filter";
 import { ReportSelectFilter } from "@/components/reports/report-select-filter";
 import { PrintButton } from "@/components/vouchers/print-button";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatAccountCode, formatDate, formatMoney } from "@/lib/format";
 import type { CashBankAccountSection } from "@/lib/reports/cash-bank-book";
 import type { ResolvedReportCurrency } from "@/lib/reports/report-currency";
 
@@ -51,7 +51,7 @@ export function CashBankBookView({
 
   const exportRows = sections.flatMap((s) =>
     s.rows.map((r) => [
-      `${s.account_code} - ${s.account_name}`,
+      `${formatAccountCode(s.account_code)} - ${s.account_name}`,
       formatDate(r.entry_date),
       r.voucher_no ?? "",
       r.description || r.narration || "",
@@ -108,7 +108,7 @@ export function CashBankBookView({
       {sections.map((section) => (
         <div key={section.account_id} className="space-y-2">
           <h2 className="mb-2 text-sm font-semibold text-foreground">
-            <span className="font-mono text-xs text-muted-foreground">{section.account_code}</span>{" "}
+            <span className="font-mono text-xs text-muted-foreground">{formatAccountCode(section.account_code)}</span>{" "}
             {section.account_name}
           </h2>
           <div className="overflow-hidden rounded-xl border bg-card shadow-sm">

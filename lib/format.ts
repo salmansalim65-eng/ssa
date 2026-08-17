@@ -14,6 +14,21 @@ export function formatMoney(value: number | null | undefined): string {
   return Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
 
+/**
+ * Account/ledger codes for display: strips the leading zero-padding so a code
+ * like `0000000014` reads as `14` (and `0000000218` as `218`). A code that is
+ * all zeros collapses to a single `0`, and any non-numeric code is passed
+ * through unchanged. Presentation-only — stored codes keep their padding.
+ */
+export function formatAccountCode(value: string | null | undefined): string {
+  if (value == null) return "";
+  const code = String(value).trim();
+  if (!code) return "";
+  // Only touch purely-numeric codes; leave structured codes (e.g. "10-200") alone.
+  if (!/^\d+$/.test(code)) return code;
+  return code.replace(/^0+(?=\d)/, "");
+}
+
 /** A plain number with thousands separators (no forced decimals). */
 export function formatNumber(value: number | null | undefined): string {
   const n = Number(value ?? 0);

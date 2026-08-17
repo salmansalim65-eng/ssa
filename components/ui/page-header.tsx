@@ -3,50 +3,40 @@ import { type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { PageNav } from "@/components/ui/page-nav";
 
-// Consistent page masthead used at the top of every major screen: an optional
-// Home/Back nav row, a small module eyebrow, the page title, an optional
-// one-line description, and a slot for primary/secondary actions kept
-// flush-right on wider screens. Passing `backHref` renders the Home + Back
-// controls (used on detail/create/edit screens).
+// Slim page toolbar shown at the top of every major screen. The boxed masthead
+// (eyebrow + large title + description) was removed across the ERP — the page
+// name now comes from the global breadcrumb in the header, matching the Rent
+// Report / Property Report layout. What remains is a compact controls row: the
+// optional Home/Back nav on the left and the page's primary/secondary actions on
+// the right. `eyebrow`, `title` and `description` are still accepted so callers
+// need no change, but they are intentionally not rendered.
 export function PageHeader({
-  eyebrow,
-  title,
-  description,
   actions,
   backHref,
   backLabel,
   className,
 }: {
   eyebrow?: string;
-  title: string;
+  title?: string;
   description?: string;
   actions?: ReactNode;
   backHref?: string;
   backLabel?: string;
   className?: string;
 }) {
-  // A light, elevated masthead — a white card band distinct from the page, with
-  // a blue eyebrow accent and dark title. (The dark navy treatment now lives on
-  // the table column headers instead.) Print flattens it to plain text.
+  // Nothing to show (no nav, no actions) → render nothing so the page starts at
+  // its content instead of leaving an empty band.
+  if (!backHref && !actions) return null;
+
   return (
     <div
       className={cn(
-        "space-y-3 rounded-xl border bg-card px-5 py-4 shadow-xs",
-        "print:rounded-none print:border-0 print:bg-transparent print:px-0 print:py-0 print:shadow-none",
+        "flex flex-wrap items-center justify-between gap-3 print:hidden",
         className,
       )}
     >
-      {backHref && <PageNav backHref={backHref} backLabel={backLabel} />}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 space-y-1">
-          {eyebrow && (
-            <p className="text-xs font-semibold uppercase tracking-wide text-primary">{eyebrow}</p>
-          )}
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
-          {description && <p className="max-w-2xl text-sm text-muted-foreground">{description}</p>}
-        </div>
-        {actions && <div className="flex shrink-0 flex-wrap items-center gap-2 print:hidden">{actions}</div>}
-      </div>
+      <div className="min-w-0">{backHref && <PageNav backHref={backHref} backLabel={backLabel} />}</div>
+      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }

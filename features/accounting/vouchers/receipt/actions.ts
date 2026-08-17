@@ -166,7 +166,29 @@ export async function updateReceiptVoucher(id: string, input: ReceiptVoucherInpu
     .eq("id", jeId)
     .single();
   if (!je) return { error: "Voucher not found" };
-  if (je.status !== "draft") return { error: "Only draft vouchers can be edited" };
+
+  // A posted journal entry is immutable at the database level (posted entries
+  // and their lines cannot be changed). Editing a POSTED receipt therefore
+  // reverses it — physically removing the posted voucher (which restores any
+  // invoice outstanding its allocations had reduced) — and re-creates a
+  // replacement receipt from the edited values, re-posted with a new number.
+  if (je.status === "posted") {
+    if (!(await isCurrentUserAdmin())) {
+      return { error: "Only administrators can edit a posted receipt voucher." };
+    }
+    const { error: delErr } = await supabase
+      .schema("accounting")
+      .rpc("fn_admin_delete_posted_voucher", { p_voucher_type: "receipt_voucher", p_id: id });
+    if (delErr) return { error: delErr.message };
+
+    const created = await createReceiptVoucher(parsed.data);
+    if ("error" in created) return { error: created.error };
+
+    revalidatePath("/accounting/vouchers/receipt_voucher");
+    revalidatePath("/dashboard");
+    return { success: true, id: created.id };
+  }
+  if (je.status !== "draft") return { error: "Only draft or posted receipts can be edited" };
 
   const lines = parsed.data.lines;
   const total = lines.reduce((sum, l) => sum + l.amount, 0);

@@ -648,7 +648,23 @@ export async function updateAccount(accountId: string, input: AccountInput) {
     .select("linked_asset_id")
     .eq("id", accountId)
     .maybeSingle();
-  const existingAssetId = (current?.linked_asset_id as string | null) ?? null;
+  let existingAssetId = (current?.linked_asset_id as string | null) ?? null;
+  // Fallback: some properties link only the other way round (assets.account_id
+  // → this account) with chart_of_accounts.linked_asset_id never populated. Find
+  // that asset too, so toggling the Rental flag (which maps to assets.is_rental,
+  // the Rental Property Report's filter) always reaches the property — otherwise
+  // un-ticking Rental silently fails and the property keeps showing in the report.
+  if (!existingAssetId) {
+    const { data: linkedAsset } = await createAdminClient()
+      .schema("assets")
+      .from("assets")
+      .select("id")
+      .eq("company_id", companyId)
+      .eq("account_id", accountId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    existingAssetId = (linkedAsset?.id as string | null) ?? null;
+  }
 
   const { error } = await supabase
     .schema("accounting")

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { useFieldArray, useForm } from "react-hook-form";
+import { useFieldArray, useForm, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { PlusIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
@@ -45,7 +45,63 @@ function today() {
 }
 
 function emptyLine() {
-  return { assetId: "", rentalAmount: blankAmount, leaseStart: today(), leaseEnd: today(), expenseAmount: blankAmount, remarks: "" };
+  return { assetId: "", rentalAmount: blankAmount, leaseStart: today(), leaseEnd: today(), expenses: [], remarks: "" };
+}
+
+// Per-property named monthly expenses (name + amount rows). Each row feeds the
+// Rent Balance report's Other Expenses column and reduces the owner's balance
+// rent. Blank rows are dropped on save.
+function LineExpenses({ control, index }: { control: Control<HhLeaseFormValues>; index: number }) {
+  const { fields, append, remove } = useFieldArray({ control, name: `lines.${index}.expenses` });
+  return (
+    <div className="space-y-1.5">
+      {fields.map((f, ei) => (
+        <div key={f.id} className="flex items-center gap-1.5">
+          <FormField
+            control={control}
+            name={`lines.${index}.expenses.${ei}.name`}
+            render={({ field }) => (
+              <Input placeholder="Name" className="h-8 w-28" {...field} value={(field.value as string) ?? ""} />
+            )}
+          />
+          <FormField
+            control={control}
+            name={`lines.${index}.expenses.${ei}.amount`}
+            render={({ field }) => (
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="Amount"
+                className="h-8 w-24"
+                {...field}
+                value={amountValue(field.value)}
+              />
+            )}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 shrink-0"
+            onClick={() => remove(ei)}
+            aria-label="Remove expense"
+          >
+            <Trash2Icon className="size-3.5" />
+          </Button>
+        </div>
+      ))}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-7"
+        onClick={() => append({ name: "", amount: blankAmount })}
+      >
+        <PlusIcon className="size-3.5" /> Add expense
+      </Button>
+    </div>
+  );
 }
 
 export function HhLeaseForm({
@@ -189,7 +245,7 @@ export function HhLeaseForm({
                   <th className="w-32">Rent</th>
                   <th className="w-40">Lease Start</th>
                   <th className="w-40">Lease End</th>
-                  <th className="w-32">Expenses</th>
+                  <th className="min-w-[260px]">Expenses</th>
                   <th className="min-w-[160px]">Remarks</th>
                   <th className="w-10" />
                 </tr>
@@ -266,18 +322,7 @@ export function HhLeaseForm({
                       />
                     </td>
                     <td>
-                      <FormField
-                        control={form.control}
-                        name={`lines.${index}.expenseAmount`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormControl>
-                              <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                      <LineExpenses control={form.control} index={index} />
                     </td>
                     <td>
                       <FormField

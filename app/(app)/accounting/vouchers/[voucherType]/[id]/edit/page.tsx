@@ -84,10 +84,13 @@ export default async function EditVoucherPage({
   }).journal_entries;
   const status = jeEmbed?.status ?? "draft";
   // A posted (or in-approval) voucher is part of the ledger — send the user back.
-  // Opening balances are the exception: they stay editable after posting so
-  // opening figures can be corrected.
-  const editableWhenPosted = voucherType === "opening_balance_voucher";
-  if (status !== "draft" && !editableWhenPosted) redirect(detailHref);
+  // Exceptions stay editable after posting: opening balances (corrections) and
+  // receipt vouchers (the update action reverses & re-posts on save). For those,
+  // only draft and posted are editable — never a pending/rejected voucher.
+  const editableWhenPosted =
+    voucherType === "opening_balance_voucher" || voucherType === "receipt_voucher";
+  const editable = status === "draft" || (status === "posted" && editableWhenPosted);
+  if (!editable) redirect(detailHref);
 
   const v = voucher as unknown as Record<string, unknown>;
 

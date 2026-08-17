@@ -17,7 +17,7 @@ import { PrintButton } from "@/components/vouchers/print-button";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
 import { loadReportCountries } from "@/lib/reports/countries";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatAccountCode, formatDate, formatMoney } from "@/lib/format";
 
 function startOfYear() {
   const now = new Date();
@@ -163,7 +163,7 @@ export default async function ProfitAndLossPage({
     return rows.map((r) => (
       <TableRow key={r.account_code}>
         <TableCell className="pl-6">
-          <span className="mr-2 font-mono text-xs text-muted-foreground">{r.account_code}</span>
+          <span className="mr-2 font-mono text-xs text-muted-foreground">{formatAccountCode(r.account_code)}</span>
           <span className="font-medium">{r.account_name}</span>
         </TableCell>
         <TableCell className="text-right font-mono tabular-nums">{r.debit ? money(r.debit) : ""}</TableCell>
@@ -187,7 +187,7 @@ export default async function ProfitAndLossPage({
             <CsvExportButton
               filename={`profit-and-loss-${from}-to-${to}.csv`}
               headers={["Section", "Code", "Name", "Debit", "Credit", "Amount"]}
-              rows={exportRows.map((r) => [r.section, r.account_code, r.account_name, r.debit, r.credit, r.balance])}
+              rows={exportRows.map((r) => [r.section, formatAccountCode(r.account_code), r.account_name, r.debit, r.credit, r.balance])}
             />
             <PrintButton />
           </>

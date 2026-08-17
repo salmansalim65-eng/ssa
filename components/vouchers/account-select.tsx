@@ -7,6 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { formatAccountCode } from "@/lib/format";
 
 export interface AccountOption {
   id: string;
@@ -33,7 +34,7 @@ export function AccountSelect({
       <SelectContent>
         {accounts.map((account) => (
           <SelectItem key={account.id} value={account.id}>
-            {account.account_code} — {account.account_name}
+            {formatAccountCode(account.account_code)} — {account.account_name}
           </SelectItem>
         ))}
       </SelectContent>

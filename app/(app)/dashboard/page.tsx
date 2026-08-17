@@ -14,8 +14,9 @@ import {
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { SummaryCard, StatCol } from "@/components/dashboard/summary-card";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
+import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatAccountCode, formatDate, formatMoney } from "@/lib/format";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { VOUCHER_TYPE_LABELS, voucherHref } from "@/lib/vouchers/meta";
 import { isRentOverdue } from "@/lib/rental/overdue";
@@ -194,8 +195,16 @@ export default async function DashboardPage({
   const isCash = panel === "cash";
   const isRecent = panel === "recent";
   const selected = (panel in BALANCE_PANELS ? panel : "") as PanelKey | "";
+  // Rent Balance drill-downs default to the CURRENT MONTH when no range is set,
+  // so the panel opens on this month's rent rather than the whole history.
+  const isRentPanel = selected === "rent-uae" || selected === "rent-pk";
+  const monthStart = `${now.slice(0, 7)}-01`;
+  const monthLastDay = new Date(Number(now.slice(0, 4)), Number(now.slice(5, 7)), 0).getDate();
+  const monthEnd = `${now.slice(0, 7)}-${String(monthLastDay).padStart(2, "0")}`;
+  const rangeFrom = isRentPanel ? dateFrom ?? monthStart : dateFrom;
+  const rangeTo = isRentPanel ? dateTo ?? monthEnd : dateTo;
   const detail = selected
-    ? await loadDetail(companyId, selected, sym(BALANCE_PANELS[selected].currency), dateFrom, dateTo)
+    ? await loadDetail(companyId, selected, sym(BALANCE_PANELS[selected].currency), rangeFrom, rangeTo)
     : isBank
       ? bankDetail(bankOnly, "Bank Balances")
       : isCash
@@ -427,7 +436,7 @@ export default async function DashboardPage({
                     <input
                       type="date"
                       name="from"
-                      defaultValue={dateFrom ?? ""}
+                      defaultValue={rangeFrom ?? ""}
                       className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
                     />
                   </label>
@@ -436,7 +445,7 @@ export default async function DashboardPage({
                     <input
                       type="date"
                       name="to"
-                      defaultValue={dateTo ?? ""}
+                      defaultValue={rangeTo ?? ""}
                       className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
                     />
                   </label>
@@ -483,7 +492,7 @@ function bankDetail(
           {accounts.map((a) => (
             <TableRow key={a.code}>
               <TableCell>
-                <span className="font-mono text-xs text-muted-foreground">{a.code}</span> {a.name}
+                <span className="font-mono text-xs text-muted-foreground">{formatAccountCode(a.code)}</span> {a.name}
               </TableCell>
               <TableCell className="text-muted-foreground">{a.symbol || "—"}</TableCell>
               <TableCell className="text-right font-mono tabular-nums">{money(a.symbol, a.balance)}</TableCell>
@@ -627,7 +636,7 @@ async function loadDetail(
               return (
                 <TableRow key={code}>
                   <TableCell>
-                    <span className="font-mono text-xs text-muted-foreground">{code}</span> {a.name}
+                    <span className="font-mono text-xs text-muted-foreground">{formatAccountCode(code)}</span> {a.name}
                   </TableCell>
                   <TableCell className="text-right font-mono tabular-nums">{fmt(a.debit)}</TableCell>
                   <TableCell className="text-right font-mono tabular-nums">{fmt(a.credit)}</TableCell>
@@ -662,10 +671,10 @@ async function loadDetail(
     };
   }
 
-  // Rent detail — outstanding invoices for the country, in the country currency.
-  // Rent is the gross billed to the tenant; Commission/Share is the agent
-  // (SAMAD RENT) cut; Balance Rent is the owner's net rent; Outstanding is the
-  // still-uncollected net rent.
+  // Rent detail — invoices for the country, in the country currency. Rent is the
+  // gross billed to the tenant; Management is the agent (SAMAD RENT) cut; Balance
+  // Rent is the owner's net rent; Outstanding is the still-uncollected net rent.
+  // Zero-outstanding (fully-paid) invoices are kept in the list, not hidden.
   let rentQuery = supabase
     .schema("reporting")
     .from("v_rental_income")
@@ -673,14 +682,21 @@ async function loadDetail(
       "invoice_id, voucher_no, invoice_date, due_date, tenant_name, asset_code, asset_name, amount, agent_share, net_amount, other_expenses, net_outstanding",
     )
     .eq("company_id", companyId)
-    .eq("country", cfg.rentCountry)
-    .gt("net_outstanding", 0);
+    .eq("country", cfg.rentCountry);
   if (dateFrom) rentQuery = rentQuery.gte("invoice_date", dateFrom);
   if (dateTo) rentQuery = rentQuery.lte("invoice_date", dateTo);
   const { data } = await rentQuery.order("due_date");
 
   const rows = data ?? [];
   const nowDate = today();
+  // PK Rent Balance omits the Management (agent share) and Other Expenses columns
+  // — those only apply to UAE/HH leases.
+  const showAgentCols = cfg.rentCountry !== "PK";
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const dueMonth = (d: string | null | undefined) => {
+    const m = /^(\d{4})-(\d{2})/.exec(String(d ?? ""));
+    return m ? `${MONTHS[Number(m[2]) - 1]} ${m[1]}` : "—";
+  };
   const totals = rows.reduce(
     (acc, r) => ({
       rent: acc.rent + Number(r.amount),
@@ -691,6 +707,9 @@ async function loadDetail(
     }),
     { rent: 0, share: 0, expenses: 0, net: 0, outstanding: 0 },
   );
+  // Columns: Date, Voucher, Due Month, Due Date, Property, Tenant, Rent,
+  // [Management, Other Expenses], Balance Rent, Receipt, Outstanding.
+  const colCount = showAgentCols ? 12 : 10;
 
   return {
     title: `Rent Balance — ${cfg.label}`,
@@ -703,12 +722,13 @@ async function loadDetail(
           <TableRow className="hover:bg-transparent">
             <TableHead>Date</TableHead>
             <TableHead>Voucher No</TableHead>
+            <TableHead>Due Month</TableHead>
             <TableHead>Due Date</TableHead>
-            <TableHead>Tenant</TableHead>
             <TableHead>Property</TableHead>
+            <TableHead>Tenant</TableHead>
             <TableHead className="text-right">Rent</TableHead>
-            <TableHead className="text-right">Management</TableHead>
-            <TableHead className="text-right">Other Expenses</TableHead>
+            {showAgentCols && <TableHead className="text-right">Management</TableHead>}
+            {showAgentCols && <TableHead className="text-right">Other Expenses</TableHead>}
             <TableHead className="text-right">Balance Rent</TableHead>
             <TableHead className="text-right">Receipt</TableHead>
             <TableHead className="text-right">Outstanding</TableHead>
@@ -719,31 +739,46 @@ async function loadDetail(
             // net_amount is already the Balance Rent (Rent − Management − Other
             // Expenses); Outstanding = Balance Rent − receipts.
             const balanceRent = Number(r.net_amount);
-            const received = balanceRent - Number(r.net_outstanding);
+            const outstanding = Number(r.net_outstanding);
+            const received = balanceRent - outstanding;
+            const overdue = isRentOverdue(r.due_date as string, nowDate);
+            // Fully-paid rows (nothing outstanding) get a light-green background;
+            // a still-owing row that is overdue paints only its Outstanding cell red.
+            const paid = outstanding <= 0;
             return (
-            <TableRow key={r.invoice_id}>
+            <TableRow key={r.invoice_id} className={paid ? "bg-emerald-50 dark:bg-emerald-950/30" : undefined}>
               <TableCell className="text-muted-foreground">{formatDate(r.invoice_date)}</TableCell>
               <TableCell>{r.voucher_no ?? "Draft"}</TableCell>
-              <TableCell className={isRentOverdue(r.due_date as string, nowDate) ? "text-destructive" : "text-muted-foreground"}>
+              <TableCell className="text-muted-foreground">{dueMonth(r.due_date as string)}</TableCell>
+              <TableCell className={overdue ? "text-destructive" : "text-muted-foreground"}>
                 {formatDate(r.due_date)}
               </TableCell>
+              <TableCell>{r.asset_name}</TableCell>
               <TableCell>{r.tenant_name}</TableCell>
-              <TableCell>
-                <span className="font-mono text-xs text-muted-foreground">{r.asset_code}</span> {r.asset_name}
-              </TableCell>
               <TableCell className="text-right font-mono tabular-nums">{fmt(Number(r.amount))}</TableCell>
-              <TableCell className="text-right font-mono tabular-nums">{fmt(Number(r.agent_share))}</TableCell>
-              <TableCell className="text-right font-mono tabular-nums">{fmt(Number(r.other_expenses))}</TableCell>
+              {showAgentCols && (
+                <TableCell className="text-right font-mono tabular-nums">{fmt(Number(r.agent_share))}</TableCell>
+              )}
+              {showAgentCols && (
+                <TableCell className="text-right font-mono tabular-nums">{fmt(Number(r.other_expenses))}</TableCell>
+              )}
               <TableCell className="text-right font-mono tabular-nums">{fmt(balanceRent)}</TableCell>
               <TableCell className="text-right font-mono tabular-nums">{fmt(received)}</TableCell>
-              <TableCell className="text-right font-mono tabular-nums">{fmt(Number(r.net_outstanding))}</TableCell>
+              <TableCell
+                className={cn(
+                  "text-right font-mono tabular-nums",
+                  overdue && !paid && "bg-red-100 font-medium text-destructive dark:bg-red-950/40",
+                )}
+              >
+                {fmt(outstanding)}
+              </TableCell>
             </TableRow>
             );
           })}
           {rows.length === 0 && (
             <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={11} className="py-10 text-center text-muted-foreground">
-                No outstanding rent for {cfg.label}.
+              <TableCell colSpan={colCount} className="py-10 text-center text-muted-foreground">
+                No rent invoices for {cfg.label} in this period.
               </TableCell>
             </TableRow>
           )}
@@ -751,12 +786,16 @@ async function loadDetail(
         {rows.length > 0 && (
           <tfoot className="border-t bg-muted/40">
             <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={5} className="font-medium">
+              <TableCell colSpan={6} className="font-medium">
                 Total
               </TableCell>
               <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.rent)}</TableCell>
-              <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.share)}</TableCell>
-              <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.expenses)}</TableCell>
+              {showAgentCols && (
+                <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.share)}</TableCell>
+              )}
+              {showAgentCols && (
+                <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.expenses)}</TableCell>
+              )}
               <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.net)}</TableCell>
               <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.net - totals.outstanding)}</TableCell>
               <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.outstanding)}</TableCell>

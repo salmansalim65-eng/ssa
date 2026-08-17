@@ -18,7 +18,7 @@ import { aggregateByAccount } from "@/lib/reports/account-aggregation";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
 import { loadReportCountries } from "@/lib/reports/countries";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatAccountCode, formatDate, formatMoney } from "@/lib/format";
 import type { AccountType } from "@/types/database.types";
 
 function today() {
@@ -174,7 +174,7 @@ export default async function BalanceSheetPage({
           return (
             <TableRow key={r.account_code}>
               <TableCell>
-                <span className="mr-2 font-mono text-xs text-muted-foreground">{r.account_code}</span>
+                <span className="mr-2 font-mono text-xs text-muted-foreground">{formatAccountCode(r.account_code)}</span>
                 <span className="font-medium">{r.account_name}</span>
               </TableCell>
               <TableCell className="text-right font-mono tabular-nums">{r.debit ? money(r.debit) : ""}</TableCell>
@@ -220,7 +220,7 @@ export default async function BalanceSheetPage({
                 const net = netOf(r);
                 return [
                   r.section,
-                  r.account_code,
+                  formatAccountCode(r.account_code),
                   r.account_name,
                   r.debit,
                   r.credit,

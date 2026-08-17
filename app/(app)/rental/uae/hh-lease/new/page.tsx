@@ -7,32 +7,52 @@ import { createClient } from "@/lib/supabase/server";
 import { loadTenantAccounts } from "@/lib/rental/tenant-accounts";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 
-// Expense accounts a HH lease can charge: the non-group children of the Chart-
-// of-Accounts group named "Rental Expenses". Empty when that group (or any child
-// account) hasn't been set up yet.
+// Expense accounts a HH lease can charge: the non-group accounts sitting under
+// the Chart-of-Accounts "Rental Expenses" group. Matches the group name loosely
+// (case-insensitive, allowing surrounding words like "HH Rental Expenses") and
+// collects children at any depth beneath it, so the setup is forgiving. Empty
+// only when no such group/accounts exist yet.
 async function loadRentalExpenseAccounts(companyId: string) {
   const supabase = await createClient();
-  const { data: group } = await supabase
+  const { data: allAccounts } = await supabase
     .schema("accounting")
     .from("chart_of_accounts")
-    .select("id")
+    .select("id, account_code, account_name, parent_id, is_group")
     .eq("company_id", companyId)
-    .eq("is_group", true)
-    .ilike("account_name", "Rental Expenses")
-    .is("deleted_at", null)
-    .maybeSingle();
-  if (!group) return [];
-  const { data: accounts } = await supabase
-    .schema("accounting")
-    .from("chart_of_accounts")
-    .select("id, account_code, account_name")
-    .eq("company_id", companyId)
-    .eq("parent_id", group.id)
-    .eq("is_group", false)
-    .eq("is_active", true)
     .is("deleted_at", null)
     .order("account_code");
-  return accounts ?? [];
+  const rows = allAccounts ?? [];
+
+  // Find the "Rental Expenses" group node (prefer an actual group; fall back to
+  // any account whose name contains "rental expense").
+  const groups = rows.filter((r) => /rental\s*expense/i.test(String(r.account_name ?? "")));
+  const groupNode = groups.find((r) => r.is_group) ?? groups[0];
+  if (!groupNode) return [];
+
+  // Collect every descendant of that node, then keep the postable (non-group)
+  // ones — so accounts nested under sub-groups are included too.
+  const childrenByParent = new Map<string, typeof rows>();
+  for (const r of rows) {
+    const p = r.parent_id as string | null;
+    if (!p) continue;
+    if (!childrenByParent.has(p)) childrenByParent.set(p, []);
+    childrenByParent.get(p)!.push(r);
+  }
+  const out: { id: string; account_code: string; account_name: string }[] = [];
+  const stack = [...(childrenByParent.get(groupNode.id as string) ?? [])];
+  while (stack.length) {
+    const node = stack.pop()!;
+    if (node.is_group) {
+      stack.push(...(childrenByParent.get(node.id as string) ?? []));
+    } else {
+      out.push({
+        id: node.id as string,
+        account_code: node.account_code as string,
+        account_name: node.account_name as string,
+      });
+    }
+  }
+  return out.sort((a, b) => a.account_code.localeCompare(b.account_code));
 }
 
 export default async function NewHhLeasePage() {

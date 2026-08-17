@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { formatAccountCode } from "@/lib/format";
 import {
   Form,
   FormControl,
@@ -106,7 +107,7 @@ export function CostCenterForm({
                   <SelectItem value="none">— None (top level) —</SelectItem>
                   {parentOptions.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
-                      {p.code} — {p.name}
+                      {formatAccountCode(p.code)} — {p.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

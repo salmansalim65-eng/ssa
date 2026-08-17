@@ -7,7 +7,7 @@ import { ReportSelectFilter } from "@/components/reports/report-select-filter";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
-import { formatMoney } from "@/lib/format";
+import { formatAccountCode, formatMoney } from "@/lib/format";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -144,7 +144,7 @@ export default async function RentReportPage({
   const exportRows = sections.flatMap((s) =>
     s.rows.map((r) => [
       COUNTRY[s.country]?.label ?? s.country,
-      r.code,
+      formatAccountCode(r.code),
       r.name,
       r.est,
       ...r.months,
@@ -249,7 +249,7 @@ export default async function RentReportPage({
                     return (
                       <tr key={r.id} className={cn("group/row border-b border-border/50 [&>td]:px-3 [&>td]:py-2", rowBg, "hover:bg-primary/[0.05]")}>
                         <td className={cn("sticky left-0 z-10 min-w-[240px] border-r border-border/50", rowBg, "group-hover/row:bg-primary/[0.05]")}>
-                          <span className="mr-2 font-mono text-[0.7rem] text-muted-foreground">{r.code}</span>
+                          <span className="mr-2 font-mono text-[0.7rem] text-muted-foreground">{formatAccountCode(r.code)}</span>
                           <span className="font-medium text-foreground">{r.name}</span>
                         </td>
                         <td className="text-right font-mono tabular-nums text-muted-foreground">{r.est ? money(r.est) : dash}</td>

@@ -51,9 +51,13 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Verify the session from the JWT locally (cached signing keys) instead of a
+  // network round-trip to the Auth server on every request — this middleware
+  // runs on every navigation, so getUser() here was the main source of app-wide
+  // latency. Requires asymmetric JWT signing keys enabled on the project;
+  // otherwise getClaims transparently falls back to a server call.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const user = claimsData?.claims ?? null;
 
   const isPublicPath = PUBLIC_PATHS.some((path) => request.nextUrl.pathname.startsWith(path));
 

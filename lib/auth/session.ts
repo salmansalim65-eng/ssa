@@ -6,12 +6,13 @@ import { createClient } from "@/lib/supabase/server";
 
 export async function requireUser() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Verify the JWT locally (cached keys) rather than a network round-trip to the
+  // Auth server — the middleware has already gate-kept the session.
+  const { data } = await supabase.auth.getClaims();
+  const claims = data?.claims;
 
-  if (!user) redirect("/login");
-  return user;
+  if (!claims?.sub) redirect("/login");
+  return { id: claims.sub as string, email: (claims.email as string | undefined) ?? null };
 }
 
 export async function getActiveCompany() {

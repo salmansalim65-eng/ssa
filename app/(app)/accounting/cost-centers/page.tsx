@@ -14,6 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { hasPermission } from "@/lib/auth/permissions";
+import { formatAccountCode } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import type { Database } from "@/types/database.types";
@@ -93,7 +94,7 @@ export default async function CostCentersPage() {
 
       const row = (
         <TableRow key={cc.id}>
-          <TableCell className="font-mono font-medium">{cc.code}</TableCell>
+          <TableCell className="font-mono font-medium">{formatAccountCode(cc.code)}</TableCell>
           <TableCell className="font-medium">
             <div
               className="flex items-center"

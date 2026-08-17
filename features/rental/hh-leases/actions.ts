@@ -67,15 +67,17 @@ export async function createHhLease(input: HhLeaseInput) {
     .select("id");
   if (error) return { error: error.message };
 
-  // Persist each property's named monthly expenses (dropping blank rows). Each
-  // created lease line lines up with parsed.data.lines by index.
+  // Persist each property's monthly expenses (an expense account + amount),
+  // dropping blank rows. Each created lease line lines up with
+  // parsed.data.lines by index. These post Dr account / Cr tenant when the HH
+  // invoice is generated.
   const expenseRows = (createdLeases ?? []).flatMap((lease, index) =>
     (parsed.data.lines[index]?.expenses ?? [])
-      .filter((e) => (e.name ?? "").trim() !== "" && Number(e.amount) > 0)
+      .filter((e) => (e.accountId ?? "") !== "" && Number(e.amount) > 0)
       .map((e) => ({
         company_id: companyId,
         lease_id: lease.id,
-        name: (e.name ?? "").trim(),
+        account_id: e.accountId as string,
         amount: Number(e.amount),
       })),
   );

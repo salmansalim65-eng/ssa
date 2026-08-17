@@ -1361,14 +1361,14 @@ export interface Database {
           id: string;
           company_id: string;
           lease_id: string;
-          name: string;
+          account_id: string | null;
+          name: string | null;
           amount: number;
           created_at: string;
         };
         Insert: Partial<Database["rental"]["Tables"]["lease_expenses"]["Row"]> & {
           company_id: string;
           lease_id: string;
-          name: string;
           amount: number;
         };
         Update: Partial<Database["rental"]["Tables"]["lease_expenses"]["Row"]>;

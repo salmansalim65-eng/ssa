@@ -1,10 +1,12 @@
 import { z } from "zod";
 
-// One named monthly expense on an HH lease property (e.g. Management, Chiller).
-// Blank rows (no name / zero amount) are dropped by the create action, so the
-// name is optional at the schema level.
+// One monthly expense on an HH lease property: an expense ACCOUNT (from the
+// "Rental Expenses" Chart-of-Accounts group) and its monthly amount. When the
+// HH invoice posts, each expense books Dr <account> / Cr <tenant>. Blank rows
+// (no account / zero amount) are dropped by the create action, so the account
+// is optional at the schema level.
 export const hhLeaseExpenseSchema = z.object({
-  name: z.string().trim().max(100, "Keep it under 100 characters").optional().or(z.literal("")),
+  accountId: z.string().uuid("Select an expense account").optional().or(z.literal("")),
   amount: z.coerce.number().nonnegative("Must be zero or more").optional(),
 });
 

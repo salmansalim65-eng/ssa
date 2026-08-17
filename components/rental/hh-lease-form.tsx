@@ -40,6 +40,12 @@ export interface TenantOption {
   name: string;
 }
 
+export interface ExpenseAccountOption {
+  id: string;
+  account_code: string;
+  account_name: string;
+}
+
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -48,10 +54,19 @@ function emptyLine() {
   return { assetId: "", rentalAmount: blankAmount, leaseStart: today(), leaseEnd: today(), expenses: [], remarks: "" };
 }
 
-// Per-property named monthly expenses (name + amount rows). Each row feeds the
-// Rent Balance report's Other Expenses column and reduces the owner's balance
-// rent. Blank rows are dropped on save.
-function LineExpenses({ control, index }: { control: Control<HhLeaseFormValues>; index: number }) {
+// Per-property monthly expenses: an expense account (from the "Rental Expenses"
+// CoA group) + amount. Each posts Dr <account> / Cr <tenant> when the HH invoice
+// is generated, and feeds the Rent Balance report's Other Expenses column. Blank
+// rows are dropped on save.
+function LineExpenses({
+  control,
+  index,
+  expenseAccounts,
+}: {
+  control: Control<HhLeaseFormValues>;
+  index: number;
+  expenseAccounts: ExpenseAccountOption[];
+}) {
   const { fields, append, remove } = useFieldArray({ control, name: `lines.${index}.expenses` });
   return (
     <div className="space-y-1.5">
@@ -59,9 +74,20 @@ function LineExpenses({ control, index }: { control: Control<HhLeaseFormValues>;
         <div key={f.id} className="flex items-center gap-1.5">
           <FormField
             control={control}
-            name={`lines.${index}.expenses.${ei}.name`}
+            name={`lines.${index}.expenses.${ei}.accountId`}
             render={({ field }) => (
-              <Input placeholder="Name" className="h-8 w-28" {...field} value={(field.value as string) ?? ""} />
+              <Select onValueChange={field.onChange} value={(field.value as string) ?? ""}>
+                <SelectTrigger className="h-8 w-40">
+                  <SelectValue placeholder="Expense account" />
+                </SelectTrigger>
+                <SelectContent>
+                  {expenseAccounts.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.account_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
           />
           <FormField
@@ -96,10 +122,16 @@ function LineExpenses({ control, index }: { control: Control<HhLeaseFormValues>;
         variant="outline"
         size="sm"
         className="h-7"
-        onClick={() => append({ name: "", amount: blankAmount })}
+        disabled={expenseAccounts.length === 0}
+        onClick={() => append({ accountId: "", amount: blankAmount })}
       >
         <PlusIcon className="size-3.5" /> Add expense
       </Button>
+      {expenseAccounts.length === 0 && (
+        <p className="text-xs text-muted-foreground">
+          Add accounts under a &ldquo;Rental Expenses&rdquo; group in the Chart of Accounts first.
+        </p>
+      )}
     </div>
   );
 }
@@ -109,11 +141,13 @@ export function HhLeaseForm({
   tenants,
   currencies,
   defaultCurrencyId,
+  expenseAccounts,
 }: {
   assets: AssetOption[];
   tenants: TenantOption[];
   currencies: CurrencyOption[];
   defaultCurrencyId?: string;
+  expenseAccounts: ExpenseAccountOption[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -322,7 +356,7 @@ export function HhLeaseForm({
                       />
                     </td>
                     <td>
-                      <LineExpenses control={form.control} index={index} />
+                      <LineExpenses control={form.control} index={index} expenseAccounts={expenseAccounts} />
                     </td>
                     <td>
                       <FormField

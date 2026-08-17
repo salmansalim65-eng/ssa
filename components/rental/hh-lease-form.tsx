@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { useFieldArray, useForm } from "react-hook-form";
+import { useFieldArray, useForm, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { PlusIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
@@ -40,12 +40,100 @@ export interface TenantOption {
   name: string;
 }
 
+export interface ExpenseAccountOption {
+  id: string;
+  account_code: string;
+  account_name: string;
+}
+
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
 function emptyLine() {
-  return { assetId: "", rentalAmount: blankAmount, leaseStart: today(), leaseEnd: today(), expenseAmount: blankAmount, remarks: "" };
+  return { assetId: "", rentalAmount: blankAmount, leaseStart: today(), leaseEnd: today(), expenses: [], remarks: "" };
+}
+
+// Per-property monthly expenses: an expense account (from the "Rental Expenses"
+// CoA group) + amount. Each posts Dr <account> / Cr <tenant> when the HH invoice
+// is generated, and feeds the Rent Balance report's Other Expenses column. Blank
+// rows are dropped on save.
+function LineExpenses({
+  control,
+  index,
+  expenseAccounts,
+}: {
+  control: Control<HhLeaseFormValues>;
+  index: number;
+  expenseAccounts: ExpenseAccountOption[];
+}) {
+  const { fields, append, remove } = useFieldArray({ control, name: `lines.${index}.expenses` });
+  return (
+    <div className="space-y-1.5">
+      {fields.map((f, ei) => (
+        <div key={f.id} className="flex items-center gap-1.5">
+          <FormField
+            control={control}
+            name={`lines.${index}.expenses.${ei}.accountId`}
+            render={({ field }) => (
+              <Select onValueChange={field.onChange} value={(field.value as string) ?? ""}>
+                <SelectTrigger className="h-8 w-40">
+                  <SelectValue placeholder="Expense account" />
+                </SelectTrigger>
+                <SelectContent>
+                  {expenseAccounts.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.account_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+          <FormField
+            control={control}
+            name={`lines.${index}.expenses.${ei}.amount`}
+            render={({ field }) => (
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="Amount"
+                className="h-8 w-24"
+                {...field}
+                value={amountValue(field.value)}
+              />
+            )}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 shrink-0"
+            onClick={() => remove(ei)}
+            aria-label="Remove expense"
+          >
+            <Trash2Icon className="size-3.5" />
+          </Button>
+        </div>
+      ))}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-7"
+        disabled={expenseAccounts.length === 0}
+        onClick={() => append({ accountId: "", amount: blankAmount })}
+      >
+        <PlusIcon className="size-3.5" /> Add expense
+      </Button>
+      {expenseAccounts.length === 0 && (
+        <p className="text-xs text-muted-foreground">
+          Add accounts under a &ldquo;Rental Expenses&rdquo; group in the Chart of Accounts first.
+        </p>
+      )}
+    </div>
+  );
 }
 
 export function HhLeaseForm({
@@ -53,11 +141,13 @@ export function HhLeaseForm({
   tenants,
   currencies,
   defaultCurrencyId,
+  expenseAccounts,
 }: {
   assets: AssetOption[];
   tenants: TenantOption[];
   currencies: CurrencyOption[];
   defaultCurrencyId?: string;
+  expenseAccounts: ExpenseAccountOption[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -189,7 +279,7 @@ export function HhLeaseForm({
                   <th className="w-32">Rent</th>
                   <th className="w-40">Lease Start</th>
                   <th className="w-40">Lease End</th>
-                  <th className="w-32">Expenses</th>
+                  <th className="min-w-[260px]">Expenses</th>
                   <th className="min-w-[160px]">Remarks</th>
                   <th className="w-10" />
                 </tr>
@@ -266,18 +356,7 @@ export function HhLeaseForm({
                       />
                     </td>
                     <td>
-                      <FormField
-                        control={form.control}
-                        name={`lines.${index}.expenseAmount`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormControl>
-                              <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                      <LineExpenses control={form.control} index={index} expenseAccounts={expenseAccounts} />
                     </td>
                     <td>
                       <FormField

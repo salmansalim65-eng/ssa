@@ -21,7 +21,7 @@ import { deletePkRentInvoice, postPkRentInvoice } from "@/features/rental/pk-ren
 import { hasPermission, isCurrentUserAdmin } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatAccountCode, formatDate, formatMoney } from "@/lib/format";
 import { getCurrentCompanyId, getVoucherApproval } from "@/lib/vouchers/engine";
 import type { JournalEntryStatus } from "@/types/database.types";
 
@@ -241,7 +241,7 @@ export default async function PkRentInvoiceDetailPage({ params }: { params: Prom
                 return (
                   <TableRow key={p.id}>
                     <TableCell className="text-muted-foreground">{formatDate(p.payment_date)}</TableCell>
-                    <TableCell>{acct ? `${acct.account_code} — ${acct.account_name}` : "—"}</TableCell>
+                    <TableCell>{acct ? `${formatAccountCode(acct.account_code)} — ${acct.account_name}` : "—"}</TableCell>
                     <TableCell className="text-right font-mono tabular-nums">{formatMoney(p.amount)}</TableCell>
                   </TableRow>
                 );

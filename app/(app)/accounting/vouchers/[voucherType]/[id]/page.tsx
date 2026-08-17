@@ -24,7 +24,7 @@ import { VoucherDeleteButton } from "@/components/vouchers/voucher-delete-button
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { getModulePermissions, isCurrentUserAdmin } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatAccountCode, formatDate, formatMoney } from "@/lib/format";
 import { getCurrentCompanyId, getVoucherApproval } from "@/lib/vouchers/engine";
 import { isPhase5VoucherType, VOUCHER_TYPE_LABELS } from "@/lib/vouchers/meta";
 import { getVoucherDetail } from "@/lib/vouchers/queries";
@@ -129,9 +129,12 @@ export default async function VoucherDetailPage({
           <>
             <VoucherStatusBadge status={detail.status} />
             <PrintButton />
-            {/* Opening balances are corrections you make after posting, so they
-                stay editable even when posted; everything else is draft-only. */}
-            {(detail.status === "draft" || voucherType === "opening_balance_voucher") &&
+            {/* Opening balances (corrections) and receipt vouchers (reversed &
+                re-posted on save) stay editable even when posted; everything
+                else is draft-only. */}
+            {(detail.status === "draft" ||
+              voucherType === "opening_balance_voucher" ||
+              (voucherType === "receipt_voucher" && detail.status === "posted")) &&
               canSubmit &&
               (EDITABLE_VOUCHER_TYPES as readonly string[]).includes(voucherType) && (
                 <Button asChild variant="outline" size="sm">
@@ -207,7 +210,7 @@ export default async function VoucherDetailPage({
             {detail.lines.map((line, index) => (
               <TableRow key={index}>
                 <TableCell className="font-medium">
-                  <span className="font-mono text-xs text-muted-foreground">{line.accountCode}</span>{" "}
+                  <span className="font-mono text-xs text-muted-foreground">{formatAccountCode(line.accountCode)}</span>{" "}
                   {line.accountName}
                 </TableCell>
                 <TableCell>{line.costCenterName ?? "—"}</TableCell>

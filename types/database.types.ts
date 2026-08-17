@@ -1356,6 +1356,23 @@ export interface Database {
         };
         Update: Partial<Database["rental"]["Tables"]["payment_invoice_expenses"]["Row"]>;
       };
+      lease_expenses: {
+        Row: {
+          id: string;
+          company_id: string;
+          lease_id: string;
+          account_id: string | null;
+          name: string | null;
+          amount: number;
+          created_at: string;
+        };
+        Insert: Partial<Database["rental"]["Tables"]["lease_expenses"]["Row"]> & {
+          company_id: string;
+          lease_id: string;
+          amount: number;
+        };
+        Update: Partial<Database["rental"]["Tables"]["lease_expenses"]["Row"]>;
+      };
       tenants: {
         Row: {
           id: string;

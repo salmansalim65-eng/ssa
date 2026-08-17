@@ -126,7 +126,10 @@ export function ReceiptVoucherForm({
         return;
       }
       toast.success(isEdit ? "Receipt voucher updated" : "Receipt voucher created");
-      router.push(`/accounting/vouchers/receipt_voucher/${isEdit ? voucherId : result.id}`);
+      // Editing a POSTED receipt reverses it and re-posts a replacement with a
+      // new id, so always navigate to the id the action returns (it equals the
+      // original id for a plain draft edit).
+      router.push(`/accounting/vouchers/receipt_voucher/${result.id ?? voucherId}`);
     });
   }
 

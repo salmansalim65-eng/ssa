@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/auth/permissions";
 import { formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
-import { createJournalEntry, getAccountIdByName, getCurrentCompanyId, postVoucher } from "@/lib/vouchers/engine";
+import { createJournalEntry, getAccountIdByName, getCurrentCompanyId, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { agentRentSplit, HH_AGENT_PCT, UAE_AGENT_PCT } from "@/lib/rental/lease-accounting";
 
 async function getPostingAccount(companyId: string, accountRole: string) {
@@ -108,6 +108,26 @@ export async function generateUaeRentInvoice(scheduleId: string) {
   const agentPct = lease.lease_type === "hh" ? HH_AGENT_PCT : UAE_AGENT_PCT;
   const { share: samadShare, income: rentalIncomeAmount } = agentRentSplit(schedule.amount, agentPct);
 
+  // HH-lease expenses post like the agent share: each expense books Dr <expense
+  // account> / Cr <tenant>, so the cost hits the P&L and reduces the tenant's
+  // receivable. HH leases only — plain UAE (and PK) leases have no such lines.
+  const expenseLines: EntryLineInput[] = [];
+  if (lease.lease_type === "hh") {
+    const { data: expenses } = await supabase
+      .schema("rental")
+      .from("lease_expenses")
+      .select("account_id, amount")
+      .eq("lease_id", schedule.lease_id);
+    for (const e of expenses ?? []) {
+      const amount = Number(e.amount);
+      if (!e.account_id || amount <= 0) continue;
+      expenseLines.push(
+        { accountId: e.account_id as string, costCenterId, debit: amount, credit: 0, description: "HH lease expense" },
+        { accountId: receivableAccountId, costCenterId, debit: 0, credit: amount, description: "HH lease expense" },
+      );
+    }
+  }
+
   const invoiceId = crypto.randomUUID();
   const today = new Date().toISOString().slice(0, 10);
   // The invoice is dated by the lease's voucher date (mandatory on new leases);
@@ -129,6 +149,7 @@ export async function generateUaeRentInvoice(scheduleId: string) {
       ...(samadShare > 0
         ? [{ accountId: samadRentId, costCenterId, debit: 0, credit: samadShare, description: "Agent share (SAMAD RENT)" }]
         : []),
+      ...expenseLines,
     ],
   });
   if ("error" in je) return { error: je.error };

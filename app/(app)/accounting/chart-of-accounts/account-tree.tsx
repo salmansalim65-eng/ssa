@@ -51,7 +51,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { formatMoney } from "@/lib/format";
+import { formatAccountCode, formatMoney } from "@/lib/format";
 import { blankAmount } from "@/lib/forms/amount";
 import {
   createAccount,
@@ -458,7 +458,7 @@ export function AccountTree({
                     isGroup ? "font-bold text-group" : "text-muted-foreground",
                   )}
                 >
-                  {account.account_code}
+                  {formatAccountCode(account.account_code)}
                 </span>
               </div>
             </div>

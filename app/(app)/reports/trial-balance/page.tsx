@@ -18,7 +18,7 @@ import { aggregateByAccount } from "@/lib/reports/account-aggregation";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
 import { loadReportCountries } from "@/lib/reports/countries";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatAccountCode, formatDate, formatMoney } from "@/lib/format";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -126,7 +126,7 @@ export default async function TrialBalancePage({
             <CsvExportButton
               filename={`trial-balance-${asOf}.csv`}
               headers={["Code", "Name", "Type", "Debit", "Credit"]}
-              rows={rows.map((r) => [r.account_code, r.account_name, r.account_type, r.debit, r.credit])}
+              rows={rows.map((r) => [formatAccountCode(r.account_code), r.account_name, r.account_type, r.debit, r.credit])}
             />
             <PrintButton />
           </>
@@ -175,7 +175,7 @@ export default async function TrialBalancePage({
           <TableBody>
             {rows.map((r) => (
               <TableRow key={r.account_code}>
-                <TableCell className="font-mono text-xs text-muted-foreground">{r.account_code}</TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">{formatAccountCode(r.account_code)}</TableCell>
                 <TableCell className="font-medium">{r.account_name}</TableCell>
                 <TableCell className="capitalize">{r.account_type}</TableCell>
                 <TableCell className="text-right font-mono tabular-nums">

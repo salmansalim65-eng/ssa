@@ -32,6 +32,7 @@ import {
 } from "@/features/accounting/chart-of-accounts/schemas";
 import { AccountAttachmentField } from "@/components/accounting/account-attachment-field";
 import { amountValue } from "@/lib/forms/amount";
+import { formatAccountCode } from "@/lib/format";
 
 const typeLabels: Record<(typeof ACCOUNT_TYPES)[number], string> = {
   asset: "Asset",
@@ -170,7 +171,7 @@ export function AccountForm({
                       <SelectItem value="none">No parent (root)</SelectItem>
                       {parentOptions.map((p) => (
                         <SelectItem key={p.id} value={p.id}>
-                          {p.account_code} — {p.account_name}
+                          {formatAccountCode(p.account_code)} — {p.account_name}
                         </SelectItem>
                       ))}
                     </SelectContent>

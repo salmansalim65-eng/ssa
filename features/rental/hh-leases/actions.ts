@@ -50,7 +50,9 @@ export async function createHhLease(input: HhLeaseInput) {
     security_deposit: 0,
     currency_id: parsed.data.currencyId,
     rent_month: null,
-    expense_amount: line.expenseAmount ?? 0,
+    // Named expenses now live in rental.lease_expenses; the legacy single-amount
+    // column stays 0 for HH leases created this way.
+    expense_amount: 0,
     remarks: line.remarks || null,
     document_no: documentNo as string,
     document_date: parsed.data.documentDate,
@@ -64,6 +66,25 @@ export async function createHhLease(input: HhLeaseInput) {
     .insert(rows)
     .select("id");
   if (error) return { error: error.message };
+
+  // Persist each property's monthly expenses (an expense account + amount),
+  // dropping blank rows. Each created lease line lines up with
+  // parsed.data.lines by index. These post Dr account / Cr tenant when the HH
+  // invoice is generated.
+  const expenseRows = (createdLeases ?? []).flatMap((lease, index) =>
+    (parsed.data.lines[index]?.expenses ?? [])
+      .filter((e) => (e.accountId ?? "") !== "" && Number(e.amount) > 0)
+      .map((e) => ({
+        company_id: companyId,
+        lease_id: lease.id,
+        account_id: e.accountId as string,
+        amount: Number(e.amount),
+      })),
+  );
+  if (expenseRows.length) {
+    const { error: expErr } = await supabase.schema("rental").from("lease_expenses").insert(expenseRows);
+    if (expErr) return { error: expErr.message };
+  }
 
   // HH leases are uae_leases — admins get every created line's invoices
   // generated + posted automatically. Real failures are surfaced as a warning

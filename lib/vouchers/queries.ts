@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
-import { formatDate, formatRate } from "@/lib/format";
+import { formatAccountCode, formatDate, formatRate } from "@/lib/format";
 import type { JournalEntryStatus } from "@/types/database.types";
 import type { Phase5VoucherType } from "./meta";
 
@@ -50,6 +50,50 @@ export interface VoucherDetail {
   }[];
 }
 
+// Resolves the "party" for a header+lines voucher (Receipt / Payment) from its
+// LINE accounts — the counter-party the money moved to/from — rather than the
+// Cash/Bank account on the header. Returns a map of voucher_id → party label
+// ("Split (n)" when a voucher has several distinct line accounts).
+async function resolvePartyFromLines(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  lineTable: "receipt_voucher_lines" | "payment_voucher_lines",
+  voucherIds: string[],
+): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
+  if (!voucherIds.length) return result;
+
+  const { data: lines } = await supabase
+    .schema("accounting")
+    .from(lineTable)
+    .select("voucher_id, account_id")
+    .in("voucher_id", voucherIds);
+
+  const accountIds = [...new Set((lines ?? []).map((l) => l.account_id as string))];
+  const nameById = new Map<string, string>();
+  if (accountIds.length) {
+    const { data: accts } = await supabase
+      .schema("accounting")
+      .from("chart_of_accounts")
+      .select("id, account_name")
+      .in("id", accountIds);
+    for (const a of accts ?? []) nameById.set(a.id as string, a.account_name as string);
+  }
+
+  const namesByVoucher = new Map<string, Set<string>>();
+  for (const l of lines ?? []) {
+    const vid = l.voucher_id as string;
+    const name = nameById.get(l.account_id as string);
+    if (!name) continue;
+    if (!namesByVoucher.has(vid)) namesByVoucher.set(vid, new Set());
+    namesByVoucher.get(vid)!.add(name);
+  }
+  for (const [vid, names] of namesByVoucher) {
+    const list = [...names];
+    result.set(vid, list.length === 1 ? list[0] : `Split (${list.length})`);
+  }
+  return result;
+}
+
 export async function getVoucherListRows(
   companyId: string,
   voucherType: Phase5VoucherType,
@@ -69,14 +113,23 @@ export async function getVoucherListRows(
       const { data } = await supabase
         .schema("accounting")
         .from("receipt_vouchers")
-        .select("id, voucher_no, receipt_date, total_amount, exchange_rate, currency_id, journal_entry_id, journal_entries:journal_entry_id(status), debit:debit_account_id(account_name)")
+        .select("id, voucher_no, receipt_date, total_amount, exchange_rate, currency_id, journal_entry_id, journal_entries:journal_entry_id(status)")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false });
-      return (data ?? []).map((r) => ({
+      const receipts = data ?? [];
+      // "Received from" is the credited party (tenant/customer) held on the
+      // receipt LINES — not the Cash/Bank account debited on the header. Resolve
+      // the line accounts separately (a cross-table embed here proved fragile).
+      const partyByReceipt = await resolvePartyFromLines(
+        supabase,
+        "receipt_voucher_lines",
+        receipts.map((r) => r.id),
+      );
+      return receipts.map((r) => ({
         id: r.id,
         voucherNo: r.voucher_no,
         date: r.receipt_date,
-        party: (r.debit as unknown as { account_name: string } | null)?.account_name ?? "—",
+        party: partyByReceipt.get(r.id) ?? "—",
         amount: r.total_amount,
         currencySymbol: symbolFor(r.currency_id),
         baseAmount: Number(r.total_amount) * Number(r.exchange_rate ?? 1),
@@ -88,14 +141,22 @@ export async function getVoucherListRows(
       const { data } = await supabase
         .schema("accounting")
         .from("payment_vouchers")
-        .select("id, voucher_no, payment_date, total_amount, exchange_rate, currency_id, journal_entry_id, journal_entries:journal_entry_id(status), credit:credit_account_id(account_name)")
+        .select("id, voucher_no, payment_date, total_amount, exchange_rate, currency_id, journal_entry_id, journal_entries:journal_entry_id(status)")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false });
-      return (data ?? []).map((r) => ({
+      const payments = data ?? [];
+      // "Paid to" is the debited party held on the payment LINES — not the
+      // Cash/Bank account credited on the header.
+      const partyByPayment = await resolvePartyFromLines(
+        supabase,
+        "payment_voucher_lines",
+        payments.map((r) => r.id),
+      );
+      return payments.map((r) => ({
         id: r.id,
         voucherNo: r.voucher_no,
         date: r.payment_date,
-        party: (r.credit as unknown as { account_name: string } | null)?.account_name ?? "—",
+        party: partyByPayment.get(r.id) ?? "—",
         amount: r.total_amount,
         currencySymbol: symbolFor(r.currency_id),
         baseAmount: Number(r.total_amount) * Number(r.exchange_rate ?? 1),
@@ -337,7 +398,7 @@ export async function getVoucherDetail(
         currencySymbol: je.currencySymbol,
         exchangeRate: je.exchangeRate,
         fields: [
-          { label: "Debit account (Cash/Bank)", value: debit ? `${debit.account_code} — ${debit.account_name}` : "—" },
+          { label: "Debit account (Cash/Bank)", value: debit ? `${formatAccountCode(debit.account_code)} — ${debit.account_name}` : "—" },
           { label: "Due date", value: v.due_date ?? "—" },
           { label: "Cost center", value: costCenter?.name ?? "—" },
           { label: "Currency conv.", value: formatRate(v.exchange_rate) },
@@ -369,7 +430,7 @@ export async function getVoucherDetail(
         currencySymbol: je.currencySymbol,
         exchangeRate: je.exchangeRate,
         fields: [
-          { label: "Credit account (Cash/Bank)", value: credit ? `${credit.account_code} — ${credit.account_name}` : "—" },
+          { label: "Credit account (Cash/Bank)", value: credit ? `${formatAccountCode(credit.account_code)} — ${credit.account_name}` : "—" },
           { label: "Cost center", value: costCenter?.name ?? "—" },
           { label: "Currency conv.", value: formatRate(v.exchange_rate) },
           { label: "Total", value: v.total_amount.toLocaleString() },
@@ -400,7 +461,7 @@ export async function getVoucherDetail(
         currencySymbol: je.currencySymbol,
         exchangeRate: je.exchangeRate,
         fields: [
-          { label: "Credit account (PDC liability)", value: credit ? `${credit.account_code} — ${credit.account_name}` : "—" },
+          { label: "Credit account (PDC liability)", value: credit ? `${formatAccountCode(credit.account_code)} — ${credit.account_name}` : "—" },
           { label: "Payee", value: v.payee },
           { label: "Cheque number", value: v.cheque_no },
           { label: "Due date", value: v.due_date ?? "—" },
@@ -435,7 +496,7 @@ export async function getVoucherDetail(
         currencySymbol: je.currencySymbol,
         exchangeRate: je.exchangeRate,
         fields: [
-          { label: "Debit account (PDC asset)", value: debit ? `${debit.account_code} — ${debit.account_name}` : "—" },
+          { label: "Debit account (PDC asset)", value: debit ? `${formatAccountCode(debit.account_code)} — ${debit.account_name}` : "—" },
           { label: "Payer", value: v.payer },
           { label: "Cheque number", value: v.cheque_no },
           { label: "Due date", value: v.due_date ?? "—" },
@@ -552,7 +613,7 @@ export async function getVoucherDetail(
         currencySymbol: je.currencySymbol,
         exchangeRate: je.exchangeRate,
         fields: [
-          { label: "Contra account (Opening Balance Equity)", value: contra ? `${contra.account_code} — ${contra.account_name}` : "—" },
+          { label: "Contra account (Opening Balance Equity)", value: contra ? `${formatAccountCode(contra.account_code)} — ${contra.account_name}` : "—" },
           { label: "Cost center", value: costCenter?.name ?? "—" },
           { label: "Currency conv.", value: formatRate(v.exchange_rate) },
           { label: "Total", value: v.total_amount.toLocaleString() },

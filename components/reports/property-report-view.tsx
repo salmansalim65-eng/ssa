@@ -60,7 +60,6 @@ const NUM_COLS: {
   { key: "estRent", label: "Est. Rent", full: "Estimated Rent (monthly)", kind: "money" },
   { key: "monthlyRent", label: "Monthly Rent", full: "Balance Rent: lease rent − commission − HH expenses", kind: "money" },
   { key: "yearlyRent", label: "Yearly Rent", full: "Yearly Rent (Monthly × 12)", kind: "money" },
-  { key: "diffEstVsYearly", label: "Diff. Est/Yr", full: "Difference: Estimated × 12 − Yearly", kind: "money" },
   { key: "sqFt", label: "Sq. Ft", full: "Area (square feet)", kind: "money" },
   { key: "serviceMonthly", label: "Service Charges", full: "Monthly service charge (Rate × Sq. Ft ÷ 12)", kind: "money" },
   { key: "netRent", label: "Net Rent", full: "Monthly Rent − Service Charges", kind: "money" },

@@ -19,7 +19,7 @@ export default async function CompaniesPage() {
   const { data: company } = await supabase
     .schema("core")
     .from("companies")
-    .select("id, name, code, country, address")
+    .select("id, name, code, country, address, accounting_period_start")
     .eq("id", profile!.default_company_id!)
     .single();
 
@@ -51,6 +51,7 @@ export default async function CompaniesPage() {
               name: company.name,
               country: (company.country as "PK" | "AE") ?? "PK",
               address: company.address ?? "",
+              accountingPeriodStart: company.accounting_period_start ?? "",
             }}
           />
         </CardContent>

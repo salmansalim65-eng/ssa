@@ -46,6 +46,7 @@ export interface Database {
           name: string;
           country: string | null;
           address: string | null;
+          accounting_period_start: string | null;
           logo_path: string | null;
           is_active: boolean;
           created_by: string;

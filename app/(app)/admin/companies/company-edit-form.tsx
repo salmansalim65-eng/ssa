@@ -104,6 +104,22 @@ export function CompanyEditForm({
             </FormItem>
           )}
         />
+        <FormField
+          control={form.control}
+          name="accountingPeriodStart"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Accounting period start</FormLabel>
+              <FormControl>
+                <Input type="date" disabled={!canEdit} {...field} value={(field.value as string) ?? ""} />
+              </FormControl>
+              <p className="text-xs text-muted-foreground">
+                Reports won&apos;t show activity before this date. Leave blank to use the earliest lease.
+              </p>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
         {formError && <p className="text-sm text-destructive">{formError}</p>}
         {canEdit && (
           <Button type="submit" disabled={isPending}>

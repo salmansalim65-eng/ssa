@@ -22,6 +22,7 @@ export async function updateCompany(companyId: string, input: UpdateCompanyInput
       name: parsed.data.name,
       country: parsed.data.country,
       address: parsed.data.address || null,
+      accounting_period_start: parsed.data.accountingPeriodStart || null,
     })
     .eq("id", companyId);
 

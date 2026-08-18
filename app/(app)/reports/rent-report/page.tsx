@@ -48,6 +48,7 @@ export default async function RentReportPage({
     { data: currencies },
     { data: leaseExpenses },
     { data: rentalAssets },
+    { data: companyRow },
   ] = await Promise.all([
       supabase
         .schema("accounting")
@@ -80,6 +81,7 @@ export default async function RentReportPage({
         .eq("company_id", companyId)
         .eq("is_rental", true)
         .is("deleted_at", null),
+      supabase.schema("core").from("companies").select("accounting_period_start").eq("id", companyId).maybeSingle(),
     ]);
 
   const symbolByCode = new Map((currencies ?? []).map((c) => [c.code as string, c.symbol as string]));
@@ -134,13 +136,16 @@ export default async function RentReportPage({
   const monthStart = (m: number) => `${year}-${String(m + 1).padStart(2, "0")}-01`;
   const monthEnd = (m: number) => `${year}-${String(m + 1).padStart(2, "0")}-${String(new Date(year, m + 1, 0).getDate())}`;
 
-  // Accounting-period start = the earliest lease start on record. Months entirely
-  // before it are left blank (the business didn't exist yet) rather than "Vacant".
+  // Accounting-period start: the company setting when set, else the earliest
+  // lease start on record. Months entirely before it are left blank (the
+  // business didn't exist yet) rather than shown as "Vacant".
+  const settingStart = (companyRow?.accounting_period_start as string | null) ?? null;
   const leaseStartDates = [
     ...(pkLeases ?? []).map((l) => l.lease_start as string | null),
     ...(uaeLeases ?? []).map((l) => l.lease_start as string | null),
   ].filter((d): d is string => Boolean(d));
-  const periodStart = leaseStartDates.length ? leaseStartDates.reduce((min, d) => (d < min ? d : min)) : null;
+  const periodStart =
+    settingStart ?? (leaseStartDates.length ? leaseStartDates.reduce((min, d) => (d < min ? d : min)) : null);
 
   // One accumulator per cost centre, spreading the lease monthly across the
   // months of the year it is active.

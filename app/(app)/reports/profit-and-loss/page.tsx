@@ -17,6 +17,7 @@ import { PrintButton } from "@/components/vouchers/print-button";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
 import { loadReportCountries } from "@/lib/reports/countries";
+import { loadAccountingPeriodStart } from "@/lib/reports/period";
 import { formatAccountCode, formatDate, formatMoney } from "@/lib/format";
 
 function startOfYear() {
@@ -43,10 +44,12 @@ export default async function ProfitAndLossPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string; country?: string; cc?: string; cur?: string }>;
 }) {
-  const { from = startOfYear(), to = today(), country = "", cc = "", cur = "" } = await searchParams;
+  const { from: spFrom, to = today(), country = "", cc = "", cur = "" } = await searchParams;
 
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
+  const periodStart = await loadAccountingPeriodStart(companyId);
+  const from = spFrom ?? periodStart ?? startOfYear();
 
   let linesQuery = supabase
     .schema("reporting")

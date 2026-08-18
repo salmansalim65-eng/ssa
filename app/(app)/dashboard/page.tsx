@@ -735,7 +735,7 @@ async function loadDetail(
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((r) => {
+          {rows.flatMap((r, i) => {
             // net_amount is already the Balance Rent (Rent − Management − Other
             // Expenses); Outstanding = Balance Rent − receipts.
             const balanceRent = Number(r.net_amount);
@@ -745,7 +745,24 @@ async function loadDetail(
             // Fully-paid rows (nothing outstanding) get a light-green background;
             // a still-owing row that is overdue paints only its Outstanding cell red.
             const paid = outstanding <= 0;
-            return (
+            // Rows are ordered by due date, so due months are contiguous. Emit a
+            // highlighted month band whenever the due month changes, grouping the
+            // list month-wise.
+            const monthKey = String(r.due_date ?? "").slice(0, 7);
+            const prevKey = i > 0 ? String(rows[i - 1].due_date ?? "").slice(0, 7) : null;
+            const monthHeader =
+              monthKey !== prevKey ? (
+                <TableRow key={`grp-${monthKey}`} className="hover:bg-transparent">
+                  <TableCell
+                    colSpan={colCount}
+                    className="bg-ledger/15 py-1.5 text-xs font-semibold uppercase tracking-wide text-ledger dark:bg-ledger/25"
+                  >
+                    {dueMonth(r.due_date as string)}
+                  </TableCell>
+                </TableRow>
+              ) : null;
+            return [
+              monthHeader,
             <TableRow key={r.invoice_id} className={paid ? "bg-emerald-50 dark:bg-emerald-950/30" : undefined}>
               <TableCell className="text-muted-foreground">{formatDate(r.invoice_date)}</TableCell>
               <TableCell>{r.voucher_no ? formatVoucherNo(r.voucher_no) : "Draft"}</TableCell>
@@ -772,8 +789,8 @@ async function loadDetail(
               >
                 {fmt(outstanding)}
               </TableCell>
-            </TableRow>
-            );
+            </TableRow>,
+            ];
           })}
           {rows.length === 0 && (
             <TableRow className="hover:bg-transparent">

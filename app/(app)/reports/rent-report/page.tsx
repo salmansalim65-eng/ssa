@@ -41,8 +41,14 @@ export default async function RentReportPage({
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
 
-  const [{ data: costCenters }, { data: pkLeases }, { data: uaeLeases }, { data: currencies }, { data: leaseExpenses }] =
-    await Promise.all([
+  const [
+    { data: costCenters },
+    { data: pkLeases },
+    { data: uaeLeases },
+    { data: currencies },
+    { data: leaseExpenses },
+    { data: rentalAssets },
+  ] = await Promise.all([
       supabase
         .schema("accounting")
         .from("cost_centers")
@@ -67,6 +73,13 @@ export default async function RentReportPage({
         .is("deleted_at", null),
       supabase.schema("core").from("currencies").select("code, symbol"),
       supabase.schema("rental").from("lease_expenses").select("lease_id, amount").eq("company_id", companyId),
+      supabase
+        .schema("assets")
+        .from("assets")
+        .select("id")
+        .eq("company_id", companyId)
+        .eq("is_rental", true)
+        .is("deleted_at", null),
     ]);
 
   const symbolByCode = new Map((currencies ?? []).map((c) => [c.code as string, c.symbol as string]));
@@ -123,8 +136,12 @@ export default async function RentReportPage({
 
   // One accumulator per cost centre, spreading the lease monthly across the
   // months of the year it is active.
+  // Rental properties only (a cost centre linked to a rental asset). Vacant ones
+  // are kept so they still list, with a "Vacant" marker in their empty months.
+  const rentalAssetIds = new Set((rentalAssets ?? []).map((a) => a.id as string));
   const rows = new Map<string, CcRow>();
   for (const cc of costCenters ?? []) {
+    if (!cc.asset_id || !rentalAssetIds.has(cc.asset_id as string)) continue;
     const leases = cc.asset_id ? leaseByAsset.get(cc.asset_id as string) ?? [] : [];
     const months = Array(12).fill(0) as number[];
     let total = 0;
@@ -151,11 +168,9 @@ export default async function RentReportPage({
     });
   }
 
-  // Group cost centres by country, keeping only rows with an estimate or any
-  // billed rent so the report doesn't fill with empty properties.
+  // Group rental properties by country — vacant ones included.
   const byCountry = new Map<string, CcRow[]>();
   for (const row of rows.values()) {
-    if (row.est === 0 && row.total === 0) continue;
     const list = byCountry.get(row.country) ?? [];
     list.push(row);
     byCountry.set(row.country, list);
@@ -275,6 +290,11 @@ export default async function RentReportPage({
                       <tr key={r.id} className={cn("group/row border-b border-border/50 [&>td]:px-3 [&>td]:py-2", rowBg, "hover:bg-primary/[0.05]")}>
                         <td className={cn("sticky left-0 z-10 min-w-[240px] border-r border-border/50", rowBg, "group-hover/row:bg-primary/[0.05]")}>
                           <span className="font-medium text-foreground">{r.name}</span>
+                          {r.total === 0 && (
+                            <span className="ml-2 rounded border border-amber-400/60 px-1.5 text-[0.6rem] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                              Vacant
+                            </span>
+                          )}
                         </td>
                         <td className="text-right font-mono tabular-nums text-muted-foreground">{r.est ? money(r.est) : dash}</td>
                         {r.months.map((v, i) => (
@@ -283,10 +303,15 @@ export default async function RentReportPage({
                             className={cn(
                               "text-right font-mono tabular-nums",
                               i === thisMonth && "bg-primary/[0.04]",
-                              !v && "text-muted-foreground/40",
                             )}
                           >
-                            {v ? money(v) : dash}
+                            {v ? (
+                              money(v)
+                            ) : (
+                              <span className="text-[0.6rem] font-medium uppercase tracking-wide text-amber-600/80 dark:text-amber-400/80">
+                                Vacant
+                              </span>
+                            )}
                           </td>
                         ))}
                         <td className="text-right font-mono font-semibold tabular-nums text-foreground">{money(r.total)}</td>

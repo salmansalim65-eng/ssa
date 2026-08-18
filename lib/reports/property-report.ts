@@ -2,12 +2,13 @@
 // asset + lease data so the maths lives in one tested place.
 //
 // Verified against the reference report:
-//   Monthly Rent     = gross lease rent − Commission − HH expenses  (NET; service charges NOT deducted)
+//   Monthly Rent     = gross lease rent − Commission − HH expenses  (= "Balance Rent")
 //   Yearly Rent      = Monthly Rent × 12
 //   Diff Est/Yearly  = Est Rent × 12 − Yearly Rent      (annualised estimate vs actual)
 //   Sq Ft Value      = Purchase Value / Sq Ft
 //   Service Charges  = Service Rate × Sq Ft             (stored on the asset; = "Maintenance")
-//   Perc%            = Monthly Rent × 12 / Current Value × 100    (annualised yield)
+//   Net Rent (month) = Monthly Rent − Service Charges / 12
+//   Perc%            = Net Rent × 12 / Current Value × 100    (annualised yield)
 //   % Month          = Perc% / 12
 //   Difference Value = Current Value − Purchase Value
 //   Maintenance%     = Service Charges / Yearly Rent × 100
@@ -121,8 +122,8 @@ export function computePropertyRow(i: PropertyRowInput): PropertyRow {
   const currentValue = round2(i.currentValue);
   const serviceCharges = round2(i.serviceCharges); // annual
   const serviceMonthly = round2(serviceCharges / 12);
-  // Net Rent equals Monthly Rent now (both net); kept for the yield calc.
-  const netRent = monthlyRent;
+  // Net Rent = Monthly Rent (Balance Rent) less the monthly service charge.
+  const netRent = round2(monthlyRent - serviceMonthly);
   return {
     id: i.id,
     group: i.group,

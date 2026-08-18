@@ -63,7 +63,6 @@ const NUM_COLS: {
   { key: "diffEstVsYearly", label: "Diff. Est/Yr", full: "Difference: Estimated × 12 − Yearly", kind: "money" },
   { key: "sqFt", label: "Sq. Ft", full: "Area (square feet)", kind: "money" },
   { key: "serviceMonthly", label: "Service Charges", full: "Monthly service charge (Rate × Sq. Ft ÷ 12)", kind: "money" },
-  { key: "commission", label: "Commission", full: "Monthly agent commission (5% UAE / 10% HH / 0 PK)", kind: "money" },
   { key: "netRent", label: "Net Rent", full: "Monthly: Monthly Rent − Commission − HH expenses", kind: "money" },
   { key: "currentValue", label: "Current Value", full: "Current property value", kind: "money" },
   { key: "perc", label: "Perc%", full: "Annualised yield: Net Rent × 12 ÷ Current Value", kind: "pct" },
@@ -109,23 +108,22 @@ export function PropertyReportView({
   monthlyTrend,
   currencies,
   rateToBase,
-  baseCurrencyId,
 }: {
   groups: PropertyGroup[];
   countries: { code: string; name: string }[];
   monthlyTrend: MonthlyTrendPoint[];
   currencies: { id: string; code: string; symbol: string }[];
   rateToBase: Record<string, number>;
-  baseCurrencyId: string | null;
+  baseCurrencyId?: string | null;
 }) {
   const [search, setSearch] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [country, setCountry] = useState("");
   const [occupancy, setOccupancy] = useState<"" | "occupied" | "vacant">("");
   const [propertyType, setPropertyType] = useState("");
-  // Default to the company base currency so mixed-currency portfolios sum in one
-  // currency (converted), instead of naively adding e.g. PKR + SAR.
-  const [currency, setCurrency] = useState(baseCurrencyId ?? "");
+  // Default to each property's ORIGINAL currency (no conversion); the user can
+  // pick a currency to convert the whole portfolio into.
+  const [currency, setCurrency] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
 

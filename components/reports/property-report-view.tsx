@@ -64,7 +64,7 @@ const NUM_COLS: {
   { key: "sqFt", label: "Sq. Ft", full: "Area (square feet)", kind: "money" },
   { key: "serviceMonthly", label: "Service Charges", full: "Monthly service charge (Rate × Sq. Ft ÷ 12)", kind: "money" },
   { key: "commission", label: "Commission", full: "Monthly agent commission (5% UAE / 10% HH / 0 PK)", kind: "money" },
-  { key: "netRent", label: "Net Rent", full: "Monthly: Monthly Rent − Service Charges − Commission", kind: "money" },
+  { key: "netRent", label: "Net Rent", full: "Monthly: Monthly Rent − Commission − HH expenses", kind: "money" },
   { key: "currentValue", label: "Current Value", full: "Current property value", kind: "money" },
   { key: "perc", label: "Perc%", full: "Annualised yield: Net Rent × 12 ÷ Current Value", kind: "pct" },
   { key: "percMonth", label: "% Month", full: "Monthly yield: Perc% ÷ 12", kind: "pct" },

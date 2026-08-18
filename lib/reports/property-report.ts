@@ -6,7 +6,7 @@
 //   Diff Est/Yearly  = Est Rent × 12 − Yearly Rent      (annualised estimate vs actual)
 //   Sq Ft Value      = Purchase Value / Sq Ft
 //   Service Charges  = Service Rate × Sq Ft             (stored on the asset; = "Maintenance")
-//   Net Rent (month) = Monthly Rent − Service Charges / 12
+//   Net Rent (month) = Monthly Rent − Commission − HH expenses   (service charges NOT deducted)
 //   Perc%            = Net Rent × 12 / Current Value × 100    (annualised yield)
 //   % Month          = Perc% / 12
 //   Difference Value = Current Value − Purchase Value
@@ -41,6 +41,7 @@ export interface PropertyRowInput {
   serviceRate: number; // asset.service_charges_rate
   serviceCharges: number; // asset.service_charges_amount (rate × area), ANNUAL
   commissionMonthly: number; // agent commission per month (5% UAE / 10% HH / 0 PK)
+  expensesMonthly?: number; // monthly HH lease expenses (0 for UAE/PK leases without them)
   purchaseValue: number;
   currentValue: number;
   titleDeedValue: number;
@@ -82,7 +83,8 @@ export interface PropertyRow {
   serviceCharges: number; // annual (kept for reference)
   serviceMonthly: number; // monthly service charge = serviceCharges / 12
   commission: number; // monthly agent commission
-  netRent: number; // monthly: monthlyRent − serviceMonthly − commission
+  expensesMonthly: number; // monthly HH lease expenses
+  netRent: number; // monthly: monthlyRent − commission − expensesMonthly
   currentValue: number;
   perc: number;
   percMonth: number;
@@ -114,9 +116,10 @@ export function computePropertyRow(i: PropertyRowInput): PropertyRow {
   const serviceCharges = round2(i.serviceCharges); // annual
   const serviceMonthly = round2(serviceCharges / 12);
   const commission = round2(i.commissionMonthly);
-  // Net Rent is monthly: monthly rent less monthly service charge and the
-  // monthly agent commission.
-  const netRent = round2(monthlyRent - serviceMonthly - commission);
+  const expensesMonthly = round2(i.expensesMonthly ?? 0);
+  // Net Rent is monthly: monthly rent less the agent commission and the monthly
+  // HH lease expenses. Service charges are shown but NOT deducted here.
+  const netRent = round2(monthlyRent - commission - expensesMonthly);
   return {
     id: i.id,
     group: i.group,
@@ -136,6 +139,7 @@ export function computePropertyRow(i: PropertyRowInput): PropertyRow {
     serviceCharges,
     serviceMonthly,
     commission,
+    expensesMonthly,
     netRent,
     currentValue,
     perc: currentValue > 0 ? round2(((netRent * 12) / currentValue) * 100) : 0,

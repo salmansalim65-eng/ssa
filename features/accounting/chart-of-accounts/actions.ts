@@ -455,19 +455,29 @@ export async function createAccount(input: AccountInput) {
   return { success: true };
 }
 
-// True when the given parent account is the "PROPERTIES" group. Accounts created
-// under it are registered as properties in the Assets module (regardless of the
-// rental flag — that flag only controls lease visibility).
+// True when the given parent account sits under the "PROPERTIES" group — the
+// group itself OR any group nested beneath it (e.g. "DUBAI PROPERTIES",
+// "PK PROPERTIES"). Accounts created under it are registered as properties in
+// the Assets module. Walks the ancestor chain so nested property groups count.
 async function isPropertiesParent(parentId: string | null | undefined): Promise<boolean> {
   if (!parentId) return false;
   const supabase = await createClient();
-  const { data } = await supabase
-    .schema("accounting")
-    .from("chart_of_accounts")
-    .select("account_name")
-    .eq("id", parentId)
-    .maybeSingle();
-  return (data?.account_name ?? "").trim().toUpperCase() === "PROPERTIES";
+  let currentId: string | null = parentId;
+  const seen = new Set<string>();
+  while (currentId && !seen.has(currentId)) {
+    seen.add(currentId);
+    const result = await supabase
+      .schema("accounting")
+      .from("chart_of_accounts")
+      .select("account_name, parent_id")
+      .eq("id", currentId)
+      .maybeSingle();
+    const row = result.data as { account_name: string | null; parent_id: string | null } | null;
+    if (!row) return false;
+    if ((row.account_name ?? "").trim().toUpperCase() === "PROPERTIES") return true;
+    currentId = row.parent_id ?? null;
+  }
+  return false;
 }
 
 // Delegates to ensureLinkedAsset. Properties are managed from Chart of Accounts,

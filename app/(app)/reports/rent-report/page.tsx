@@ -85,10 +85,18 @@ export default async function RentReportPage({
     start: string | null;
     end: string | null;
   }
-  const leaseByAsset = new Map<string, AssetLease>();
+  // A property can carry more than one active lease (e.g. an HH lease and a
+  // plain UAE lease on the same unit), so collect ALL of them per asset and sum
+  // their net rent — otherwise the later one silently overwrote the earlier.
+  const leaseByAsset = new Map<string, AssetLease[]>();
+  const addLease = (assetId: string, lease: AssetLease) => {
+    const arr = leaseByAsset.get(assetId) ?? [];
+    arr.push(lease);
+    leaseByAsset.set(assetId, arr);
+  };
   for (const l of pkLeases ?? []) {
     if (!l.asset_id) continue;
-    leaseByAsset.set(l.asset_id as string, {
+    addLease(l.asset_id as string, {
       monthly: Number(l.monthly_rent) || 0,
       start: (l.lease_start as string) ?? null,
       end: (l.lease_end as string) ?? null,
@@ -102,7 +110,7 @@ export default async function RentReportPage({
     const management = gross * (isHh ? HH_AGENT_PCT : UAE_AGENT_PCT);
     const expenses = isHh ? expenseByLease.get(l.id as string) ?? 0 : 0;
     const net = Math.max(0, gross - management - expenses);
-    leaseByAsset.set(l.asset_id as string, {
+    addLease(l.asset_id as string, {
       monthly: net,
       start: (l.lease_start as string) ?? null,
       end: (l.lease_end as string) ?? null,
@@ -117,24 +125,27 @@ export default async function RentReportPage({
   // months of the year it is active.
   const rows = new Map<string, CcRow>();
   for (const cc of costCenters ?? []) {
-    const lease = cc.asset_id ? leaseByAsset.get(cc.asset_id as string) : undefined;
+    const leases = cc.asset_id ? leaseByAsset.get(cc.asset_id as string) ?? [] : [];
     const months = Array(12).fill(0) as number[];
     let total = 0;
-    if (lease && lease.monthly > 0) {
-      for (let m = 0; m < 12; m++) {
+    for (let m = 0; m < 12; m++) {
+      let monthSum = 0;
+      for (const lease of leases) {
+        if (lease.monthly <= 0) continue;
         const active = (!lease.start || lease.start <= monthEnd(m)) && (!lease.end || lease.end >= monthStart(m));
-        if (active) {
-          months[m] = lease.monthly;
-          total += lease.monthly;
-        }
+        if (active) monthSum += lease.monthly;
       }
+      months[m] = monthSum;
+      total += monthSum;
     }
+    // "Net Rent" column = combined monthly net rent across the property's leases.
+    const est = leases.reduce((s, l) => s + (l.monthly > 0 ? l.monthly : 0), 0);
     rows.set(cc.id as string, {
       id: cc.id as string,
       code: cc.code as string,
       name: cc.name as string,
       country: (cc.country as string) ?? "",
-      est: lease?.monthly ?? 0,
+      est,
       months,
       total,
     });

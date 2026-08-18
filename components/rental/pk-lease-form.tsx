@@ -124,7 +124,7 @@ export function PkLeaseForm({
                 <SelectContent>
                   {assets.map((a) => (
                     <SelectItem key={a.id} value={a.id}>
-                      {a.asset_code} — {a.asset_name}
+                      {a.asset_name}
                     </SelectItem>
                   ))}
                 </SelectContent>

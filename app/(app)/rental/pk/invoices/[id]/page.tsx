@@ -151,7 +151,7 @@ export default async function PkRentInvoiceDetailPage({ params }: { params: Prom
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Asset</p>
           <p className="mt-0.5">
-            {refs.pk_leases?.assets ? `${refs.pk_leases.assets.asset_code} — ${refs.pk_leases.assets.asset_name}` : "—"}
+            {refs.pk_leases?.assets ? refs.pk_leases.assets.asset_name : "—"}
           </p>
         </div>
         <div>

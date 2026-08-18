@@ -120,7 +120,7 @@ export default async function PkLeaseDetailPage({ params }: { params: Promise<{ 
   const remainingAdvance = Math.max(lease.advance_rent - advanceAlreadyAdjusted, 0);
   const pendingScheduleCount = (schedules ?? []).filter((s) => s.status === "pending").length;
 
-  const assetLabel = refs.assets ? `${refs.assets.asset_code} — ${refs.assets.asset_name}` : "—";
+  const assetLabel = refs.assets ? refs.assets.asset_name : "—";
 
   return (
     <div className="space-y-6">

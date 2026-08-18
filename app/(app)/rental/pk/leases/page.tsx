@@ -110,7 +110,7 @@ export default async function PkLeasesPage() {
                         href={`/rental/pk/leases/${lease.id}`}
                         className="font-medium text-primary hover:underline"
                       >
-                        {asset ? `${asset.asset_code} — ${asset.asset_name}` : "—"}
+                        {asset ? asset.asset_name : "—"}
                       </Link>
                     </TableCell>
                     <TableCell>{lease.tenants?.name ?? "—"}</TableCell>

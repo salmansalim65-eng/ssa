@@ -75,7 +75,6 @@ export default async function AssetRegisterPage() {
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead>Code</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Location</TableHead>
@@ -89,7 +88,6 @@ export default async function AssetRegisterPage() {
           <TableBody>
             {(rows ?? []).map((r) => (
               <TableRow key={r.asset_id}>
-                <TableCell className="font-mono text-xs text-muted-foreground">{r.asset_code}</TableCell>
                 <TableCell className="font-medium">{r.asset_name}</TableCell>
                 <TableCell>{r.property_type}</TableCell>
                 <TableCell>
@@ -107,7 +105,7 @@ export default async function AssetRegisterPage() {
             ))}
             {(rows ?? []).length === 0 && (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                   No assets registered yet.
                 </TableCell>
               </TableRow>

@@ -107,7 +107,7 @@ export default async function HhLeasesPage() {
                     <TableCell className="font-mono text-xs text-muted-foreground">{lease.document_no ?? "—"}</TableCell>
                     <TableCell>
                       <Link href={`/rental/uae/leases/${lease.id}`} className="font-medium text-primary hover:underline">
-                        {asset ? `${asset.asset_code} — ${asset.asset_name}` : "—"}
+                        {asset ? asset.asset_name : "—"}
                       </Link>
                     </TableCell>
                     <TableCell>{lease.tenants?.name ?? "—"}</TableCell>

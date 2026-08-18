@@ -115,7 +115,6 @@ export default async function OutstandingRentPage({
                 <TableCell>{r.voucher_no ?? "Draft"}</TableCell>
                 <TableCell>{formatDate(r.due_date)}</TableCell>
                 <TableCell>
-                  <span className="font-mono text-xs text-muted-foreground">{r.asset_code}</span> —{" "}
                   <span className="font-medium">{r.asset_name}</span>
                 </TableCell>
                 <TableCell>{r.tenant_name}</TableCell>

@@ -148,9 +148,7 @@ export default async function UaeRentInvoiceDetailPage({ params }: { params: Pro
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Asset</p>
           <p className="mt-0.5">
-            {refs.uae_leases?.assets
-              ? `${refs.uae_leases.assets.asset_code} — ${refs.uae_leases.assets.asset_name}`
-              : "—"}
+            {refs.uae_leases?.assets ? refs.uae_leases.assets.asset_name : "—"}
           </p>
         </div>
         <div>

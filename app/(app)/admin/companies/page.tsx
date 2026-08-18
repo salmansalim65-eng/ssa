@@ -19,7 +19,7 @@ export default async function CompaniesPage() {
   const { data: company } = await supabase
     .schema("core")
     .from("companies")
-    .select("id, name, code, country, address, accounting_period_start")
+    .select("id, name, code, country, address")
     .eq("id", profile!.default_company_id!)
     .single();
 
@@ -28,6 +28,16 @@ export default async function CompaniesPage() {
   if (!company) {
     return <p className="text-sm text-muted-foreground">Company not found.</p>;
   }
+
+  // Fetched separately and tolerantly so the page still loads if the
+  // accounting_period_start migration hasn't been applied yet.
+  const { data: periodRow } = await supabase
+    .schema("core")
+    .from("companies")
+    .select("accounting_period_start")
+    .eq("id", company.id)
+    .maybeSingle();
+  const accountingPeriodStart = (periodRow?.accounting_period_start as string | null) ?? "";
 
   return (
     <div className="space-y-5">
@@ -51,7 +61,7 @@ export default async function CompaniesPage() {
               name: company.name,
               country: (company.country as "PK" | "AE") ?? "PK",
               address: company.address ?? "",
-              accountingPeriodStart: company.accounting_period_start ?? "",
+              accountingPeriodStart,
             }}
           />
         </CardContent>

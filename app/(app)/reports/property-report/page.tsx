@@ -42,6 +42,7 @@ export default async function PropertyReportPage() {
     { data: currencyRows },
     { data: companyCurrencies },
     { data: exchangeRates },
+    { data: leaseExpenses },
   ] = await Promise.all([
     supabase
       .schema("assets")
@@ -62,7 +63,7 @@ export default async function PropertyReportPage() {
     supabase
       .schema("rental")
       .from("uae_leases")
-      .select("asset_id, rental_amount, rent_cycle, lease_start, lease_end, rent_month, lease_type")
+      .select("id, asset_id, rental_amount, rent_cycle, lease_start, lease_end, rent_month, lease_type")
       .eq("company_id", companyId)
       .is("deleted_at", null),
     supabase
@@ -90,7 +91,15 @@ export default async function PropertyReportPage() {
       .eq("company_id", companyId)
       .lte("rate_date", today)
       .order("rate_date", { ascending: false }),
+    supabase.schema("rental").from("lease_expenses").select("lease_id, amount").eq("company_id", companyId),
   ]);
+
+  // Monthly HH-lease expense total per lease — deducted from Net Rent.
+  const expenseByLease = new Map<string, number>();
+  for (const e of leaseExpenses ?? []) {
+    const k = e.lease_id as string;
+    expenseByLease.set(k, (expenseByLease.get(k) ?? 0) + Number(e.amount));
+  }
 
   const countryName = new Map((countryRows ?? []).map((c) => [c.code as string, c.name as string]));
 
@@ -131,6 +140,7 @@ export default async function PropertyReportPage() {
   interface ActiveLease {
     monthly: number;
     commissionMonthly: number; // agent commission (5% UAE / 10% HH / 0 PK)
+    expensesMonthly: number; // monthly HH lease expenses (deducted from net rent)
     start: string | null;
     end: string | null;
     renew: string | null;
@@ -144,6 +154,7 @@ export default async function PropertyReportPage() {
     end: string | null,
     rentMonth: string | null,
     commissionPct: number,
+    expensesMonthly: number,
   ) => {
     if (!assetId) return;
     const active = (!start || start <= today) && (!end || end >= today);
@@ -152,6 +163,7 @@ export default async function PropertyReportPage() {
     leaseByAsset.set(assetId, {
       monthly,
       commissionMonthly: Math.round(monthly * commissionPct * 100) / 100,
+      expensesMonthly,
       start,
       end,
       renew: rentMonth || monthLabel(end),
@@ -167,6 +179,7 @@ export default async function PropertyReportPage() {
       l.rent_month as string | null,
       // Agent commission: HH lease 10%, standard UAE lease 5% (see lib/rental/lease-accounting.ts).
       l.lease_type === "hh" ? 0.1 : 0.05,
+      l.lease_type === "hh" ? expenseByLease.get(l.id as string) ?? 0 : 0,
     );
   }
   for (const l of pkLeases ?? []) {
@@ -178,6 +191,7 @@ export default async function PropertyReportPage() {
       l.lease_end as string | null,
       l.rent_month as string | null,
       0, // no agent commission on PK leases
+      0, // no HH expenses on PK leases
     );
   }
 
@@ -268,6 +282,7 @@ export default async function PropertyReportPage() {
       serviceRate: Number(a.service_charges_rate) || 0,
       serviceCharges: Number(a.service_charges_amount) || 0,
       commissionMonthly: lease?.commissionMonthly ?? 0,
+      expensesMonthly: lease?.expensesMonthly ?? 0,
       purchaseValue: Number(a.purchase_value) || 0,
       currentValue: Number(a.current_value) || 0,
       titleDeedValue: Number(a.title_deed_value) || 0,

@@ -16,7 +16,7 @@ import { SummaryCard, StatCol } from "@/components/dashboard/summary-card";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
-import { formatAccountCode, formatDate, formatMoney } from "@/lib/format";
+import { formatAccountCode, formatDate, formatMoney, formatVoucherNo } from "@/lib/format";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { VOUCHER_TYPE_LABELS, voucherHref } from "@/lib/vouchers/meta";
 import { isRentOverdue } from "@/lib/rental/overdue";
@@ -409,7 +409,7 @@ export default async function DashboardPage({
                   key={`${row.voucher_type}-${row.voucher_id}`}
                   className="flex items-baseline justify-between gap-3"
                 >
-                  <span className="truncate font-mono text-muted-foreground">{row.voucher_no ?? "Draft"}</span>
+                  <span className="truncate font-mono text-muted-foreground">{row.voucher_no ? formatVoucherNo(row.voucher_no) : "Draft"}</span>
                   <span className="shrink-0 font-mono font-medium tabular-nums">
                     {money(symById(row.currency_id), Number(row.doc_amount ?? row.amount))}
                   </span>
@@ -557,7 +557,7 @@ function recentDetail(
                   href={voucherHref(row.voucher_type as VoucherType, row.voucher_id)}
                   className="font-mono font-medium text-primary hover:underline"
                 >
-                  {row.voucher_no ?? "Draft"}
+                  {row.voucher_no ? formatVoucherNo(row.voucher_no) : "Draft"}
                 </Link>
               </TableCell>
               <TableCell>{VOUCHER_TYPE_LABELS[row.voucher_type as VoucherType]}</TableCell>
@@ -748,7 +748,7 @@ async function loadDetail(
             return (
             <TableRow key={r.invoice_id} className={paid ? "bg-emerald-50 dark:bg-emerald-950/30" : undefined}>
               <TableCell className="text-muted-foreground">{formatDate(r.invoice_date)}</TableCell>
-              <TableCell>{r.voucher_no ?? "Draft"}</TableCell>
+              <TableCell>{r.voucher_no ? formatVoucherNo(r.voucher_no) : "Draft"}</TableCell>
               <TableCell className="text-muted-foreground">{dueMonth(r.due_date as string)}</TableCell>
               <TableCell className={overdue ? "text-destructive" : "text-muted-foreground"}>
                 {formatDate(r.due_date)}

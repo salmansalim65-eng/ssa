@@ -29,6 +29,19 @@ export function formatAccountCode(value: string | null | undefined): string {
   return code.replace(/^0+(?=\d)/, "");
 }
 
+/**
+ * Voucher/document numbers for display: strips the zero-padding from the numeric
+ * run so `URI-000023` reads as `URI-23`, `RCT-000008` as `RCT-8`, and a bare
+ * `0000000014` as `14`. Any prefix and separators are preserved. Presentation-
+ * only — stored numbers keep their padding.
+ */
+export function formatVoucherNo(value: string | null | undefined): string {
+  if (value == null) return "";
+  const s = String(value).trim();
+  if (!s) return "";
+  return s.replace(/(^|[^0-9])0+(\d)/g, "$1$2");
+}
+
 /** A plain number with thousands separators (no forced decimals). */
 export function formatNumber(value: number | null | undefined): string {
   const n = Number(value ?? 0);

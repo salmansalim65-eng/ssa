@@ -10,7 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatMoney, formatVoucherNo } from "@/lib/format";
 import type { VoucherListRow } from "@/lib/vouchers/queries";
 import { VoucherStatusBadge } from "./voucher-status-badge";
 
@@ -61,7 +61,7 @@ export function VoucherListTable({
                   href={`/accounting/vouchers/${voucherType}/${row.id}`}
                   className="font-mono font-medium text-primary hover:underline"
                 >
-                  {row.voucherNo ?? "Draft"}
+                  {row.voucherNo ? formatVoucherNo(row.voucherNo) : "Draft"}
                 </Link>
               </TableCell>
               <TableCell className="text-muted-foreground">{formatDate(row.date)}</TableCell>

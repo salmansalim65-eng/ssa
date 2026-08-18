@@ -110,6 +110,54 @@ export default async function BalanceSheetPage({
 
   const byAccount = aggregateByAccount(lines ?? []);
 
+  // ---- Chart-of-Accounts tree (for hierarchical grouping) ----
+  // The balance sheet mirrors the CoA group hierarchy: each group nests its
+  // sub-groups and accounts with a rolled-up subtotal, like Chart of Accounts
+  // (EQUITY → CAPITAL → SS GROUP → …).
+  const { data: coa } = await supabase
+    .schema("accounting")
+    .from("chart_of_accounts")
+    .select("id, account_code, account_name, parent_id, is_group, account_type, is_active")
+    .eq("company_id", companyId)
+    .is("deleted_at", null);
+  type CoaNode = {
+    id: string;
+    account_code: string;
+    account_name: string;
+    parent_id: string | null;
+    is_group: boolean;
+    account_type: string;
+    is_active: boolean;
+  };
+  const coaAccounts = (coa ?? []) as CoaNode[];
+  const childrenOf = new Map<string, CoaNode[]>();
+  for (const a of coaAccounts) {
+    const key = a.parent_id ?? "__root__";
+    if (!childrenOf.has(key)) childrenOf.set(key, []);
+    childrenOf.get(key)!.push(a);
+  }
+  for (const list of childrenOf.values()) list.sort((a, b) => a.account_code.localeCompare(b.account_code));
+
+  // "Inactive": an account/group flagged inactive, or one under a group named
+  // like "Inactive Accounts". Inactivity flows down to descendants. These are
+  // pulled out of the main sections into their own Inactive Accounts block.
+  const inactiveIds = new Set<string>();
+  {
+    const stack = coaAccounts.filter((n) => n.is_active === false || /in\s*active/i.test(n.account_name));
+    for (const n of stack) inactiveIds.add(n.id);
+    while (stack.length) {
+      const n = stack.pop()!;
+      for (const c of childrenOf.get(n.id) ?? []) {
+        if (!inactiveIds.has(c.id)) {
+          inactiveIds.add(c.id);
+          stack.push(c);
+        }
+      }
+    }
+  }
+
+  // Active balances by type drive the section totals + balance check (inactive
+  // accounts are excluded here and reported in their own block below).
   const buckets: Record<AccountType, AccountBalance[]> = {
     asset: [],
     liability: [],
@@ -117,8 +165,8 @@ export default async function BalanceSheetPage({
     income: [],
     expense: [],
   };
-
-  for (const a of byAccount.values()) {
+  for (const [id, a] of byAccount) {
+    if (inactiveIds.has(id)) continue;
     const isDebitNormal = a.account_type === "asset" || a.account_type === "expense";
     const balance = isDebitNormal ? a.debit - a.credit : a.credit - a.debit;
     if (balance === 0) continue;
@@ -129,38 +177,11 @@ export default async function BalanceSheetPage({
       credit: a.credit * factor,
     });
   }
-
   for (const list of Object.values(buckets)) list.sort((a, b) => a.account_code.localeCompare(b.account_code));
 
-  // ---- Hierarchical grouping by the Chart-of-Accounts tree ----
-  // The balance sheet mirrors the CoA group hierarchy: each group nests its
-  // sub-groups and accounts with a rolled-up subtotal, exactly like the tree in
-  // Chart of Accounts (EQUITY → CAPITAL → SS GROUP → …).
-  const { data: coa } = await supabase
-    .schema("accounting")
-    .from("chart_of_accounts")
-    .select("id, account_code, account_name, parent_id, is_group, account_type")
-    .eq("company_id", companyId)
-    .is("deleted_at", null);
-  type CoaNode = {
-    id: string;
-    account_code: string;
-    account_name: string;
-    parent_id: string | null;
-    is_group: boolean;
-    account_type: string;
-  };
-  const coaAccounts = (coa ?? []) as CoaNode[];
   // Converted balance per account id (base ledger amounts × currency factor).
   const balById = new Map<string, { debit: number; credit: number }>();
   for (const [id, a] of byAccount) balById.set(id, { debit: a.debit * factor, credit: a.credit * factor });
-  const childrenOf = new Map<string, CoaNode[]>();
-  for (const a of coaAccounts) {
-    const key = a.parent_id ?? "__root__";
-    if (!childrenOf.has(key)) childrenOf.set(key, []);
-    childrenOf.get(key)!.push(a);
-  }
-  for (const list of childrenOf.values()) list.sort((a, b) => a.account_code.localeCompare(b.account_code));
   // Roll a group's balance up from its descendants (leaf accounts read balById).
   const nodeTotals = new Map<string, { debit: number; credit: number }>();
   function totalsFor(node: CoaNode): { debit: number; credit: number } {
@@ -188,12 +209,13 @@ export default async function BalanceSheetPage({
   // Render a node and its descendants. Groups are bold subtotal bands; empty
   // groups and zero-balance accounts are pruned so the sheet stays a balance
   // sheet, not a full account dump.
-  function renderNode(node: CoaNode, depth: number): ReactNode[] {
+  function renderNode(node: CoaNode, depth: number, renderingInactive: boolean): ReactNode[] {
+    if (!renderingInactive && inactiveIds.has(node.id)) return [];
     const t = totalsFor(node);
     const pad = { paddingLeft: `${0.5 + depth * 1.25}rem` };
     const net = t.debit - t.credit;
     if (node.is_group) {
-      const childRows = (childrenOf.get(node.id) ?? []).flatMap((c) => renderNode(c, depth + 1));
+      const childRows = (childrenOf.get(node.id) ?? []).flatMap((c) => renderNode(c, depth + 1, renderingInactive));
       if (childRows.length === 0) return [];
       return [
         <TableRow key={node.id} className="bg-muted/40 hover:bg-muted/40">
@@ -224,7 +246,14 @@ export default async function BalanceSheetPage({
   // accounts, in account-code order (income & expense live in the P&L).
   const BS_TYPES = new Set(["asset", "liability", "equity"]);
   const bsRoots = (childrenOf.get("__root__") ?? []).filter((n) => BS_TYPES.has(n.account_type));
-  const treeRows = bsRoots.flatMap((r) => renderNode(r, 0));
+  const treeRows = bsRoots.flatMap((r) => renderNode(r, 0, false));
+
+  // Inactive accounts, shown in their own section: the top of each inactive
+  // subtree (a node whose parent is not itself inactive).
+  const inactiveRows = coaAccounts
+    .filter((n) => inactiveIds.has(n.id) && !(n.parent_id && inactiveIds.has(n.parent_id)))
+    .sort((a, b) => a.account_code.localeCompare(b.account_code))
+    .flatMap((r) => renderNode(r, 0, true));
 
   const sumDebit = (rows: AccountBalance[]) => rows.reduce((s, r) => s + r.debit, 0);
   const sumCredit = (rows: AccountBalance[]) => rows.reduce((s, r) => s + r.credit, 0);
@@ -373,6 +402,18 @@ export default async function BalanceSheetPage({
                 true,
               )}
             </TableRow>
+
+            {/* Inactive accounts — shown separately, excluded from the totals above. */}
+            {inactiveRows.length > 0 && (
+              <>
+                <TableRow className="bg-muted/60 hover:bg-muted/60">
+                  <TableCell colSpan={4} className="pt-4 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                    Inactive Accounts
+                  </TableCell>
+                </TableRow>
+                {inactiveRows}
+              </>
+            )}
           </TableBody>
         </Table>
       </div>

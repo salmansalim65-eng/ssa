@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, type ReactNode } from "react";
 
 import {
   Table,
@@ -132,6 +132,100 @@ export default async function BalanceSheetPage({
 
   for (const list of Object.values(buckets)) list.sort((a, b) => a.account_code.localeCompare(b.account_code));
 
+  // ---- Hierarchical grouping by the Chart-of-Accounts tree ----
+  // The balance sheet mirrors the CoA group hierarchy: each group nests its
+  // sub-groups and accounts with a rolled-up subtotal, exactly like the tree in
+  // Chart of Accounts (EQUITY → CAPITAL → SS GROUP → …).
+  const { data: coa } = await supabase
+    .schema("accounting")
+    .from("chart_of_accounts")
+    .select("id, account_code, account_name, parent_id, is_group, account_type")
+    .eq("company_id", companyId)
+    .is("deleted_at", null);
+  type CoaNode = {
+    id: string;
+    account_code: string;
+    account_name: string;
+    parent_id: string | null;
+    is_group: boolean;
+    account_type: string;
+  };
+  const coaAccounts = (coa ?? []) as CoaNode[];
+  // Converted balance per account id (base ledger amounts × currency factor).
+  const balById = new Map<string, { debit: number; credit: number }>();
+  for (const [id, a] of byAccount) balById.set(id, { debit: a.debit * factor, credit: a.credit * factor });
+  const childrenOf = new Map<string, CoaNode[]>();
+  for (const a of coaAccounts) {
+    const key = a.parent_id ?? "__root__";
+    if (!childrenOf.has(key)) childrenOf.set(key, []);
+    childrenOf.get(key)!.push(a);
+  }
+  for (const list of childrenOf.values()) list.sort((a, b) => a.account_code.localeCompare(b.account_code));
+  // Roll a group's balance up from its descendants (leaf accounts read balById).
+  const nodeTotals = new Map<string, { debit: number; credit: number }>();
+  function totalsFor(node: CoaNode): { debit: number; credit: number } {
+    const cached = nodeTotals.get(node.id);
+    if (cached) return cached;
+    const t = { debit: 0, credit: 0 };
+    if (node.is_group) {
+      for (const c of childrenOf.get(node.id) ?? []) {
+        const ct = totalsFor(c);
+        t.debit += ct.debit;
+        t.credit += ct.credit;
+      }
+    } else {
+      const b = balById.get(node.id);
+      if (b) {
+        t.debit = b.debit;
+        t.credit = b.credit;
+      }
+    }
+    nodeTotals.set(node.id, t);
+    return t;
+  }
+  const nonZero = (t: { debit: number; credit: number }) =>
+    Math.abs(t.debit) >= 0.005 || Math.abs(t.credit) >= 0.005;
+  // Render a node and its descendants. Groups are bold subtotal bands; empty
+  // groups and zero-balance accounts are pruned so the sheet stays a balance
+  // sheet, not a full account dump.
+  function renderNode(node: CoaNode, depth: number): ReactNode[] {
+    const t = totalsFor(node);
+    const pad = { paddingLeft: `${0.5 + depth * 1.25}rem` };
+    const net = t.debit - t.credit;
+    if (node.is_group) {
+      const childRows = (childrenOf.get(node.id) ?? []).flatMap((c) => renderNode(c, depth + 1));
+      if (childRows.length === 0) return [];
+      return [
+        <TableRow key={node.id} className="bg-muted/40 hover:bg-muted/40">
+          <TableCell style={pad} className="font-semibold uppercase tracking-wide">
+            {node.account_name}
+          </TableCell>
+          <TableCell className="text-right font-mono font-semibold tabular-nums">{money(t.debit)}</TableCell>
+          <TableCell className="text-right font-mono font-semibold tabular-nums">{money(t.credit)}</TableCell>
+          <TableCell className="text-right font-mono font-semibold tabular-nums">{balanceLabel(net)}</TableCell>
+        </TableRow>,
+        ...childRows,
+      ];
+    }
+    if (!nonZero(t)) return [];
+    return [
+      <TableRow key={node.id}>
+        <TableCell style={pad}>
+          <span className="mr-2 font-mono text-xs text-muted-foreground">{formatAccountCode(node.account_code)}</span>
+          <span className="font-medium">{node.account_name}</span>
+        </TableCell>
+        <TableCell className="text-right font-mono tabular-nums">{t.debit ? money(t.debit) : ""}</TableCell>
+        <TableCell className="text-right font-mono tabular-nums">{t.credit ? money(t.credit) : ""}</TableCell>
+        <TableCell className="text-right font-mono tabular-nums">{balanceLabel(net)}</TableCell>
+      </TableRow>,
+    ];
+  }
+  // Balance-sheet roots: the top-level asset / liability / equity groups &
+  // accounts, in account-code order (income & expense live in the P&L).
+  const BS_TYPES = new Set(["asset", "liability", "equity"]);
+  const bsRoots = (childrenOf.get("__root__") ?? []).filter((n) => BS_TYPES.has(n.account_type));
+  const treeRows = bsRoots.flatMap((r) => renderNode(r, 0));
+
   const sumDebit = (rows: AccountBalance[]) => rows.reduce((s, r) => s + r.debit, 0);
   const sumCredit = (rows: AccountBalance[]) => rows.reduce((s, r) => s + r.credit, 0);
 
@@ -160,32 +254,6 @@ export default async function BalanceSheetPage({
     ...buckets.equity.map((r) => ({ ...r, section: "Equity" })),
     { ...profitRow, section: "Equity" },
   ];
-
-  function sectionRows(title: string, rows: AccountBalance[]) {
-    return (
-      <>
-        <TableRow className="bg-muted/50 hover:bg-muted/50">
-          <TableCell colSpan={4} className="font-semibold">
-            {title}
-          </TableCell>
-        </TableRow>
-        {rows.map((r) => {
-          const net = netOf(r);
-          return (
-            <TableRow key={r.account_code}>
-              <TableCell>
-                <span className="mr-2 font-mono text-xs text-muted-foreground">{formatAccountCode(r.account_code)}</span>
-                <span className="font-medium">{r.account_name}</span>
-              </TableCell>
-              <TableCell className="text-right font-mono tabular-nums">{r.debit ? money(r.debit) : ""}</TableCell>
-              <TableCell className="text-right font-mono tabular-nums">{r.credit ? money(r.credit) : ""}</TableCell>
-              <TableCell className="text-right font-mono tabular-nums">{balanceLabel(net)}</TableCell>
-            </TableRow>
-          );
-        })}
-      </>
-    );
-  }
 
   // The dark navy treatment (same tokens as the table column headers) applied to
   // every subtotal/total row so the summary figures stand out from the accounts.
@@ -279,24 +347,11 @@ export default async function BalanceSheetPage({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sectionRows("Assets", buckets.asset)}
-            <TableRow className={totalRow}>
-              {totalRowCells("Total assets", sumDebit(buckets.asset), sumCredit(buckets.asset), assetNet)}
-            </TableRow>
+            {treeRows}
 
-            {sectionRows("Liabilities", buckets.liability)}
-            <TableRow className={totalRow}>
-              {totalRowCells(
-                "Total liabilities",
-                sumDebit(buckets.liability),
-                sumCredit(buckets.liability),
-                liabilityNet,
-              )}
-            </TableRow>
-
-            {sectionRows("Equity", buckets.equity)}
+            {/* Current-period profit rolls into equity for the balance check. */}
             <TableRow>
-              <TableCell>Current period profit/(loss)</TableCell>
+              <TableCell className="pl-2">Current period profit/(loss)</TableCell>
               <TableCell className="text-right font-mono tabular-nums">
                 {profitRow.debit ? money(profitRow.debit) : ""}
               </TableCell>
@@ -305,15 +360,10 @@ export default async function BalanceSheetPage({
               </TableCell>
               <TableCell className="text-right font-mono tabular-nums">{balanceLabel(netOf(profitRow))}</TableCell>
             </TableRow>
-            <TableRow className={totalRow}>
-              {totalRowCells(
-                "Total equity",
-                sumDebit(buckets.equity) + profitRow.debit,
-                sumCredit(buckets.equity) + profitRow.credit,
-                equityAndProfitNet,
-              )}
-            </TableRow>
 
+            <TableRow className={totalRow}>
+              {totalRowCells("Total assets", sumDebit(buckets.asset), sumCredit(buckets.asset), assetNet)}
+            </TableRow>
             <TableRow className={totalRow}>
               {totalRowCells(
                 "Total liabilities + equity",

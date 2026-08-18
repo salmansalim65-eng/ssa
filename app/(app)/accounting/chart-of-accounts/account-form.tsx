@@ -102,8 +102,13 @@ export function AccountForm({
   // Chart of Accounts: the full property field set is surfaced and the account is
   // registered in the Assets module. The "This is a rental property" checkbox is
   // editable and only controls whether the property is offered in leases.
+  // Matches the "PROPERTIES" group itself and any group nested under it — the
+  // auto-created country sub-groups are named "DUBAI PROPERTIES", "PK PROPERTIES",
+  // etc., so a name containing "PROPERTIES" is treated as a property parent. This
+  // keeps the property fields + Rental toggle available for nested property
+  // accounts (matching the server's ancestor-walking check).
   const parentName = (selectedParent?.account_name ?? "").trim().toUpperCase();
-  const isPropertiesParent = parentName === "PROPERTIES";
+  const isPropertiesParent = parentName.includes("PROPERTIES");
 
   // The Details section (party info) is only relevant for Tenant / Customers /
   // Suppliers accounts, so it shows only under those groups.

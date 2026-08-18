@@ -134,6 +134,14 @@ export default async function RentReportPage({
   const monthStart = (m: number) => `${year}-${String(m + 1).padStart(2, "0")}-01`;
   const monthEnd = (m: number) => `${year}-${String(m + 1).padStart(2, "0")}-${String(new Date(year, m + 1, 0).getDate())}`;
 
+  // Accounting-period start = the earliest lease start on record. Months entirely
+  // before it are left blank (the business didn't exist yet) rather than "Vacant".
+  const leaseStartDates = [
+    ...(pkLeases ?? []).map((l) => l.lease_start as string | null),
+    ...(uaeLeases ?? []).map((l) => l.lease_start as string | null),
+  ].filter((d): d is string => Boolean(d));
+  const periodStart = leaseStartDates.length ? leaseStartDates.reduce((min, d) => (d < min ? d : min)) : null;
+
   // One accumulator per cost centre, spreading the lease monthly across the
   // months of the year it is active.
   // Rental properties only (a cost centre linked to a rental asset). Vacant ones
@@ -297,23 +305,31 @@ export default async function RentReportPage({
                           )}
                         </td>
                         <td className="text-right font-mono tabular-nums text-muted-foreground">{r.est ? money(r.est) : dash}</td>
-                        {r.months.map((v, i) => (
-                          <td
-                            key={i}
-                            className={cn(
-                              "text-right font-mono tabular-nums",
-                              i === thisMonth && "bg-primary/[0.04]",
-                            )}
-                          >
-                            {v ? (
-                              money(v)
-                            ) : (
-                              <span className="text-[0.6rem] font-medium uppercase tracking-wide text-amber-600/80 dark:text-amber-400/80">
-                                Vacant
-                              </span>
-                            )}
-                          </td>
-                        ))}
+                        {r.months.map((v, i) => {
+                          // A month entirely before the accounting period started
+                          // is blank, not "Vacant".
+                          const beforePeriod = periodStart != null && monthEnd(i) < periodStart;
+                          return (
+                            <td
+                              key={i}
+                              className={cn(
+                                "text-right font-mono tabular-nums",
+                                i === thisMonth && "bg-primary/[0.04]",
+                                beforePeriod && "text-muted-foreground/40",
+                              )}
+                            >
+                              {v ? (
+                                money(v)
+                              ) : beforePeriod ? (
+                                dash
+                              ) : (
+                                <span className="text-[0.6rem] font-medium uppercase tracking-wide text-amber-600/80 dark:text-amber-400/80">
+                                  Vacant
+                                </span>
+                              )}
+                            </td>
+                          );
+                        })}
                         <td className="text-right font-mono font-semibold tabular-nums text-foreground">{money(r.total)}</td>
                       </tr>
                     );

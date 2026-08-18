@@ -182,7 +182,6 @@ export default async function AssetValuationReportPage({
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead>Code</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Location</TableHead>
               <TableHead>Cost center</TableHead>
@@ -196,7 +195,6 @@ export default async function AssetValuationReportPage({
           <TableBody>
             {rows.map((row) => (
               <TableRow key={row.assetId}>
-                <TableCell className="font-mono text-xs text-muted-foreground">{row.code}</TableCell>
                 <TableCell className="font-medium">{row.name}</TableCell>
                 <TableCell>{row.location || "—"}</TableCell>
                 <TableCell className="text-muted-foreground">{row.costCenter || "—"}</TableCell>
@@ -213,7 +211,7 @@ export default async function AssetValuationReportPage({
             ))}
             {rows.length === 0 && (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                   No assets match the current filters.
                 </TableCell>
               </TableRow>
@@ -222,7 +220,7 @@ export default async function AssetValuationReportPage({
           {rows.length > 0 && (
             <tfoot className="border-t bg-muted/40">
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={4} className="font-medium">
+                <TableCell colSpan={3} className="font-medium">
                   Total{!cur && " (mixed currencies)"}
                 </TableCell>
                 <TableCell className="text-right font-mono font-medium tabular-nums">{money(totalSymbol, totalPurchase)}</TableCell>

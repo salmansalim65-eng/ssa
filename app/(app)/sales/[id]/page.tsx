@@ -153,7 +153,7 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
         </div>
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Asset</p>
-          <p className="mt-0.5">{saleAsset ? `${saleAsset.asset_code} — ${saleAsset.asset_name}` : "—"}</p>
+          <p className="mt-0.5">{saleAsset ? saleAsset.asset_name : "—"}</p>
         </div>
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Date</p>

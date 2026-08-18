@@ -94,7 +94,6 @@ export default async function SaleReportPage({
                 <TableCell>{r.voucher_no ?? "Draft"}</TableCell>
                 <TableCell>{formatDate(r.sale_date)}</TableCell>
                 <TableCell>
-                  {r.asset_code ? `${r.asset_code} — ` : ""}
                   {r.asset_name}
                 </TableCell>
                 <TableCell className="text-right font-mono tabular-nums">

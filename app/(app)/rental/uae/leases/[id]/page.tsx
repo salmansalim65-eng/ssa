@@ -83,7 +83,7 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
     tenants: (lease as unknown as { tenants: Refs["tenants"] }).tenants,
     currencies: currenciesById.get(lease.currency_id) ?? null,
   };
-  const assetLabel = refs.assets ? `${refs.assets.asset_code} — ${refs.assets.asset_name}` : "—";
+  const assetLabel = refs.assets ? refs.assets.asset_name : "—";
 
   const [{ data: schedules }, { data: invoices }] = await Promise.all([
     supabase

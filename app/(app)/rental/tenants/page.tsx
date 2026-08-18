@@ -114,7 +114,7 @@ export default async function TenantsPage() {
     rows.push({
       country: asset?.country ?? "—",
       tenantName: tenant.name as string,
-      property: asset ? `${asset.asset_code} ${asset.asset_name}` : "—",
+      property: asset ? asset.asset_name : "—",
       periodStart: start,
       periodEnd: end,
       rent: Number(rent) || 0,

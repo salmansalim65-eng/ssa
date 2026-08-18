@@ -201,10 +201,7 @@ export default async function RentInvoicesPage({
                   <TableCell>{r.tenant_name ?? "—"}</TableCell>
                   <TableCell>
                     {r.asset_code ? (
-                      <>
-                        <span className="font-mono text-xs text-muted-foreground">{r.asset_code}</span>{" "}
-                        <span>{r.asset_name}</span>
-                      </>
+                      <span>{r.asset_name}</span>
                     ) : (
                       "—"
                     )}

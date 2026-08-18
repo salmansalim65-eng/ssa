@@ -162,7 +162,6 @@ export default async function AssetsPage({
             <Table className="min-w-[960px]">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead>Code</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Official owner</TableHead>
                   <TableHead>Area</TableHead>
@@ -176,7 +175,7 @@ export default async function AssetsPage({
                   return (
                     <Fragment key={code}>
                       <TableRow className="bg-muted/50 hover:bg-muted/50">
-                        <TableCell colSpan={6} className="font-semibold">
+                        <TableCell colSpan={5} className="font-semibold">
                           {countryName(code)}
                           <span className="ml-2 font-normal text-muted-foreground">
                             ({list.length} asset{list.length === 1 ? "" : "s"})
@@ -185,15 +184,14 @@ export default async function AssetsPage({
                       </TableRow>
                       {list.map((asset) => (
                         <TableRow key={asset.id}>
-                          <TableCell>
+                          <TableCell className="font-medium">
                             <Link
                               href={`/assets/${asset.id}`}
-                              className="font-mono font-medium text-primary hover:underline"
+                              className="font-medium text-primary hover:underline"
                             >
-                              {asset.asset_code}
+                              {asset.asset_name}
                             </Link>
                           </TableCell>
-                          <TableCell className="font-medium">{asset.asset_name}</TableCell>
                           <TableCell>{asset.official_owner ?? "—"}</TableCell>
                           <TableCell>{formatArea(asset.area_sqft, asset.area_unit)}</TableCell>
                           <TableCell className="text-right font-mono tabular-nums">

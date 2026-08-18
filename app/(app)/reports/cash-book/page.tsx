@@ -1,6 +1,7 @@
 import { CashBankBookView } from "@/components/reports/cash-bank-book-view";
 import { getCashOrBankBookSections } from "@/lib/reports/cash-bank-book";
 import { loadReportCountries } from "@/lib/reports/countries";
+import { loadAccountingPeriodStart } from "@/lib/reports/period";
 import { resolveReportCurrency } from "@/lib/reports/report-currency";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 
@@ -18,9 +19,11 @@ export default async function CashBookPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string; country?: string; cur?: string }>;
 }) {
-  const { from = startOfYear(), to = today(), country = "", cur = "" } = await searchParams;
+  const { from: spFrom, to = today(), country = "", cur = "" } = await searchParams;
 
   const companyId = await getCurrentCompanyId();
+  const periodStart = await loadAccountingPeriodStart(companyId);
+  const from = spFrom ?? periodStart ?? startOfYear();
 
   const [sections, countries, currency] = await Promise.all([
     getCashOrBankBookSections({ companyId, flag: "is_cash", from, to, country }),

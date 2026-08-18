@@ -15,6 +15,7 @@ import { PrintButton } from "@/components/vouchers/print-button";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
+import { loadAccountingPeriodStart } from "@/lib/reports/period";
 import { formatDate, formatMoney } from "@/lib/format";
 
 function startOfYear() {
@@ -31,10 +32,12 @@ export default async function PurchaseReportPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string }>;
 }) {
-  const { from = startOfYear(), to = today() } = await searchParams;
+  const { from: spFrom, to = today() } = await searchParams;
 
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
+  const periodStart = await loadAccountingPeriodStart(companyId);
+  const from = spFrom ?? periodStart ?? startOfYear();
 
   const { data: rows } = await supabase
     .schema("reporting")

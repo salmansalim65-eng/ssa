@@ -17,6 +17,7 @@ import { PrintButton } from "@/components/vouchers/print-button";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
 import { convertAtBookingRate, resolveReportCurrency } from "@/lib/reports/report-currency";
+import { loadAccountingPeriodStart } from "@/lib/reports/period";
 import { formatDate, formatMoney } from "@/lib/format";
 
 function startOfYear() {
@@ -33,10 +34,12 @@ export default async function RentalIncomePage({
 }: {
   searchParams: Promise<{ from?: string; to?: string; cur?: string }>;
 }) {
-  const { from = startOfYear(), to = today(), cur = "" } = await searchParams;
+  const { from: spFrom, to = today(), cur = "" } = await searchParams;
 
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
+  const periodStart = await loadAccountingPeriodStart(companyId);
+  const from = spFrom ?? periodStart ?? startOfYear();
 
   const [{ data: rows }, currency] = await Promise.all([
     supabase

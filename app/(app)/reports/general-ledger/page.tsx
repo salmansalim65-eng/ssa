@@ -16,6 +16,7 @@ import { GeneralLedgerFilters } from "@/components/reports/general-ledger-filter
 import { ReportNav } from "@/components/reports/report-nav";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { computeRunningBalances } from "@/lib/reports/ledger-balance";
+import { loadAccountingPeriodStart } from "@/lib/reports/period";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
@@ -68,7 +69,10 @@ export default async function GeneralLedgerPage({
   }>;
 }) {
   const sp = await searchParams;
-  const from = sp.from ?? startOfYear();
+  const supabase = await createClient();
+  const companyId = await getCurrentCompanyId();
+  const periodStart = await loadAccountingPeriodStart(companyId);
+  const from = sp.from ?? periodStart ?? startOfYear();
   const to = sp.to ?? today();
   const accountIds = (sp.accountIds ?? sp.accountId ?? "")
     .split(",")
@@ -80,9 +84,6 @@ export default async function GeneralLedgerPage({
   const q = (sp.q ?? "").toLowerCase();
   const minAmount = sp.min ? Number(sp.min) : null;
   const maxAmount = sp.max ? Number(sp.max) : null;
-
-  const supabase = await createClient();
-  const companyId = await getCurrentCompanyId();
 
   const [{ data: accounts }, { data: companyCurrencies }, { data: costCenters }] = await Promise.all([
     supabase

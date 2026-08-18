@@ -8,6 +8,7 @@ import { PrintButton } from "@/components/vouchers/print-button";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
 import { formatAccountCode, formatMoney } from "@/lib/format";
+import { HH_AGENT_PCT, UAE_AGENT_PCT } from "@/lib/rental/lease-accounting";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -40,7 +41,7 @@ export default async function RentReportPage({
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
 
-  const [{ data: costCenters }, { data: pkLeases }, { data: uaeLeases }, { data: currencies }] =
+  const [{ data: costCenters }, { data: pkLeases }, { data: uaeLeases }, { data: currencies }, { data: leaseExpenses }] =
     await Promise.all([
       supabase
         .schema("accounting")
@@ -60,14 +61,22 @@ export default async function RentReportPage({
       supabase
         .schema("rental")
         .from("uae_leases")
-        .select("asset_id, rental_amount, rent_cycle, lease_start, lease_end")
+        .select("id, asset_id, rental_amount, rent_cycle, lease_start, lease_end, lease_type")
         .eq("company_id", companyId)
         .eq("status", "active")
         .is("deleted_at", null),
       supabase.schema("core").from("currencies").select("code, symbol"),
+      supabase.schema("rental").from("lease_expenses").select("lease_id, amount").eq("company_id", companyId),
     ]);
 
   const symbolByCode = new Map((currencies ?? []).map((c) => [c.code as string, c.symbol as string]));
+
+  // Monthly HH-lease expense total per lease (feeds the net-rent deduction).
+  const expenseByLease = new Map<string, number>();
+  for (const e of leaseExpenses ?? []) {
+    const k = e.lease_id as string;
+    expenseByLease.set(k, (expenseByLease.get(k) ?? 0) + Number(e.amount));
+  }
 
   // Active lease per asset: monthly rent + period, so a monthly lease shows its
   // monthly rent in EVERY month it covers (not a lump where its invoice posted).
@@ -87,9 +96,14 @@ export default async function RentReportPage({
   }
   for (const l of uaeLeases ?? []) {
     if (!l.asset_id) continue;
-    const monthly = l.rent_cycle === "yearly" ? Number(l.rental_amount) / 12 : Number(l.rental_amount) || 0;
+    const gross = l.rent_cycle === "yearly" ? Number(l.rental_amount) / 12 : Number(l.rental_amount) || 0;
+    // Net rent = rent − management (agent share: HH 10% / UAE 5%) − HH expenses.
+    const isHh = l.lease_type === "hh";
+    const management = gross * (isHh ? HH_AGENT_PCT : UAE_AGENT_PCT);
+    const expenses = isHh ? expenseByLease.get(l.id as string) ?? 0 : 0;
+    const net = Math.max(0, gross - management - expenses);
     leaseByAsset.set(l.asset_id as string, {
-      monthly,
+      monthly: net,
       start: (l.lease_start as string) ?? null,
       end: (l.lease_end as string) ?? null,
     });
@@ -177,7 +191,7 @@ export default async function RentReportPage({
         <div className="flex items-center gap-2">
           <CsvExportButton
             filename={`rent-report-${year}.csv`}
-            headers={["Country", "Code", "Cost centre", "Est. Rent", ...MONTHS, "Total"]}
+            headers={["Country", "Code", "Cost centre", "Net Rent", ...MONTHS, "Total"]}
             rows={exportRows}
           />
           <PrintButton />
@@ -194,7 +208,7 @@ export default async function RentReportPage({
             return (
               <Kpi
                 key={s.country}
-                label={`${COUNTRY[s.country]?.label ?? s.country} — Annual Rent`}
+                label={`${COUNTRY[s.country]?.label ?? s.country} — Annual Net Rent`}
                 value={`${symbol ? symbol + " " : ""}${formatMoney(total)}`}
                 sub={`${s.rows.length} propert${s.rows.length === 1 ? "y" : "ies"} · ${cur}`}
               />
@@ -209,7 +223,7 @@ export default async function RentReportPage({
           <thead className="sticky top-0 z-20">
             <tr className="bg-primary text-primary-foreground [&>th]:border-r [&>th]:border-primary/40 [&>th]:px-3 [&>th]:py-2.5 [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide">
               <th className="sticky left-0 z-30 min-w-[240px] bg-primary text-left">Cost centre</th>
-              <th className="whitespace-nowrap text-right">Est. Rent</th>
+              <th className="whitespace-nowrap text-right">Net Rent</th>
               {MONTHS.map((m, i) => (
                 <th key={m} className={cn("whitespace-nowrap text-right", i === thisMonth && "bg-white/15")}>
                   {m}

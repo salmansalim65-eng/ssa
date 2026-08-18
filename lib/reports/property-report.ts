@@ -2,12 +2,12 @@
 // asset + lease data so the maths lives in one tested place.
 //
 // Verified against the reference report:
+//   Monthly Rent     = gross lease rent − Commission − HH expenses  (NET; service charges NOT deducted)
 //   Yearly Rent      = Monthly Rent × 12
 //   Diff Est/Yearly  = Est Rent × 12 − Yearly Rent      (annualised estimate vs actual)
 //   Sq Ft Value      = Purchase Value / Sq Ft
 //   Service Charges  = Service Rate × Sq Ft             (stored on the asset; = "Maintenance")
-//   Net Rent (month) = Monthly Rent − Commission − HH expenses   (service charges NOT deducted)
-//   Perc%            = Net Rent × 12 / Current Value × 100    (annualised yield)
+//   Perc%            = Monthly Rent × 12 / Current Value × 100    (annualised yield)
 //   % Month          = Perc% / 12
 //   Difference Value = Current Value − Purchase Value
 //   Maintenance%     = Service Charges / Yearly Rent × 100
@@ -107,7 +107,13 @@ export interface PropertyRow {
 
 export function computePropertyRow(i: PropertyRowInput): PropertyRow {
   const estRent = round2(i.estimatedRentMonthly);
-  const monthlyRent = round2(i.monthlyRent);
+  const commission = round2(i.commissionMonthly);
+  const expensesMonthly = round2(i.expensesMonthly ?? 0);
+  // "Monthly Rent" is the owner's NET monthly rent: gross lease rent less the
+  // agent commission and the monthly HH lease expenses. Service charges are shown
+  // separately but NOT deducted. Yearly Rent and the yields all follow from it.
+  const grossMonthly = round2(i.monthlyRent);
+  const monthlyRent = round2(grossMonthly - commission - expensesMonthly);
   const yearlyRent = round2(monthlyRent * 12);
   const diffEstVsYearly = round2(estRent * 12 - yearlyRent);
   const sqFt = round2(i.areaSqft);
@@ -115,11 +121,8 @@ export function computePropertyRow(i: PropertyRowInput): PropertyRow {
   const currentValue = round2(i.currentValue);
   const serviceCharges = round2(i.serviceCharges); // annual
   const serviceMonthly = round2(serviceCharges / 12);
-  const commission = round2(i.commissionMonthly);
-  const expensesMonthly = round2(i.expensesMonthly ?? 0);
-  // Net Rent is monthly: monthly rent less the agent commission and the monthly
-  // HH lease expenses. Service charges are shown but NOT deducted here.
-  const netRent = round2(monthlyRent - commission - expensesMonthly);
+  // Net Rent equals Monthly Rent now (both net); kept for the yield calc.
+  const netRent = monthlyRent;
   return {
     id: i.id,
     group: i.group,

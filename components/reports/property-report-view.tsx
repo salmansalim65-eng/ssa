@@ -58,12 +58,11 @@ const NUM_COLS: {
   kind: "money" | "rate" | "pct";
 }[] = [
   { key: "estRent", label: "Est. Rent", full: "Estimated Rent (monthly)", kind: "money" },
-  { key: "monthlyRent", label: "Monthly Rent", full: "Monthly Rent (from lease)", kind: "money" },
-  { key: "yearlyRent", label: "Yearly Rent", full: "Yearly Rent (Monthly × 12)", kind: "money" },
+  { key: "monthlyRent", label: "Monthly Rent", full: "Net monthly rent: lease rent − commission − HH expenses", kind: "money" },
+  { key: "yearlyRent", label: "Yearly Rent", full: "Yearly Rent (Net Monthly × 12)", kind: "money" },
   { key: "diffEstVsYearly", label: "Diff. Est/Yr", full: "Difference: Estimated × 12 − Yearly", kind: "money" },
   { key: "sqFt", label: "Sq. Ft", full: "Area (square feet)", kind: "money" },
   { key: "serviceMonthly", label: "Service Charges", full: "Monthly service charge (Rate × Sq. Ft ÷ 12)", kind: "money" },
-  { key: "netRent", label: "Net Rent", full: "Monthly: Monthly Rent − Commission − HH expenses", kind: "money" },
   { key: "currentValue", label: "Current Value", full: "Current property value", kind: "money" },
   { key: "perc", label: "Perc%", full: "Annualised yield: Net Rent × 12 ÷ Current Value", kind: "pct" },
   { key: "percMonth", label: "% Month", full: "Monthly yield: Perc% ÷ 12", kind: "pct" },

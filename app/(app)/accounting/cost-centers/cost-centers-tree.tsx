@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatAccountCode } from "@/lib/format";
+import { formatVoucherNo } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Database } from "@/types/database.types";
 import { CostCenterRowActions } from "./cost-center-row-actions";
@@ -76,6 +76,25 @@ export function CostCentersTree({
     return map;
   }, [rows]);
 
+  // Serial number for actual cost centres (leaf rows), assigned in full tree
+  // order so numbers stay stable when a group is collapsed. Group rows are not
+  // numbered.
+  const serialById = useMemo(() => {
+    const map = new Map<string, number>();
+    let n = 0;
+    const walk = (parentKey: string) => {
+      for (const cc of childrenByParent.get(parentKey) ?? []) {
+        if (!cc.is_group) {
+          n += 1;
+          map.set(cc.id, n);
+        }
+        walk(cc.id);
+      }
+    };
+    walk("__root__");
+    return map;
+  }, [childrenByParent]);
+
   function renderRows(parentKey: string, depth: number): ReactNode[] {
     return (childrenByParent.get(parentKey) ?? []).flatMap((cc) => {
       const excluded = collectDescendantIds(childrenByParent, cc.id);
@@ -90,7 +109,10 @@ export function CostCentersTree({
           key={cc.id}
           className={cn(isGroup && "bg-ledger/15 hover:bg-ledger/20 dark:bg-ledger/10")}
         >
-          <TableCell className="font-mono font-medium">{formatAccountCode(cc.code)}</TableCell>
+          <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">
+            {isGroup ? "" : serialById.get(cc.id)}
+          </TableCell>
+          <TableCell className="font-mono font-medium">{formatVoucherNo(cc.code)}</TableCell>
           <TableCell className={cn("font-medium", isGroup && "font-semibold text-ledger-dark")}>
             <div className="flex items-center" style={{ paddingLeft: `${depth * 1.25}rem` }}>
               {isGroup && hasChildren ? (
@@ -160,6 +182,7 @@ export function CostCentersTree({
     <Table>
       <TableHeader>
         <TableRow className="hover:bg-transparent">
+          <TableHead className="w-12 text-right">S.No</TableHead>
           <TableHead>Code</TableHead>
           <TableHead>Name</TableHead>
           <TableHead>Country / City</TableHead>

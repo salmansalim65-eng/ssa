@@ -208,6 +208,10 @@ export default async function RentReportPage({
 
   const dash = "—";
   const thisMonth = year === currentYear ? new Date().getMonth() : -1;
+  // Months after the current month are in the future — leave them blank rather
+  // than flagging "Vacant" (we can't know a property will be vacant then).
+  const nowMonthIdx = new Date().getMonth();
+  const isFutureMonth = (i: number) => year > currentYear || (year === currentYear && i > nowMonthIdx);
   const totalCols = 16; // S.No + cost centre + est + 12 months + total
 
   return (
@@ -316,21 +320,22 @@ export default async function RentReportPage({
                         </td>
                         <td className="text-right font-mono tabular-nums text-muted-foreground">{r.est ? money(r.est) : dash}</td>
                         {r.months.map((v, i) => {
-                          // A month entirely before the accounting period started
-                          // is blank, not "Vacant".
+                          // A month entirely before the accounting period started,
+                          // or in the future, is blank — never flagged "Vacant".
                           const beforePeriod = periodStart != null && monthEnd(i) < periodStart;
+                          const blankMonth = beforePeriod || isFutureMonth(i);
                           return (
                             <td
                               key={i}
                               className={cn(
                                 "text-right font-mono tabular-nums",
                                 i === thisMonth && "bg-primary/[0.04]",
-                                beforePeriod && "text-muted-foreground/40",
+                                blankMonth && "text-muted-foreground/40",
                               )}
                             >
                               {v ? (
                                 money(v)
-                              ) : beforePeriod ? (
+                              ) : blankMonth ? (
                                 dash
                               ) : (
                                 <span className="text-[0.6rem] font-medium uppercase tracking-wide text-amber-600/80 dark:text-amber-400/80">

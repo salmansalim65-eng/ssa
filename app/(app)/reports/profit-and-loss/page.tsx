@@ -154,8 +154,8 @@ export default async function ProfitAndLossPage({
   const netProfit = totalIncome - totalExpense;
 
   const exportRows = [
-    ...income.map((r) => ({ ...r, section: "Income" })),
-    ...expense.map((r) => ({ ...r, section: "Expense" })),
+    ...income.map((r, i) => ({ ...r, section: "Income", sno: i + 1 })),
+    ...expense.map((r, i) => ({ ...r, section: "Expense", sno: i + 1 })),
   ];
 
   // Dark navy treatment (same tokens as the column headers) for the subtotal /
@@ -163,8 +163,9 @@ export default async function ProfitAndLossPage({
   const totalRow = "bg-header text-header-foreground hover:bg-header [&>td]:border-header-border";
 
   function accountRows(rows: AccountBalance[]) {
-    return rows.map((r) => (
+    return rows.map((r, i) => (
       <TableRow key={r.account_code}>
+        <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">{i + 1}</TableCell>
         <TableCell className="pl-6">
           <span className="mr-2 font-mono text-xs text-muted-foreground">{formatAccountCode(r.account_code)}</span>
           <span className="font-medium">{r.account_name}</span>
@@ -189,8 +190,8 @@ export default async function ProfitAndLossPage({
           <>
             <CsvExportButton
               filename={`profit-and-loss-${from}-to-${to}.csv`}
-              headers={["Section", "Code", "Name", "Debit", "Credit", "Amount"]}
-              rows={exportRows.map((r) => [r.section, formatAccountCode(r.account_code), r.account_name, r.debit, r.credit, r.balance])}
+              headers={["S.No", "Section", "Code", "Name", "Debit", "Credit", "Amount"]}
+              rows={exportRows.map((r) => [r.sno, r.section, formatAccountCode(r.account_code), r.account_name, r.debit, r.credit, r.balance])}
             />
             <PrintButton />
           </>
@@ -229,6 +230,7 @@ export default async function ProfitAndLossPage({
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
+              <TableHead className="w-12 text-right">S.No</TableHead>
               <TableHead>Account</TableHead>
               <TableHead className="text-right">Debit</TableHead>
               <TableHead className="text-right">Credit</TableHead>
@@ -237,12 +239,13 @@ export default async function ProfitAndLossPage({
           </TableHeader>
           <TableBody>
             <TableRow className="bg-muted/50 hover:bg-muted/50">
-              <TableCell colSpan={4} className="font-semibold">
+              <TableCell colSpan={5} className="font-semibold">
                 Income
               </TableCell>
             </TableRow>
             {accountRows(income)}
             <TableRow className={totalRow}>
+              <TableCell />
               <TableCell className="font-medium">Total income</TableCell>
               <TableCell className="text-right font-mono font-medium tabular-nums">{money(sumDebit(income))}</TableCell>
               <TableCell className="text-right font-mono font-medium tabular-nums">{money(sumCredit(income))}</TableCell>
@@ -250,12 +253,13 @@ export default async function ProfitAndLossPage({
             </TableRow>
 
             <TableRow className="bg-muted/50 hover:bg-muted/50">
-              <TableCell colSpan={4} className="font-semibold">
+              <TableCell colSpan={5} className="font-semibold">
                 Expense
               </TableCell>
             </TableRow>
             {accountRows(expense)}
             <TableRow className={totalRow}>
+              <TableCell />
               <TableCell className="font-medium">Total expense</TableCell>
               <TableCell className="text-right font-mono font-medium tabular-nums">{money(sumDebit(expense))}</TableCell>
               <TableCell className="text-right font-mono font-medium tabular-nums">{money(sumCredit(expense))}</TableCell>
@@ -263,7 +267,7 @@ export default async function ProfitAndLossPage({
             </TableRow>
 
             <TableRow className={totalRow}>
-              <TableCell colSpan={3} className="font-semibold">
+              <TableCell colSpan={4} className="font-semibold">
                 Net profit / (loss)
               </TableCell>
               <TableCell

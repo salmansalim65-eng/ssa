@@ -209,6 +209,9 @@ export default async function BalanceSheetPage({
   // Render a node and its descendants. Groups are bold subtotal bands; empty
   // groups and zero-balance accounts are pruned so the sheet stays a balance
   // sheet, not a full account dump.
+  // Serial number for leaf (non-group) accounts only. Group/subtotal rows get a
+  // blank S.No cell. Reset between the active statement and the inactive block.
+  let leafSeq = 0;
   function renderNode(node: CoaNode, depth: number, renderingInactive: boolean): ReactNode[] {
     if (!renderingInactive && inactiveIds.has(node.id)) return [];
     const t = totalsFor(node);
@@ -219,6 +222,7 @@ export default async function BalanceSheetPage({
       if (childRows.length === 0) return [];
       return [
         <TableRow key={node.id} className="bg-muted/40 hover:bg-muted/40">
+          <TableCell />
           <TableCell style={pad} className="font-semibold uppercase tracking-wide">
             {node.account_name}
           </TableCell>
@@ -230,8 +234,10 @@ export default async function BalanceSheetPage({
       ];
     }
     if (!nonZero(t)) return [];
+    const seq = ++leafSeq;
     return [
       <TableRow key={node.id}>
+        <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">{seq}</TableCell>
         <TableCell style={pad}>
           <span className="mr-2 font-mono text-xs text-muted-foreground">{formatAccountCode(node.account_code)}</span>
           <span className="font-medium">{node.account_name}</span>
@@ -247,6 +253,10 @@ export default async function BalanceSheetPage({
   const BS_TYPES = new Set(["asset", "liability", "equity"]);
   const bsRoots = (childrenOf.get("__root__") ?? []).filter((n) => BS_TYPES.has(n.account_type));
   const treeRows = bsRoots.flatMap((r) => renderNode(r, 0, false));
+  // The profit/(loss) line continues the active-statement numbering; the
+  // inactive block restarts at 1.
+  const profitSeq = leafSeq + 1;
+  leafSeq = 0;
 
   // Inactive accounts, shown in their own section: the top of each inactive
   // subtree (a node whose parent is not itself inactive).
@@ -291,6 +301,7 @@ export default async function BalanceSheetPage({
     const weight = emphatic ? "font-semibold" : "font-medium";
     return (
       <>
+        <TableCell />
         <TableCell className={weight}>{label}</TableCell>
         <TableCell className={`text-right font-mono tabular-nums ${weight}`}>{money(debit)}</TableCell>
         <TableCell className={`text-right font-mono tabular-nums ${weight}`}>{money(credit)}</TableCell>
@@ -312,10 +323,11 @@ export default async function BalanceSheetPage({
           <>
             <CsvExportButton
               filename={`balance-sheet-${asOf}.csv`}
-              headers={["Section", "Code", "Name", "Debit", "Credit", "Balance"]}
-              rows={exportRows.map((r) => {
+              headers={["S.No", "Section", "Code", "Name", "Debit", "Credit", "Balance"]}
+              rows={exportRows.map((r, i) => {
                 const net = netOf(r);
                 return [
+                  i + 1,
                   r.section,
                   formatAccountCode(r.account_code),
                   r.account_name,
@@ -369,6 +381,7 @@ export default async function BalanceSheetPage({
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
+              <TableHead className="w-12 text-right">S.No</TableHead>
               <TableHead>Account</TableHead>
               <TableHead className="text-right">Debit</TableHead>
               <TableHead className="text-right">Credit</TableHead>
@@ -380,6 +393,7 @@ export default async function BalanceSheetPage({
 
             {/* Current-period profit rolls into equity for the balance check. */}
             <TableRow>
+              <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">{profitSeq}</TableCell>
               <TableCell className="pl-2">Current period profit/(loss)</TableCell>
               <TableCell className="text-right font-mono tabular-nums">
                 {profitRow.debit ? money(profitRow.debit) : ""}
@@ -407,7 +421,7 @@ export default async function BalanceSheetPage({
             {inactiveRows.length > 0 && (
               <>
                 <TableRow className="bg-muted/60 hover:bg-muted/60">
-                  <TableCell colSpan={4} className="pt-4 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                  <TableCell colSpan={5} className="pt-4 text-xs font-bold uppercase tracking-wide text-muted-foreground">
                     Inactive Accounts
                   </TableCell>
                 </TableRow>

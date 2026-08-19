@@ -195,7 +195,8 @@ export default async function RentReportPage({
   const yearOptions = [1, 2, 3, 4].map((n) => ({ value: String(currentYear - n), label: String(currentYear - n) }));
 
   const exportRows = sections.flatMap((s) =>
-    s.rows.map((r) => [
+    s.rows.map((r, i) => [
+      i + 1,
       COUNTRY[s.country]?.label ?? s.country,
       formatAccountCode(r.code),
       r.name,
@@ -207,7 +208,7 @@ export default async function RentReportPage({
 
   const dash = "—";
   const thisMonth = year === currentYear ? new Date().getMonth() : -1;
-  const totalCols = 15; // cost centre + est + 12 months + total
+  const totalCols = 16; // S.No + cost centre + est + 12 months + total
 
   return (
     <div className="space-y-5">
@@ -230,7 +231,7 @@ export default async function RentReportPage({
         <div className="flex items-center gap-2">
           <CsvExportButton
             filename={`rent-report-${year}.csv`}
-            headers={["Country", "Code", "Cost centre", "Net Rent", ...MONTHS, "Total"]}
+            headers={["S.No", "Country", "Code", "Cost centre", "Net Rent", ...MONTHS, "Total"]}
             rows={exportRows}
           />
           <PrintButton />
@@ -261,7 +262,8 @@ export default async function RentReportPage({
         <table className="w-full min-w-[1080px] border-collapse text-sm">
           <thead className="sticky top-0 z-20">
             <tr className="bg-primary text-primary-foreground [&>th]:border-r [&>th]:border-primary/40 [&>th]:px-3 [&>th]:py-2.5 [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide">
-              <th className="sticky left-0 z-30 min-w-[240px] bg-primary text-left">Cost centre</th>
+              <th className="sticky left-0 z-30 w-12 bg-primary text-right">S.No</th>
+              <th className="sticky left-12 z-30 min-w-[240px] bg-primary text-left">Cost centre</th>
               <th className="whitespace-nowrap text-right">Net Rent</th>
               {MONTHS.map((m, i) => (
                 <th key={m} className={cn("whitespace-nowrap text-right", i === thisMonth && "bg-white/15")}>
@@ -301,7 +303,10 @@ export default async function RentReportPage({
                     const rowBg = ri % 2 ? "bg-muted/30" : "bg-card";
                     return (
                       <tr key={r.id} className={cn("group/row border-b border-border/50 [&>td]:px-3 [&>td]:py-2", rowBg, "hover:bg-primary/[0.05]")}>
-                        <td className={cn("sticky left-0 z-10 min-w-[240px] border-r border-border/50", rowBg, "group-hover/row:bg-primary/[0.05]")}>
+                        <td className={cn("sticky left-0 z-10 w-12 border-r border-border/50 text-right font-mono text-xs tabular-nums text-muted-foreground", rowBg, "group-hover/row:bg-primary/[0.05]")}>
+                          {ri + 1}
+                        </td>
+                        <td className={cn("sticky left-12 z-10 min-w-[240px] border-r border-border/50", rowBg, "group-hover/row:bg-primary/[0.05]")}>
                           <span className="font-medium text-foreground">{r.name}</span>
                           {r.total === 0 && (
                             <span className="ml-2 rounded border border-amber-400/60 px-1.5 text-[0.6rem] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
@@ -341,7 +346,7 @@ export default async function RentReportPage({
                   })}
                   {/* Country total */}
                   <tr className="bg-primary font-semibold text-primary-foreground [&>td]:px-3 [&>td]:py-2">
-                    <td className="sticky left-0 z-10 bg-primary text-xs uppercase tracking-wide">Total — {label}</td>
+                    <td colSpan={2} className="sticky left-0 z-10 bg-primary text-xs uppercase tracking-wide">Total — {label}</td>
                     <td className="text-right font-mono tabular-nums">{secEst ? money(secEst) : dash}</td>
                     {secMonths.map((v, i) => (
                       <td key={i} className={cn("text-right font-mono tabular-nums", i === thisMonth && "bg-white/15")}>

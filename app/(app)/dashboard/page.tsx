@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertCircleIcon, Building2Icon, CalendarRangeIcon } from "lucide-react";
+import { AlertCircleIcon, Building2Icon, CalendarRangeIcon, WalletIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,6 +73,8 @@ export default async function DashboardPage({
     { data: currencies },
     { data: recentVouchers },
     { count: rentalPropertyCount },
+    { data: expenseLedger },
+    { data: baseCurrencyRow },
   ] = await Promise.all([
     supabase
       .schema("reporting")
@@ -123,7 +125,31 @@ export default async function DashboardPage({
       .eq("company_id", companyId)
       .eq("is_rental", true)
       .is("deleted_at", null),
+    supabase
+      .schema("reporting")
+      .from("v_ledger_entries")
+      .select("debit_amount, credit_amount")
+      .eq("company_id", companyId)
+      .eq("account_type", "expense")
+      .gte("entry_date", `${new Date().getFullYear()}-01-01`)
+      .lte("entry_date", `${new Date().getFullYear()}-12-31`),
+    supabase
+      .schema("core")
+      .from("company_currencies")
+      .select("currencies:currency_id(symbol, code)")
+      .eq("company_id", companyId)
+      .eq("is_base_currency", true)
+      .maybeSingle(),
   ]);
+
+  // Total expenses (base currency) for the current calendar year — dashboard KPI.
+  const expenseTotal = (expenseLedger ?? []).reduce(
+    (s, r) => s + Number(r.debit_amount) - Number(r.credit_amount),
+    0,
+  );
+  const baseCurrency = (baseCurrencyRow as unknown as { currencies: { symbol: string; code: string } | null } | null)
+    ?.currencies;
+  const baseSymbol = baseCurrency?.symbol ?? baseCurrency?.code ?? "";
 
   const symbolByCode = new Map((currencies ?? []).map((c) => [c.code as string, c.symbol as string]));
   const symbolById = new Map((currencies ?? []).map((c) => [c.id as string, c.symbol as string]));
@@ -380,6 +406,14 @@ export default async function DashboardPage({
             </Link>
           </div>
         </SummaryCard>
+
+        <KpiCard
+          label={`Expenses (${new Date().getFullYear()})`}
+          value={`${baseSymbol ? baseSymbol + " " : ""}${formatMoney(expenseTotal)}`}
+          subtext="Cost centre · account · month"
+          icon={WalletIcon}
+          href="/reports/expense-report"
+        />
 
         <KpiCard
           label="Pending approvals"

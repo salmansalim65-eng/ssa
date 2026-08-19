@@ -40,6 +40,7 @@ export default async function AssetRegisterPage() {
             <CsvExportButton
               filename="asset-register.csv"
               headers={[
+                "S.No",
                 "Code",
                 "Name",
                 "Type",
@@ -52,7 +53,8 @@ export default async function AssetRegisterPage() {
                 "Current Value",
                 "Status",
               ]}
-              rows={(rows ?? []).map((r) => [
+              rows={(rows ?? []).map((r, i) => [
+                i + 1,
                 r.asset_code,
                 r.asset_name,
                 r.property_type,
@@ -75,6 +77,7 @@ export default async function AssetRegisterPage() {
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
+              <TableHead className="w-12 text-right">S.No</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Location</TableHead>
@@ -86,8 +89,9 @@ export default async function AssetRegisterPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {(rows ?? []).map((r) => (
+            {(rows ?? []).map((r, i) => (
               <TableRow key={r.asset_id}>
+                <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">{i + 1}</TableCell>
                 <TableCell className="font-medium">{r.asset_name}</TableCell>
                 <TableCell>{r.property_type}</TableCell>
                 <TableCell>
@@ -105,7 +109,7 @@ export default async function AssetRegisterPage() {
             ))}
             {(rows ?? []).length === 0 && (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
                   No assets registered yet.
                 </TableCell>
               </TableRow>

@@ -61,8 +61,9 @@ export default async function SaleReportPage({
           <>
             <CsvExportButton
               filename={`sale-report-${from}-to-${to}.csv`}
-              headers={["Voucher No", "Date", "Property", "Gross", "Currency", "Status"]}
-              rows={(rows ?? []).map((r) => [
+              headers={["S.No", "Voucher No", "Date", "Property", "Gross", "Currency", "Status"]}
+              rows={(rows ?? []).map((r, i) => [
+                i + 1,
                 r.voucher_no ?? "",
                 r.sale_date,
                 `${r.asset_code} - ${r.asset_name}`,
@@ -84,6 +85,7 @@ export default async function SaleReportPage({
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
+              <TableHead className="w-12 text-right">S.No</TableHead>
               <TableHead>Voucher No</TableHead>
               <TableHead>Date</TableHead>
               <TableHead>Property</TableHead>
@@ -92,8 +94,9 @@ export default async function SaleReportPage({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {(rows ?? []).map((r) => (
+            {(rows ?? []).map((r, i) => (
               <TableRow key={r.sale_id}>
+                <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">{i + 1}</TableCell>
                 <TableCell>{r.voucher_no ?? "Draft"}</TableCell>
                 <TableCell>{formatDate(r.sale_date)}</TableCell>
                 <TableCell>
@@ -109,7 +112,7 @@ export default async function SaleReportPage({
             ))}
             {(rows ?? []).length === 0 && (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                   No sales in this period.
                 </TableCell>
               </TableRow>
@@ -118,7 +121,7 @@ export default async function SaleReportPage({
           {(rows ?? []).length > 0 && (
             <tfoot className="border-t bg-muted/40">
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={3} className="font-medium">
+                <TableCell colSpan={4} className="font-medium">
                   Total
                 </TableCell>
                 <TableCell className="text-right font-mono font-medium tabular-nums">{formatMoney(totalGross)}</TableCell>

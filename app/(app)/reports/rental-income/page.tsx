@@ -75,8 +75,9 @@ export default async function RentalIncomePage({
           <>
             <CsvExportButton
               filename={`rental-income-${from}-to-${to}.csv`}
-              headers={["Country", "Voucher No", "Date", "Asset", "Tenant", "Amount", "Outstanding", "Currency"]}
-              rows={(rows ?? []).map((r) => [
+              headers={["S.No", "Country", "Voucher No", "Date", "Asset", "Tenant", "Amount", "Outstanding", "Currency"]}
+              rows={(rows ?? []).map((r, i) => [
+                i + 1,
                 r.country,
                 r.voucher_no ?? "",
                 r.invoice_date,
@@ -112,6 +113,7 @@ export default async function RentalIncomePage({
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
+              <TableHead className="w-12 text-right">S.No</TableHead>
               <TableHead>Country</TableHead>
               <TableHead>Voucher No</TableHead>
               <TableHead>Date</TableHead>
@@ -122,8 +124,9 @@ export default async function RentalIncomePage({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {(rows ?? []).map((r) => (
+            {(rows ?? []).map((r, i) => (
               <TableRow key={r.invoice_id}>
+                <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">{i + 1}</TableCell>
                 <TableCell>
                   <Badge variant="outline">{r.country}</Badge>
                 </TableCell>
@@ -143,7 +146,7 @@ export default async function RentalIncomePage({
             ))}
             {(rows ?? []).length === 0 && (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                   No rental income in this period.
                 </TableCell>
               </TableRow>
@@ -152,7 +155,7 @@ export default async function RentalIncomePage({
           {(rows ?? []).length > 0 && (
             <tfoot className="border-t bg-muted/40">
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={5} className="font-medium">
+                <TableCell colSpan={6} className="font-medium">
                   Total
                 </TableCell>
                 <TableCell className="text-right font-mono font-medium tabular-nums">{money(totalAmount)}</TableCell>

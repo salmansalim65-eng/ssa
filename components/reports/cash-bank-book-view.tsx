@@ -50,7 +50,8 @@ export function CashBankBookView({
   const money = (n: number) => (symbol ? `${symbol} ${formatMoney(n * factor)}` : formatMoney(n * factor));
 
   const exportRows = sections.flatMap((s) =>
-    s.rows.map((r) => [
+    s.rows.map((r, i) => [
+      i + 1,
       `${formatAccountCode(s.account_code)} - ${s.account_name}`,
       formatDate(r.entry_date),
       r.voucher_no ?? "",
@@ -72,7 +73,7 @@ export function CashBankBookView({
           <>
             <CsvExportButton
               filename={`${filenamePrefix}-${from}-to-${to}.csv`}
-              headers={["Account", "Date", "Voucher No", "Narration", "Debit", "Credit", "Balance"]}
+              headers={["S.No", "Account", "Date", "Voucher No", "Narration", "Debit", "Credit", "Balance"]}
               rows={exportRows}
             />
             <PrintButton />
@@ -115,6 +116,7 @@ export function CashBankBookView({
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
+                  <TableHead className="w-12 text-right">S.No</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Voucher No</TableHead>
                   <TableHead>Narration</TableHead>
@@ -125,15 +127,16 @@ export function CashBankBookView({
               </TableHeader>
               <TableBody>
                 <TableRow>
-                  <TableCell colSpan={5} className="font-medium">
+                  <TableCell colSpan={6} className="font-medium">
                     Opening balance
                   </TableCell>
                   <TableCell className="text-right font-mono font-medium tabular-nums">
                     {money(section.openingBalance)}
                   </TableCell>
                 </TableRow>
-                {section.rows.map((r) => (
+                {section.rows.map((r, i) => (
                   <TableRow key={`${r.journal_entry_id}-${r.entry_date}`}>
+                    <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">{i + 1}</TableCell>
                     <TableCell>{formatDate(r.entry_date)}</TableCell>
                     <TableCell>{r.voucher_no ?? "Draft"}</TableCell>
                     <TableCell>{r.description || r.narration || "—"}</TableCell>
@@ -147,7 +150,7 @@ export function CashBankBookView({
                   </TableRow>
                 ))}
                 <TableRow>
-                  <TableCell colSpan={5} className="font-medium">
+                  <TableCell colSpan={6} className="font-medium">
                     Closing balance
                   </TableCell>
                   <TableCell className="text-right font-mono font-medium tabular-nums">

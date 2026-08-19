@@ -261,7 +261,8 @@ export default async function GeneralLedgerPage({
   }
 
   const csvRows = sections.flatMap((s) =>
-    s.rows.map((r) => [
+    s.rows.map((r, i) => [
+      i + 1,
       formatDate(r.entry_date),
       r.due_date ? formatDate(r.due_date) : "",
       r.voucher_no ?? "",
@@ -286,7 +287,7 @@ export default async function GeneralLedgerPage({
           <>
             <CsvExportButton
               filename={`general-ledger-${from}-to-${to}.csv`}
-              headers={["Date", "Due Date", "Voucher No", "Account", "Currency", "Narration", "Debit", "Credit", "Balance"]}
+              headers={["S.No", "Date", "Due Date", "Voucher No", "Account", "Currency", "Narration", "Debit", "Credit", "Balance"]}
               rows={csvRows}
             />
             <PrintButton />
@@ -335,6 +336,7 @@ export default async function GeneralLedgerPage({
         >
             <TableHeader className="sticky top-0 z-20">
               <TableRow className="hover:bg-transparent">
+                <TableHead className="w-12 text-right">S.No</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Due Date</TableHead>
                 <TableHead>Voucher No</TableHead>
@@ -354,7 +356,7 @@ export default async function GeneralLedgerPage({
                 return (
                 <Fragment key={s.account.id}>
                   <TableRow className="bg-ledger/10">
-                    <TableCell colSpan={3} className="font-medium">
+                    <TableCell colSpan={4} className="font-medium">
                       <span className="font-mono text-xs text-muted-foreground">{formatAccountCode(s.account.account_code)}</span>{" "}
                       <span className="font-semibold text-foreground">{s.account.account_name}</span>{" "}
                       <span className="font-normal text-muted-foreground">({s.currencyCode})</span>
@@ -366,8 +368,9 @@ export default async function GeneralLedgerPage({
                       {money(s.opening)}
                     </TableCell>
                   </TableRow>
-                  {s.rows.map((r) => (
+                  {s.rows.map((r, i) => (
                     <TableRow key={`${r.journal_entry_id}-${r.entry_date}-${r.voucher_no ?? ""}`}>
+                      <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">{i + 1}</TableCell>
                       <TableCell>{formatDate(r.entry_date)}</TableCell>
                       <TableCell>{r.due_date ? formatDate(r.due_date) : "—"}</TableCell>
                       <TableCell>
@@ -395,14 +398,14 @@ export default async function GeneralLedgerPage({
                   ))}
                   {s.rows.length === 0 && (
                     <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
                         No transactions match the filters in this period.
                       </TableCell>
                     </TableRow>
                   )}
                   {s.rows.length > 0 && (
                     <TableRow className="border-t-2 border-ledger/50 bg-ledger/25 hover:bg-ledger/25">
-                      <TableCell colSpan={5} className="text-right font-semibold text-foreground">
+                      <TableCell colSpan={6} className="text-right font-semibold text-foreground">
                         Total — {formatAccountCode(s.account.account_code)} {s.account.account_name}
                       </TableCell>
                       <TableCell className="text-right font-mono font-semibold tabular-nums">

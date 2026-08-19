@@ -63,8 +63,9 @@ export default async function OutstandingRentPage({
           <>
             <CsvExportButton
               filename="outstanding-rent.csv"
-              headers={["Country", "Voucher No", "Due Date", "Asset", "Tenant", "Outstanding", "Currency", "Days Overdue"]}
-              rows={(rows ?? []).map((r) => [
+              headers={["S.No", "Country", "Voucher No", "Due Date", "Asset", "Tenant", "Outstanding", "Currency", "Days Overdue"]}
+              rows={(rows ?? []).map((r, i) => [
+                i + 1,
                 r.country,
                 r.voucher_no ?? "",
                 r.due_date,
@@ -97,6 +98,7 @@ export default async function OutstandingRentPage({
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
+              <TableHead className="w-12 text-right">S.No</TableHead>
               <TableHead>Country</TableHead>
               <TableHead>Voucher No</TableHead>
               <TableHead>Due date</TableHead>
@@ -107,8 +109,9 @@ export default async function OutstandingRentPage({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {(rows ?? []).map((r) => (
+            {(rows ?? []).map((r, i) => (
               <TableRow key={r.invoice_id}>
+                <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">{i + 1}</TableCell>
                 <TableCell>
                   <Badge variant="outline">{r.country}</Badge>
                 </TableCell>
@@ -128,7 +131,7 @@ export default async function OutstandingRentPage({
             ))}
             {(rows ?? []).length === 0 && (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                   No outstanding rent.
                 </TableCell>
               </TableRow>
@@ -137,7 +140,7 @@ export default async function OutstandingRentPage({
           {(rows ?? []).length > 0 && (
             <tfoot className="border-t bg-muted/40">
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={5} className="font-medium">
+                <TableCell colSpan={6} className="font-medium">
                   Total
                 </TableCell>
                 <TableCell className="text-right font-mono font-medium tabular-nums">{money(totalOutstanding)}</TableCell>

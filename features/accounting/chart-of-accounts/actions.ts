@@ -112,16 +112,25 @@ async function syncAccountOpeningBalance(params: {
   const asOfDate = `${new Date().getFullYear()}-01-01`;
   const voucherId = crypto.randomUUID();
 
-  const je = await createJournalEntry({
-    companyId: params.companyId,
-    voucherType: "opening_balance_voucher",
-    voucherId,
-    entryDate: asOfDate,
-    currencyId,
-    narration: "Opening balance",
-    createdBy: params.userId,
-    lines,
-  });
+  // createJournalEntry resolves the currency's exchange rate, which throws when
+  // no rate is configured for this currency as of the opening-balance date (e.g.
+  // a PKR property with no PKR rate on 1 Jan). Catch it so the account save
+  // surfaces a clear message instead of crashing the whole page.
+  let je: Awaited<ReturnType<typeof createJournalEntry>>;
+  try {
+    je = await createJournalEntry({
+      companyId: params.companyId,
+      voucherType: "opening_balance_voucher",
+      voucherId,
+      entryDate: asOfDate,
+      currencyId,
+      narration: "Opening balance",
+      createdBy: params.userId,
+      lines,
+    });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to post the opening balance" };
+  }
   if ("error" in je) return { error: je.error };
 
   await supabase.schema("accounting").from("opening_balance_vouchers").insert({

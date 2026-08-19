@@ -51,7 +51,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { formatAccountCode, formatMoney } from "@/lib/format";
+import { formatMoney } from "@/lib/format";
 import { blankAmount } from "@/lib/forms/amount";
 import {
   createAccount,
@@ -454,49 +454,35 @@ export function AccountTree({
                 )}
                 <span
                   className={cn(
-                    "font-mono text-xs",
-                    isGroup ? "font-bold text-group" : "text-muted-foreground",
+                    "truncate",
+                    isGroup
+                      ? depth === 0
+                        ? "font-bold uppercase tracking-wide text-group"
+                        : "font-semibold text-group"
+                      : "font-medium",
                   )}
                 >
-                  {formatAccountCode(account.account_code)}
+                  {account.account_name}
                 </span>
-              </div>
-            </div>
-          </td>
-
-          {/* Account name */}
-          <td className="p-3 align-middle">
-            <div className="flex items-center gap-2">
-              <span
-                className={cn(
-                  "truncate",
-                  isGroup
-                    ? depth === 0
-                      ? "font-bold uppercase tracking-wide text-group"
-                      : "font-semibold text-group"
-                    : "font-medium",
+                {isGroup && (
+                  <Badge
+                    variant="outline"
+                    className="ml-2 shrink-0 border-group/30 bg-group/10 text-[0.65rem] uppercase tracking-wide text-group"
+                  >
+                    Group
+                  </Badge>
                 )}
-              >
-                {account.account_name}
-              </span>
-              {isGroup && (
-                <Badge
-                  variant="outline"
-                  className="shrink-0 border-group/30 bg-group/10 text-[0.65rem] uppercase tracking-wide text-group"
-                >
-                  Group
-                </Badge>
-              )}
-              {account.is_cash && (
-                <Badge variant="outline" className="shrink-0">
-                  Cash
-                </Badge>
-              )}
-              {account.is_bank && (
-                <Badge variant="outline" className="shrink-0">
-                  Bank
-                </Badge>
-              )}
+                {account.is_cash && (
+                  <Badge variant="outline" className="ml-2 shrink-0">
+                    Cash
+                  </Badge>
+                )}
+                {account.is_bank && (
+                  <Badge variant="outline" className="ml-2 shrink-0">
+                    Bank
+                  </Badge>
+                )}
+              </div>
             </div>
           </td>
 
@@ -745,7 +731,6 @@ export function AccountTree({
           <Table containerClassName="max-h-[70vh] overflow-auto">
             <TableHeader className="sticky top-0 z-20">
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-[28%]">Account Code</TableHead>
                 <TableHead>Account Name</TableHead>
                 <TableHead className="w-28">Type</TableHead>
                 <TableHead className="w-24">Currency</TableHead>

@@ -138,6 +138,7 @@ export default async function PropertyReportPage() {
 
   // Active lease per asset (today within period, or any lease when dates are open).
   interface ActiveLease {
+    active: boolean;
     monthly: number;
     commissionMonthly: number; // agent commission (5% UAE / 10% HH / 0 PK)
     expensesMonthly: number; // monthly HH lease expenses (deducted from net rent)
@@ -145,6 +146,10 @@ export default async function PropertyReportPage() {
     end: string | null;
     renew: string | null;
   }
+  // A property can carry more than one active lease (e.g. separate units under
+  // one property, like SAIMA's B-601 / B-614). Sum every concurrent active
+  // lease's rent so the Property Report matches the Rent Report, instead of the
+  // last-seen lease silently overwriting the others.
   const leaseByAsset = new Map<string, ActiveLease>();
   const consider = (
     assetId: string | null,
@@ -158,11 +163,38 @@ export default async function PropertyReportPage() {
   ) => {
     if (!assetId) return;
     const active = (!start || start <= today) && (!end || end >= today);
-    if (!active && leaseByAsset.has(assetId)) return;
     const monthly = monthlyFromCycle(amount, cycle);
+    const commissionMonthly = Math.round(monthly * commissionPct * 100) / 100;
+    const existing = leaseByAsset.get(assetId);
+
+    if (existing) {
+      // Sum additional concurrent active leases onto the running total.
+      if (active && existing.active) {
+        existing.monthly += monthly;
+        existing.commissionMonthly += commissionMonthly;
+        existing.expensesMonthly += expensesMonthly;
+        return;
+      }
+      // An active lease supersedes an inactive placeholder; otherwise keep what
+      // is already recorded (an inactive lease never overrides an active one).
+      if (active && !existing.active) {
+        leaseByAsset.set(assetId, {
+          active: true,
+          monthly,
+          commissionMonthly,
+          expensesMonthly,
+          start,
+          end,
+          renew: rentMonth || monthLabel(end),
+        });
+      }
+      return;
+    }
+
     leaseByAsset.set(assetId, {
+      active,
       monthly,
-      commissionMonthly: Math.round(monthly * commissionPct * 100) / 100,
+      commissionMonthly,
       expensesMonthly,
       start,
       end,

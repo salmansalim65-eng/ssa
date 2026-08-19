@@ -125,8 +125,8 @@ export default async function TrialBalancePage({
           <>
             <CsvExportButton
               filename={`trial-balance-${asOf}.csv`}
-              headers={["Code", "Name", "Type", "Debit", "Credit"]}
-              rows={rows.map((r) => [formatAccountCode(r.account_code), r.account_name, r.account_type, r.debit, r.credit])}
+              headers={["S.No", "Code", "Name", "Type", "Debit", "Credit"]}
+              rows={rows.map((r, i) => [i + 1, formatAccountCode(r.account_code), r.account_name, r.account_type, r.debit, r.credit])}
             />
             <PrintButton />
           </>
@@ -165,6 +165,7 @@ export default async function TrialBalancePage({
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
+              <TableHead className="w-12 text-right">S.No</TableHead>
               <TableHead>Code</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Type</TableHead>
@@ -173,8 +174,9 @@ export default async function TrialBalancePage({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map((r) => (
+            {rows.map((r, i) => (
               <TableRow key={r.account_code}>
+                <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">{i + 1}</TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">{formatAccountCode(r.account_code)}</TableCell>
                 <TableCell className="font-medium">{r.account_name}</TableCell>
                 <TableCell className="capitalize">{r.account_type}</TableCell>
@@ -188,7 +190,7 @@ export default async function TrialBalancePage({
             ))}
             {rows.length === 0 && (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                   No posted transactions as of this date.
                 </TableCell>
               </TableRow>
@@ -199,7 +201,7 @@ export default async function TrialBalancePage({
               {/* Dark navy treatment (same tokens as the column headers) so the
                   totals stand out from the account rows. */}
               <TableRow className="bg-header text-header-foreground hover:bg-header [&>td]:border-header-border">
-                <TableCell colSpan={3} className="font-semibold">
+                <TableCell colSpan={4} className="font-semibold">
                   Total
                 </TableCell>
                 <TableCell

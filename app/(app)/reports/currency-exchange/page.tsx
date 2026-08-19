@@ -58,8 +58,8 @@ export default async function CurrencyExchangePage({
           <>
             <CsvExportButton
               filename={`currency-exchange-${from}-to-${to}.csv`}
-              headers={["Currency", "Date", "Rate to base", "Source"]}
-              rows={(rows ?? []).map((r) => [r.currency_code, formatDate(r.rate_date), r.rate_to_base, r.source])}
+              headers={["S.No", "Currency", "Date", "Rate to base", "Source"]}
+              rows={(rows ?? []).map((r, i) => [i + 1, r.currency_code, formatDate(r.rate_date), r.rate_to_base, r.source])}
             />
             <PrintButton />
           </>
@@ -74,6 +74,7 @@ export default async function CurrencyExchangePage({
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
+              <TableHead className="w-12 text-right">S.No</TableHead>
               <TableHead>Currency</TableHead>
               <TableHead>Date</TableHead>
               <TableHead className="text-right">Rate to base</TableHead>
@@ -83,6 +84,7 @@ export default async function CurrencyExchangePage({
           <TableBody>
             {(rows ?? []).map((r, i) => (
               <TableRow key={`${r.currency_code}-${r.rate_date}-${i}`}>
+                <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">{i + 1}</TableCell>
                 <TableCell>{r.currency_code}</TableCell>
                 <TableCell>{formatDate(r.rate_date)}</TableCell>
                 <TableCell className="text-right font-mono tabular-nums">{r.rate_to_base}</TableCell>
@@ -91,7 +93,7 @@ export default async function CurrencyExchangePage({
             ))}
             {(rows ?? []).length === 0 && (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
                   No exchange rates recorded in this period.
                 </TableCell>
               </TableRow>

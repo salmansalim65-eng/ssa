@@ -79,6 +79,7 @@ function fmt(kind: "money" | "rate" | "pct", n: number): string {
 // Service Rate sits between Sq. Ft Value and Service Charges but has no group
 // total, so it's rendered from the row directly (not from NUM_COLS totals).
 const CSV_HEADERS = [
+  "S.No",
   "Country",
   "Property",
   "Country Code",
@@ -268,7 +269,10 @@ export function PropertyReportView({
     setOccupancy((o) => (o === k ? "" : (k as "occupied" | "vacant")));
   const toggleType = (t: string) => setPropertyType((p) => (p === t ? "" : t));
 
-  const csvRows = visibleRows.map((r) => [
+  // Serial number restarts per group (section), matching the on-screen table.
+  const csvRows = filteredGroups.flatMap((g) =>
+    g.rows.map((r, i) => [
+    i + 1,
     r.group,
     r.name,
     r.country,
@@ -289,7 +293,8 @@ export function PropertyReportView({
     r.maintenancePct,
     r.titleDeedOwner,
     r.occupied ? "Occupied" : "Vacant",
-  ]);
+    ]),
+  );
 
   function toggleGroup(name: string) {
     setCollapsed((prev) => {
@@ -300,8 +305,8 @@ export function PropertyReportView({
     });
   }
 
-  // Column count for the frozen first column + numeric columns.
-  const totalCols = 1 + NUM_COLS.length;
+  // Column count: S.No + frozen first column + numeric columns.
+  const totalCols = 2 + NUM_COLS.length;
 
   // Charts render below the detailed table (see layout order in the return).
   const dashboardCharts = (
@@ -554,7 +559,8 @@ export function PropertyReportView({
         <table className="min-w-[1500px] w-full border-collapse text-sm">
           <thead className="sticky top-0 z-20">
             <tr className="bg-header text-header-foreground [&>th]:border-r [&>th]:border-header-border [&>th]:px-3 [&>th]:py-2 [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide">
-              <th className="sticky left-0 z-30 min-w-[220px] bg-header text-left">Country / Property</th>
+              <th className="sticky left-0 z-30 w-12 bg-header text-right">S.No</th>
+              <th className="sticky left-12 z-30 min-w-[220px] bg-header text-left">Country / Property</th>
               {NUM_COLS.map((c) => (
                 <th key={c.key} title={c.full} className="whitespace-nowrap text-right">
                   {c.label}
@@ -572,7 +578,7 @@ export function PropertyReportView({
                     className="cursor-pointer border-b border-ledger-dark/30 bg-ledger-dark text-white hover:bg-ledger-dark/90 [&>td]:px-3 [&>td]:py-2"
                     onClick={() => toggleGroup(g.name)}
                   >
-                    <td className="sticky left-0 z-10 min-w-[220px] bg-ledger-dark font-semibold">
+                    <td colSpan={2} className="sticky left-0 z-10 min-w-[220px] bg-ledger-dark font-semibold">
                       <span className="inline-flex items-center gap-1.5">
                         {isCollapsed ? <ChevronRightIcon className="size-4" /> : <ChevronDownIcon className="size-4" />}
                         {g.name}
@@ -605,7 +611,16 @@ export function PropertyReportView({
                       >
                         <td
                           className={cn(
-                            "sticky left-0 z-10 min-w-[220px] border-r border-border/50 pl-8",
+                            "sticky left-0 z-10 w-12 border-r border-border/50 text-right font-mono text-xs tabular-nums text-muted-foreground",
+                            rowBg,
+                            !isSel && "group-hover/row:bg-primary/[0.06]",
+                          )}
+                        >
+                          {i + 1}
+                        </td>
+                        <td
+                          className={cn(
+                            "sticky left-12 z-10 min-w-[220px] border-r border-border/50 pl-8",
                             rowBg,
                             !isSel && "group-hover/row:bg-primary/[0.06]",
                           )}

@@ -20,7 +20,7 @@ import { loadAccountingPeriodStart } from "@/lib/reports/period";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
-import { formatAccountCode, formatDate, formatMoney } from "@/lib/format";
+import { formatAccountCode, formatDate, formatMoney, formatVoucherNo } from "@/lib/format";
 import { voucherHref } from "@/lib/vouchers/meta";
 import type { AccountType, VoucherType } from "@/types/database.types";
 
@@ -265,7 +265,7 @@ export default async function GeneralLedgerPage({
       i + 1,
       formatDate(r.entry_date),
       r.due_date ? formatDate(r.due_date) : "",
-      r.voucher_no ?? "",
+      r.voucher_no ? formatVoucherNo(r.voucher_no) : "",
       `${formatAccountCode(s.account.account_code)} - ${s.account.account_name}`,
       s.currencyCode,
       r.description || r.narration || "",
@@ -379,7 +379,7 @@ export default async function GeneralLedgerPage({
                             href={voucherHref(r.voucher_type as VoucherType, r.voucher_id)}
                             className="font-medium text-primary hover:underline"
                           >
-                            {r.voucher_no}
+                            {formatVoucherNo(r.voucher_no)}
                           </Link>
                         ) : (
                           "Draft"

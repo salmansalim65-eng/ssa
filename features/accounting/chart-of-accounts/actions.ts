@@ -82,16 +82,23 @@ async function syncAccountOpeningBalance(params: {
     .eq("status", "posted");
   const obJeIds = (obJes ?? []).map((j) => j.id as string);
   let currentNet = 0;
+  // Rate the account's existing opening balance was booked at. An adjustment or
+  // reversal reuses it, so clearing/changing an opening balance never depends on
+  // a *current* exchange rate being configured (which for e.g. a PKR property
+  // may not exist as of 1 Jan).
+  let existingRate: number | null = null;
   if (obJeIds.length) {
     const { data: lines } = await supabase
       .schema("accounting")
       .from("journal_entry_lines")
-      .select("debit_amount, credit_amount")
+      .select("debit_amount, credit_amount, exchange_rate")
       .eq("account_id", params.accountId)
       .in("journal_entry_id", obJeIds);
     currentNet = round2(
       (lines ?? []).reduce((s, l) => s + Number(l.debit_amount) - Number(l.credit_amount), 0),
     );
+    const rated = (lines ?? []).find((l) => Number(l.exchange_rate) > 0);
+    if (rated) existingRate = Number(rated.exchange_rate);
   }
 
   const delta = round2(target - currentNet);
@@ -124,6 +131,9 @@ async function syncAccountOpeningBalance(params: {
       voucherId,
       entryDate: asOfDate,
       currencyId,
+      // Reuse the original booking rate when adjusting/reversing an existing
+      // opening balance; only a brand-new opening balance resolves a fresh rate.
+      exchangeRate: existingRate ?? undefined,
       narration: "Opening balance",
       createdBy: params.userId,
       lines,

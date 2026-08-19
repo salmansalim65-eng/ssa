@@ -16,7 +16,7 @@ import { PrintButton } from "@/components/vouchers/print-button";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
 import { convertAtBookingRate, resolveReportCurrency } from "@/lib/reports/report-currency";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatMoney, formatVoucherNo } from "@/lib/format";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -67,7 +67,7 @@ export default async function OutstandingRentPage({
               rows={(rows ?? []).map((r, i) => [
                 i + 1,
                 r.country,
-                r.voucher_no ?? "",
+                r.voucher_no ? formatVoucherNo(r.voucher_no) : "",
                 r.due_date,
                 `${r.asset_code} - ${r.asset_name}`,
                 r.tenant_name,
@@ -115,7 +115,7 @@ export default async function OutstandingRentPage({
                 <TableCell>
                   <Badge variant="outline">{r.country}</Badge>
                 </TableCell>
-                <TableCell>{r.voucher_no ?? "Draft"}</TableCell>
+                <TableCell>{r.voucher_no ? formatVoucherNo(r.voucher_no) : "Draft"}</TableCell>
                 <TableCell>{formatDate(r.due_date)}</TableCell>
                 <TableCell>
                   <span className="font-medium">{r.asset_name}</span>

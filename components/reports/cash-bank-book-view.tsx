@@ -17,7 +17,7 @@ import {
 } from "@/components/reports/report-country-filter";
 import { ReportSelectFilter } from "@/components/reports/report-select-filter";
 import { PrintButton } from "@/components/vouchers/print-button";
-import { formatAccountCode, formatDate, formatMoney } from "@/lib/format";
+import { formatAccountCode, formatDate, formatMoney, formatVoucherNo } from "@/lib/format";
 import type { CashBankAccountSection } from "@/lib/reports/cash-bank-book";
 import type { ResolvedReportCurrency } from "@/lib/reports/report-currency";
 
@@ -54,7 +54,7 @@ export function CashBankBookView({
       i + 1,
       `${formatAccountCode(s.account_code)} - ${s.account_name}`,
       formatDate(r.entry_date),
-      r.voucher_no ?? "",
+      r.voucher_no ? formatVoucherNo(r.voucher_no) : "",
       r.description || r.narration || "",
       r.debit_amount * factor,
       r.credit_amount * factor,
@@ -138,7 +138,7 @@ export function CashBankBookView({
                   <TableRow key={`${r.journal_entry_id}-${r.entry_date}`}>
                     <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">{i + 1}</TableCell>
                     <TableCell>{formatDate(r.entry_date)}</TableCell>
-                    <TableCell>{r.voucher_no ?? "Draft"}</TableCell>
+                    <TableCell>{r.voucher_no ? formatVoucherNo(r.voucher_no) : "Draft"}</TableCell>
                     <TableCell>{r.description || r.narration || "—"}</TableCell>
                     <TableCell className="text-right font-mono tabular-nums">
                       {r.debit_amount ? money(r.debit_amount) : ""}

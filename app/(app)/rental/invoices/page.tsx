@@ -18,7 +18,7 @@ import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { RentInvoiceFilters } from "@/components/rental/rent-invoice-filters";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatMoney, formatVoucherNo } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { JournalEntryStatus } from "@/types/database.types";
 
@@ -190,7 +190,7 @@ export default async function RentInvoicesPage({
                       href={`${DETAIL_BASE[r.source]}/${r.invoice_id}`}
                       className="font-mono font-medium text-primary hover:underline"
                     >
-                      {r.voucher_no ?? "Draft"}
+                      {r.voucher_no ? formatVoucherNo(r.voucher_no) : "Draft"}
                     </Link>
                   </TableCell>
                   <TableCell>

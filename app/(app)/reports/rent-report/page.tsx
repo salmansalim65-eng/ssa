@@ -381,9 +381,9 @@ export default async function RentReportPage({
       <div className="max-h-[72vh] overflow-auto rounded-xl border bg-card shadow-xs">
         <table className="w-full min-w-[1080px] border-collapse text-sm">
           <thead className="sticky top-0 z-20">
-            <tr className="bg-primary text-primary-foreground [&>th]:border-r [&>th]:border-primary/40 [&>th]:px-3 [&>th]:py-2.5 [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide">
-              <th className="sticky left-0 z-30 w-12 bg-primary text-right">S.No</th>
-              <th className="sticky left-12 z-30 min-w-[240px] bg-primary text-left">Cost centre</th>
+            <tr className="bg-primary text-primary-foreground [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:border-r [&>th]:border-primary/40 [&>th]:bg-primary [&>th]:px-3 [&>th]:py-2.5 [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide">
+              <th className="sticky left-0 top-0 z-30 w-12 bg-primary text-right">S.No</th>
+              <th className="sticky left-12 top-0 z-30 min-w-[240px] bg-primary text-left">Cost centre</th>
               <th className="whitespace-nowrap text-right">Net Rent</th>
               {MONTHS.map((m, i) => (
                 <th key={m} className={cn("whitespace-nowrap text-right", i === thisMonth && "bg-white/15")}>

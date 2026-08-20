@@ -235,12 +235,40 @@ export default async function GeneralLedgerPage({
     });
   }
 
+  // Rent month per rent-invoice voucher, taken from the invoice's own billing
+  // period (UAE: period_start; PK bills monthly on the invoice due date) rather
+  // than the ledger line's due date.
+  const rentMonthByVoucher = new Map<string, string>();
+  {
+    const uaeIds = new Set<string>();
+    const pkIds = new Set<string>();
+    for (const s of sections)
+      for (const r of s.rows) {
+        if (!r.voucher_id) continue;
+        if (r.voucher_type === "uae_rent_invoice") uaeIds.add(r.voucher_id);
+        else if (r.voucher_type === "pk_rent_invoice") pkIds.add(r.voucher_id);
+      }
+    const [uaeInv, pkInv] = await Promise.all([
+      uaeIds.size
+        ? supabase.schema("rental").from("uae_rent_invoices").select("id, period_start").in("id", [...uaeIds])
+        : Promise.resolve({ data: [] as { id: string; period_start: string | null }[] }),
+      pkIds.size
+        ? supabase.schema("rental").from("pk_rent_invoices").select("id, due_date").in("id", [...pkIds])
+        : Promise.resolve({ data: [] as { id: string; due_date: string | null }[] }),
+    ]);
+    for (const r of (uaeInv.data ?? []) as { id: string; period_start: string | null }[])
+      rentMonthByVoucher.set(r.id, rentMonthLabel(r.period_start));
+    for (const r of (pkInv.data ?? []) as { id: string; due_date: string | null }[])
+      rentMonthByVoucher.set(r.id, rentMonthLabel(r.due_date));
+  }
+  const rentMonthFor = (r: { voucher_id: string }) => rentMonthByVoucher.get(r.voucher_id) ?? "";
+
   const csvRows = sections.flatMap((s) =>
     s.rows.map((r, i) => [
       i + 1,
       formatDate(r.entry_date),
       r.due_date ? formatDate(r.due_date) : "",
-      rentMonthLabel(r.due_date),
+      rentMonthFor(r),
       r.voucher_no ? formatVoucherNo(r.voucher_no) : "",
       (r.cost_center_id && ccNameById.get(r.cost_center_id)) || "",
       s.currencyCode,
@@ -350,7 +378,7 @@ export default async function GeneralLedgerPage({
                       <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">{i + 1}</TableCell>
                       <TableCell>{formatDate(r.entry_date)}</TableCell>
                       <TableCell>{r.due_date ? formatDate(r.due_date) : "—"}</TableCell>
-                      <TableCell className="text-muted-foreground">{rentMonthLabel(r.due_date) || "—"}</TableCell>
+                      <TableCell className="text-muted-foreground">{rentMonthFor(r) || "—"}</TableCell>
                       <TableCell>
                         {r.voucher_no ? (
                           <Link

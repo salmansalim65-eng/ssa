@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { resolveTenantId } from "@/lib/rental/tenant-accounts";
 import { generateAllPkRentInvoices, postAllPkRentInvoices } from "@/features/rental/pk-rent-invoices/actions";
@@ -49,21 +49,19 @@ export async function createPkLease(input: PkLeaseInput) {
 
   if (error || !lease) return { error: error?.message ?? "Failed to create lease" };
 
-  // Admins get invoices generated + posted automatically. The lease is created
-  // regardless, but a real failure (e.g. missing posting template) is surfaced
-  // as a warning instead of being silently swallowed.
+  // Every lease auto-generates and posts its invoices on creation. The lease is
+  // created regardless, but a real failure (e.g. missing posting template) is
+  // surfaced as a warning instead of being silently swallowed.
   let invoiceWarning: string | undefined;
-  if (await isCurrentUserAdmin()) {
-    try {
-      const gen = await generateAllPkRentInvoices(lease.id);
-      if (gen.error && gen.error !== "No pending periods left to invoice.") invoiceWarning = gen.error;
-      const post = await postAllPkRentInvoices(lease.id);
-      if (post.failed.length > 0) {
-        invoiceWarning = `Some invoices could not be posted: ${post.failed.map((f) => f.reason).join("; ")}`;
-      }
-    } catch (e) {
-      invoiceWarning = e instanceof Error ? e.message : "Invoice generation failed";
+  try {
+    const gen = await generateAllPkRentInvoices(lease.id);
+    if (gen.error && gen.error !== "No pending periods left to invoice.") invoiceWarning = gen.error;
+    const post = await postAllPkRentInvoices(lease.id);
+    if (post.failed.length > 0) {
+      invoiceWarning = `Some invoices could not be posted: ${post.failed.map((f) => f.reason).join("; ")}`;
     }
+  } catch (e) {
+    invoiceWarning = e instanceof Error ? e.message : "Invoice generation failed";
   }
 
   revalidatePath("/rental/pk/leases");

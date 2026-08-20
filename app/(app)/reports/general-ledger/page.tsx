@@ -358,6 +358,19 @@ export default async function GeneralLedgerPage({
                 const sectionDebit = round2(s.rows.reduce((a, r) => a + r.debit_amount, 0));
                 const sectionCredit = round2(s.rows.reduce((a, r) => a + r.credit_amount, 0));
                 const closing = s.rows.length ? s.rows[s.rows.length - 1].balance : s.opening;
+                // Rows sharing a due month are banded together; each successive
+                // due-month group alternates a light grey shade so periods read
+                // apart at a glance.
+                let dueGrp = -1;
+                let prevDueKey: string | null = null;
+                const shaded = s.rows.map((r) => {
+                  const key = (r.due_date ?? "").slice(0, 7);
+                  if (key !== prevDueKey) {
+                    dueGrp += 1;
+                    prevDueKey = key;
+                  }
+                  return dueGrp % 2 === 1;
+                });
                 return (
                 <Fragment key={s.account.id}>
                   <TableRow className="bg-ledger/10">
@@ -374,7 +387,10 @@ export default async function GeneralLedgerPage({
                     </TableCell>
                   </TableRow>
                   {s.rows.map((r, i) => (
-                    <TableRow key={`${r.journal_entry_id}-${r.entry_date}-${r.voucher_no ?? ""}`}>
+                    <TableRow
+                      key={`${r.journal_entry_id}-${r.entry_date}-${r.voucher_no ?? ""}`}
+                      className={shaded[i] ? "bg-muted/50 hover:bg-muted/50" : undefined}
+                    >
                       <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">{i + 1}</TableCell>
                       <TableCell>{formatDate(r.entry_date)}</TableCell>
                       <TableCell>{r.due_date ? formatDate(r.due_date) : "—"}</TableCell>

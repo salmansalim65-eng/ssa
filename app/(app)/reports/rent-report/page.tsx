@@ -1,4 +1,5 @@
 import { Fragment, Suspense } from "react";
+import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 import { CsvExportButton } from "@/components/reports/csv-export-button";
@@ -224,19 +225,22 @@ export default async function RentReportPage({
     | null = null;
   if (assetParam) {
     const cc = (costCenters ?? []).find((c) => c.id === assetParam);
-    if (cc) {
-      const leases = cc.asset_id ? leaseByAsset.get(cc.asset_id as string) ?? [] : [];
+    // Fall back to the dropdown label so a picked property always resolves a name.
+    const optLabel = assetOptions.find((o) => o.value === assetParam)?.label;
+    if (cc || optLabel) {
+      const assetId = (cc?.asset_id as string | undefined) ?? undefined;
+      const leases = assetId ? leaseByAsset.get(assetId) ?? [] : [];
       const starts = leases.map((l) => l.start).filter((d): d is string => Boolean(d));
       const ends = leases.map((l) => l.end).filter((d): d is string => Boolean(d));
       const start = starts.length ? starts.reduce((min, d) => (d < min ? d : min)) : null;
       const end = ends.length ? ends.reduce((max, d) => (d > max ? d : max)) : null;
       const renew = leases.map((l) => l.renew).find((v): v is string => Boolean(v)) || monthLabel(end);
       const grossMonthly = leases.reduce((s, l) => s + (l.gross > 0 ? l.gross : 0), 0);
-      const cur = COUNTRY[(cc.country as string) ?? ""]?.code ?? "";
+      const cur = COUNTRY[(cc?.country as string) ?? ""]?.code ?? "";
       const symbol = symbolByCode.get(cur) ?? cur;
       // Resolve tenant name(s) for the property's active lease(s).
       const tenantIds = [...new Set(leases.map((l) => l.tenantId).filter((v): v is string => Boolean(v)))];
-      let tenant = "—";
+      let tenant = leases.length ? "—" : "Vacant";
       if (tenantIds.length) {
         const { data: tenantRows } = await supabase
           .schema("rental")
@@ -247,7 +251,7 @@ export default async function RentReportPage({
         if (names.length) tenant = names.join(", ");
       }
       selectedDetail = {
-        name: cc.name as string,
+        name: (cc?.name as string) ?? optLabel ?? "Property",
         start,
         end,
         renew: renew || "—",
@@ -276,6 +280,16 @@ export default async function RentReportPage({
   const nowMonthIdx = new Date().getMonth();
   const isFutureMonth = (i: number) => year > currentYear || (year === currentYear && i > nowMonthIdx);
   const totalCols = 16; // S.No + cost centre + est + 12 months + total
+  // Link a property row to itself as the selected property (fills the term
+  // cards), preserving the year/country filters. Clicking the active one clears it.
+  const propHref = (id: string) => {
+    const qp = new URLSearchParams();
+    if (yearParam) qp.set("year", yearParam);
+    if (countryParam) qp.set("country", countryParam);
+    if (assetParam !== id) qp.set("asset", id);
+    const s = qp.toString();
+    return s ? `?${s}` : "?";
+  };
 
   return (
     <div className="space-y-5">
@@ -410,7 +424,16 @@ export default async function RentReportPage({
                           {ri + 1}
                         </td>
                         <td className={cn("sticky left-12 z-10 min-w-[240px] border-r border-border/50", rowBg, "group-hover/row:bg-primary/[0.05]")}>
-                          <span className="font-medium text-foreground">{r.name}</span>
+                          <Link
+                            href={propHref(r.id)}
+                            scroll={false}
+                            className={cn(
+                              "font-medium text-foreground hover:text-primary hover:underline",
+                              assetParam === r.id && "text-primary underline",
+                            )}
+                          >
+                            {r.name}
+                          </Link>
                           {r.total === 0 && (
                             <span className="ml-2 rounded border border-amber-400/60 px-1.5 text-[0.6rem] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
                               Vacant

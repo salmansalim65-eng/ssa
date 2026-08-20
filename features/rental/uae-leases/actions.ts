@@ -47,6 +47,12 @@ export async function createUaeLease(input: UaeLeaseInput) {
 
   if (error || !lease) return { error: error?.message ?? "Failed to create lease" };
 
+  // Remarks written in a separate, tolerant update so a lease still saves if the
+  // remarks-column migration hasn't been applied yet.
+  if (parsed.data.remarks) {
+    await supabase.schema("rental").from("uae_leases").update({ remarks: parsed.data.remarks }).eq("id", lease.id);
+  }
+
   // Every lease auto-generates and posts its invoices on creation. The lease is
   // created regardless, but a real failure (e.g. missing posting template) is
   // surfaced as a warning instead of being silently swallowed.
@@ -100,6 +106,15 @@ export async function updateUaeLease(id: string, input: UaeLeaseInput) {
     .from("uae_leases")
     .update({ voucher_date: parsed.data.voucherDate || null })
     .eq("id", id);
+
+  // Remarks persisted separately (tolerant of the column not existing yet).
+  if (parsed.data.remarks !== undefined) {
+    await supabase
+      .schema("rental")
+      .from("uae_leases")
+      .update({ remarks: parsed.data.remarks || null })
+      .eq("id", id);
+  }
 
   revalidatePath("/rental/uae/leases");
   revalidatePath(`/rental/uae/leases/${id}`);

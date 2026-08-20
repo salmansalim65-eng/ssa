@@ -339,41 +339,43 @@ export default async function RentReportPage({
         </div>
       </div>
 
-      {/* Selected property's lease term. Always shown; fills in once a property
-          is picked, otherwise the cards display "—". Frozen at the top so the
-          cards stay visible while scrolling the matrix. */}
-      <div className="sticky top-0 z-30 -mx-1 space-y-2 rounded-lg bg-background/85 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/70 print:static print:bg-transparent">
-        <p className="text-sm font-medium text-foreground">
-          Lease term —{" "}
-          <span className="text-muted-foreground">{selectedDetail ? selectedDetail.name : "select a property"}</span>
-        </p>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <TermCard label="Tenant" value={selectedDetail?.tenant ?? "—"} />
-          <TermCard label="Monthly Rent" value={selectedDetail?.rent ?? "—"} />
-          <TermCard label="Start Date" value={selectedDetail?.start ? formatDate(selectedDetail.start) : "—"} />
-          <TermCard label="End Date" value={selectedDetail?.end ? formatDate(selectedDetail.end) : "—"} />
-          <TermCard label="Renew Month" value={selectedDetail?.renew ?? "—"} />
+      {/* Selected property's lease term + per-country annual-rent summary,
+          frozen together at the top so they stay visible while scrolling the
+          matrix. */}
+      <div className="sticky top-0 z-30 -mx-1 space-y-3 rounded-lg bg-background/85 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/70 print:static print:bg-transparent">
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-foreground">
+            Lease term —{" "}
+            <span className="text-muted-foreground">{selectedDetail ? selectedDetail.name : "select a property"}</span>
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <TermCard label="Tenant" value={selectedDetail?.tenant ?? "—"} />
+            <TermCard label="Monthly Rent" value={selectedDetail?.rent ?? "—"} />
+            <TermCard label="Start Date" value={selectedDetail?.start ? formatDate(selectedDetail.start) : "—"} />
+            <TermCard label="End Date" value={selectedDetail?.end ? formatDate(selectedDetail.end) : "—"} />
+            <TermCard label="Renew Month" value={selectedDetail?.renew ?? "—"} />
+          </div>
         </div>
-      </div>
 
-      {/* Per-country annual-rent summary */}
-      {sections.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {sections.map((s) => {
-            const cur = COUNTRY[s.country]?.code ?? "";
-            const symbol = symbolByCode.get(cur) ?? cur;
-            const total = s.rows.reduce((a, r) => a + r.total, 0);
-            return (
-              <Kpi
-                key={s.country}
-                label={`${COUNTRY[s.country]?.label ?? s.country} — Annual Net Rent`}
-                value={`${symbol ? symbol + " " : ""}${formatMoney(total)}`}
-                sub={`${s.rows.length} propert${s.rows.length === 1 ? "y" : "ies"} · ${cur}`}
-              />
-            );
-          })}
-        </div>
-      )}
+        {/* Per-country annual-rent summary */}
+        {sections.length > 0 && (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {sections.map((s) => {
+              const cur = COUNTRY[s.country]?.code ?? "";
+              const symbol = symbolByCode.get(cur) ?? cur;
+              const total = s.rows.reduce((a, r) => a + r.total, 0);
+              return (
+                <Kpi
+                  key={s.country}
+                  label={`${COUNTRY[s.country]?.label ?? s.country} — Annual Net Rent`}
+                  value={`${symbol ? symbol + " " : ""}${formatMoney(total)}`}
+                  sub={`${s.rows.length} propert${s.rows.length === 1 ? "y" : "ies"} · ${cur}`}
+                />
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Month-wise rent matrix */}
       <div className="max-h-[72vh] overflow-auto rounded-xl border bg-card shadow-xs">

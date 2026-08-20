@@ -130,7 +130,7 @@ export async function copyUaeLease(id: string) {
     .schema("rental")
     .from("uae_leases")
     .select(
-      "asset_id, tenant_id, lease_start, lease_end, rental_amount, rent_cycle, security_deposit, currency_id, due_date, voucher_date",
+      "asset_id, tenant_id, lease_start, lease_end, rental_amount, rent_cycle, security_deposit, currency_id, due_date, voucher_date, remarks",
     )
     .eq("company_id", companyId)
     .eq("id", id)
@@ -150,6 +150,7 @@ export async function copyUaeLease(id: string) {
     currencyId: src.currency_id,
     dueDate: src.due_date ?? "",
     voucherDate: src.voucher_date ?? new Date().toISOString().slice(0, 10),
+    remarks: (src.remarks as string | null) || "Copied lease",
   });
 }
 

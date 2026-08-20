@@ -292,10 +292,10 @@ export default async function RentReportPage({
   };
 
   return (
-    <div className="space-y-5">
+    <div className="flex h-[calc(100dvh-5.5rem)] min-h-0 flex-col gap-4 sm:h-[calc(100dvh-6.5rem)] print:block print:h-auto print:gap-0">
       {/* Toolbar — home/back, year, export and print on one line (the report name
           is shown by the breadcrumb, so there's no heading box) */}
-      <div className="flex flex-wrap items-end justify-between gap-3 print:hidden">
+      <div className="flex shrink-0 flex-wrap items-end justify-between gap-3 print:hidden">
         <div className="flex flex-wrap items-end gap-3">
           <ReportNav className="pb-1.5" />
           <Suspense>
@@ -342,7 +342,7 @@ export default async function RentReportPage({
       {/* Selected property's lease term + per-country annual-rent summary,
           frozen together at the top so they stay visible while scrolling the
           matrix. */}
-      <div className="sticky top-0 z-30 -mx-1 space-y-3 rounded-lg bg-background/85 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/70 print:static print:bg-transparent">
+      <div className="shrink-0 space-y-3">
         <div className="space-y-2">
           <p className="text-sm font-medium text-foreground">
             Lease term —{" "}
@@ -378,7 +378,7 @@ export default async function RentReportPage({
       </div>
 
       {/* Month-wise rent matrix */}
-      <div className="max-h-[72vh] overflow-auto rounded-xl border bg-card shadow-xs">
+      <div className="min-h-0 flex-1 overflow-auto rounded-xl border bg-card shadow-xs print:h-auto print:overflow-visible">
         <table className="w-full min-w-[1080px] border-collapse text-sm">
           <thead className="sticky top-0 z-20">
             <tr className="bg-primary text-primary-foreground [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:border-r [&>th]:border-primary/40 [&>th]:bg-primary [&>th]:px-3 [&>th]:py-2.5 [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide">

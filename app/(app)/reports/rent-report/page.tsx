@@ -325,21 +325,21 @@ export default async function RentReportPage({
         </div>
       </div>
 
-      {/* Selected property's lease term — start / end / renew month */}
-      {selectedDetail && (
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-foreground">
-            Lease term — <span className="text-muted-foreground">{selectedDetail.name}</span>
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <TermCard label="Tenant" value={selectedDetail.tenant} />
-            <TermCard label="Monthly Rent" value={selectedDetail.rent} />
-            <TermCard label="Start Date" value={selectedDetail.start ? formatDate(selectedDetail.start) : "—"} />
-            <TermCard label="End Date" value={selectedDetail.end ? formatDate(selectedDetail.end) : "—"} />
-            <TermCard label="Renew Month" value={selectedDetail.renew} />
-          </div>
+      {/* Selected property's lease term. Always shown; fills in once a property
+          is picked, otherwise the cards display "—". */}
+      <div className="space-y-2">
+        <p className="text-sm font-medium text-foreground">
+          Lease term —{" "}
+          <span className="text-muted-foreground">{selectedDetail ? selectedDetail.name : "select a property"}</span>
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <TermCard label="Tenant" value={selectedDetail?.tenant ?? "—"} />
+          <TermCard label="Monthly Rent" value={selectedDetail?.rent ?? "—"} />
+          <TermCard label="Start Date" value={selectedDetail?.start ? formatDate(selectedDetail.start) : "—"} />
+          <TermCard label="End Date" value={selectedDetail?.end ? formatDate(selectedDetail.end) : "—"} />
+          <TermCard label="Renew Month" value={selectedDetail?.renew ?? "—"} />
         </div>
-      )}
+      </div>
 
       {/* Per-country annual-rent summary */}
       {sections.length > 0 && (

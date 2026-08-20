@@ -12,6 +12,7 @@ export const uaeLeaseSchema = z
     currencyId: z.string().uuid("Select a currency"),
     dueDate: z.string().date("Enter a valid date").optional().or(z.literal("")),
     voucherDate: z.string().date("Voucher date is required"),
+    remarks: z.string().max(1000).optional().or(z.literal("")),
   })
   .refine((d) => d.leaseEnd > d.leaseStart, {
     message: "Lease end must be after lease start",

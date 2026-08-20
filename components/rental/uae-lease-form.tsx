@@ -80,6 +80,7 @@ export function UaeLeaseForm({
       currencyId: defaultCurrencyId ?? currencies[0]?.id ?? "",
       dueDate: "",
       voucherDate: today(),
+      remarks: "",
     },
   });
 
@@ -260,6 +261,20 @@ export function UaeLeaseForm({
               <FormLabel>Voucher date</FormLabel>
               <FormControl>
                 <Input type="date" {...field} value={(field.value as string) ?? ""} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="remarks"
+          render={({ field }) => (
+            <FormItem className="sm:col-span-2">
+              <FormLabel>Remarks</FormLabel>
+              <FormControl>
+                <Input placeholder="Optional notes for this lease" {...field} value={(field.value as string) ?? ""} />
               </FormControl>
               <FormMessage />
             </FormItem>

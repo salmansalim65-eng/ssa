@@ -7,7 +7,7 @@ import { ReportSelectFilter } from "@/components/reports/report-select-filter";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
-import { formatAccountCode, formatMoney } from "@/lib/format";
+import { formatAccountCode, formatDate, formatMoney } from "@/lib/format";
 import { HH_AGENT_PCT, UAE_AGENT_PCT } from "@/lib/rental/lease-accounting";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -32,10 +32,10 @@ interface CcRow {
 export default async function RentReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ year?: string }>;
+  searchParams: Promise<{ year?: string; asset?: string }>;
 }) {
   const currentYear = new Date().getFullYear();
-  const { year: yearParam = "" } = await searchParams;
+  const { year: yearParam = "", asset: assetParam = "" } = await searchParams;
   const year = Number(yearParam) || currentYear;
 
   const supabase = await createClient();
@@ -61,14 +61,14 @@ export default async function RentReportPage({
       supabase
         .schema("rental")
         .from("pk_leases")
-        .select("asset_id, monthly_rent, lease_start, lease_end")
+        .select("asset_id, monthly_rent, lease_start, lease_end, rent_month")
         .eq("company_id", companyId)
         .eq("status", "active")
         .is("deleted_at", null),
       supabase
         .schema("rental")
         .from("uae_leases")
-        .select("id, asset_id, rental_amount, rent_cycle, lease_start, lease_end, lease_type")
+        .select("id, asset_id, rental_amount, rent_cycle, lease_start, lease_end, lease_type, rent_month")
         .eq("company_id", companyId)
         .eq("status", "active")
         .is("deleted_at", null),
@@ -93,12 +93,19 @@ export default async function RentReportPage({
     expenseByLease.set(k, (expenseByLease.get(k) ?? 0) + Number(e.amount));
   }
 
+  // "MMM YYYY" label for a date (used for the renew month).
+  const monthLabel = (d: string | null | undefined) => {
+    const m = /^(\d{4})-(\d{2})/.exec(String(d ?? ""));
+    return m ? `${MONTHS[Number(m[2]) - 1]} ${m[1]}` : "";
+  };
+
   // Active lease per asset: monthly rent + period, so a monthly lease shows its
   // monthly rent in EVERY month it covers (not a lump where its invoice posted).
   interface AssetLease {
     monthly: number;
     start: string | null;
     end: string | null;
+    renew: string | null; // rent_month label, else derived from lease end
   }
   // A property can carry more than one active lease (e.g. an HH lease and a
   // plain UAE lease on the same unit), so collect ALL of them per asset and sum
@@ -115,6 +122,7 @@ export default async function RentReportPage({
       monthly: Number(l.monthly_rent) || 0,
       start: (l.lease_start as string) ?? null,
       end: (l.lease_end as string) ?? null,
+      renew: (l.rent_month as string) || monthLabel(l.lease_end as string),
     });
   }
   for (const l of uaeLeases ?? []) {
@@ -129,6 +137,7 @@ export default async function RentReportPage({
       monthly: net,
       start: (l.lease_start as string) ?? null,
       end: (l.lease_end as string) ?? null,
+      renew: (l.rent_month as string) || monthLabel(l.lease_end as string),
     });
   }
 
@@ -194,6 +203,24 @@ export default async function RentReportPage({
 
   const yearOptions = [1, 2, 3, 4].map((n) => ({ value: String(currentYear - n), label: String(currentYear - n) }));
 
+  // Property selector + selected property's lease term (start / end / renew).
+  const assetOptions = [...rows.values()]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((r) => ({ value: r.id, label: r.name }));
+  let selectedDetail: { name: string; start: string | null; end: string | null; renew: string } | null = null;
+  if (assetParam) {
+    const cc = (costCenters ?? []).find((c) => c.id === assetParam);
+    if (cc) {
+      const leases = cc.asset_id ? leaseByAsset.get(cc.asset_id as string) ?? [] : [];
+      const starts = leases.map((l) => l.start).filter((d): d is string => Boolean(d));
+      const ends = leases.map((l) => l.end).filter((d): d is string => Boolean(d));
+      const start = starts.length ? starts.reduce((min, d) => (d < min ? d : min)) : null;
+      const end = ends.length ? ends.reduce((max, d) => (d > max ? d : max)) : null;
+      const renew = leases.map((l) => l.renew).find((v): v is string => Boolean(v)) || monthLabel(end);
+      selectedDetail = { name: cc.name as string, start, end, renew: renew || "—" };
+    }
+  }
+
   const exportRows = sections.flatMap((s) =>
     s.rows.map((r, i) => [
       i + 1,
@@ -231,6 +258,16 @@ export default async function RentReportPage({
               width="w-40"
             />
           </Suspense>
+          <Suspense>
+            <ReportSelectFilter
+              label="Property"
+              param="asset"
+              allLabel="Select a property"
+              options={assetOptions}
+              selected={assetParam}
+              width="w-56"
+            />
+          </Suspense>
         </div>
         <div className="flex items-center gap-2">
           <CsvExportButton
@@ -241,6 +278,20 @@ export default async function RentReportPage({
           <PrintButton />
         </div>
       </div>
+
+      {/* Selected property's lease term — start / end / renew month */}
+      {selectedDetail && (
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-foreground">
+            Lease term — <span className="text-muted-foreground">{selectedDetail.name}</span>
+          </p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <TermCard label="Start Date" value={selectedDetail.start ? formatDate(selectedDetail.start) : "—"} />
+            <TermCard label="End Date" value={selectedDetail.end ? formatDate(selectedDetail.end) : "—"} />
+            <TermCard label="Renew Month" value={selectedDetail.renew} />
+          </div>
+        </div>
+      )}
 
       {/* Per-country annual-rent summary */}
       {sections.length > 0 && (
@@ -366,6 +417,15 @@ export default async function RentReportPage({
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function TermCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="overflow-hidden rounded-xl border shadow-xs">
+      <div className="bg-ledger-dark px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white">{label}</div>
+      <div className="bg-card px-4 py-3 font-mono text-lg font-semibold tabular-nums text-foreground">{value}</div>
     </div>
   );
 }

@@ -19,7 +19,6 @@ import { computeRunningBalances } from "@/lib/reports/ledger-balance";
 import { loadAccountingPeriodStart } from "@/lib/reports/period";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
-import { fetchRefs } from "@/lib/supabase/hydrate";
 import { formatAccountCode, formatDate, formatMoney, formatVoucherNo } from "@/lib/format";
 import { voucherHref } from "@/lib/vouchers/meta";
 import type { AccountType, VoucherType } from "@/types/database.types";
@@ -46,10 +45,18 @@ interface LedgerRow {
   voucher_type: string;
   voucher_id: string;
   voucher_no: string | null;
+  cost_center_id: string | null;
   debit_amount: number;
   credit_amount: number;
   description: string | null;
   narration: string | null;
+}
+
+const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+// Rent month = the billed period, taken from the entry's due date (e.g. "Aug 2026").
+function rentMonthLabel(due: string | null): string {
+  const m = /^(\d{4})-(\d{2})/.exec(String(due ?? ""));
+  return m ? `${MONTH_ABBR[Number(m[2]) - 1]} ${m[1]}` : "";
 }
 
 export default async function GeneralLedgerPage({
@@ -112,6 +119,7 @@ export default async function GeneralLedgerPage({
   ]);
 
   const costCenterOptions = costCenters ?? [];
+  const ccNameById = new Map((costCenters ?? []).map((c) => [c.id as string, c.name as string]));
 
   type RawCurrency = { is_base_currency: boolean; currencies: { id: string; code: string; symbol: string } | null };
   const currencyList = ((companyCurrencies as unknown as RawCurrency[]) ?? []).filter((cc) => cc.currencies);
@@ -143,7 +151,6 @@ export default async function GeneralLedgerPage({
     currencyCode: string;
     symbol: string;
     opening: number;
-    counterpartByJe: Map<string, string>;
     rows: (LedgerRow & { balance: number })[];
   };
   const sections: Section[] = [];
@@ -188,7 +195,7 @@ export default async function GeneralLedgerPage({
       .schema("reporting")
       .from("v_ledger_entries")
       .select(
-        "journal_entry_id, entry_date, due_date, voucher_type, voucher_id, voucher_no, debit_amount, credit_amount, description, narration",
+        "journal_entry_id, entry_date, due_date, voucher_type, voucher_id, voucher_no, cost_center_id, debit_amount, credit_amount, description, narration",
       )
       .eq("company_id", companyId)
       .eq("account_id", acc.id)
@@ -199,37 +206,6 @@ export default async function GeneralLedgerPage({
       .order("entry_date")
       .order("voucher_no", { nullsFirst: false })
       .order("line_no");
-
-    // Resolve the counterpart (other side) account name for each journal entry.
-    const jeIds = [...new Set(((lineRows as unknown as LedgerRow[]) ?? []).map((r) => r.journal_entry_id))];
-    const counterpartByJe = new Map<string, string>();
-    if (jeIds.length > 0) {
-      const { data: cpLines } = await supabase
-        .schema("reporting")
-        .from("v_ledger_entries")
-        .select("journal_entry_id, account_id")
-        .eq("company_id", companyId)
-        .in("journal_entry_id", jeIds)
-        .neq("account_id", acc.id);
-      const cpRows = (cpLines as unknown as { journal_entry_id: string; account_id: string }[]) ?? [];
-      const nameById = await fetchRefs<{ id: string; account_name: string }>(
-        supabase,
-        "accounting",
-        "chart_of_accounts",
-        "account_name",
-        cpRows.map((r) => r.account_id),
-      );
-      const namesByJe = new Map<string, Set<string>>();
-      for (const r of cpRows) {
-        const name = nameById.get(r.account_id)?.account_name;
-        if (!name) continue;
-        if (!namesByJe.has(r.journal_entry_id)) namesByJe.set(r.journal_entry_id, new Set());
-        namesByJe.get(r.journal_entry_id)!.add(name);
-      }
-      for (const [je, names] of namesByJe) {
-        counterpartByJe.set(je, names.size === 1 ? [...names][0] : `Split (${names.size})`);
-      }
-    }
 
     let rows = ((lineRows as unknown as LedgerRow[]) ?? []).map((r) => ({
       ...r,
@@ -255,7 +231,6 @@ export default async function GeneralLedgerPage({
       currencyCode,
       symbol,
       opening,
-      counterpartByJe,
       rows: computeRunningBalances(opening, isDebitNormal, rows),
     });
   }
@@ -265,8 +240,9 @@ export default async function GeneralLedgerPage({
       i + 1,
       formatDate(r.entry_date),
       r.due_date ? formatDate(r.due_date) : "",
+      rentMonthLabel(r.due_date),
       r.voucher_no ? formatVoucherNo(r.voucher_no) : "",
-      `${formatAccountCode(s.account.account_code)} - ${s.account.account_name}`,
+      (r.cost_center_id && ccNameById.get(r.cost_center_id)) || "",
       s.currencyCode,
       r.description || r.narration || "",
       r.debit_amount,
@@ -287,7 +263,7 @@ export default async function GeneralLedgerPage({
           <>
             <CsvExportButton
               filename={`general-ledger-${from}-to-${to}.csv`}
-              headers={["S.No", "Date", "Due Date", "Voucher No", "Account", "Currency", "Narration", "Debit", "Credit", "Balance"]}
+              headers={["S.No", "Date", "Due Date", "Rent Month", "Voucher No", "Unit / Cost Centre", "Currency", "Narration", "Debit", "Credit", "Balance"]}
               rows={csvRows}
             />
             <PrintButton />
@@ -339,8 +315,9 @@ export default async function GeneralLedgerPage({
                 <TableHead className="w-12 text-right">S.No</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Due Date</TableHead>
+                <TableHead>Rent Month</TableHead>
                 <TableHead>Voucher No</TableHead>
-                <TableHead>Account</TableHead>
+                <TableHead>Unit / Cost Centre</TableHead>
                 <TableHead>Narration</TableHead>
                 <TableHead className="text-right">Debit</TableHead>
                 <TableHead className="text-right">Credit</TableHead>
@@ -356,7 +333,7 @@ export default async function GeneralLedgerPage({
                 return (
                 <Fragment key={s.account.id}>
                   <TableRow className="bg-ledger/10">
-                    <TableCell colSpan={4} className="font-medium">
+                    <TableCell colSpan={5} className="font-medium">
                       <span className="font-mono text-xs text-muted-foreground">{formatAccountCode(s.account.account_code)}</span>{" "}
                       <span className="font-semibold text-foreground">{s.account.account_name}</span>{" "}
                       <span className="font-normal text-muted-foreground">({s.currencyCode})</span>
@@ -373,6 +350,7 @@ export default async function GeneralLedgerPage({
                       <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">{i + 1}</TableCell>
                       <TableCell>{formatDate(r.entry_date)}</TableCell>
                       <TableCell>{r.due_date ? formatDate(r.due_date) : "—"}</TableCell>
+                      <TableCell className="text-muted-foreground">{rentMonthLabel(r.due_date) || "—"}</TableCell>
                       <TableCell>
                         {r.voucher_no ? (
                           <Link
@@ -385,7 +363,7 @@ export default async function GeneralLedgerPage({
                           "Draft"
                         )}
                       </TableCell>
-                      <TableCell className="font-medium">{s.counterpartByJe.get(r.journal_entry_id) ?? "—"}</TableCell>
+                      <TableCell className="font-medium">{(r.cost_center_id && ccNameById.get(r.cost_center_id)) || "—"}</TableCell>
                       <TableCell>{r.description || r.narration || "—"}</TableCell>
                       <TableCell className="text-right font-mono tabular-nums">
                         {r.debit_amount ? money(r.debit_amount) : ""}
@@ -398,14 +376,14 @@ export default async function GeneralLedgerPage({
                   ))}
                   {s.rows.length === 0 && (
                     <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                      <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
                         No transactions match the filters in this period.
                       </TableCell>
                     </TableRow>
                   )}
                   {s.rows.length > 0 && (
                     <TableRow className="border-t-2 border-ledger/50 bg-ledger/25 hover:bg-ledger/25">
-                      <TableCell colSpan={6} className="text-right font-semibold text-foreground">
+                      <TableCell colSpan={7} className="text-right font-semibold text-foreground">
                         Total — {formatAccountCode(s.account.account_code)} {s.account.account_name}
                       </TableCell>
                       <TableCell className="text-right font-mono font-semibold tabular-nums">

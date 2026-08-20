@@ -389,7 +389,7 @@ export default async function GeneralLedgerPage({
                   {s.rows.map((r, i) => (
                     <TableRow
                       key={`${r.journal_entry_id}-${r.entry_date}-${r.voucher_no ?? ""}`}
-                      className={shaded[i] ? "bg-muted/50 hover:bg-muted/50" : undefined}
+                      className={shaded[i] ? "bg-foreground/[0.07] hover:bg-foreground/[0.07]" : undefined}
                     >
                       <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">{i + 1}</TableCell>
                       <TableCell>{formatDate(r.entry_date)}</TableCell>

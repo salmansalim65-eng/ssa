@@ -32,10 +32,10 @@ interface CcRow {
 export default async function RentReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ year?: string; asset?: string }>;
+  searchParams: Promise<{ year?: string; asset?: string; country?: string }>;
 }) {
   const currentYear = new Date().getFullYear();
-  const { year: yearParam = "", asset: assetParam = "" } = await searchParams;
+  const { year: yearParam = "", asset: assetParam = "", country: countryParam = "" } = await searchParams;
   const year = Number(yearParam) || currentYear;
 
   const supabase = await createClient();
@@ -61,14 +61,14 @@ export default async function RentReportPage({
       supabase
         .schema("rental")
         .from("pk_leases")
-        .select("asset_id, monthly_rent, lease_start, lease_end, rent_month")
+        .select("asset_id, tenant_id, monthly_rent, lease_start, lease_end, rent_month")
         .eq("company_id", companyId)
         .eq("status", "active")
         .is("deleted_at", null),
       supabase
         .schema("rental")
         .from("uae_leases")
-        .select("id, asset_id, rental_amount, rent_cycle, lease_start, lease_end, lease_type, rent_month")
+        .select("id, asset_id, tenant_id, rental_amount, rent_cycle, lease_start, lease_end, lease_type, rent_month")
         .eq("company_id", companyId)
         .eq("status", "active")
         .is("deleted_at", null),
@@ -103,9 +103,11 @@ export default async function RentReportPage({
   // monthly rent in EVERY month it covers (not a lump where its invoice posted).
   interface AssetLease {
     monthly: number;
+    gross: number; // contract monthly rent (before deductions)
     start: string | null;
     end: string | null;
     renew: string | null; // rent_month label, else derived from lease end
+    tenantId: string | null;
   }
   // A property can carry more than one active lease (e.g. an HH lease and a
   // plain UAE lease on the same unit), so collect ALL of them per asset and sum
@@ -120,9 +122,11 @@ export default async function RentReportPage({
     if (!l.asset_id) continue;
     addLease(l.asset_id as string, {
       monthly: Number(l.monthly_rent) || 0,
+      gross: Number(l.monthly_rent) || 0,
       start: (l.lease_start as string) ?? null,
       end: (l.lease_end as string) ?? null,
       renew: (l.rent_month as string) || monthLabel(l.lease_end as string),
+      tenantId: (l.tenant_id as string) ?? null,
     });
   }
   for (const l of uaeLeases ?? []) {
@@ -135,9 +139,11 @@ export default async function RentReportPage({
     const net = Math.max(0, gross - management - expenses);
     addLease(l.asset_id as string, {
       monthly: net,
+      gross,
       start: (l.lease_start as string) ?? null,
       end: (l.lease_end as string) ?? null,
       renew: (l.rent_month as string) || monthLabel(l.lease_end as string),
+      tenantId: (l.tenant_id as string) ?? null,
     });
   }
 
@@ -199,15 +205,23 @@ export default async function RentReportPage({
   }
   // Sections: UAE and PK first (as requested), then any other country present.
   const order = ["AE", "PK", ...[...byCountry.keys()].filter((c) => c !== "AE" && c !== "PK")];
-  const sections = order.filter((c) => byCountry.has(c)).map((c) => ({ country: c, rows: byCountry.get(c)! }));
+  const countryOptions = order
+    .filter((c) => byCountry.has(c))
+    .map((c) => ({ value: c, label: COUNTRY[c]?.label ?? c }));
+  const sections = order
+    .filter((c) => byCountry.has(c) && (!countryParam || c === countryParam))
+    .map((c) => ({ country: c, rows: byCountry.get(c)! }));
 
   const yearOptions = [1, 2, 3, 4].map((n) => ({ value: String(currentYear - n), label: String(currentYear - n) }));
 
   // Property selector + selected property's lease term (start / end / renew).
   const assetOptions = [...rows.values()]
+    .filter((r) => !countryParam || r.country === countryParam)
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((r) => ({ value: r.id, label: r.name }));
-  let selectedDetail: { name: string; start: string | null; end: string | null; renew: string } | null = null;
+  let selectedDetail:
+    | { name: string; start: string | null; end: string | null; renew: string; tenant: string; rent: string }
+    | null = null;
   if (assetParam) {
     const cc = (costCenters ?? []).find((c) => c.id === assetParam);
     if (cc) {
@@ -217,7 +231,29 @@ export default async function RentReportPage({
       const start = starts.length ? starts.reduce((min, d) => (d < min ? d : min)) : null;
       const end = ends.length ? ends.reduce((max, d) => (d > max ? d : max)) : null;
       const renew = leases.map((l) => l.renew).find((v): v is string => Boolean(v)) || monthLabel(end);
-      selectedDetail = { name: cc.name as string, start, end, renew: renew || "—" };
+      const grossMonthly = leases.reduce((s, l) => s + (l.gross > 0 ? l.gross : 0), 0);
+      const cur = COUNTRY[(cc.country as string) ?? ""]?.code ?? "";
+      const symbol = symbolByCode.get(cur) ?? cur;
+      // Resolve tenant name(s) for the property's active lease(s).
+      const tenantIds = [...new Set(leases.map((l) => l.tenantId).filter((v): v is string => Boolean(v)))];
+      let tenant = "—";
+      if (tenantIds.length) {
+        const { data: tenantRows } = await supabase
+          .schema("rental")
+          .from("tenants")
+          .select("id, name")
+          .in("id", tenantIds);
+        const names = [...new Set((tenantRows ?? []).map((t) => t.name as string).filter(Boolean))];
+        if (names.length) tenant = names.join(", ");
+      }
+      selectedDetail = {
+        name: cc.name as string,
+        start,
+        end,
+        renew: renew || "—",
+        tenant,
+        rent: grossMonthly ? `${symbol ? symbol + " " : ""}${formatMoney(grossMonthly)}` : "—",
+      };
     }
   }
 
@@ -260,6 +296,16 @@ export default async function RentReportPage({
           </Suspense>
           <Suspense>
             <ReportSelectFilter
+              label="Country"
+              param="country"
+              allLabel="All countries"
+              options={countryOptions}
+              selected={countryParam}
+              width="w-48"
+            />
+          </Suspense>
+          <Suspense>
+            <ReportSelectFilter
               label="Property"
               param="asset"
               allLabel="Select a property"
@@ -285,7 +331,9 @@ export default async function RentReportPage({
           <p className="text-sm font-medium text-foreground">
             Lease term — <span className="text-muted-foreground">{selectedDetail.name}</span>
           </p>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <TermCard label="Tenant" value={selectedDetail.tenant} />
+            <TermCard label="Monthly Rent" value={selectedDetail.rent} />
             <TermCard label="Start Date" value={selectedDetail.start ? formatDate(selectedDetail.start) : "—"} />
             <TermCard label="End Date" value={selectedDetail.end ? formatDate(selectedDetail.end) : "—"} />
             <TermCard label="Renew Month" value={selectedDetail.renew} />

@@ -340,8 +340,9 @@ export default async function RentReportPage({
       </div>
 
       {/* Selected property's lease term. Always shown; fills in once a property
-          is picked, otherwise the cards display "—". */}
-      <div className="space-y-2">
+          is picked, otherwise the cards display "—". Frozen at the top so the
+          cards stay visible while scrolling the matrix. */}
+      <div className="sticky top-0 z-30 -mx-1 space-y-2 rounded-lg bg-background/85 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/70 print:static print:bg-transparent">
         <p className="text-sm font-medium text-foreground">
           Lease term —{" "}
           <span className="text-muted-foreground">{selectedDetail ? selectedDetail.name : "select a property"}</span>

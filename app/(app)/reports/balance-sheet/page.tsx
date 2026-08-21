@@ -98,8 +98,11 @@ export default async function BalanceSheetPage({
   const symbol = selectedCurrency?.symbol ?? selectedCurrency?.code ?? "";
   // `SYMBOL 1,234` — currency symbol before a thousands-separated amount.
   const money = (n: number) => (symbol ? `${symbol} ${formatMoney(n)}` : formatMoney(n));
-  // `SYMBOL 1,234 Dr` / `SYMBOL 1,234 Cr` from a net debit figure.
-  const balanceLabel = (net: number) => `${money(Math.abs(net))} ${net >= 0 ? "Dr" : "Cr"}`;
+  // Blank out zero figures so the sheet doesn't carry a wall of "SYMBOL 0".
+  const moneyOrBlank = (n: number) => (Math.abs(n) < 0.005 ? "" : money(n));
+  // `SYMBOL 1,234 Dr` / `SYMBOL 1,234 Cr` from a net debit figure (blank at zero).
+  const balanceLabel = (net: number) =>
+    Math.abs(net) < 0.005 ? "" : `${money(Math.abs(net))} ${net >= 0 ? "Dr" : "Cr"}`;
 
   const byAccount = aggregateByAccount(lines ?? []);
 
@@ -221,8 +224,8 @@ export default async function BalanceSheetPage({
           seq: null,
           code: "",
           name: node.account_name ?? "",
-          debit: money(t.debit),
-          credit: money(t.credit),
+          debit: moneyOrBlank(t.debit),
+          credit: moneyOrBlank(t.credit),
           balance: balanceLabel(net),
         },
         ...children,
@@ -239,8 +242,8 @@ export default async function BalanceSheetPage({
         seq,
         code: formatAccountCode(node.account_code),
         name: node.account_name ?? "",
-        debit: t.debit ? money(t.debit) : "",
-        credit: t.credit ? money(t.credit) : "",
+        debit: moneyOrBlank(t.debit),
+        credit: moneyOrBlank(t.credit),
         balance: balanceLabel(net),
       },
     ];
@@ -295,22 +298,22 @@ export default async function BalanceSheetPage({
   const totalsForTree: BsTotal[] = [
     {
       label: "Total assets",
-      debit: money(sumDebit(buckets.asset)),
-      credit: money(sumCredit(buckets.asset)),
+      debit: moneyOrBlank(sumDebit(buckets.asset)),
+      credit: moneyOrBlank(sumCredit(buckets.asset)),
       balance: balanceLabel(assetNet),
     },
     {
       label: "Total liabilities + equity",
-      debit: money(sumDebit(buckets.liability) + sumDebit(buckets.equity) + profitRow.debit),
-      credit: money(sumCredit(buckets.liability) + sumCredit(buckets.equity) + profitRow.credit),
+      debit: moneyOrBlank(sumDebit(buckets.liability) + sumDebit(buckets.equity) + profitRow.debit),
+      credit: moneyOrBlank(sumCredit(buckets.liability) + sumCredit(buckets.equity) + profitRow.credit),
       balance: balanceLabel(liabilitiesAndEquityNet),
       emphatic: true,
     },
   ];
   const profitForTree = {
     seq: profitSeq,
-    debit: profitRow.debit ? money(profitRow.debit) : "",
-    credit: profitRow.credit ? money(profitRow.credit) : "",
+    debit: moneyOrBlank(profitRow.debit),
+    credit: moneyOrBlank(profitRow.credit),
     balance: balanceLabel(netOf(profitRow)),
   };
 

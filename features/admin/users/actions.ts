@@ -7,8 +7,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import {
   addUserSchema,
+  setPasswordSchema,
   updateUserSchema,
   type AddUserInput,
+  type SetPasswordInput,
   type UpdateUserInput,
 } from "./schemas";
 
@@ -160,6 +162,24 @@ export async function sendPasswordReset(email: string) {
 
   const supabase = await createClient();
   const { error } = await supabase.auth.resetPasswordForEmail(email);
+  if (error) return { error: error.message };
+
+  return { success: true };
+}
+
+// Sets a user's password directly (service-role admin API) — no email link,
+// which matches the username/password login model where users may have no real
+// email address.
+export async function setUserPassword(userId: string, input: SetPasswordInput) {
+  const parsed = setPasswordSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+
+  await requirePermission("users", "edit");
+
+  const admin = createAdminClient();
+  const { error } = await admin.auth.admin.updateUserById(userId, { password: parsed.data.password });
   if (error) return { error: error.message };
 
   return { success: true };

@@ -41,15 +41,19 @@ import {
 import {
   assignRole,
   removeUserFromCompany,
-  sendPasswordReset,
   setUserActive,
+  setUserPassword,
   updateUser,
 } from "@/features/admin/users/actions";
-import { updateUserSchema, type UpdateUserInput } from "@/features/admin/users/schemas";
+import {
+  setPasswordSchema,
+  updateUserSchema,
+  type SetPasswordInput,
+  type UpdateUserInput,
+} from "@/features/admin/users/schemas";
 
 export function UserRowActions({
   userId,
-  email,
   fullName,
   username,
   phone,
@@ -75,11 +79,30 @@ export function UserRowActions({
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [pendingRoleId, setPendingRoleId] = useState(currentRoleId ?? "");
   const [editOpen, setEditOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
 
   const editForm = useForm<UpdateUserInput>({
     resolver: zodResolver(updateUserSchema),
     defaultValues: { fullName, username: username ?? "", phone: phone ?? "" },
   });
+
+  const passwordForm = useForm<SetPasswordInput>({
+    resolver: zodResolver(setPasswordSchema),
+    defaultValues: { password: "", confirmPassword: "" },
+  });
+
+  function onPasswordSubmit(values: SetPasswordInput) {
+    startTransition(async () => {
+      const result = await setUserPassword(userId, values);
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Password updated");
+      passwordForm.reset({ password: "", confirmPassword: "" });
+      setPasswordOpen(false);
+    });
+  }
 
   function run(action: () => Promise<{ error?: string } | undefined>, successMessage: string) {
     startTransition(async () => {
@@ -143,9 +166,12 @@ export function UserRowActions({
           )}
           {canEdit && (
             <DropdownMenuItem
-              onSelect={() => run(() => sendPasswordReset(email), "Password reset email sent")}
+              onSelect={() => {
+                passwordForm.reset({ password: "", confirmPassword: "" });
+                setPasswordOpen(true);
+              }}
             >
-              Reset password
+              Set password
             </DropdownMenuItem>
           )}
           {canDelete && (
@@ -211,6 +237,49 @@ export function UserRowActions({
               <DialogFooter>
                 <Button type="submit" disabled={isPending}>
                   Save
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={passwordOpen} onOpenChange={setPasswordOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Set password — {fullName}</DialogTitle>
+          </DialogHeader>
+          <Form {...passwordForm}>
+            <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="space-y-4">
+              <FormField
+                control={passwordForm.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>New password</FormLabel>
+                    <FormControl>
+                      <Input type="password" autoComplete="new-password" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={passwordForm.control}
+                name="confirmPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Confirm password</FormLabel>
+                    <FormControl>
+                      <Input type="password" autoComplete="new-password" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button type="submit" disabled={isPending}>
+                  Update password
                 </Button>
               </DialogFooter>
             </form>

@@ -81,13 +81,13 @@ export function BalanceSheetTree({
       return (
         <TableRow
           key={r.id}
-          className="cursor-pointer bg-muted hover:bg-muted/80"
+          className="cursor-pointer bg-ledger/15 hover:bg-ledger/25"
           onClick={() => toggle(r.id)}
         >
           <TableCell />
           <TableCell
             style={pad}
-            className="font-semibold uppercase tracking-wide text-primary"
+            className="font-semibold uppercase tracking-wide text-ledger-dark"
           >
             <span className="mr-1.5 inline-flex size-4 shrink-0 items-center justify-center align-middle text-muted-foreground">
               {isCollapsed ? <ChevronRightIcon className="size-4" /> : <ChevronDownIcon className="size-4" />}

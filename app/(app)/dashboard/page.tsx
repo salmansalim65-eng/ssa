@@ -32,6 +32,17 @@ const BALANCE_PANELS = {
 } as const;
 type PanelKey = keyof typeof BALANCE_PANELS;
 
+// Country codes are inconsistent across the app (cost centres use "AE"/"PK";
+// assets/rental use "UAE"/"PK"; a party account's own country can be either).
+// Fold every spelling to the two canonical dashboard buckets so a balance lands
+// under its country no matter which code was stored.
+function normCountry(c: string | null | undefined): "AE" | "PK" | null {
+  const u = (c ?? "").trim().toUpperCase();
+  if (u === "AE" || u === "UAE") return "AE";
+  if (u === "PK" || u === "PAK" || u === "PAKISTAN") return "PK";
+  return null;
+}
+
 const money = (symbol: string, n: number) => (symbol ? `${symbol} ${formatMoney(n)}` : formatMoney(n));
 
 // The "Balances" cards read as operating balances, so they exclude Cash & Bank,
@@ -79,7 +90,7 @@ export default async function DashboardPage({
         "cost_center_country, account_country, account_type, doc_debit_amount, doc_credit_amount, is_cash, is_bank, is_tenant_account, is_fixed_asset_account",
       )
       .eq("company_id", companyId)
-      .or("cost_center_country.in.(AE,PK),account_country.in.(AE,PK)"),
+      .or("cost_center_country.in.(AE,UAE,PK),account_country.in.(AE,UAE,PK)"),
     supabase
       .schema("reporting")
       .from("v_rental_income")
@@ -172,8 +183,8 @@ export default async function DashboardPage({
   for (const r of ledgerRows ?? []) {
     // Attribute by cost centre, falling back to the account's own country so a
     // party account (e.g. a supplier opening balance) booked without a cost
-    // centre still lands under its country.
-    const country = (r.cost_center_country as string | null) ?? (r.account_country as string | null);
+    // centre still lands under its country. Codes are normalised (AE/UAE → AE).
+    const country = normCountry((r.cost_center_country as string | null) ?? (r.account_country as string | null));
     const b = country ? balByCountry[country] : undefined;
     if (!b) continue;
     if (isExcludedFromBalances(r)) continue;
@@ -525,14 +536,14 @@ async function loadDetail(
         "account_code, account_name, account_type, cost_center_country, account_country, doc_debit_amount, doc_credit_amount, is_cash, is_bank, is_tenant_account, is_fixed_asset_account",
       )
       .eq("company_id", companyId)
-      .or(`cost_center_country.eq.${cfg.ccCountry},account_country.eq.${cfg.ccCountry}`);
+      .or("cost_center_country.in.(AE,UAE,PK),account_country.in.(AE,UAE,PK)");
 
     const byAccount = new Map<string, { name: string; debit: number; credit: number }>();
     for (const r of data ?? []) {
       // Same attribution as the card total: cost centre first, else the
-      // account's own country. Skip lines that resolve to another country.
-      const country = (r.cost_center_country as string | null) ?? (r.account_country as string | null);
-      if (country !== cfg.ccCountry) continue;
+      // account's own country (codes normalised). Skip lines from another country.
+      const country = normCountry((r.cost_center_country as string | null) ?? (r.account_country as string | null));
+      if (country !== normCountry(cfg.ccCountry)) continue;
       if (isExcludedFromBalances(r)) continue;
       const k = r.account_code as string;
       const a = byAccount.get(k) ?? { name: r.account_name as string, debit: 0, credit: 0 };

@@ -104,6 +104,8 @@ export default async function ProfitAndLossPage({
   // Income/Expense section headers already convey the Dr/Cr direction, and each
   // account's raw debits/credits show in their own columns.
   const money = (n: number) => (symbol ? `${symbol} ${formatMoney(n)}` : formatMoney(n));
+  // Blank out zero figures so the statement doesn't carry a wall of "SYMBOL 0".
+  const moneyOrBlank = (n: number) => (Math.abs(n) < 0.005 ? "" : money(n));
 
   const byAccount = new Map<
     string,
@@ -217,9 +219,9 @@ export default async function ProfitAndLossPage({
           seq: null,
           code: "",
           name: node.account_name ?? "",
-          debit: money(t.debit),
-          credit: money(t.credit),
-          amount: money(amountOf(t, type)),
+          debit: moneyOrBlank(t.debit),
+          credit: moneyOrBlank(t.credit),
+          amount: moneyOrBlank(amountOf(t, type)),
         },
         ...children,
       ];

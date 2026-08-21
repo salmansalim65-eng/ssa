@@ -13,14 +13,11 @@ import {
 } from "@/components/ui/table";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { SummaryCard, StatCol } from "@/components/dashboard/summary-card";
-import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
 import { formatAccountCode, formatDate, formatMoney, formatVoucherNo } from "@/lib/format";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
-import { VOUCHER_TYPE_LABELS, voucherHref } from "@/lib/vouchers/meta";
 import { isRentOverdue } from "@/lib/rental/overdue";
-import type { JournalEntryStatus, VoucherType } from "@/types/database.types";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -71,7 +68,6 @@ export default async function DashboardPage({
     { data: cashBankLedger },
     { count: pendingApprovals },
     { data: currencies },
-    { data: recentVouchers },
     { count: rentalPropertyCount },
     { data: expenseLedger },
     { data: baseCurrencyRow },
@@ -111,13 +107,6 @@ export default async function DashboardPage({
       .eq("company_id", companyId)
       .eq("status", "pending"),
     supabase.schema("core").from("currencies").select("id, code, symbol"),
-    supabase
-      .schema("accounting")
-      .from("v_voucher_register")
-      .select("*")
-      .eq("company_id", companyId)
-      .order("created_at", { ascending: false })
-      .limit(8),
     supabase
       .schema("assets")
       .from("assets")
@@ -223,7 +212,6 @@ export default async function DashboardPage({
 
   const isBank = panel === "bank";
   const isCash = panel === "cash";
-  const isRecent = panel === "recent";
   const selected = (panel in BALANCE_PANELS ? panel : "") as PanelKey | "";
   // Rent Balance drill-downs default to the CURRENT MONTH when no range is set,
   // so the panel opens on this month's rent rather than the whole history.
@@ -239,14 +227,12 @@ export default async function DashboardPage({
       ? bankDetail(bankOnly, "Bank Balances")
       : isCash
         ? bankDetail(cashOnly, "Cash Balances")
-        : isRecent
-          ? recentDetail((recentVouchers ?? []) as unknown as RecentVoucherRow[], symById, dateFrom, dateTo)
-          : null;
-  // The rent-balance and recent-transactions detail panels support a date range.
-  const detailPanelKey = selected || (isRecent ? "recent" : "");
+        : null;
+  // The rent-balance detail panels support a date range.
+  const detailPanelKey = selected;
   const showDateRange = detail !== null && detailPanelKey !== "";
 
-  function cardHref(key: PanelKey | "bank" | "cash" | "recent") {
+  function cardHref(key: PanelKey | "bank" | "cash") {
     return panel === key ? "/dashboard" : `/dashboard?panel=${key}`;
   }
 
@@ -428,36 +414,6 @@ export default async function DashboardPage({
           href="/accounting/voucher-register"
         />
 
-        <SummaryCard
-          title="Recent Transactions"
-          href={cardHref("recent")}
-          active={isRecent}
-          footer={
-            <div className="text-center text-xs font-medium text-muted-foreground">
-              {(recentVouchers ?? []).length > 0
-                ? "Latest vouchers — click for detail"
-                : "No transactions yet"}
-            </div>
-          }
-        >
-          {(recentVouchers ?? []).length > 0 ? (
-            <div className="space-y-1 text-sm">
-              {(recentVouchers ?? []).slice(0, 3).map((row) => (
-                <div
-                  key={`${row.voucher_type}-${row.voucher_id}`}
-                  className="flex items-baseline justify-between gap-3"
-                >
-                  <span className="truncate font-mono text-muted-foreground">{row.voucher_no ? formatVoucherNo(row.voucher_no) : "Draft"}</span>
-                  <span className="shrink-0 font-mono font-medium tabular-nums">
-                    {money(symById(row.currency_id), Number(row.doc_amount ?? row.amount))}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="py-1 text-sm text-muted-foreground">No transactions yet.</div>
-          )}
-        </SummaryCard>
       </div>
 
       {/* The selected tab's detail/report renders here — below ALL the cards. */}
@@ -540,78 +496,6 @@ function bankDetail(
             <TableRow className="hover:bg-transparent">
               <TableCell colSpan={3} className="py-10 text-center text-muted-foreground">
                 No cash or bank accounts yet.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    ),
-  };
-}
-
-interface RecentVoucherRow {
-  voucher_type: string;
-  voucher_id: string;
-  voucher_no: string | null;
-  entry_date: string;
-  currency_id: string | null;
-  doc_amount: number | null;
-  amount: number | null;
-  status: JournalEntryStatus;
-}
-
-// Recent Transactions drill-down — the latest vouchers, opened in the detail
-// slot from the dashboard tab (mirrors the standalone list it replaced).
-function recentDetail(
-  allRows: RecentVoucherRow[],
-  symById: (id: string | null) => string,
-  dateFrom: string | null,
-  dateTo: string | null,
-) {
-  const rows = allRows.filter((r) => {
-    const d = String(r.entry_date ?? "").slice(0, 10);
-    if (dateFrom && d < dateFrom) return false;
-    if (dateTo && d > dateTo) return false;
-    return true;
-  });
-  return {
-    title: "Recent Transactions",
-    body: (
-      <Table className="[&_td]:first:pl-5 [&_td]:last:pr-5 [&_th]:first:pl-5 [&_th]:last:pr-5">
-        <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            <TableHead>Voucher No</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Date</TableHead>
-            <TableHead className="text-right">Amount</TableHead>
-            <TableHead className="w-36">Status</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row) => (
-            <TableRow key={`${row.voucher_type}-${row.voucher_id}`}>
-              <TableCell>
-                <Link
-                  href={voucherHref(row.voucher_type as VoucherType, row.voucher_id)}
-                  className="font-mono font-medium text-primary hover:underline"
-                >
-                  {row.voucher_no ? formatVoucherNo(row.voucher_no) : "Draft"}
-                </Link>
-              </TableCell>
-              <TableCell>{VOUCHER_TYPE_LABELS[row.voucher_type as VoucherType]}</TableCell>
-              <TableCell className="text-muted-foreground">{formatDate(row.entry_date)}</TableCell>
-              <TableCell className="text-right font-mono tabular-nums">
-                {money(symById(row.currency_id), Number(row.doc_amount ?? row.amount))}
-              </TableCell>
-              <TableCell>
-                <VoucherStatusBadge status={row.status} />
-              </TableCell>
-            </TableRow>
-          ))}
-          {rows.length === 0 && (
-            <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
-                No transactions yet.
               </TableCell>
             </TableRow>
           )}

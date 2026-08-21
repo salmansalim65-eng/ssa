@@ -110,9 +110,12 @@ export function AccountForm({
   const isPropertiesParent = parentName.includes("PROPERTIES");
 
   // The Details section (party info) is only relevant for Tenant / Customers /
-  // Suppliers accounts, so it shows only under those groups.
-  const DETAILS_PARENTS = new Set(["TENANT", "TENANTS", "CUSTOMER", "CUSTOMERS", "SUPPLIER", "SUPPLIERS"]);
-  const isDetailsParent = DETAILS_PARENTS.has(parentName);
+  // Suppliers accounts, so it shows only under those groups. Match on a keyword
+  // rather than an exact name so country/region sub-groups (e.g. "UAE SUPPLIERS",
+  // "TRADE CUSTOMERS") still surface the party fields — same approach as the
+  // PROPERTIES check above.
+  const DETAILS_PARENT_KEYWORDS = ["TENANT", "CUSTOMER", "SUPPLIER"];
+  const isDetailsParent = DETAILS_PARENT_KEYWORDS.some((k) => parentName.includes(k));
 
   const canBeRentalProperty = !isGroup && accountType === "asset";
   const showPropertyFields = canBeRentalProperty && (isPropertiesParent || linkedProperty);

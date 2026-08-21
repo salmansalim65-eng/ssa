@@ -81,7 +81,7 @@ export function BalanceSheetTree({
       return (
         <TableRow
           key={r.id}
-          className="cursor-pointer bg-muted/40 hover:bg-muted/60"
+          className="cursor-pointer bg-muted hover:bg-muted/80"
           onClick={() => toggle(r.id)}
         >
           <TableCell />

@@ -1,13 +1,5 @@
-import { Suspense, type ReactNode } from "react";
+import { Suspense } from "react";
 
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { PageHeader } from "@/components/ui/page-header";
 import { AsOfDateFilter } from "@/components/reports/as-of-date-filter";
 import { CsvExportButton } from "@/components/reports/csv-export-button";
@@ -20,6 +12,7 @@ import { createClient } from "@/lib/supabase/server";
 import { loadReportCountries } from "@/lib/reports/countries";
 import { formatAccountCode, formatDate, formatMoney } from "@/lib/format";
 import type { AccountType } from "@/types/database.types";
+import { BalanceSheetTree, type BsRow, type BsTotal } from "./balance-sheet-tree";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -206,53 +199,57 @@ export default async function BalanceSheetPage({
   }
   const nonZero = (t: { debit: number; credit: number }) =>
     Math.abs(t.debit) >= 0.005 || Math.abs(t.credit) >= 0.005;
-  // Render a node and its descendants. Groups are bold subtotal bands; empty
-  // groups and zero-balance accounts are pruned so the sheet stays a balance
-  // sheet, not a full account dump.
-  // Serial number for leaf (non-group) accounts only. Group/subtotal rows get a
-  // blank S.No cell. Reset between the active statement and the inactive block.
+  // Build a flat, serialisable descriptor list for the collapsible client tree.
+  // Groups are subtotal bands; empty groups and zero-balance accounts are pruned
+  // so the sheet stays a balance sheet, not a full account dump. Leaf accounts
+  // get a serial number; group rows don't. Reset between the active statement
+  // and the inactive block.
   let leafSeq = 0;
-  function renderNode(node: CoaNode, depth: number, renderingInactive: boolean): ReactNode[] {
+  function collectRows(node: CoaNode, depth: number, parentId: string | null, renderingInactive: boolean): BsRow[] {
     if (!renderingInactive && inactiveIds.has(node.id)) return [];
     const t = totalsFor(node);
-    const pad = { paddingLeft: `${0.5 + depth * 1.25}rem` };
     const net = t.debit - t.credit;
     if (node.is_group) {
-      const childRows = (childrenOf.get(node.id) ?? []).flatMap((c) => renderNode(c, depth + 1, renderingInactive));
-      if (childRows.length === 0) return [];
+      const children = (childrenOf.get(node.id) ?? []).flatMap((c) => collectRows(c, depth + 1, node.id, renderingInactive));
+      if (children.length === 0) return [];
       return [
-        <TableRow key={node.id} className="bg-muted/40 hover:bg-muted/40">
-          <TableCell />
-          <TableCell style={pad} className="font-semibold uppercase tracking-wide">
-            {node.account_name}
-          </TableCell>
-          <TableCell className="text-right font-mono font-semibold tabular-nums">{money(t.debit)}</TableCell>
-          <TableCell className="text-right font-mono font-semibold tabular-nums">{money(t.credit)}</TableCell>
-          <TableCell className="text-right font-mono font-semibold tabular-nums">{balanceLabel(net)}</TableCell>
-        </TableRow>,
-        ...childRows,
+        {
+          id: node.id,
+          parentId,
+          depth,
+          isGroup: true,
+          seq: null,
+          code: "",
+          name: node.account_name ?? "",
+          debit: money(t.debit),
+          credit: money(t.credit),
+          balance: balanceLabel(net),
+        },
+        ...children,
       ];
     }
     if (!nonZero(t)) return [];
     const seq = ++leafSeq;
     return [
-      <TableRow key={node.id}>
-        <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">{seq}</TableCell>
-        <TableCell style={pad}>
-          <span className="mr-2 font-mono text-xs text-muted-foreground">{formatAccountCode(node.account_code)}</span>
-          <span className="font-medium">{node.account_name}</span>
-        </TableCell>
-        <TableCell className="text-right font-mono tabular-nums">{t.debit ? money(t.debit) : ""}</TableCell>
-        <TableCell className="text-right font-mono tabular-nums">{t.credit ? money(t.credit) : ""}</TableCell>
-        <TableCell className="text-right font-mono tabular-nums">{balanceLabel(net)}</TableCell>
-      </TableRow>,
+      {
+        id: node.id,
+        parentId,
+        depth,
+        isGroup: false,
+        seq,
+        code: formatAccountCode(node.account_code),
+        name: node.account_name ?? "",
+        debit: t.debit ? money(t.debit) : "",
+        credit: t.credit ? money(t.credit) : "",
+        balance: balanceLabel(net),
+      },
     ];
   }
   // Balance-sheet roots: the top-level asset / liability / equity groups &
   // accounts, in account-code order (income & expense live in the P&L).
   const BS_TYPES = new Set(["asset", "liability", "equity"]);
   const bsRoots = (childrenOf.get("__root__") ?? []).filter((n) => BS_TYPES.has(n.account_type));
-  const treeRows = bsRoots.flatMap((r) => renderNode(r, 0, false));
+  const treeRows = bsRoots.flatMap((r) => collectRows(r, 0, null, false));
   // The profit/(loss) line continues the active-statement numbering; the
   // inactive block restarts at 1.
   const profitSeq = leafSeq + 1;
@@ -263,7 +260,7 @@ export default async function BalanceSheetPage({
   const inactiveRows = coaAccounts
     .filter((n) => inactiveIds.has(n.id) && !(n.parent_id && inactiveIds.has(n.parent_id)))
     .sort((a, b) => a.account_code.localeCompare(b.account_code))
-    .flatMap((r) => renderNode(r, 0, true));
+    .flatMap((r) => collectRows(r, 0, null, true));
 
   const sumDebit = (rows: AccountBalance[]) => rows.reduce((s, r) => s + r.debit, 0);
   const sumCredit = (rows: AccountBalance[]) => rows.reduce((s, r) => s + r.credit, 0);
@@ -294,21 +291,28 @@ export default async function BalanceSheetPage({
     { ...profitRow, section: "Equity" },
   ];
 
-  // The dark navy treatment (same tokens as the table column headers) applied to
-  // every subtotal/total row so the summary figures stand out from the accounts.
-  const totalRow = "bg-header text-header-foreground hover:bg-header [&>td]:border-header-border";
-  function totalRowCells(label: string, debit: number, credit: number, net: number, emphatic = false) {
-    const weight = emphatic ? "font-semibold" : "font-medium";
-    return (
-      <>
-        <TableCell />
-        <TableCell className={weight}>{label}</TableCell>
-        <TableCell className={`text-right font-mono tabular-nums ${weight}`}>{money(debit)}</TableCell>
-        <TableCell className={`text-right font-mono tabular-nums ${weight}`}>{money(credit)}</TableCell>
-        <TableCell className={`text-right font-mono tabular-nums ${weight}`}>{balanceLabel(net)}</TableCell>
-      </>
-    );
-  }
+  // Pre-formatted totals + profit row for the client tree.
+  const totalsForTree: BsTotal[] = [
+    {
+      label: "Total assets",
+      debit: money(sumDebit(buckets.asset)),
+      credit: money(sumCredit(buckets.asset)),
+      balance: balanceLabel(assetNet),
+    },
+    {
+      label: "Total liabilities + equity",
+      debit: money(sumDebit(buckets.liability) + sumDebit(buckets.equity) + profitRow.debit),
+      credit: money(sumCredit(buckets.liability) + sumCredit(buckets.equity) + profitRow.credit),
+      balance: balanceLabel(liabilitiesAndEquityNet),
+      emphatic: true,
+    },
+  ];
+  const profitForTree = {
+    seq: profitSeq,
+    debit: profitRow.debit ? money(profitRow.debit) : "",
+    credit: profitRow.credit ? money(profitRow.credit) : "",
+    balance: balanceLabel(netOf(profitRow)),
+  };
 
   return (
     <div className="space-y-5">
@@ -377,60 +381,12 @@ export default async function BalanceSheetPage({
         </p>
       )}
 
-      <div className="overflow-hidden rounded-lg border bg-card shadow-xs">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="w-12 text-right">S.No</TableHead>
-              <TableHead>Account</TableHead>
-              <TableHead className="text-right">Debit</TableHead>
-              <TableHead className="text-right">Credit</TableHead>
-              <TableHead className="text-right">Balance</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {treeRows}
-
-            {/* Current-period profit rolls into equity for the balance check. */}
-            <TableRow>
-              <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">{profitSeq}</TableCell>
-              <TableCell className="pl-2">Current period profit/(loss)</TableCell>
-              <TableCell className="text-right font-mono tabular-nums">
-                {profitRow.debit ? money(profitRow.debit) : ""}
-              </TableCell>
-              <TableCell className="text-right font-mono tabular-nums">
-                {profitRow.credit ? money(profitRow.credit) : ""}
-              </TableCell>
-              <TableCell className="text-right font-mono tabular-nums">{balanceLabel(netOf(profitRow))}</TableCell>
-            </TableRow>
-
-            <TableRow className={totalRow}>
-              {totalRowCells("Total assets", sumDebit(buckets.asset), sumCredit(buckets.asset), assetNet)}
-            </TableRow>
-            <TableRow className={totalRow}>
-              {totalRowCells(
-                "Total liabilities + equity",
-                sumDebit(buckets.liability) + sumDebit(buckets.equity) + profitRow.debit,
-                sumCredit(buckets.liability) + sumCredit(buckets.equity) + profitRow.credit,
-                liabilitiesAndEquityNet,
-                true,
-              )}
-            </TableRow>
-
-            {/* Inactive accounts — shown separately, excluded from the totals above. */}
-            {inactiveRows.length > 0 && (
-              <>
-                <TableRow className="bg-muted/60 hover:bg-muted/60">
-                  <TableCell colSpan={5} className="pt-4 text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                    Inactive Accounts
-                  </TableCell>
-                </TableRow>
-                {inactiveRows}
-              </>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <BalanceSheetTree
+        rows={treeRows}
+        profit={profitForTree}
+        totals={totalsForTree}
+        inactiveRows={inactiveRows}
+      />
 
       {!balanced && (
         <p className="text-xs font-medium text-destructive print:hidden">

@@ -72,6 +72,21 @@ export default async function DashboardPage({
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
 
+  // Party accounts carry their own country (chart_of_accounts.country). Used to
+  // attribute ledger lines with no cost centre to a country bucket — read from
+  // the base table so this never depends on a view column being present.
+  const { data: coaCountries } = await supabase
+    .schema("accounting")
+    .from("chart_of_accounts")
+    .select("id, country")
+    .eq("company_id", companyId);
+  const coaCountryById = new Map<string, string | null>(
+    (coaCountries ?? []).map((a) => [a.id as string, (a.country as string | null) ?? null]),
+  );
+  const countryAccountIds = (coaCountries ?? [])
+    .filter((a) => normCountry(a.country as string | null))
+    .map((a) => a.id as string);
+
   const [
     { data: ledgerRows },
     { data: rentRows },
@@ -87,10 +102,14 @@ export default async function DashboardPage({
       .schema("reporting")
       .from("v_ledger_entries")
       .select(
-        "cost_center_country, account_country, account_type, doc_debit_amount, doc_credit_amount, is_cash, is_bank, is_tenant_account, is_fixed_asset_account",
+        "account_id, cost_center_country, account_type, doc_debit_amount, doc_credit_amount, is_cash, is_bank, is_tenant_account, is_fixed_asset_account",
       )
       .eq("company_id", companyId)
-      .or("cost_center_country.in.(AE,UAE,PK),account_country.in.(AE,UAE,PK)"),
+      .or(
+        `cost_center_country.in.(AE,UAE,PK)${
+          countryAccountIds.length ? `,account_id.in.(${countryAccountIds.join(",")})` : ""
+        }`,
+      ),
     supabase
       .schema("reporting")
       .from("v_rental_income")
@@ -184,7 +203,9 @@ export default async function DashboardPage({
     // Attribute by cost centre, falling back to the account's own country so a
     // party account (e.g. a supplier opening balance) booked without a cost
     // centre still lands under its country. Codes are normalised (AE/UAE → AE).
-    const country = normCountry((r.cost_center_country as string | null) ?? (r.account_country as string | null));
+    const country = normCountry(
+      (r.cost_center_country as string | null) ?? coaCountryById.get(r.account_id as string),
+    );
     const b = country ? balByCountry[country] : undefined;
     if (!b) continue;
     if (isExcludedFromBalances(r)) continue;
@@ -529,20 +550,39 @@ async function loadDetail(
   const fmt = (n: number) => money(symbol, n);
 
   if (cfg.kind === "balances") {
+    // Party account → own country, read from the base table (no view-column dep).
+    const { data: coaCountries } = await supabase
+      .schema("accounting")
+      .from("chart_of_accounts")
+      .select("id, country")
+      .eq("company_id", companyId);
+    const coaCountryById = new Map<string, string | null>(
+      (coaCountries ?? []).map((a) => [a.id as string, (a.country as string | null) ?? null]),
+    );
+    const countryAccountIds = (coaCountries ?? [])
+      .filter((a) => normCountry(a.country as string | null))
+      .map((a) => a.id as string);
+
     const { data } = await supabase
       .schema("reporting")
       .from("v_ledger_entries")
       .select(
-        "account_code, account_name, account_type, cost_center_country, account_country, doc_debit_amount, doc_credit_amount, is_cash, is_bank, is_tenant_account, is_fixed_asset_account",
+        "account_id, account_code, account_name, account_type, cost_center_country, doc_debit_amount, doc_credit_amount, is_cash, is_bank, is_tenant_account, is_fixed_asset_account",
       )
       .eq("company_id", companyId)
-      .or("cost_center_country.in.(AE,UAE,PK),account_country.in.(AE,UAE,PK)");
+      .or(
+        `cost_center_country.in.(AE,UAE,PK)${
+          countryAccountIds.length ? `,account_id.in.(${countryAccountIds.join(",")})` : ""
+        }`,
+      );
 
     const byAccount = new Map<string, { name: string; debit: number; credit: number }>();
     for (const r of data ?? []) {
       // Same attribution as the card total: cost centre first, else the
       // account's own country (codes normalised). Skip lines from another country.
-      const country = normCountry((r.cost_center_country as string | null) ?? (r.account_country as string | null));
+      const country = normCountry(
+        (r.cost_center_country as string | null) ?? coaCountryById.get(r.account_id as string),
+      );
       if (country !== normCountry(cfg.ccCountry)) continue;
       if (isExcludedFromBalances(r)) continue;
       const k = r.account_code as string;

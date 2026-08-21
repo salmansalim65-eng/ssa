@@ -1,13 +1,5 @@
 import { Suspense } from "react";
 
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { PageHeader } from "@/components/ui/page-header";
 import { CsvExportButton } from "@/components/reports/csv-export-button";
 import { DateRangeFilter } from "@/components/reports/date-range-filter";
@@ -19,6 +11,7 @@ import { createClient } from "@/lib/supabase/server";
 import { loadReportCountries } from "@/lib/reports/countries";
 import { loadAccountingPeriodStart } from "@/lib/reports/period";
 import { formatAccountCode, formatDate, formatMoney } from "@/lib/format";
+import { ProfitLossTree, type PlRow } from "./profit-loss-tree";
 
 function startOfYear() {
   const now = new Date();
@@ -158,24 +151,103 @@ export default async function ProfitAndLossPage({
     ...expense.map((r, i) => ({ ...r, section: "Expense", sno: i + 1 })),
   ];
 
-  // Dark navy treatment (same tokens as the column headers) for the subtotal /
-  // total rows, matching the Balance Sheet and Trial Balance.
-  const totalRow = "bg-header text-header-foreground hover:bg-header [&>td]:border-header-border";
-
-  function accountRows(rows: AccountBalance[]) {
-    return rows.map((r, i) => (
-      <TableRow key={r.account_code}>
-        <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">{i + 1}</TableCell>
-        <TableCell className="pl-6">
-          <span className="mr-2 font-mono text-xs text-muted-foreground">{formatAccountCode(r.account_code)}</span>
-          <span className="font-medium">{r.account_name}</span>
-        </TableCell>
-        <TableCell className="text-right font-mono tabular-nums">{r.debit ? money(r.debit) : ""}</TableCell>
-        <TableCell className="text-right font-mono tabular-nums">{r.credit ? money(r.credit) : ""}</TableCell>
-        <TableCell className="text-right font-mono tabular-nums">{money(r.balance)}</TableCell>
-      </TableRow>
-    ));
+  // ---- CoA hierarchy for the collapsible P&L tree ----
+  const { data: coa } = await supabase
+    .schema("accounting")
+    .from("chart_of_accounts")
+    .select("id, account_code, account_name, parent_id, is_group, account_type")
+    .eq("company_id", companyId)
+    .is("deleted_at", null);
+  type CoaNode = {
+    id: string;
+    account_code: string;
+    account_name: string;
+    parent_id: string | null;
+    is_group: boolean;
+    account_type: string;
+  };
+  const coaAccounts = (coa ?? []) as CoaNode[];
+  const childrenOf = new Map<string, CoaNode[]>();
+  for (const a of coaAccounts) {
+    const key = a.parent_id ?? "__root__";
+    if (!childrenOf.has(key)) childrenOf.set(key, []);
+    childrenOf.get(key)!.push(a);
   }
+  for (const list of childrenOf.values()) list.sort((a, b) => a.account_code.localeCompare(b.account_code));
+
+  const balById = new Map<string, { debit: number; credit: number }>();
+  for (const [id, a] of byAccount) balById.set(id, { debit: a.debit * factor, credit: a.credit * factor });
+  const nodeTotals = new Map<string, { debit: number; credit: number }>();
+  function totalsFor(node: CoaNode): { debit: number; credit: number } {
+    const cached = nodeTotals.get(node.id);
+    if (cached) return cached;
+    const t = { debit: 0, credit: 0 };
+    if (node.is_group) {
+      for (const c of childrenOf.get(node.id) ?? []) {
+        const ct = totalsFor(c);
+        t.debit += ct.debit;
+        t.credit += ct.credit;
+      }
+    } else {
+      const b = balById.get(node.id);
+      if (b) {
+        t.debit = b.debit;
+        t.credit = b.credit;
+      }
+    }
+    nodeTotals.set(node.id, t);
+    return t;
+  }
+  const nonZero = (t: { debit: number; credit: number }) => Math.abs(t.debit) >= 0.005 || Math.abs(t.credit) >= 0.005;
+  const amountOf = (t: { debit: number; credit: number }, type: "income" | "expense") =>
+    type === "income" ? t.credit - t.debit : t.debit - t.credit;
+
+  let plSeq = 0;
+  function collectPl(node: CoaNode, depth: number, parentId: string | null, type: "income" | "expense"): PlRow[] {
+    const t = totalsFor(node);
+    if (node.is_group) {
+      const children = (childrenOf.get(node.id) ?? []).flatMap((c) => collectPl(c, depth + 1, node.id, type));
+      if (children.length === 0) return [];
+      return [
+        {
+          id: node.id,
+          parentId,
+          depth,
+          isGroup: true,
+          seq: null,
+          code: "",
+          name: node.account_name ?? "",
+          debit: money(t.debit),
+          credit: money(t.credit),
+          amount: money(amountOf(t, type)),
+        },
+        ...children,
+      ];
+    }
+    if (!nonZero(t)) return [];
+    const seq = ++plSeq;
+    return [
+      {
+        id: node.id,
+        parentId,
+        depth,
+        isGroup: false,
+        seq,
+        code: formatAccountCode(node.account_code),
+        name: node.account_name ?? "",
+        debit: t.debit ? money(t.debit) : "",
+        credit: t.credit ? money(t.credit) : "",
+        amount: money(amountOf(t, type)),
+      },
+    ];
+  }
+  const incomeTree = (childrenOf.get("__root__") ?? [])
+    .filter((n) => n.account_type === "income")
+    .flatMap((r) => collectPl(r, 0, null, "income"));
+  plSeq = 0;
+  const expenseTree = (childrenOf.get("__root__") ?? [])
+    .filter((n) => n.account_type === "expense")
+    .flatMap((r) => collectPl(r, 0, null, "expense"));
 
   return (
     <div className="space-y-5">
@@ -226,59 +298,13 @@ export default async function ProfitAndLossPage({
         </Suspense>
       </div>
 
-      <div className="overflow-hidden rounded-lg border bg-card shadow-xs">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="w-12 text-right">S.No</TableHead>
-              <TableHead>Account</TableHead>
-              <TableHead className="text-right">Debit</TableHead>
-              <TableHead className="text-right">Credit</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow className="bg-muted/50 hover:bg-muted/50">
-              <TableCell colSpan={5} className="font-semibold">
-                Income
-              </TableCell>
-            </TableRow>
-            {accountRows(income)}
-            <TableRow className={totalRow}>
-              <TableCell />
-              <TableCell className="font-medium">Total income</TableCell>
-              <TableCell className="text-right font-mono font-medium tabular-nums">{money(sumDebit(income))}</TableCell>
-              <TableCell className="text-right font-mono font-medium tabular-nums">{money(sumCredit(income))}</TableCell>
-              <TableCell className="text-right font-mono font-medium tabular-nums">{money(totalIncome)}</TableCell>
-            </TableRow>
-
-            <TableRow className="bg-muted/50 hover:bg-muted/50">
-              <TableCell colSpan={5} className="font-semibold">
-                Expense
-              </TableCell>
-            </TableRow>
-            {accountRows(expense)}
-            <TableRow className={totalRow}>
-              <TableCell />
-              <TableCell className="font-medium">Total expense</TableCell>
-              <TableCell className="text-right font-mono font-medium tabular-nums">{money(sumDebit(expense))}</TableCell>
-              <TableCell className="text-right font-mono font-medium tabular-nums">{money(sumCredit(expense))}</TableCell>
-              <TableCell className="text-right font-mono font-medium tabular-nums">{money(totalExpense)}</TableCell>
-            </TableRow>
-
-            <TableRow className={totalRow}>
-              <TableCell colSpan={4} className="font-semibold">
-                Net profit / (loss)
-              </TableCell>
-              <TableCell
-                className={`text-right font-mono font-semibold tabular-nums ${netProfit >= 0 ? "text-success" : "text-destructive"}`}
-              >
-                {money(netProfit)}
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
-      </div>
+      <ProfitLossTree
+        income={incomeTree}
+        expense={expenseTree}
+        incomeTotal={{ debit: money(sumDebit(income)), credit: money(sumCredit(income)), amount: money(totalIncome) }}
+        expenseTotal={{ debit: money(sumDebit(expense)), credit: money(sumCredit(expense)), amount: money(totalExpense) }}
+        netProfit={{ amount: money(netProfit), positive: netProfit >= 0 }}
+      />
     </div>
   );
 }

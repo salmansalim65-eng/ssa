@@ -150,6 +150,7 @@ export default async function GeneralLedgerPage({
     account: { id: string; account_code: string; account_name: string };
     currencyCode: string;
     symbol: string;
+    isDebitNormal: boolean;
     opening: number;
     rows: (LedgerRow & { balance: number })[];
   };
@@ -230,6 +231,7 @@ export default async function GeneralLedgerPage({
       account: acc,
       currencyCode,
       symbol,
+      isDebitNormal,
       opening,
       rows: computeRunningBalances(opening, isDebitNormal, rows),
     });
@@ -263,6 +265,12 @@ export default async function GeneralLedgerPage({
   }
   const rentMonthFor = (r: { voucher_id: string }) => rentMonthByVoucher.get(r.voucher_id) ?? "";
 
+  // Balance as a magnitude + Dr/Cr, matching the on-screen column.
+  const balanceLabel = (n: number, isDebitNormal: boolean) => {
+    if (Math.abs(n) < 0.005) return "0";
+    const isDr = isDebitNormal ? n >= 0 : n < 0;
+    return `${Math.abs(n)} ${isDr ? "Dr" : "Cr"}`;
+  };
   const csvRows = sections.flatMap((s) =>
     s.rows.map((r, i) => [
       i + 1,
@@ -275,7 +283,7 @@ export default async function GeneralLedgerPage({
       r.description || r.narration || "",
       r.debit_amount,
       r.credit_amount,
-      r.balance,
+      balanceLabel(r.balance, s.isDebitNormal),
     ]),
   );
 
@@ -355,6 +363,14 @@ export default async function GeneralLedgerPage({
             <TableBody>
               {sections.map((s) => {
                 const money = (n: number) => `${s.symbol} ${formatMoney(n)}`;
+                // Running balance as a magnitude with a Dr/Cr suffix (never a bare
+                // negative): a debit-normal account is Dr when its natural balance
+                // is positive, a credit-normal account is Dr when it's negative.
+                const bal = (n: number) => {
+                  if (Math.abs(n) < 0.005) return `${s.symbol} 0`;
+                  const isDr = s.isDebitNormal ? n >= 0 : n < 0;
+                  return `${s.symbol} ${formatMoney(Math.abs(n))} ${isDr ? "Dr" : "Cr"}`;
+                };
                 const sectionDebit = round2(s.rows.reduce((a, r) => a + r.debit_amount, 0));
                 const sectionCredit = round2(s.rows.reduce((a, r) => a + r.credit_amount, 0));
                 const closing = s.rows.length ? s.rows[s.rows.length - 1].balance : s.opening;
@@ -383,7 +399,7 @@ export default async function GeneralLedgerPage({
                       Opening balance
                     </TableCell>
                     <TableCell className="text-right font-mono font-medium tabular-nums">
-                      {money(s.opening)}
+                      {bal(s.opening)}
                     </TableCell>
                   </TableRow>
                   {s.rows.map((r, i) => (
@@ -415,7 +431,7 @@ export default async function GeneralLedgerPage({
                       <TableCell className="text-right font-mono tabular-nums">
                         {r.credit_amount ? money(r.credit_amount) : ""}
                       </TableCell>
-                      <TableCell className="text-right font-mono tabular-nums">{money(r.balance)}</TableCell>
+                      <TableCell className="text-right font-mono tabular-nums">{bal(r.balance)}</TableCell>
                     </TableRow>
                   ))}
                   {s.rows.length === 0 && (
@@ -437,7 +453,7 @@ export default async function GeneralLedgerPage({
                         {money(sectionCredit)}
                       </TableCell>
                       <TableCell className="text-right font-mono font-semibold tabular-nums">
-                        {money(closing)}
+                        {bal(closing)}
                       </TableCell>
                     </TableRow>
                   )}

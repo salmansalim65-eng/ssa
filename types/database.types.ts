@@ -1728,6 +1728,12 @@ export interface Database {
           status: JournalEntryStatus;
           due_date: string | null;
           cost_center_country: string | null;
+          doc_debit_amount: number;
+          doc_credit_amount: number;
+          currency_code: string | null;
+          is_tenant_account: boolean;
+          is_fixed_asset_account: boolean;
+          account_country: string | null;
         };
       };
       v_asset_register: {

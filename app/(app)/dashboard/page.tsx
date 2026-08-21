@@ -80,10 +80,10 @@ export default async function DashboardPage({
       .schema("reporting")
       .from("v_ledger_entries")
       .select(
-        "cost_center_country, account_type, doc_debit_amount, doc_credit_amount, is_cash, is_bank, is_tenant_account, is_fixed_asset_account",
+        "cost_center_country, account_country, account_type, doc_debit_amount, doc_credit_amount, is_cash, is_bank, is_tenant_account, is_fixed_asset_account",
       )
       .eq("company_id", companyId)
-      .in("cost_center_country", ["AE", "PK"]),
+      .or("cost_center_country.in.(AE,PK),account_country.in.(AE,PK)"),
     supabase
       .schema("reporting")
       .from("v_rental_income")
@@ -181,7 +181,11 @@ export default async function DashboardPage({
     PK: { debit: 0, credit: 0 },
   };
   for (const r of ledgerRows ?? []) {
-    const b = balByCountry[r.cost_center_country as string];
+    // Attribute by cost centre, falling back to the account's own country so a
+    // party account (e.g. a supplier opening balance) booked without a cost
+    // centre still lands under its country.
+    const country = (r.cost_center_country as string | null) ?? (r.account_country as string | null);
+    const b = country ? balByCountry[country] : undefined;
     if (!b) continue;
     if (isExcludedFromBalances(r)) continue;
     b.debit += Number(r.doc_debit_amount);
@@ -634,13 +638,17 @@ async function loadDetail(
       .schema("reporting")
       .from("v_ledger_entries")
       .select(
-        "account_code, account_name, account_type, doc_debit_amount, doc_credit_amount, is_cash, is_bank, is_tenant_account, is_fixed_asset_account",
+        "account_code, account_name, account_type, cost_center_country, account_country, doc_debit_amount, doc_credit_amount, is_cash, is_bank, is_tenant_account, is_fixed_asset_account",
       )
       .eq("company_id", companyId)
-      .eq("cost_center_country", cfg.ccCountry);
+      .or(`cost_center_country.eq.${cfg.ccCountry},account_country.eq.${cfg.ccCountry}`);
 
     const byAccount = new Map<string, { name: string; debit: number; credit: number }>();
     for (const r of data ?? []) {
+      // Same attribution as the card total: cost centre first, else the
+      // account's own country. Skip lines that resolve to another country.
+      const country = (r.cost_center_country as string | null) ?? (r.account_country as string | null);
+      if (country !== cfg.ccCountry) continue;
       if (isExcludedFromBalances(r)) continue;
       const k = r.account_code as string;
       const a = byAccount.get(k) ?? { name: r.account_name as string, debit: 0, credit: 0 };

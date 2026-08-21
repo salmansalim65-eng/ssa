@@ -87,7 +87,7 @@ export function BalanceSheetTree({
           <TableCell />
           <TableCell
             style={pad}
-            className="font-semibold uppercase tracking-wide text-slate-900 dark:text-slate-100"
+            className="font-semibold uppercase tracking-wide text-primary"
           >
             <span className="mr-1.5 inline-flex size-4 shrink-0 items-center justify-center align-middle text-muted-foreground">
               {isCollapsed ? <ChevronRightIcon className="size-4" /> : <ChevronDownIcon className="size-4" />}

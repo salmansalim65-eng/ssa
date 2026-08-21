@@ -101,7 +101,6 @@ export function BalanceSheetTree({
       <TableRow key={r.id}>
         <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">{r.seq}</TableCell>
         <TableCell style={pad}>
-          <span className="mr-2 font-mono text-xs text-muted-foreground">{r.code}</span>
           <span className="font-medium">{r.name}</span>
         </TableCell>
         <TableCell className="text-right font-mono tabular-nums">{r.debit}</TableCell>

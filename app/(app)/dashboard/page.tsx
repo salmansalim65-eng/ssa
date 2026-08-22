@@ -1,5 +1,14 @@
 import Link from "next/link";
-import { AlertCircleIcon, Building2Icon, CalendarRangeIcon, WalletIcon } from "lucide-react";
+import {
+  AlertCircleIcon,
+  BanknoteIcon,
+  Building2Icon,
+  CalendarRangeIcon,
+  ClockIcon,
+  PercentIcon,
+  TrendingUpIcon,
+  WalletIcon,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +23,7 @@ import {
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { SummaryCard, StatCol } from "@/components/dashboard/summary-card";
 import { GroupCompanyLink } from "@/components/dashboard/group-company-link";
+import { DashboardCharts } from "@/components/dashboard/dashboard-charts";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
 import { formatAccountCode, formatDate, formatMoney, formatVoucherNo } from "@/lib/format";
@@ -243,6 +253,40 @@ export default async function DashboardPage({
   }
   const rentReceipts = (c: string) => rentByCountry[c].billed - rentByCountry[c].outstanding;
 
+  // ---- Analytics (converted to base currency so UAE/PK combine cleanly) ----
+  // Rent rows carry the invoice's exchange rate; base = doc amount × rate,
+  // matching how ledger base amounts are stored.
+  const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const monthlyBilled = new Map<string, number>();
+  const outstandingByCountryBase: Record<string, number> = { UAE: 0, PK: 0 };
+  let anBilled = 0;
+  let anOutstanding = 0;
+  for (const r of rentRows ?? []) {
+    const rate = Number(r.exchange_rate) || 1;
+    const billed = Number(r.net_amount) * rate;
+    const outstanding = Number(r.net_outstanding) * rate;
+    anBilled += billed;
+    anOutstanding += outstanding;
+    if (outstandingByCountryBase[r.country as string] !== undefined)
+      outstandingByCountryBase[r.country as string] += outstanding;
+    const ym = String(r.due_date ?? "").slice(0, 7);
+    if (ym) monthlyBilled.set(ym, (monthlyBilled.get(ym) ?? 0) + billed);
+  }
+  const anCollected = anBilled - anOutstanding;
+  const collectionRate = anBilled > 0 ? Math.round((anCollected / anBilled) * 100) : 0;
+  const monthlySeries = [...monthlyBilled.keys()]
+    .sort()
+    .slice(-12)
+    .map((ym) => {
+      const [y, m] = ym.split("-");
+      return { label: `${MONTH_LABELS[Number(m) - 1]} ${y.slice(2)}`, value: monthlyBilled.get(ym) ?? 0 };
+    });
+  const outstandingSlices = [
+    { key: "UAE", label: "UAE", value: outstandingByCountryBase.UAE, color: "#2f8f4e" },
+    { key: "PK", label: "Pakistan", value: outstandingByCountryBase.PK, color: "#3A53A4" },
+  ];
+  const baseMoney = (n: number) => `${baseSymbol ? baseSymbol + " " : ""}${formatMoney(n)}`;
+
   const isBank = panel === "bank";
   const isCash = panel === "cash";
   const selected = (panel in BALANCE_PANELS ? panel : "") as PanelKey | "";
@@ -451,6 +495,24 @@ export default async function DashboardPage({
           href="/accounting/voucher-register"
         />
 
+      </div>
+
+      {/* Analytics — KPIs and charts below the report cards. */}
+      <div className="space-y-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Analytics</h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <KpiCard label="Rent billed" value={baseMoney(anBilled)} subtext="Owner's net rent" icon={BanknoteIcon} />
+          <KpiCard label="Collected" value={baseMoney(anCollected)} subtext="Received to date" icon={TrendingUpIcon} tone="success" />
+          <KpiCard
+            label="Outstanding"
+            value={baseMoney(anOutstanding)}
+            subtext="Still uncollected"
+            icon={ClockIcon}
+            tone={anOutstanding > 0 ? "warning" : undefined}
+          />
+          <KpiCard label="Collection rate" value={`${collectionRate}%`} subtext="Collected / billed" icon={PercentIcon} />
+        </div>
+        <DashboardCharts symbol={baseSymbol} monthly={monthlySeries} outstanding={outstandingSlices} />
       </div>
 
       {/* The selected tab's detail/report renders here — below ALL the cards. */}

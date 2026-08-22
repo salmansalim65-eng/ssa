@@ -23,6 +23,7 @@ import {
   ShoppingCartIcon,
   SlidersHorizontalIcon,
   LineChartIcon,
+  PieChartIcon,
   WalletIcon,
   KeyRoundIcon,
   ReceiptIcon,
@@ -46,7 +47,10 @@ export interface NavSection {
 export const navSections: NavSection[] = [
   {
     label: "",
-    items: [{ label: "Dashboard", href: "/dashboard", icon: LayoutDashboardIcon }],
+    items: [
+      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboardIcon },
+      { label: "Financial Dashboard", href: "/reports/financial-dashboard", icon: PieChartIcon },
+    ],
   },
   {
     label: "Assets",

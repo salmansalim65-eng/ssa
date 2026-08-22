@@ -8,7 +8,7 @@ import { ReportSelectFilter } from "@/components/reports/report-select-filter";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
-import { loadReportCountries } from "@/lib/reports/countries";
+import { loadReportCountries, equivalentCountryCodes } from "@/lib/reports/countries";
 import { loadAccountingPeriodStart } from "@/lib/reports/period";
 import { formatAccountCode, formatDate, formatMoney } from "@/lib/format";
 import { ProfitLossTree, type PlRow } from "./profit-loss-tree";
@@ -47,6 +47,7 @@ export default async function ProfitAndLossPage({
   // Accounts tagged to a country (posted without a cost centre) must still show
   // under a country filter — otherwise they're "not mentioned" by the
   // cost-centre-only filter.
+  const countryCodes = country ? equivalentCountryCodes(country) : [];
   const accountIdsInCountry = country
     ? ((
         await supabase
@@ -54,7 +55,7 @@ export default async function ProfitAndLossPage({
           .from("chart_of_accounts")
           .select("id, country")
           .eq("company_id", companyId)
-          .eq("country", country)
+          .in("country", countryCodes)
           .is("deleted_at", null)
       ).data ?? []).map((a) => a.id as string)
     : [];
@@ -68,13 +69,14 @@ export default async function ProfitAndLossPage({
     .gte("entry_date", from)
     .lte("entry_date", to);
   if (country) {
-    // Line belongs to the country if its cost centre is in that country, or —
-    // with no cost centre — the account itself is tagged to that country.
+    // Line belongs to the country if its cost centre is in that country (codes
+    // normalised, AE/UAE together), or — with no cost centre — the account
+    // itself is tagged to that country.
     linesQuery = accountIdsInCountry.length
       ? linesQuery.or(
-          `cost_center_country.eq.${country},and(cost_center_country.is.null,account_id.in.(${accountIdsInCountry.join(",")}))`,
+          `cost_center_country.in.(${countryCodes.join(",")}),and(cost_center_country.is.null,account_id.in.(${accountIdsInCountry.join(",")}))`,
         )
-      : linesQuery.eq("cost_center_country", country);
+      : linesQuery.in("cost_center_country", countryCodes);
   }
   if (cc) linesQuery = linesQuery.eq("cost_center_id", cc);
   const [{ data: lines }, countries, { data: companyCurrencies }, { data: costCenters }] = await Promise.all([

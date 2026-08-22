@@ -24,6 +24,8 @@ export interface BsRow {
   debit: string;
   credit: string;
   balance: string;
+  /** Balance in the account's own currency when it differs from base. */
+  original?: string;
 }
 
 export interface BsTotal {
@@ -108,7 +110,12 @@ export function BalanceSheetTree({
         </TableCell>
         <TableCell className="text-right font-mono tabular-nums">{r.debit}</TableCell>
         <TableCell className="text-right font-mono tabular-nums">{r.credit}</TableCell>
-        <TableCell className="text-right font-mono tabular-nums">{r.balance}</TableCell>
+        <TableCell className="text-right font-mono tabular-nums">
+          {r.balance}
+          {r.original && (
+            <span className="mt-0.5 block text-xs font-normal text-muted-foreground">{r.original}</span>
+          )}
+        </TableCell>
       </TableRow>
     );
   }

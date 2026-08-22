@@ -62,7 +62,9 @@ export default async function BalanceSheetPage({
   let linesQuery = supabase
     .schema("reporting")
     .from("v_ledger_entries")
-    .select("account_id, account_code, account_name, account_type, debit_amount, credit_amount")
+    .select(
+      "account_id, account_code, account_name, account_type, debit_amount, credit_amount, doc_debit_amount, doc_credit_amount, currency_code",
+    )
     .eq("company_id", companyId)
     .lte("entry_date", asOf);
   if (country) {
@@ -131,6 +133,28 @@ export default async function BalanceSheetPage({
     Math.abs(net) < 0.005 ? "" : `${money(Math.abs(net))} ${net >= 0 ? "Dr" : "Cr"}`;
 
   const byAccount = aggregateByAccount(lines ?? []);
+
+  // Original transaction-currency balance per account. Accounts booked in a
+  // single currency other than base get their own-currency figure shown next to
+  // the converted base amount (e.g. "AED 60,801 Dr" beside "SR 62,017 Dr").
+  const baseCode = baseCurrency?.code ?? "";
+  const docByAccount = new Map<string, { debit: number; credit: number; codes: Set<string> }>();
+  for (const l of lines ?? []) {
+    const d = docByAccount.get(l.account_id) ?? { debit: 0, credit: 0, codes: new Set<string>() };
+    d.debit += Number(l.doc_debit_amount ?? 0);
+    d.credit += Number(l.doc_credit_amount ?? 0);
+    if (l.currency_code) d.codes.add(l.currency_code as string);
+    docByAccount.set(l.account_id, d);
+  }
+  const originalLabel = (accountId: string): string | null => {
+    const d = docByAccount.get(accountId);
+    if (!d || d.codes.size !== 1) return null;
+    const code = [...d.codes][0];
+    if (!code || code === baseCode) return null;
+    const net = d.debit - d.credit; // net debit, same convention as the balance
+    if (Math.abs(net) < 0.005) return null;
+    return `${code} ${formatMoney(Math.abs(net))} ${net >= 0 ? "Dr" : "Cr"}`;
+  };
 
   // ---- Chart-of-Accounts tree (for hierarchical grouping) ----
   // The balance sheet mirrors the CoA group hierarchy: each group nests its
@@ -266,6 +290,7 @@ export default async function BalanceSheetPage({
         debit: moneyOrBlank(t.debit),
         credit: moneyOrBlank(t.credit),
         balance: balanceLabel(net),
+        original: originalLabel(node.id) ?? undefined,
       },
     ];
   }

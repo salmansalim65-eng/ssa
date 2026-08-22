@@ -1,10 +1,13 @@
 import {
+  ArrowLeftRightIcon,
   BanknoteIcon,
+  ClockIcon,
   LandmarkIcon,
+  PercentIcon,
+  ReceiptIcon,
   ScaleIcon,
   TrendingUpIcon,
   WalletIcon,
-  ClockIcon,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/ui/page-header";
@@ -27,12 +30,14 @@ export default async function FinancialDashboardPage() {
   const year = asOf.slice(0, 4);
   const yearStart = `${year}-01-01`;
 
-  const [{ data: lines }, { data: companyCurrencies }, { data: costCenters }, { data: rentRows }] =
+  const [{ data: lines }, { data: companyCurrencies }, { data: costCenters }, { data: rentRows }, { data: coaCountries }] =
     await Promise.all([
       supabase
         .schema("reporting")
         .from("v_ledger_entries")
-        .select("account_type, debit_amount, credit_amount, entry_date, cost_center_id, is_cash, is_bank")
+        .select(
+          "account_id, account_type, debit_amount, credit_amount, entry_date, cost_center_id, cost_center_country, is_cash, is_bank, is_tenant_account, is_fixed_asset_account",
+        )
         .eq("company_id", companyId)
         .lte("entry_date", asOf),
       supabase
@@ -50,7 +55,12 @@ export default async function FinancialDashboardPage() {
       supabase
         .schema("reporting")
         .from("v_rental_income")
-        .select("net_outstanding, exchange_rate")
+        .select("net_amount, net_outstanding, exchange_rate")
+        .eq("company_id", companyId),
+      supabase
+        .schema("accounting")
+        .from("chart_of_accounts")
+        .select("id, country")
         .eq("company_id", companyId),
     ]);
 
@@ -60,12 +70,25 @@ export default async function FinancialDashboardPage() {
   const money = (n: number) => `${symbol ? symbol + " " : ""}${formatMoney(n)}`;
   const ccName = new Map((costCenters ?? []).map((c) => [c.id as string, c.name as string]));
 
+  const coaCountryById = new Map<string, string | null>(
+    (coaCountries ?? []).map((a) => [a.id as string, (a.country as string | null) ?? null]),
+  );
+  const normCountry = (c: string | null | undefined): "AE" | "PK" | null => {
+    const u = (c ?? "").trim().toUpperCase();
+    if (u === "AE" || u === "UAE") return "AE";
+    if (u === "PK" || u === "PAK" || u === "PAKISTAN") return "PK";
+    return null;
+  };
+  const NON_BALANCE_TYPES = new Set(["equity", "income", "expense"]);
+
   let assets = 0;
   let liabilities = 0;
   let equity = 0;
   let income = 0;
   let expense = 0;
   let cashBank = 0;
+  let cashFlowYtd = 0;
+  const balByCountry: Record<"AE" | "PK", number> = { AE: 0, PK: 0 }; // net debit
   const monthlyIncome = new Map<string, number>();
   const monthlyExpense = new Map<string, number>();
   const expenseByCc = new Map<string, number>();
@@ -91,14 +114,36 @@ export default async function FinancialDashboardPage() {
         expenseByCc.set(key, (expenseByCc.get(key) ?? 0) + net);
       }
     }
-    if (l.is_cash || l.is_bank) cashBank += net;
+    if (l.is_cash || l.is_bank) {
+      cashBank += net;
+      if (inYear) cashFlowYtd += net;
+    }
+    // Operating balances by country (same exclusions as the main dashboard:
+    // drop cash/bank, tenant and fixed-asset accounts and equity/income/expense).
+    if (
+      !NON_BALANCE_TYPES.has(type) &&
+      !l.is_cash &&
+      !l.is_bank &&
+      !l.is_tenant_account &&
+      !l.is_fixed_asset_account
+    ) {
+      const ctry = normCountry((l.cost_center_country as string | null) ?? coaCountryById.get(l.account_id as string));
+      if (ctry) balByCountry[ctry] += net;
+    }
   }
 
   const netProfit = income - expense;
+  const rentBilled = (rentRows ?? []).reduce(
+    (s, r) => s + Number(r.net_amount) * (Number(r.exchange_rate) || 1),
+    0,
+  );
   const outstandingRent = (rentRows ?? []).reduce(
     (s, r) => s + Number(r.net_outstanding) * (Number(r.exchange_rate) || 1),
     0,
   );
+  const rentCollected = rentBilled - outstandingRent;
+  const collectionRate = rentBilled > 0 ? Math.round((rentCollected / rentBilled) * 100) : 0;
+  const drCr = (net: number) => `${money(Math.abs(net))} ${net >= 0 ? "Dr" : "Cr"}`;
 
   // Chart data (base currency).
   const position = [
@@ -144,11 +189,23 @@ export default async function FinancialDashboardPage() {
         />
         <KpiCard label="Cash & bank" value={money(cashBank)} icon={WalletIcon} />
         <KpiCard
-          label="Outstanding rent"
+          label={`Net cash flow (${year})`}
+          value={money(cashFlowYtd)}
+          icon={ArrowLeftRightIcon}
+          tone={cashFlowYtd >= 0 ? "success" : "destructive"}
+        />
+
+        <KpiCard label="Balances UAE" value={drCr(balByCountry.AE)} icon={LandmarkIcon} />
+        <KpiCard label="Balances PK" value={drCr(balByCountry.PK)} icon={LandmarkIcon} />
+        <KpiCard label="Rent billed" value={money(rentBilled)} icon={ReceiptIcon} />
+        <KpiCard label="Rent collected" value={money(rentCollected)} icon={BanknoteIcon} tone="success" />
+        <KpiCard
+          label="Rent outstanding"
           value={money(outstandingRent)}
           icon={ClockIcon}
           tone={outstandingRent > 0 ? "warning" : undefined}
         />
+        <KpiCard label="Collection rate" value={`${collectionRate}%`} icon={PercentIcon} />
       </div>
 
       <FinancialDashboardCharts

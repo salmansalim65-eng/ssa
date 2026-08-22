@@ -42,13 +42,35 @@ export default async function BalanceSheetPage({
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
 
+  // Load the Chart of Accounts up front: each account's own country lets a
+  // country-filtered balance sheet include party/other accounts that carry a
+  // country but were posted without a cost centre (so they'd otherwise be
+  // "not mentioned" under the cost-centre-only filter).
+  const { data: coa } = await supabase
+    .schema("accounting")
+    .from("chart_of_accounts")
+    .select("id, account_code, account_name, parent_id, is_group, account_type, is_active, country")
+    .eq("company_id", companyId)
+    .is("deleted_at", null);
+  const accountIdsInCountry = country
+    ? (coa ?? []).filter((a) => a.country === country).map((a) => a.id as string)
+    : [];
+
   let linesQuery = supabase
     .schema("reporting")
     .from("v_ledger_entries")
     .select("account_id, account_code, account_name, account_type, debit_amount, credit_amount")
     .eq("company_id", companyId)
     .lte("entry_date", asOf);
-  if (country) linesQuery = linesQuery.eq("cost_center_country", country);
+  if (country) {
+    // Line belongs to the country if its cost centre is in that country, or —
+    // when it has no cost centre — the account itself is tagged to that country.
+    linesQuery = accountIdsInCountry.length
+      ? linesQuery.or(
+          `cost_center_country.eq.${country},and(cost_center_country.is.null,account_id.in.(${accountIdsInCountry.join(",")}))`,
+        )
+      : linesQuery.eq("cost_center_country", country);
+  }
   if (cc) linesQuery = linesQuery.eq("cost_center_id", cc);
   const [{ data: lines }, countries, { data: companyCurrencies }, { data: costCenters }] = await Promise.all([
     linesQuery,
@@ -110,12 +132,6 @@ export default async function BalanceSheetPage({
   // The balance sheet mirrors the CoA group hierarchy: each group nests its
   // sub-groups and accounts with a rolled-up subtotal, like Chart of Accounts
   // (EQUITY → CAPITAL → SS GROUP → …).
-  const { data: coa } = await supabase
-    .schema("accounting")
-    .from("chart_of_accounts")
-    .select("id, account_code, account_name, parent_id, is_group, account_type, is_active")
-    .eq("company_id", companyId)
-    .is("deleted_at", null);
   type CoaNode = {
     id: string;
     account_code: string;
@@ -124,6 +140,7 @@ export default async function BalanceSheetPage({
     is_group: boolean;
     account_type: string;
     is_active: boolean;
+    country?: string | null;
   };
   const coaAccounts = (coa ?? []) as CoaNode[];
   const childrenOf = new Map<string, CoaNode[]>();

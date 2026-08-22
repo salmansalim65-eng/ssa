@@ -34,13 +34,36 @@ export default async function TrialBalancePage({
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
 
+  // Accounts tagged to a country (party/other accounts posted without a cost
+  // centre) must still show under a country filter — otherwise they're "not
+  // mentioned" by the cost-centre-only filter.
+  const accountIdsInCountry = country
+    ? ((
+        await supabase
+          .schema("accounting")
+          .from("chart_of_accounts")
+          .select("id, country")
+          .eq("company_id", companyId)
+          .eq("country", country)
+          .is("deleted_at", null)
+      ).data ?? []).map((a) => a.id as string)
+    : [];
+
   let linesQuery = supabase
     .schema("reporting")
     .from("v_ledger_entries")
     .select("account_id, account_code, account_name, account_type, debit_amount, credit_amount")
     .eq("company_id", companyId)
     .lte("entry_date", asOf);
-  if (country) linesQuery = linesQuery.eq("cost_center_country", country);
+  if (country) {
+    // Line belongs to the country if its cost centre is in that country, or —
+    // with no cost centre — the account itself is tagged to that country.
+    linesQuery = accountIdsInCountry.length
+      ? linesQuery.or(
+          `cost_center_country.eq.${country},and(cost_center_country.is.null,account_id.in.(${accountIdsInCountry.join(",")}))`,
+        )
+      : linesQuery.eq("cost_center_country", country);
+  }
   if (cc) linesQuery = linesQuery.eq("cost_center_id", cc);
   const [{ data: lines }, countries, { data: companyCurrencies }, { data: costCenters }] = await Promise.all([
     linesQuery,

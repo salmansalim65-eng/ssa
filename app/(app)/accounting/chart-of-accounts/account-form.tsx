@@ -413,6 +413,43 @@ export function AccountForm({
           </FormSection>
         )}
 
+        {/* Country for any other leaf account (party accounts and properties set
+            it in their own sections above). Lets a balance be attributed to a
+            country on the dashboard even without a cost centre. */}
+        {!isGroup && !isDetailsParent && !showPropertyFields && (
+          <FormSection title="Country">
+            <FormField
+              control={form.control}
+              name="country"
+              render={({ field }) => (
+                <FormItem className="sm:max-w-xs">
+                  <FormLabel>Country</FormLabel>
+                  <Select
+                    onValueChange={(v) => field.onChange(v === "none" ? "" : v)}
+                    value={field.value || "none"}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">Not set</SelectItem>
+                      {countries.map((c) => (
+                        <SelectItem key={c.code} value={c.code}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>Attributes this account to a country in the dashboard balances.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </FormSection>
+        )}
+
         {showPropertyFields && (
           <FormSection title="Property details">
             <p className="text-xs text-muted-foreground">

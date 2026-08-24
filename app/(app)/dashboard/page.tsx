@@ -5,7 +5,6 @@ import {
   Building2Icon,
   CalendarRangeIcon,
   ClockIcon,
-  PercentIcon,
   TrendingUpIcon,
   WalletIcon,
 } from "lucide-react";
@@ -123,7 +122,7 @@ export default async function DashboardPage({
     supabase
       .schema("reporting")
       .from("v_rental_income")
-      .select("country, amount, outstanding_balance, net_amount, net_outstanding, due_date, exchange_rate")
+      .select("country, amount, outstanding_balance, net_amount, net_outstanding, due_date, exchange_rate, currency_code")
       .eq("company_id", companyId)
       .in("country", ["UAE", "PK"]),
     supabase
@@ -252,19 +251,40 @@ export default async function DashboardPage({
   }
   const rentReceipts = (c: string) => rentByCountry[c].billed - rentByCountry[c].outstanding;
 
-  // ---- Analytics KPIs (converted to base currency so UAE/PK combine cleanly) ----
-  // Rent rows carry the invoice's exchange rate; base = doc amount × rate,
-  // matching how ledger base amounts are stored.
-  let anBilled = 0;
-  let anOutstanding = 0;
+  // ---- Analytics KPIs (rent shown in its own document currency) ----
+  // Sum the rent net amounts as booked. When rent spans a single currency the
+  // tiles show that currency; if it spans several, fall back to base so we never
+  // add mismatched units.
+  let rentBilledDoc = 0;
+  let rentOutstandingDoc = 0;
+  const rentCodes = new Set<string>();
   for (const r of rentRows ?? []) {
-    const rate = Number(r.exchange_rate) || 1;
-    anBilled += Number(r.net_amount) * rate;
-    anOutstanding += Number(r.net_outstanding) * rate;
+    rentBilledDoc += Number(r.net_amount);
+    rentOutstandingDoc += Number(r.net_outstanding);
+    if (r.currency_code) rentCodes.add(r.currency_code as string);
+  }
+  const singleRentCode = rentCodes.size === 1 ? [...rentCodes][0] : null;
+  let anBilled: number;
+  let anOutstanding: number;
+  let rentSym: string;
+  if (singleRentCode) {
+    anBilled = rentBilledDoc;
+    anOutstanding = rentOutstandingDoc;
+    rentSym = symbolByCode.get(singleRentCode) ?? singleRentCode;
+  } else {
+    let b = 0;
+    let o = 0;
+    for (const r of rentRows ?? []) {
+      const rate = Number(r.exchange_rate) || 1;
+      b += Number(r.net_amount) * rate;
+      o += Number(r.net_outstanding) * rate;
+    }
+    anBilled = b;
+    anOutstanding = o;
+    rentSym = baseSymbol;
   }
   const anCollected = anBilled - anOutstanding;
-  const collectionRate = anBilled > 0 ? Math.round((anCollected / anBilled) * 100) : 0;
-  const baseMoney = (n: number) => `${baseSymbol ? baseSymbol + " " : ""}${formatMoney(n)}`;
+  const rentMoney = (n: number) => `${rentSym ? rentSym + " " : ""}${formatMoney(n)}`;
 
   const isBank = panel === "bank";
   const isCash = panel === "cash";
@@ -479,17 +499,16 @@ export default async function DashboardPage({
       {/* Analytics — KPIs and charts below the report cards. */}
       <div className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Analytics</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <KpiCard label="Rent billed" value={baseMoney(anBilled)} subtext="Owner's net rent" icon={BanknoteIcon} />
-          <KpiCard label="Collected" value={baseMoney(anCollected)} subtext="Received to date" icon={TrendingUpIcon} tone="success" />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <KpiCard label="Rent billed" value={rentMoney(anBilled)} subtext="Owner's net rent" icon={BanknoteIcon} />
+          <KpiCard label="Collected" value={rentMoney(anCollected)} subtext="Received to date" icon={TrendingUpIcon} tone="success" />
           <KpiCard
             label="Outstanding"
-            value={baseMoney(anOutstanding)}
+            value={rentMoney(anOutstanding)}
             subtext="Still uncollected"
             icon={ClockIcon}
             tone={anOutstanding > 0 ? "warning" : undefined}
           />
-          <KpiCard label="Collection rate" value={`${collectionRate}%`} subtext="Collected / billed" icon={PercentIcon} />
         </div>
       </div>
 

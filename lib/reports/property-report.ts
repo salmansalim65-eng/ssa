@@ -41,6 +41,8 @@ export interface PropertyRowInput {
   areaSqft: number;
   serviceRate: number; // asset.service_charges_rate
   serviceCharges: number; // asset.service_charges_amount (rate × area), ANNUAL
+  officialRentYearly?: number; // PK: declared yearly rent from the lease
+  propertyTax?: number; // PK: asset.property_tax (annual amount)
   commissionMonthly: number; // agent commission per month (5% UAE / 10% HH / 0 PK)
   expensesMonthly?: number; // monthly HH lease expenses (0 for UAE/PK leases without them)
   purchaseValue: number;
@@ -83,6 +85,9 @@ export interface PropertyRow {
   serviceRate: number;
   serviceCharges: number; // annual (kept for reference)
   serviceMonthly: number; // monthly service charge = serviceCharges / 12
+  officialRentYearly: number; // PK: declared yearly rent (0 elsewhere)
+  propertyTax: number; // PK: annual property tax (0 elsewhere)
+  propertyTaxPct: number; // PK: property tax as % of official yearly rent
   commission: number; // monthly agent commission
   expensesMonthly: number; // monthly HH lease expenses
   netRent: number; // monthly: monthlyRent − commission − expensesMonthly
@@ -142,6 +147,10 @@ export function computePropertyRow(i: PropertyRowInput): PropertyRow {
     serviceRate: round2(i.serviceRate),
     serviceCharges,
     serviceMonthly,
+    officialRentYearly: round2(i.officialRentYearly ?? 0),
+    propertyTax: round2(i.propertyTax ?? 0),
+    propertyTaxPct:
+      (i.officialRentYearly ?? 0) > 0 ? round2(((i.propertyTax ?? 0) / (i.officialRentYearly ?? 0)) * 100) : 0,
     commission,
     expensesMonthly,
     netRent,

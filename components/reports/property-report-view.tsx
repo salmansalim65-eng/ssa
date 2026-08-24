@@ -878,6 +878,19 @@ function PropertyDetail({ row, onClear }: { row: PropertyRow; onClear: () => voi
             <Field label="Start Date" value={row.leaseStart ? formatDate(row.leaseStart) : ""} />
             <Field label="End Date" value={row.leaseEnd ? formatDate(row.leaseEnd) : ""} />
             <Field label="Renew Month" value={row.renewMonth ?? ""} />
+            {row.country === "PK" && (
+              <>
+                <Field label="Official Rent (Yearly)" value={money(row.officialRentYearly)} />
+                <Field
+                  label="Tax Charges"
+                  value={
+                    row.propertyTax
+                      ? `${money(row.propertyTax)}${row.propertyTaxPct ? ` (${pct(row.propertyTaxPct)})` : ""}`
+                      : dash
+                  }
+                />
+              </>
+            )}
           </div>
         </section>
       </div>

@@ -48,7 +48,7 @@ export default async function PropertyReportPage() {
       .schema("assets")
       .from("assets")
       .select(
-        "id, asset_code, asset_name, country, currency_id, area_sqft, purchase_value, current_value, service_charges_rate, service_charges_amount, title_deed_value, estimated_rent, owner, official_owner, purchase_date, property_type, title_deed_attachment_id",
+        "id, asset_code, asset_name, country, currency_id, area_sqft, purchase_value, current_value, service_charges_rate, service_charges_amount, property_tax, title_deed_value, estimated_rent, owner, official_owner, purchase_date, property_type, title_deed_attachment_id",
       )
       .eq("company_id", companyId)
       .eq("is_rental", true)
@@ -69,7 +69,7 @@ export default async function PropertyReportPage() {
     supabase
       .schema("rental")
       .from("pk_leases")
-      .select("asset_id, monthly_rent, rent_cycle, lease_start, lease_end, rent_month")
+      .select("asset_id, monthly_rent, official_rent, rent_cycle, lease_start, lease_end, rent_month")
       .eq("company_id", companyId)
       .is("deleted_at", null),
     supabase.schema("assets").from("asset_valuations").select("asset_id, valuation_date").is("deleted_at", null),
@@ -227,6 +227,20 @@ export default async function PropertyReportPage() {
     );
   }
 
+  // Official (declared) rent per PK asset — monthly, summed over concurrent
+  // active leases and normalised by cycle. Pakistan-only.
+  const officialRentMonthlyByAsset = new Map<string, number>();
+  for (const l of pkLeases ?? []) {
+    const assetId = l.asset_id as string | null;
+    if (!assetId) continue;
+    const start = l.lease_start as string | null;
+    const end = l.lease_end as string | null;
+    const active = (!start || start <= today) && (!end || end >= today);
+    if (!active) continue;
+    const m = monthlyFromCycle(Number(l.official_rent) || 0, l.rent_cycle as string | null);
+    officialRentMonthlyByAsset.set(assetId, (officialRentMonthlyByAsset.get(assetId) ?? 0) + m);
+  }
+
   // Latest valuation year per asset.
   const valYearByAsset = new Map<string, number>();
   for (const v of valuations ?? []) {
@@ -313,6 +327,8 @@ export default async function PropertyReportPage() {
       areaSqft: Number(a.area_sqft) || 0,
       serviceRate: Number(a.service_charges_rate) || 0,
       serviceCharges: Number(a.service_charges_amount) || 0,
+      officialRentYearly: (officialRentMonthlyByAsset.get(id) ?? 0) * 12,
+      propertyTax: Number(a.property_tax) || 0,
       commissionMonthly: lease?.commissionMonthly ?? 0,
       expensesMonthly: lease?.expensesMonthly ?? 0,
       purchaseValue: Number(a.purchase_value) || 0,

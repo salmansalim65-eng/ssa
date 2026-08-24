@@ -1,11 +1,8 @@
 import Link from "next/link";
 import {
   AlertCircleIcon,
-  BanknoteIcon,
   Building2Icon,
   CalendarRangeIcon,
-  ClockIcon,
-  TrendingUpIcon,
   WalletIcon,
 } from "lucide-react";
 
@@ -30,6 +27,39 @@ import { isRentOverdue } from "@/lib/rental/overdue";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
+}
+
+// Rent KPI tile that lists one amount per currency (AED and PKR kept separate),
+// styled like KpiCard (green header over a light body).
+function RentCurrencyCard({
+  label,
+  subtext,
+  rows,
+}: {
+  label: string;
+  subtext: string;
+  rows: { code: string; amount: string }[];
+}) {
+  return (
+    <div className="flex h-full flex-col overflow-hidden rounded-md border-2 border-ledger-dark bg-card shadow-sm">
+      <div className="truncate border-b-2 border-ledger-dark bg-ledger-dark px-3 py-1.5 text-center text-[0.7rem] font-bold uppercase tracking-wide text-white">
+        {label}
+      </div>
+      <div className="flex flex-1 flex-col justify-center gap-1.5 p-4">
+        {rows.length ? (
+          rows.map((r) => (
+            <div key={r.code} className="flex items-baseline justify-between gap-2">
+              <span className="text-xs font-medium text-muted-foreground">{r.code}</span>
+              <span className="font-mono text-lg font-semibold tabular-nums text-foreground">{r.amount}</span>
+            </div>
+          ))
+        ) : (
+          <span className="text-lg font-semibold text-muted-foreground">—</span>
+        )}
+        <p className="mt-0.5 text-xs text-muted-foreground">{subtext}</p>
+      </div>
+    </div>
+  );
 }
 
 // Each country card shows figures in that country's own currency.
@@ -251,40 +281,24 @@ export default async function DashboardPage({
   }
   const rentReceipts = (c: string) => rentByCountry[c].billed - rentByCountry[c].outstanding;
 
-  // ---- Analytics KPIs (rent shown in its own document currency) ----
-  // Sum the rent net amounts as booked. When rent spans a single currency the
-  // tiles show that currency; if it spans several, fall back to base so we never
-  // add mismatched units.
-  let rentBilledDoc = 0;
-  let rentOutstandingDoc = 0;
-  const rentCodes = new Set<string>();
+  // ---- Analytics KPIs — rent kept in its own document currency, one line per
+  // currency (AED and PKR shown separately, never converted to base). ----
+  const rentByCode = new Map<string, { billed: number; outstanding: number }>();
   for (const r of rentRows ?? []) {
-    rentBilledDoc += Number(r.net_amount);
-    rentOutstandingDoc += Number(r.net_outstanding);
-    if (r.currency_code) rentCodes.add(r.currency_code as string);
+    const code = (r.currency_code as string) || baseCurrency?.code || "—";
+    const e = rentByCode.get(code) ?? { billed: 0, outstanding: 0 };
+    e.billed += Number(r.net_amount);
+    e.outstanding += Number(r.net_outstanding);
+    rentByCode.set(code, e);
   }
-  const singleRentCode = rentCodes.size === 1 ? [...rentCodes][0] : null;
-  let anBilled: number;
-  let anOutstanding: number;
-  let rentSym: string;
-  if (singleRentCode) {
-    anBilled = rentBilledDoc;
-    anOutstanding = rentOutstandingDoc;
-    rentSym = symbolByCode.get(singleRentCode) ?? singleRentCode;
-  } else {
-    let b = 0;
-    let o = 0;
-    for (const r of rentRows ?? []) {
-      const rate = Number(r.exchange_rate) || 1;
-      b += Number(r.net_amount) * rate;
-      o += Number(r.net_outstanding) * rate;
-    }
-    anBilled = b;
-    anOutstanding = o;
-    rentSym = baseSymbol;
-  }
-  const anCollected = anBilled - anOutstanding;
-  const rentMoney = (n: number) => `${rentSym ? rentSym + " " : ""}${formatMoney(n)}`;
+  const rentCurrencyRows = [...rentByCode.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([code, v]) => ({
+      symbol: symbolByCode.get(code) ?? code,
+      billed: v.billed,
+      collected: v.billed - v.outstanding,
+      outstanding: v.outstanding,
+    }));
 
   const isBank = panel === "bank";
   const isCash = panel === "cash";
@@ -500,14 +514,20 @@ export default async function DashboardPage({
       <div className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Analytics</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <KpiCard label="Rent billed" value={rentMoney(anBilled)} subtext="Owner's net rent" icon={BanknoteIcon} />
-          <KpiCard label="Collected" value={rentMoney(anCollected)} subtext="Received to date" icon={TrendingUpIcon} tone="success" />
-          <KpiCard
+          <RentCurrencyCard
+            label="Rent billed"
+            subtext="Owner's net rent"
+            rows={rentCurrencyRows.map((r) => ({ code: r.symbol, amount: formatMoney(r.billed) }))}
+          />
+          <RentCurrencyCard
+            label="Collected"
+            subtext="Received to date"
+            rows={rentCurrencyRows.map((r) => ({ code: r.symbol, amount: formatMoney(r.collected) }))}
+          />
+          <RentCurrencyCard
             label="Outstanding"
-            value={rentMoney(anOutstanding)}
             subtext="Still uncollected"
-            icon={ClockIcon}
-            tone={anOutstanding > 0 ? "warning" : undefined}
+            rows={rentCurrencyRows.map((r) => ({ code: r.symbol, amount: formatMoney(r.outstanding) }))}
           />
         </div>
       </div>

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Building2Icon, CalendarDaysIcon, ExternalLinkIcon, MenuIcon } from "lucide-react";
+import { Building2Icon, CalendarDaysIcon, MenuIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -25,9 +25,6 @@ export function Header({
   companyName: string;
 }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  // The Vista Group logo is served from the remote Vista ERP. If it fails to
-  // load (offline, moved, blocked), fall back to the text label + icon.
-  const [vistaLogoOk, setVistaLogoOk] = useState(true);
   // Same calendar-day string on server and client; the span carries
   // suppressHydrationWarning to tolerate a midnight boundary.
   const todayLabel = formatDate(new Date().toISOString().slice(0, 10));
@@ -67,23 +64,15 @@ export function Header({
           target="_blank"
           rel="noopener noreferrer"
           title="Open Vista Group ERP"
-          className="hidden items-center gap-1.5 rounded-md border border-white/25 bg-white/10 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-white/20 sm:inline-flex"
+          className="hidden items-center rounded-md px-1 py-0.5 transition-opacity hover:opacity-80 sm:inline-flex"
         >
-          {vistaLogoOk ? (
-            <Image
-              src="/vista-logo.svg"
-              alt="Vista Group"
-              width={20}
-              height={22}
-              className="h-5 w-auto"
-              onError={() => setVistaLogoOk(false)}
-            />
-          ) : (
-            <>
-              <ExternalLinkIcon className="size-3.5 text-white/70" />
-              Vista Group
-            </>
-          )}
+          <Image
+            src="/vista-logo.svg"
+            alt="Vista Group"
+            width={26}
+            height={28}
+            className="h-7 w-auto"
+          />
         </a>
         <span className="hidden items-center gap-1.5 rounded-md border border-white/25 bg-white/10 px-2.5 py-1 text-xs font-medium text-white sm:inline-flex">
           <CalendarDaysIcon className="size-3.5 text-white/70" />

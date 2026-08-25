@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Building2Icon, CalendarDaysIcon, MenuIcon } from "lucide-react";
+import { Building2Icon, CalendarDaysIcon, ExternalLinkIcon, MenuIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -59,6 +59,16 @@ export function Header({
       </div>
 
       <div className="ml-auto flex items-center gap-1.5">
+        <a
+          href="https://erp.vista-group.co"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Open Vista Group ERP"
+          className="hidden items-center gap-1.5 rounded-md border border-white/25 bg-white/10 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-white/20 sm:inline-flex"
+        >
+          <ExternalLinkIcon className="size-3.5 text-white/70" />
+          Vista Group
+        </a>
         <span className="hidden items-center gap-1.5 rounded-md border border-white/25 bg-white/10 px-2.5 py-1 text-xs font-medium text-white sm:inline-flex">
           <CalendarDaysIcon className="size-3.5 text-white/70" />
           <span className="tabular-nums" suppressHydrationWarning>

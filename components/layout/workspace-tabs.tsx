@@ -59,8 +59,11 @@ export function WorkspaceTabs({ children }: { children: ReactNode }) {
       )}
 
       <div className="relative min-h-0 flex-1">
-        {/* Base / home surface (the current route). */}
-        <div className={cn("h-full overflow-auto p-4 sm:p-6", !showHome && "hidden")}>{children}</div>
+        {/* Base / home surface (the current route). The --vh-offset drives
+            full-height reports (viewport minus the header) in the top window. */}
+        <div className={cn("h-full overflow-auto p-4 [--vh-offset:5.5rem] sm:p-6 sm:[--vh-offset:6.5rem]", !showHome && "hidden")}>
+          {children}
+        </div>
 
         {/* One iframe per open tab; only the active one is visible, but all stay
             mounted so their state is preserved when switching. */}

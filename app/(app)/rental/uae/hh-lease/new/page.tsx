@@ -25,7 +25,9 @@ async function loadRentalExpenseAccounts(companyId: string) {
 
   // Find the "Rental Expenses" group node (prefer an actual group; fall back to
   // any account whose name contains "rental expense").
-  const groups = rows.filter((r) => /rental\s*expense/i.test(String(r.account_name ?? "")));
+  // Match RENTAL / RENTEL / RENT EXPENSE(S) — the group name is sometimes
+  // misspelled in the Chart of Accounts.
+  const groups = rows.filter((r) => /rent[a-z]*\s*expense/i.test(String(r.account_name ?? "")));
   const groupNode = groups.find((r) => r.is_group) ?? groups[0];
   if (!groupNode) return [];
 

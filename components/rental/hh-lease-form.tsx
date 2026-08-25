@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { useFieldArray, useForm, type Control } from "react-hook-form";
+import { useFieldArray, useForm, useWatch, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { PlusIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
@@ -165,6 +165,17 @@ export function HhLeaseForm({
   });
 
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "lines" });
+
+  // Live column totals for the grid footer. Blank amount fields are "" so
+  // `Number(x) || 0` keeps NaN out of the sums.
+  const watchedLines = useWatch({ control: form.control, name: "lines" }) ?? [];
+  const totalRent = watchedLines.reduce((sum, l) => sum + (Number(l?.rentalAmount) || 0), 0);
+  const totalExpenses = watchedLines.reduce(
+    (sum, l) => sum + (l?.expenses ?? []).reduce((es, e) => es + (Number(e?.amount) || 0), 0),
+    0,
+  );
+  const fmtAmount = (n: number) =>
+    n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   function onSubmit(values: HhLeaseInput) {
     setFormError(null);
@@ -387,6 +398,20 @@ export function HhLeaseForm({
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr className="border-t bg-muted/50 font-semibold [&_td]:px-2 [&_td]:py-2">
+                  <td />
+                  <td className="text-right text-muted-foreground">Total</td>
+                  <td className="tabular-nums">{fmtAmount(totalRent)}</td>
+                  <td />
+                  <td />
+                  <td className="tabular-nums">{fmtAmount(totalExpenses)}</td>
+                  <td className="whitespace-nowrap tabular-nums">
+                    <span className="text-muted-foreground">Grand&nbsp;total:</span> {fmtAmount(totalRent + totalExpenses)}
+                  </td>
+                  <td />
+                </tr>
+              </tfoot>
             </table>
           </div>
         </div>

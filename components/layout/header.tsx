@@ -25,6 +25,9 @@ export function Header({
   companyName: string;
 }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // The Vista Group logo is served from the remote Vista ERP. If it fails to
+  // load (offline, moved, blocked), fall back to the text label + icon.
+  const [vistaLogoOk, setVistaLogoOk] = useState(true);
   // Same calendar-day string on server and client; the span carries
   // suppressHydrationWarning to tolerate a midnight boundary.
   const todayLabel = formatDate(new Date().toISOString().slice(0, 10));
@@ -66,8 +69,20 @@ export function Header({
           title="Open Vista Group ERP"
           className="hidden items-center gap-1.5 rounded-md border border-white/25 bg-white/10 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-white/20 sm:inline-flex"
         >
-          <ExternalLinkIcon className="size-3.5 text-white/70" />
-          Vista Group
+          {vistaLogoOk ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src="https://erp.vista-group.co/logo.svg"
+              alt="Vista Group"
+              className="h-5 w-auto"
+              onError={() => setVistaLogoOk(false)}
+            />
+          ) : (
+            <>
+              <ExternalLinkIcon className="size-3.5 text-white/70" />
+              Vista Group
+            </>
+          )}
         </a>
         <span className="hidden items-center gap-1.5 rounded-md border border-white/25 bg-white/10 px-2.5 py-1 text-xs font-medium text-white sm:inline-flex">
           <CalendarDaysIcon className="size-3.5 text-white/70" />

@@ -217,8 +217,11 @@ export default async function PropertyReportPage() {
   for (const l of pkLeases ?? []) {
     consider(
       l.asset_id as string | null,
+      // PK monthly_rent is ALREADY a monthly figure — the rent cycle only sets
+      // the billing frequency (an invoice = monthly_rent × months in the cycle,
+      // per the PK schedule generator). So don't divide it by the cycle here.
       Number(l.monthly_rent),
-      l.rent_cycle as string | null,
+      "monthly",
       l.lease_start as string | null,
       l.lease_end as string | null,
       l.rent_month as string | null,
@@ -237,7 +240,8 @@ export default async function PropertyReportPage() {
     const end = l.lease_end as string | null;
     const active = (!start || start <= today) && (!end || end >= today);
     if (!active) continue;
-    const m = monthlyFromCycle(Number(l.official_rent) || 0, l.rent_cycle as string | null);
+    // official_rent is also a monthly figure — don't divide it by the cycle.
+    const m = Number(l.official_rent) || 0;
     officialRentMonthlyByAsset.set(assetId, (officialRentMonthlyByAsset.get(assetId) ?? 0) + m);
   }
 

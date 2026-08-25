@@ -22,7 +22,7 @@ select
 from accounting.chart_of_accounts g
 where g.is_group = true
   and g.deleted_at is null
-  and g.account_name ~* 'rental\s*expense'
+  and g.account_name ~* 'rent[a-z]*\s*expense'   -- matches RENTAL / RENTEL / RENT EXPENSE(S)
   and not exists (
     select 1
     from accounting.chart_of_accounts c

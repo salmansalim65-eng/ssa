@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { type MouseEvent, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDownIcon, ChevronsDownUpIcon, ChevronsUpDownIcon } from "lucide-react";
@@ -8,6 +8,7 @@ import { ChevronDownIcon, ChevronsDownUpIcon, ChevronsUpDownIcon } from "lucide-
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { navSections } from "./nav-items";
+import { openTab, goHome, useWorkspace } from "./workspace-store";
 
 // Which section headings the user has EXPANDED, persisted in localStorage and
 // read through useSyncExternalStore so the server snapshot (nothing expanded)
@@ -63,12 +64,30 @@ export function SidebarNav({
   collapsed?: boolean;
 }) {
   const pathname = usePathname();
+  const { tabs, activeId } = useWorkspace();
   const expandedList = useSyncExternalStore(subscribeSections, getExpandedSnapshot, getExpandedServerSnapshot);
   const expandedSections = new Set(expandedList);
   const allExpanded = collapsibleSectionLabels.every((l) => expandedSections.has(l));
 
+  // The active nav item follows the focused workspace tab (a report/voucher open
+  // in-app); with no tab focused, it falls back to the browser route.
+  const activeHref = activeId ? tabs.find((t) => t.id === activeId)?.href ?? null : null;
+
   function isActive(href: string) {
+    if (activeHref) return activeHref === href || activeHref.startsWith(href + "/");
+    // No tab focused → Dashboard (home) is active, else the current route.
+    if (tabs.length > 0) return href === "/dashboard";
     return pathname === href || pathname.startsWith(href + "/");
+  }
+
+  // Left-click opens the target in an in-app workspace tab instead of navigating
+  // the whole window; modified clicks (ctrl/cmd/middle) still open a browser tab.
+  function handleNavClick(e: MouseEvent<HTMLAnchorElement>, href: string, label: string) {
+    onNavigate?.();
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    e.preventDefault();
+    if (href === "/dashboard") goHome();
+    else openTab(href, label);
   }
 
   function renderItems(items: typeof navSections[number]["items"]) {
@@ -85,7 +104,7 @@ export function SidebarNav({
             <Link
               key={item.href}
               href={item.href}
-              onClick={onNavigate}
+              onClick={(e) => handleNavClick(e, item.href, item.label)}
               aria-current={active ? "page" : undefined}
               className={cn(
                 "relative flex items-center rounded-md text-sm transition-colors",

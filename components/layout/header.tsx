@@ -70,10 +70,11 @@ export function Header({
           className="hidden items-center gap-1.5 rounded-md border border-white/25 bg-white/10 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-white/20 sm:inline-flex"
         >
           {vistaLogoOk ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src="https://erp.vista-group.co/logo.svg"
+            <Image
+              src="/vista-logo.svg"
               alt="Vista Group"
+              width={20}
+              height={22}
               className="h-5 w-auto"
               onError={() => setVistaLogoOk(false)}
             />

@@ -61,6 +61,7 @@ const NUM_COLS: {
   { key: "monthlyRent", label: "Monthly Rent", full: "Balance Rent: lease rent − commission − HH expenses", kind: "money" },
   { key: "yearlyRent", label: "Yearly Rent", full: "Yearly Rent (Monthly × 12)", kind: "money" },
   { key: "sqFt", label: "Sq. Ft", full: "Area (square feet)", kind: "money" },
+  { key: "serviceRate", label: "Service Rate", full: "Service charges rate (per Sq. Ft)", kind: "rate" },
   { key: "serviceMonthly", label: "Service Charges", full: "Monthly service charge (Rate × Sq. Ft ÷ 12)", kind: "money" },
   { key: "netRent", label: "Net Rent", full: "Monthly Rent − Service Charges", kind: "money" },
   { key: "currentValue", label: "Current Value", full: "Current property value", kind: "money" },
@@ -136,7 +137,7 @@ export function PropertyReportView({
     if (!target) return groups;
     const MONEY_FIELDS: (keyof PropertyRow)[] = [
       "estRent", "monthlyRent", "yearlyRent", "diffEstVsYearly", "sqFtValue",
-      "serviceCharges", "serviceMonthly", "commission", "netRent", "currentValue",
+      "serviceRate", "serviceCharges", "serviceMonthly", "commission", "netRent", "currentValue",
       "purchaseValue", "titleDeedValue", "diffValue",
     ];
     return groups.map((g) => ({

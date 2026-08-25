@@ -182,6 +182,7 @@ export interface PropertyGroupTotals {
   diffEstVsYearly: number;
   sqFt: number;
   sqFtValue: number;
+  serviceRate: number; // no meaningful group total (rate is per-property) — kept 0
   serviceCharges: number;
   serviceMonthly: number;
   commission: number;
@@ -215,6 +216,7 @@ export function aggregateGroup(rows: PropertyRow[]): PropertyGroupTotals {
     diffEstVsYearly: sum((r) => r.diffEstVsYearly),
     sqFt,
     sqFtValue: sqFt > 0 ? round2(purchaseValue / sqFt) : 0,
+    serviceRate: 0, // per-property rate is meaningless summed; shown as dash
     serviceCharges,
     serviceMonthly,
     commission,

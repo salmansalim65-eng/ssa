@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/table";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { SummaryCard, StatCol } from "@/components/dashboard/summary-card";
-import { GroupCompanyLink } from "@/components/dashboard/group-company-link";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
 import { formatAccountCode, formatDate, formatMoney, formatVoucherNo } from "@/lib/format";
@@ -333,10 +332,6 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-end">
-        <GroupCompanyLink href="https://erp.vista-group.co" name="Vista Group" />
-      </div>
-
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard
           title="Balances UAE"

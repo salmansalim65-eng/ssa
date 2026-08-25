@@ -292,7 +292,7 @@ export default async function RentReportPage({
   };
 
   return (
-    <div className="flex h-[calc(100dvh-5.5rem)] min-h-0 flex-col gap-4 sm:h-[calc(100dvh-6.5rem)] print:block print:h-auto print:gap-0">
+    <div className="flex h-[calc(100dvh-var(--vh-offset,5.5rem))] min-h-0 flex-col gap-4 print:block print:h-auto print:gap-0">
       {/* Toolbar — home/back, year, export and print on one line (the report name
           is shown by the breadcrumb, so there's no heading box) */}
       <div className="flex shrink-0 flex-wrap items-end justify-between gap-3 print:hidden">

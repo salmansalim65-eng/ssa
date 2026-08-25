@@ -32,7 +32,9 @@ export function AppShell({
   const embedded = useIsEmbedded();
 
   if (embedded) {
-    return <main className="p-4 sm:p-6">{children}</main>;
+    // No header inside a tab, so full-height reports only need to subtract their
+    // own padding (the --vh-offset), not a header height.
+    return <main className="p-4 [--vh-offset:2rem] sm:p-6 sm:[--vh-offset:3rem]">{children}</main>;
   }
 
   return (

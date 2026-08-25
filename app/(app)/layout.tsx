@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
+import { AppShell } from "@/components/layout/app-shell";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth/session";
 
@@ -28,16 +29,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .single();
 
   return (
-    <div className="flex min-h-screen flex-1">
-      <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
+    <AppShell
+      sidebar={<Sidebar />}
+      header={
         <Header
           fullName={profile.full_name}
           email={user.email ?? ""}
           companyName={company?.name ?? ""}
         />
-        <main className="flex-1 overflow-x-hidden p-4 sm:p-6">{children}</main>
-      </div>
-    </div>
+      }
+    >
+      {children}
+    </AppShell>
   );
 }

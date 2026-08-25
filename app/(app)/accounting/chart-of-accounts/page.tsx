@@ -45,7 +45,7 @@ export default async function ChartOfAccountsPage() {
         .schema("assets")
         .from("assets")
         .select(
-          "id, is_rental, property_type, status, city, address, owner, official_owner, purchase_date, area_sqft, area_unit, purchase_value, current_value, title_deed_value, service_charges_rate, property_tax, other_charges, estimated_rent, notes",
+          "id, account_id, is_rental, property_type, status, city, address, owner, official_owner, purchase_date, area_sqft, area_unit, purchase_value, current_value, title_deed_value, service_charges_rate, property_tax, other_charges, estimated_rent, notes",
         )
         .eq("company_id", companyId)
         .is("deleted_at", null),
@@ -54,11 +54,16 @@ export default async function ChartOfAccountsPage() {
       hasPermission("chart_of_accounts", "delete"),
     ]);
 
-  // Property fields of each asset, keyed by id, to prefill the CoA Property
-  // details section when editing a linked property account.
+  // Property fields of each asset, keyed by asset id AND by the account it links
+  // to, to prefill the CoA Property details section when editing a linked
+  // property account. The by-account key is the fallback for properties whose
+  // chart_of_accounts.linked_asset_id was never populated (the asset links back
+  // via assets.account_id instead) — otherwise the details load blank on reopen.
   const assetFieldsById: Record<string, LinkedAssetFields> = {};
-  for (const a of (linkedAssets as unknown as (LinkedAssetFields & { id: string })[]) ?? []) {
-    assetFieldsById[a.id] = {
+  const assetFieldsByAccountId: Record<string, LinkedAssetFields> = {};
+  for (const a of (linkedAssets as unknown as (LinkedAssetFields & { id: string; account_id: string | null })[]) ??
+    []) {
+    const fields: LinkedAssetFields = {
       is_rental: a.is_rental,
       property_type: a.property_type,
       status: a.status,
@@ -78,6 +83,8 @@ export default async function ChartOfAccountsPage() {
       estimated_rent: a.estimated_rent,
       notes: a.notes,
     };
+    assetFieldsById[a.id] = fields;
+    if (a.account_id) assetFieldsByAccountId[a.account_id] = fields;
   }
 
   // Current balance per posting account, net in the base currency. Group rows
@@ -160,6 +167,7 @@ export default async function ChartOfAccountsPage() {
       canEdit={canEdit}
       canDelete={canDelete}
       assetFieldsById={assetFieldsById}
+      assetFieldsByAccountId={assetFieldsByAccountId}
     />
   );
 }

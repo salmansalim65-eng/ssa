@@ -213,6 +213,7 @@ export function AccountTree({
   canEdit,
   canDelete,
   assetFieldsById = {},
+  assetFieldsByAccountId = {},
 }: {
   accounts: AccountRow[];
   currencies: CurrencyOption[];
@@ -223,6 +224,9 @@ export function AccountTree({
   /** Property fields of each linked asset, keyed by asset id — prefills the
    *  Property details section when editing a property account. */
   assetFieldsById?: Record<string, LinkedAssetFields>;
+  /** Same fields keyed by the account the asset links to — fallback when the
+   *  account's linked_asset_id is null. */
+  assetFieldsByAccountId?: Record<string, LinkedAssetFields>;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(accounts.filter((a) => a.is_group).map((a) => a.id)),
@@ -763,9 +767,13 @@ export function AccountTree({
               defaultValues={
                 dialog.mode === "edit"
                   ? (() => {
-                      const linked = dialog.account.linked_asset_id
-                        ? assetFieldsById[dialog.account.linked_asset_id]
-                        : undefined;
+                      // Prefer the direct link; fall back to the asset that
+                      // links back via account_id (linked_asset_id can be null),
+                      // so the property details always reload on edit.
+                      const linked =
+                        (dialog.account.linked_asset_id
+                          ? assetFieldsById[dialog.account.linked_asset_id]
+                          : undefined) ?? assetFieldsByAccountId[dialog.account.id];
                       return {
                         ...emptyValues,
                         accountName: dialog.account.account_name,

@@ -221,6 +221,7 @@ export default async function DashboardPage({
     bankBalById.set(k, (bankBalById.get(k) ?? 0) + Number(r.doc_debit_amount) - Number(r.doc_credit_amount));
   }
   const bankAccounts = (cashBankAccounts ?? []).map((a) => ({
+    id: a.id as string,
     code: a.account_code as string,
     name: a.account_name as string,
     symbol: symById(a.currency_id as string | null),
@@ -584,7 +585,7 @@ export default async function DashboardPage({
 // Cash / Bank drill-down — each account and its balance, shown in that
 // account's own currency with its symbol.
 function bankDetail(
-  accounts: { code: string; name: string; symbol: string; balance: number }[],
+  accounts: { id: string; code: string; name: string; symbol: string; balance: number }[],
   title: string,
 ) {
   return {
@@ -602,7 +603,14 @@ function bankDetail(
           {accounts.map((a) => (
             <TableRow key={a.code}>
               <TableCell>
-                <span className="font-mono text-xs text-muted-foreground">{formatAccountCode(a.code)}</span> {a.name}
+                <Link
+                  href={`/reports/general-ledger?accountIds=${a.id}`}
+                  className="hover:underline"
+                  title="Open ledger"
+                >
+                  <span className="font-mono text-xs text-muted-foreground">{formatAccountCode(a.code)}</span>{" "}
+                  <span className="text-primary">{a.name}</span>
+                </Link>
               </TableCell>
               <TableCell className="text-muted-foreground">{a.symbol || "—"}</TableCell>
               <TableCell className="text-right font-mono tabular-nums">{money(a.symbol, a.balance)}</TableCell>

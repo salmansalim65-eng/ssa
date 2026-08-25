@@ -21,7 +21,8 @@ export const hhLeaseLineSchema = z
     // Named monthly other-expenses for this property; each feeds the Rent Balance
     // report's Other Expenses column and reduces the owner's balance rent.
     expenses: z.array(hhLeaseExpenseSchema).optional().default([]),
-    remarks: z.string().trim().min(1, "Remarks are required").max(200, "Keep it under 200 characters"),
+    // Remarks are optional — an empty string is accepted and stored as NULL.
+    remarks: z.string().trim().max(200, "Keep it under 200 characters").optional().default(""),
   })
   .refine((d) => d.leaseEnd > d.leaseStart, {
     message: "Lease end must be after lease start",

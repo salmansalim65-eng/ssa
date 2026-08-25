@@ -64,14 +64,14 @@ export function Header({
           target="_blank"
           rel="noopener noreferrer"
           title="Open Vista Group ERP"
-          className="hidden items-center rounded-md px-1 py-0.5 transition-opacity hover:opacity-80 sm:inline-flex"
+          className="hidden items-center rounded-md bg-white px-2 py-1 shadow-sm ring-1 ring-black/5 transition-opacity hover:opacity-90 sm:inline-flex"
         >
           <Image
             src="/vista-logo.svg"
             alt="Vista Group"
-            width={26}
-            height={28}
-            className="h-7 w-auto"
+            width={24}
+            height={24}
+            className="h-6 w-auto"
           />
         </a>
         <span className="hidden items-center gap-1.5 rounded-md border border-white/25 bg-white/10 px-2.5 py-1 text-xs font-medium text-white sm:inline-flex">

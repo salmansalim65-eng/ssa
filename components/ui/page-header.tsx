@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 import { PageNav } from "@/components/ui/page-nav";
+import { OpenInNewTabButton } from "@/components/ui/open-in-new-tab-button";
 
 // Slim page toolbar shown at the top of every major screen. The boxed masthead
 // (eyebrow + large title + description) was removed across the ERP — the page
@@ -36,7 +37,10 @@ export function PageHeader({
       )}
     >
       <div className="min-w-0">{backHref && <PageNav backHref={backHref} backLabel={backLabel} />}</div>
-      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <OpenInNewTabButton />
+        {actions}
+      </div>
     </div>
   );
 }

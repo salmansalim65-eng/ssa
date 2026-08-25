@@ -660,7 +660,7 @@ async function loadDetail(
         }`,
       );
 
-    const byAccount = new Map<string, { name: string; debit: number; credit: number }>();
+    const byAccount = new Map<string, { id: string; name: string; debit: number; credit: number }>();
     for (const r of data ?? []) {
       // Same attribution as the card total: cost centre first, else the
       // account's own country (codes normalised). Skip lines from another country.
@@ -670,7 +670,7 @@ async function loadDetail(
       if (country !== normCountry(cfg.ccCountry)) continue;
       if (isExcludedFromBalances(r)) continue;
       const k = r.account_code as string;
-      const a = byAccount.get(k) ?? { name: r.account_name as string, debit: 0, credit: 0 };
+      const a = byAccount.get(k) ?? { id: r.account_id as string, name: r.account_name as string, debit: 0, credit: 0 };
       a.debit += Number(r.doc_debit_amount);
       a.credit += Number(r.doc_credit_amount);
       byAccount.set(k, a);
@@ -697,7 +697,14 @@ async function loadDetail(
               return (
                 <TableRow key={code}>
                   <TableCell>
-                    <span className="font-mono text-xs text-muted-foreground">{formatAccountCode(code)}</span> {a.name}
+                    <Link
+                      href={`/reports/general-ledger?accountIds=${a.id}`}
+                      className="hover:underline"
+                      title="Open ledger"
+                    >
+                      <span className="font-mono text-xs text-muted-foreground">{formatAccountCode(code)}</span>{" "}
+                      <span className="text-primary">{a.name}</span>
+                    </Link>
                   </TableCell>
                   <TableCell className="text-right font-mono tabular-nums">{fmt(a.debit)}</TableCell>
                   <TableCell className="text-right font-mono tabular-nums">{fmt(a.credit)}</TableCell>

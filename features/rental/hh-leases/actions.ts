@@ -339,12 +339,15 @@ async function updateCombinedRentInvoice(
   // and reports; the re-create below adds fresh ones under the same document no.
   if (documentNo) {
     const { data: user } = await supabase.auth.getUser();
-    await supabase
+    const { error: softDeleteErr } = await supabase
       .schema("rental")
       .from("uae_leases")
       .update({ deleted_at: new Date().toISOString(), deleted_by: user.user!.id })
       .eq("document_no", documentNo)
       .is("deleted_at", null);
+    // If the old leases can't be cleared, stop — recreating now would leave the
+    // old rows behind and double the voucher in the lists and reports.
+    if (softDeleteErr) return { error: softDeleteErr.message };
   }
 
   return createCombinedRentInvoice(input, {

@@ -16,11 +16,51 @@ export async function deletePostedRentInvoice(invoiceId: string, country: "uae" 
     return { error: "Only administrators can delete posted invoices." };
   }
   const supabase = await createClient();
+
+  // A combined voucher invoice (schedule_id null) owns the voucher's leases —
+  // they exist only to feed the month-wise reports for THIS invoice. The delete
+  // RPC removes the invoice and its journal entry but leaves those leases behind,
+  // so capture the voucher's document number first and soft-delete its leases
+  // after; otherwise they linger and double the lists and reports. Schedule-based
+  // invoices keep their lease (it has many invoices), so they're left untouched.
+  let voucherDocNo: string | null = null;
+  if (country === "uae") {
+    const { data: inv } = await supabase
+      .schema("rental")
+      .from("uae_rent_invoices")
+      .select("lease_id, schedule_id")
+      .eq("id", invoiceId)
+      .maybeSingle();
+    if (inv && !inv.schedule_id && inv.lease_id) {
+      const { data: lease } = await supabase
+        .schema("rental")
+        .from("uae_leases")
+        .select("document_no")
+        .eq("id", inv.lease_id)
+        .maybeSingle();
+      voucherDocNo = (lease?.document_no as string | null) ?? null;
+    }
+  }
+
   const { error } = await supabase
     .schema("rental")
     .rpc("fn_admin_delete_rent_invoice", { p_invoice_id: invoiceId, p_country: country });
   if (error) return { error: error.message };
 
+  if (voucherDocNo) {
+    const { data: user } = await supabase.auth.getUser();
+    const { error: leaseErr } = await supabase
+      .schema("rental")
+      .from("uae_leases")
+      .update({ deleted_at: new Date().toISOString(), deleted_by: user.user!.id })
+      .eq("document_no", voucherDocNo)
+      .is("deleted_at", null);
+    if (leaseErr) return { error: leaseErr.message };
+  }
+
   revalidatePath(`/rental/${country}/invoices`);
+  revalidatePath("/rental/uae/leases");
+  revalidatePath("/rental/uae/hh-lease");
+  revalidatePath("/dashboard");
   return { success: true };
 }

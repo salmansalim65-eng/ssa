@@ -1,4 +1,8 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
+import { PencilIcon } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
 
 import {
   Table,
@@ -140,13 +144,22 @@ export default async function UaeRentInvoiceDetailPage({ params }: { params: Pro
             )}
             {isAdmin && status === "posted" && (
               <>
-                <EditPostedInvoiceButton
-                  invoiceId={invoice.id}
-                  country="uae"
-                  amount={invoice.amount}
-                  dueDate={invoice.due_date}
-                  currencyCode={refs.currencies?.code}
-                />
+                {invoice.schedule_id ? (
+                  <EditPostedInvoiceButton
+                    invoiceId={invoice.id}
+                    country="uae"
+                    amount={invoice.amount}
+                    dueDate={invoice.due_date}
+                    currencyCode={refs.currencies?.code}
+                  />
+                ) : (
+                  // Combined (grid) invoice: edit in the full multi-property form.
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={`/rental/uae/invoices/${invoice.id}/edit`}>
+                      <PencilIcon className="size-4" /> Edit
+                    </Link>
+                  </Button>
+                )}
                 <DeletePostedInvoiceButton invoiceId={invoice.id} country="uae" />
               </>
             )}

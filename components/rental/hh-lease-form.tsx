@@ -146,6 +146,8 @@ export function HhLeaseForm({
   docLabel = "HH Rent Invoice",
   redirectHref = "/rental/uae/hh-lease",
   managementPct = 0.1,
+  initialValues,
+  submitLabel,
 }: {
   assets: AssetOption[];
   tenants: TenantOption[];
@@ -165,6 +167,9 @@ export function HhLeaseForm({
   // Management (agent) charge as a fraction of rent — HH 10%, UAE 5%. Shown as a
   // column and deducted from the grand total.
   managementPct?: number;
+  // When editing an existing voucher, its current values pre-fill the grid.
+  initialValues?: HhLeaseFormValues;
+  submitLabel?: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -172,7 +177,7 @@ export function HhLeaseForm({
 
   const form = useForm<HhLeaseFormValues, unknown, HhLeaseInput>({
     resolver: zodResolver(hhLeaseSchema),
-    defaultValues: {
+    defaultValues: initialValues ?? {
       tenantId: "",
       documentDate: today(),
       currencyId: defaultCurrencyId ?? currencies[0]?.id ?? "",
@@ -207,7 +212,7 @@ export function HhLeaseForm({
         setFormError(result.error);
         return;
       }
-      toast.success(`${docLabel} ${result.documentNo} created (${result.count} propertie(s))`);
+      toast.success(`${docLabel} ${result.documentNo} saved (${result.count} propertie(s))`);
       if (result && "invoiceWarning" in result && result.invoiceWarning)
         toast.warning(result.invoiceWarning as string);
       router.push(redirectHref);
@@ -445,7 +450,7 @@ export function HhLeaseForm({
 
         {formError && <p className="text-sm text-destructive">{formError}</p>}
         <Button type="submit" disabled={isPending} className="sm:w-fit">
-          {isPending ? "Saving…" : `Save ${docLabel}`}
+          {isPending ? "Saving…" : (submitLabel ?? `Save ${docLabel}`)}
         </Button>
       </form>
     </Form>

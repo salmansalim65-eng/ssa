@@ -79,10 +79,11 @@ export default async function RentReportPage({
       supabase
         .schema("rental")
         .from("uae_leases")
-        .select("id, asset_id, tenant_id, rental_amount, rent_cycle, lease_start, lease_end, lease_type, rent_month")
+        .select("id, asset_id, tenant_id, rental_amount, rent_cycle, lease_start, lease_end, lease_type, rent_month, document_no, created_at")
         .eq("company_id", companyId)
         .eq("status", "active")
-        .is("deleted_at", null),
+        .is("deleted_at", null)
+        .order("created_at"),
       supabase.schema("core").from("currencies").select("code, symbol"),
       supabase.schema("rental").from("lease_expenses").select("lease_id, amount").eq("company_id", companyId),
       supabase
@@ -140,7 +141,19 @@ export default async function RentReportPage({
       tenantId: (l.tenant_id as string) ?? null,
     });
   }
+  // Drop any stray duplicate lease for the same property within one voucher
+  // (keep the most recent — rows come oldest-first) so a property's monthly rent
+  // is never counted twice. Leases without a voucher number are kept as-is.
+  const uaeDedupByKey = new Map<string, NonNullable<typeof uaeLeases>[number]>();
+  const uaeLeasesDeduped: NonNullable<typeof uaeLeases> = [];
   for (const l of uaeLeases ?? []) {
+    const doc = l.document_no as string | null;
+    if (!doc || !l.asset_id) uaeLeasesDeduped.push(l);
+    else uaeDedupByKey.set(`${doc}|${l.asset_id}`, l);
+  }
+  uaeLeasesDeduped.push(...uaeDedupByKey.values());
+
+  for (const l of uaeLeasesDeduped) {
     if (!l.asset_id) continue;
     const gross = l.rent_cycle === "yearly" ? Number(l.rental_amount) / 12 : Number(l.rental_amount) || 0;
     // Net rent = rent − management (agent share: HH 10% / UAE 5%) − HH expenses.

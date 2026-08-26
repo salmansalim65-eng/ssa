@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/auth/permissions";
 import { formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
-import { createJournalEntry, getAccountIdByName, getCurrentCompanyId, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
+import { createJournalEntry, getCurrentCompanyId, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { agentRentSplit, HH_AGENT_PCT, UAE_AGENT_PCT } from "@/lib/rental/lease-accounting";
 
 async function getPostingAccount(companyId: string, accountRole: string) {
@@ -45,6 +45,27 @@ async function getTenantAccountId(companyId: string, tenantId: string) {
     .eq("id", tenantId)
     .maybeSingle();
   return (data?.account_id as string | undefined) ?? null;
+}
+
+// Resolve the "SAMAD RENT" agent-share account by name, excluding any account
+// that belongs to a tenant (a tenant can share that exact name, which makes a
+// plain lookup ambiguous and silently fail).
+async function getAgentShareAccountId(companyId: string): Promise<string | null> {
+  const supabase = await createClient();
+  const [{ data: accts }, { data: tenants }] = await Promise.all([
+    supabase
+      .schema("accounting")
+      .from("chart_of_accounts")
+      .select("id")
+      .eq("company_id", companyId)
+      .eq("is_group", false)
+      .is("deleted_at", null)
+      .ilike("account_name", "SAMAD RENT"),
+    supabase.schema("rental").from("tenants").select("account_id").eq("company_id", companyId),
+  ]);
+  const tenantAccountIds = new Set((tenants ?? []).map((t) => t.account_id as string | null).filter(Boolean));
+  const candidates = ((accts as { id: string }[]) ?? []).map((a) => a.id);
+  return candidates.find((id) => !tenantAccountIds.has(id)) ?? candidates[0] ?? null;
 }
 
 function addPeriod(date: string, cycle: "monthly" | "yearly") {
@@ -91,7 +112,7 @@ export async function generateUaeRentInvoice(scheduleId: string) {
   const [tenantReceivableId, rentalIncomeId, samadRentId] = await Promise.all([
     getPostingAccount(companyId, "tenant_receivable"),
     getPostingAccount(companyId, "uae_rental_income"),
-    getAccountIdByName(companyId, "SAMAD RENT"),
+    getAgentShareAccountId(companyId),
   ]);
   if (!tenantReceivableId || !rentalIncomeId) {
     return { error: "Configure Posting Templates for UAE Rent Invoice first (Tenant Receivable + Rental Income accounts)." };

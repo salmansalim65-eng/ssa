@@ -6,7 +6,7 @@ import { requirePermission, isCurrentUserAdmin } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { resolveTenantId } from "@/lib/rental/tenant-accounts";
 import { postUaeRentInvoice } from "@/features/rental/uae-rent-invoices/actions";
-import { createJournalEntry, getAccountIdByName, type EntryLineInput } from "@/lib/vouchers/engine";
+import { createJournalEntry, type EntryLineInput } from "@/lib/vouchers/engine";
 import { agentRentSplit, HH_AGENT_PCT, UAE_AGENT_PCT } from "@/lib/rental/lease-accounting";
 import { hhLeaseSchema, type HhLeaseInput } from "./schemas";
 
@@ -41,6 +41,28 @@ async function getAssetCostCenterId(assetId: string) {
     .eq("asset_id", assetId)
     .maybeSingle();
   return (data?.id as string | undefined) ?? null;
+}
+
+// The agent-share account is named "SAMAD RENT". A TENANT can also be named
+// "SAMAD RENT" (its own Chart-of-Accounts account carries that name), so a plain
+// name lookup is ambiguous and fails. Resolve the posting account by name but
+// exclude any account that belongs to a tenant, so the real agent account wins.
+async function getAgentShareAccountId(companyId: string): Promise<string | null> {
+  const supabase = await createClient();
+  const [{ data: accts }, { data: tenants }] = await Promise.all([
+    supabase
+      .schema("accounting")
+      .from("chart_of_accounts")
+      .select("id")
+      .eq("company_id", companyId)
+      .eq("is_group", false)
+      .is("deleted_at", null)
+      .ilike("account_name", "SAMAD RENT"),
+    supabase.schema("rental").from("tenants").select("account_id").eq("company_id", companyId),
+  ]);
+  const tenantAccountIds = new Set((tenants ?? []).map((t) => t.account_id as string | null).filter(Boolean));
+  const candidates = ((accts as { id: string }[]) ?? []).map((a) => a.id);
+  return candidates.find((id) => !tenantAccountIds.has(id)) ?? candidates[0] ?? null;
 }
 
 async function getTenantAccountId(companyId: string, tenantId: string) {
@@ -168,15 +190,30 @@ async function createCombinedRentInvoice(
   // working; those schedules are flagged 'invoiced' here so they aren't billed
   // again.
   const created = createdLeases ?? [];
+  // If anything past this point fails, undo the leases we just created so the
+  // voucher never leaves a "lease exists but no invoice" ghost behind (which
+  // showed phantom rent in the reports and opened as a lease, not the grid).
+  const rollbackLeases = async () => {
+    const leaseIds = created.map((l) => l.id);
+    if (!leaseIds.length) return;
+    await supabase
+      .schema("rental")
+      .from("uae_leases")
+      .update({ deleted_at: new Date().toISOString(), deleted_by: createdBy })
+      .in("id", leaseIds);
+  };
+
   const [tenantReceivableId, rentalIncomeId, samadRentId] = await Promise.all([
     getPostingAccount(companyId, "tenant_receivable"),
     getPostingAccount(companyId, "uae_rental_income"),
-    getAccountIdByName(companyId, "SAMAD RENT"),
+    getAgentShareAccountId(companyId),
   ]);
   if (!tenantReceivableId || !rentalIncomeId) {
+    await rollbackLeases();
     return { error: "Configure Posting Templates for UAE Rent Invoice first (Tenant Receivable + Rental Income accounts)." };
   }
   if (!samadRentId) {
+    await rollbackLeases();
     return { error: 'The "SAMAD RENT" account is missing from the Chart of Accounts; cannot post the agent share.' };
   }
   const tenantAccountId = await getTenantAccountId(companyId, tenantId);
@@ -227,7 +264,10 @@ async function createCombinedRentInvoice(
       createdBy,
       lines,
     });
-    if ("error" in je) return { error: je.error };
+    if ("error" in je) {
+      await rollbackLeases();
+      return { error: je.error };
+    }
 
     const { error: invErr } = await supabase.schema("rental").from("uae_rent_invoices").insert({
       id: invoiceId,
@@ -248,7 +288,12 @@ async function createCombinedRentInvoice(
       invoice_type: opts.invoiceType,
       created_by: createdBy,
     });
-    if (invErr) return { error: invErr.message };
+    if (invErr) {
+      // Drop the orphaned journal entry and the leases so nothing half-made stays.
+      await supabase.schema("accounting").from("journal_entries").delete().eq("id", je.journalEntryId);
+      await rollbackLeases();
+      return { error: invErr.message };
+    }
 
     await supabase
       .schema("rental")

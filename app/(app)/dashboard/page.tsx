@@ -758,7 +758,61 @@ async function loadDetail(
   if (dateTo) rentQuery = rentQuery.lte("invoice_date", dateTo);
   const { data } = await rentQuery.order("due_date");
 
-  const rows = data ?? [];
+  const rawRows = data ?? [];
+  type RentRow = (typeof rawRows)[number] & { _rowKey?: string };
+  let rows: RentRow[] = rawRows as RentRow[];
+
+  // Spread a combined HH/UAE invoice (one voucher for a multi-month period) into
+  // monthly rows, so the Rent Balance shows the rent due each month — current
+  // month due, later months upcoming — while the ledger keeps a single entry.
+  if (cfg.rentCountry === "UAE") {
+    const ids = rawRows.map((r) => r.invoice_id as string).filter(Boolean);
+    const { data: invMeta } = ids.length
+      ? await supabase
+          .schema("rental")
+          .from("uae_rent_invoices")
+          .select("id, period_start, period_end, schedule_id")
+          .in("id", ids)
+      : { data: [] };
+    const metaById = new Map(
+      ((invMeta as { id: string; period_start: string; period_end: string; schedule_id: string | null }[]) ?? []).map(
+        (m) => [m.id, m],
+      ),
+    );
+    const monthFirsts = (start: string, end: string) => {
+      const out: string[] = [];
+      let y = Number(start.slice(0, 4));
+      let m = Number(start.slice(5, 7)) - 1;
+      const ey = Number(end.slice(0, 4));
+      const em = Number(end.slice(5, 7)) - 1;
+      while (y < ey || (y === ey && m <= em)) {
+        out.push(`${y}-${String(m + 1).padStart(2, "0")}-01`);
+        m += 1;
+        if (m > 11) { m = 0; y += 1; }
+      }
+      return out.length ? out : [`${start.slice(0, 7)}-01`];
+    };
+    rows = rawRows.flatMap((r) => {
+      const meta = metaById.get(r.invoice_id as string);
+      if (!meta || meta.schedule_id) return [{ ...r } as RentRow];
+      const months = monthFirsts(meta.period_start, meta.period_end);
+      if (months.length <= 1) return [{ ...r } as RentRow];
+      const n = months.length;
+      const per = (v: unknown) => Math.round((Number(v) / n) * 100) / 100;
+      return months.map((mDate, i) => ({
+        ...r,
+        due_date: mDate,
+        amount: per(r.amount),
+        agent_share: per(r.agent_share),
+        other_expenses: per(r.other_expenses),
+        net_amount: per(r.net_amount),
+        net_outstanding: per(r.net_outstanding),
+        _rowKey: `${r.invoice_id}-${i}`,
+      })) as RentRow[];
+    });
+    rows.sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)));
+  }
+
   const nowDate = today();
   // PK Rent Balance omits the Management (agent share) and Other Expenses columns
   // — those only apply to UAE/HH leases.
@@ -834,7 +888,7 @@ async function loadDetail(
               ) : null;
             return [
               monthHeader,
-            <TableRow key={r.invoice_id} className={paid ? "bg-emerald-50 dark:bg-emerald-950/30" : undefined}>
+            <TableRow key={r._rowKey ?? r.invoice_id} className={paid ? "bg-emerald-50 dark:bg-emerald-950/30" : undefined}>
               <TableCell className="text-muted-foreground">{formatDate(r.invoice_date)}</TableCell>
               <TableCell>{r.voucher_no ? formatVoucherNo(r.voucher_no) : "Draft"}</TableCell>
               <TableCell className="text-muted-foreground">{dueMonth(r.due_date as string)}</TableCell>

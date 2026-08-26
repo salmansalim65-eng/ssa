@@ -756,7 +756,9 @@ async function loadDetail(
     .eq("country", cfg.rentCountry);
   if (dateFrom) rentQuery = rentQuery.gte("invoice_date", dateFrom);
   if (dateTo) rentQuery = rentQuery.lte("invoice_date", dateTo);
-  const { data } = await rentQuery.order("due_date");
+  // Ordered by invoice date so the month bands (grouped by the rent-start month)
+  // stay contiguous.
+  const { data } = await rentQuery.order("invoice_date");
 
   const rows = data ?? [];
   const nowDate = today();
@@ -793,7 +795,7 @@ async function loadDetail(
           <TableRow className="hover:bg-transparent">
             <TableHead>Date</TableHead>
             <TableHead>Voucher No</TableHead>
-            <TableHead>Due Month</TableHead>
+            <TableHead>Rent Month</TableHead>
             <TableHead>Due Date</TableHead>
             <TableHead>Property</TableHead>
             <TableHead>Tenant</TableHead>
@@ -816,11 +818,11 @@ async function loadDetail(
             // Fully-paid rows (nothing outstanding) get a light-green background;
             // a still-owing row that is overdue paints only its Outstanding cell red.
             const paid = outstanding <= 0;
-            // Rows are ordered by due date, so due months are contiguous. Emit a
-            // highlighted month band whenever the due month changes, grouping the
-            // list month-wise.
-            const monthKey = String(r.due_date ?? "").slice(0, 7);
-            const prevKey = i > 0 ? String(rows[i - 1].due_date ?? "").slice(0, 7) : null;
+            // The rent month is the month the rent STARTS (invoice/voucher date),
+            // not the payment due date. Rows are ordered by invoice date, so
+            // these month bands stay contiguous.
+            const monthKey = String(r.invoice_date ?? "").slice(0, 7);
+            const prevKey = i > 0 ? String(rows[i - 1].invoice_date ?? "").slice(0, 7) : null;
             const monthHeader =
               monthKey !== prevKey ? (
                 <TableRow key={`grp-${monthKey}`} className="hover:bg-transparent">
@@ -828,7 +830,7 @@ async function loadDetail(
                     colSpan={colCount}
                     className="bg-ledger/15 py-1.5 text-xs font-semibold uppercase tracking-wide text-ledger dark:bg-ledger/25"
                   >
-                    {dueMonth(r.due_date as string)}
+                    {dueMonth(r.invoice_date as string)}
                   </TableCell>
                 </TableRow>
               ) : null;
@@ -837,7 +839,7 @@ async function loadDetail(
             <TableRow key={r.invoice_id} className={paid ? "bg-emerald-50 dark:bg-emerald-950/30" : undefined}>
               <TableCell className="text-muted-foreground">{formatDate(r.invoice_date)}</TableCell>
               <TableCell>{r.voucher_no ? formatVoucherNo(r.voucher_no) : "Draft"}</TableCell>
-              <TableCell className="text-muted-foreground">{dueMonth(r.due_date as string)}</TableCell>
+              <TableCell className="text-muted-foreground">{dueMonth(r.invoice_date as string)}</TableCell>
               <TableCell className={overdue ? "text-destructive" : "text-muted-foreground"}>
                 {formatDate(r.due_date)}
               </TableCell>

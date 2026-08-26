@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { requirePermission } from "@/lib/auth/permissions";
+import { requirePermission, isCurrentUserAdmin } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { resolveTenantId } from "@/lib/rental/tenant-accounts";
 import { postUaeRentInvoice } from "@/features/rental/uae-rent-invoices/actions";
@@ -73,7 +73,14 @@ async function getCurrentCompanyId() {
 // lease_type, agent percentage and the invoice_type badge.
 async function createCombinedRentInvoice(
   input: HhLeaseInput,
-  opts: { leaseType: "standard" | "hh"; agentPct: number; invoiceType: "UAE" | "HH" },
+  opts: {
+    leaseType: "standard" | "hh";
+    agentPct: number;
+    invoiceType: "UAE" | "HH";
+    // When re-creating an edited voucher, keep its identity.
+    preserveDocumentNo?: string;
+    preserveVoucherNo?: string;
+  },
 ) {
   const parsed = hhLeaseSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -84,11 +91,15 @@ async function createCombinedRentInvoice(
   const { data: user } = await supabase.auth.getUser();
   const createdBy = user.user!.id;
 
-  const { data: documentNo, error: numberError } = await supabase
-    .schema("rental")
-    .rpc("fn_next_hh_lease_no", { p_company_id: companyId });
-  if (numberError || !documentNo) {
-    return { error: numberError?.message ?? "Failed to generate document number" };
+  let documentNo: string | null = opts.preserveDocumentNo ?? null;
+  if (!documentNo) {
+    const { data, error: numberError } = await supabase
+      .schema("rental")
+      .rpc("fn_next_hh_lease_no", { p_company_id: companyId });
+    if (numberError || !data) {
+      return { error: numberError?.message ?? "Failed to generate document number" };
+    }
+    documentNo = data as string;
   }
 
   const tenantId = await resolveTenantId(companyId, parsed.data.tenantId, createdBy);
@@ -241,6 +252,15 @@ async function createCombinedRentInvoice(
 
     const post = await postUaeRentInvoice(invoiceId, je.journalEntryId);
     if ("error" in post) invoiceWarning = post.error;
+
+    // Keep the edited voucher's original number so it stays the same document.
+    if (opts.preserveVoucherNo) {
+      await supabase
+        .schema("rental")
+        .from("uae_rent_invoices")
+        .update({ voucher_no: opts.preserveVoucherNo })
+        .eq("id", invoiceId);
+    }
   }
 
   revalidatePath("/rental/uae/leases");
@@ -257,4 +277,85 @@ export async function createHhLease(input: HhLeaseInput) {
 // UAE Rent Invoice: same multi-property grid, 5% agent share, standard lease.
 export async function createUaeRentInvoice(input: HhLeaseInput) {
   return createCombinedRentInvoice(input, { leaseType: "standard", agentPct: UAE_AGENT_PCT, invoiceType: "UAE" });
+}
+
+// Edit a combined Rent Invoice using the same grid: remove the old voucher
+// (invoice + journal entry + its leases) and re-create it from the edited
+// values, keeping the same document / voucher number. Admin-only; blocked when
+// the invoice has recorded payments.
+async function updateCombinedRentInvoice(
+  invoiceId: string,
+  input: HhLeaseInput,
+  opts: { leaseType: "standard" | "hh"; agentPct: number; invoiceType: "UAE" | "HH" },
+) {
+  const parsed = hhLeaseSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  if (!(await isCurrentUserAdmin())) return { error: "Only administrators can edit invoices." };
+
+  const supabase = await createClient();
+  const { data: inv } = await supabase
+    .schema("rental")
+    .from("uae_rent_invoices")
+    .select("id, lease_id, voucher_no")
+    .eq("id", invoiceId)
+    .maybeSingle();
+  if (!inv) return { error: "Invoice not found." };
+
+  const { count: payCount } = await supabase
+    .schema("rental")
+    .from("uae_rent_payments")
+    .select("id", { count: "exact", head: true })
+    .eq("invoice_id", invoiceId);
+  if ((payCount ?? 0) > 0) {
+    return { error: "This invoice has recorded payments. Remove the payments before editing." };
+  }
+
+  const { data: firstLease } = await supabase
+    .schema("rental")
+    .from("uae_leases")
+    .select("document_no")
+    .eq("id", inv.lease_id)
+    .maybeSingle();
+  const documentNo = (firstLease?.document_no as string | null) ?? undefined;
+  const oldVoucherNo = (inv.voucher_no as string | null) ?? undefined;
+
+  // Remove the old invoice + journal entry (reopens/clears its schedule).
+  const { error: delErr } = await supabase
+    .schema("rental")
+    .rpc("fn_admin_delete_rent_invoice", { p_invoice_id: invoiceId, p_country: "uae" });
+  if (delErr) return { error: delErr.message };
+
+  // Soft-delete the old voucher's property leases so they drop out of the lists
+  // and reports; the re-create below adds fresh ones under the same document no.
+  if (documentNo) {
+    const { data: user } = await supabase.auth.getUser();
+    await supabase
+      .schema("rental")
+      .from("uae_leases")
+      .update({ deleted_at: new Date().toISOString(), deleted_by: user.user!.id })
+      .eq("document_no", documentNo)
+      .is("deleted_at", null);
+  }
+
+  return createCombinedRentInvoice(input, {
+    ...opts,
+    preserveDocumentNo: documentNo,
+    preserveVoucherNo: oldVoucherNo,
+  });
+}
+
+export async function updateHhRentInvoice(invoiceId: string, input: HhLeaseInput) {
+  return updateCombinedRentInvoice(invoiceId, input, {
+    leaseType: "hh",
+    agentPct: HH_AGENT_PCT,
+    invoiceType: "HH",
+  });
+}
+
+export async function updateUaeRentInvoice(invoiceId: string, input: HhLeaseInput) {
+  return updateCombinedRentInvoice(invoiceId, input, {
+    leaseType: "standard",
+    agentPct: UAE_AGENT_PCT,
+    invoiceType: "UAE",
+  });
 }

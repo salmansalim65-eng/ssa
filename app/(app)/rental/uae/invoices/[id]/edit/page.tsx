@@ -9,17 +9,6 @@ import { loadTenantAccounts } from "@/lib/rental/tenant-accounts";
 import { loadRentalExpenseAccounts } from "@/lib/rental/rental-expense-accounts";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 
-function round2(n: number) {
-  return Math.round((Number.isFinite(n) ? n : 0) * 100) / 100;
-}
-
-// Whole calendar months a period spans, inclusive (mirrors the create action).
-function monthsBetween(start: string, end: string) {
-  const s = new Date(`${start}T00:00:00`);
-  const e = new Date(`${end}T00:00:00`);
-  return Math.max(1, (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()) + 1);
-}
-
 export default async function EditRentInvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!(await isCurrentUserAdmin())) redirect(`/rental/uae/invoices/${id}`);
@@ -111,10 +100,8 @@ export default async function EditRentInvoicePage({ params }: { params: Promise<
     rentCycle: (firstLease?.rent_cycle as "monthly" | "yearly") ?? "monthly",
     lines: leaseRows.map((l) => ({
       assetId: l.asset_id as string,
-      // Rebuild the period-total rent the user typed (lease stores the monthly).
-      rentalAmount: round2(
-        Number(l.rental_amount) * monthsBetween(l.lease_start as string, l.lease_end as string),
-      ),
+      // The lease stores the monthly rent, which is exactly what the grid takes.
+      rentalAmount: Number(l.rental_amount),
       leaseStart: l.lease_start as string,
       leaseEnd: l.lease_end as string,
       expenses: expensesByLease.get(l.id as string) ?? [],

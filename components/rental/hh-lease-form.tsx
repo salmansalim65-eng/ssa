@@ -314,7 +314,7 @@ export function HhLeaseForm({
                 <tr className="border-b bg-muted/50 text-left [&_th]:px-2 [&_th]:py-2 [&_th]:font-medium">
                   <th className="w-10">Sno</th>
                   <th className="min-w-[200px]">Asset</th>
-                  <th className="w-32">Rent</th>
+                  <th className="w-32">Rent/Month</th>
                   <th className="w-28">Management</th>
                   <th className="w-40">Lease Start</th>
                   <th className="w-40">Lease End</th>

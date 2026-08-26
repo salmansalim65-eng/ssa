@@ -25,7 +25,6 @@ import {
   LineChartIcon,
   PieChartIcon,
   WalletIcon,
-  KeyRoundIcon,
   ReceiptIcon,
   BadgeDollarSignIcon,
   CalendarRangeIcon,
@@ -73,8 +72,7 @@ export const navSections: NavSection[] = [
       { label: "Tenants", href: "/rental/tenants", icon: UsersIcon },
       { label: "UAE Rent Invoice", href: "/rental/uae/leases", icon: ReceiptIcon },
       { label: "HH Rent Invoice", href: "/rental/uae/hh-lease", icon: ReceiptIcon },
-      { label: "PK Leases", href: "/rental/pk/leases", icon: KeyRoundIcon },
-      { label: "Lease Invoices", href: "/rental/invoices", icon: ReceiptIcon },
+      { label: "PK Rent Invoice", href: "/rental/pk/leases", icon: ReceiptIcon },
     ],
   },
   {

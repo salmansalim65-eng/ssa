@@ -143,7 +143,7 @@ export default async function EditRentInvoicePage({ params }: { params: Promise<
         submitLabel={`Update ${docLabel}`}
         managementPct={isHh ? 0.1 : 0.05}
         initialValues={initialValues}
-        redirectHref="/rental/invoices"
+        redirectHref={isHh ? "/rental/uae/hh-lease" : "/rental/uae/leases"}
       />
     </div>
   );

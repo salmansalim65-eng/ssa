@@ -44,3 +44,15 @@ where ranked.id = l.id
 -- After running this, open each affected invoice and click "Update UAE Rent
 -- Invoice" once. That rebuilds its accounting entry at the correct (single)
 -- amount, so the ledger and reports match the de-duplicated leases.
+
+------------------------------------------------------------------------------
+-- 3) Payment terms on rent invoices (Monthly / Advance)
+------------------------------------------------------------------------------
+-- The ledger always books the whole rent as ONE entry. Payment terms only
+-- change WHEN it falls due in the Rent Balance: 'monthly' spreads it month by
+-- month; 'advance' makes the whole amount due in the starting month (paid up
+-- front). Default 'monthly' keeps every existing invoice unchanged.
+
+alter table rental.uae_rent_invoices
+  add column if not exists payment_terms text not null default 'monthly'
+  check (payment_terms in ('monthly', 'advance'));

@@ -34,6 +34,10 @@ export const hhLeaseSchema = z.object({
   documentDate: z.string().date("Enter a valid date"),
   currencyId: z.string().uuid("Select a currency"),
   rentCycle: z.enum(["monthly", "yearly"], { message: "Select a rent cycle" }),
+  // How the rent falls due (the ledger always books the whole amount as one
+  // entry): "monthly" spreads the due month-by-month; "advance" makes the whole
+  // amount due in the starting month (tenant pays up front).
+  paymentTerms: z.enum(["monthly", "advance"]).default("monthly"),
   lines: z.array(hhLeaseLineSchema).min(1, "Add at least one asset line"),
 });
 

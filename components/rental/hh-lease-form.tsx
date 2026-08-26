@@ -182,6 +182,7 @@ export function HhLeaseForm({
       documentDate: today(),
       currencyId: defaultCurrencyId ?? currencies[0]?.id ?? "",
       rentCycle: "monthly",
+      paymentTerms: "monthly",
       lines: [emptyLine()],
     },
   });
@@ -291,6 +292,27 @@ export function HhLeaseForm({
                   <SelectContent>
                     <SelectItem value="monthly">Monthly</SelectItem>
                     <SelectItem value="yearly">Yearly</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="paymentTerms"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Payment terms</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select terms" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="monthly">Monthly (due each month)</SelectItem>
+                    <SelectItem value="advance">Advance (whole amount up front)</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />

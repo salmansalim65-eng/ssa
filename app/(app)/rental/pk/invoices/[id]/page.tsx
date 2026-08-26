@@ -14,6 +14,7 @@ import { EscToBack } from "@/components/vouchers/esc-to-back";
 import { RecordPkRentPaymentForm } from "@/components/rental/record-pk-rent-payment-form";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { DeletePostedInvoiceButton } from "@/components/rental/delete-posted-invoice-button";
+import { EditPostedInvoiceButton } from "@/components/rental/edit-posted-invoice-button";
 import { VoucherActions } from "@/components/vouchers/voucher-actions";
 import { VoucherDeleteButton } from "@/components/vouchers/voucher-delete-button";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
@@ -141,7 +142,16 @@ export default async function PkRentInvoiceDetailPage({ params }: { params: Prom
               />
             )}
             {isAdmin && status === "posted" && (
-              <DeletePostedInvoiceButton invoiceId={invoice.id} country="pk" />
+              <>
+                <EditPostedInvoiceButton
+                  invoiceId={invoice.id}
+                  country="pk"
+                  amount={invoice.rent_amount}
+                  dueDate={invoice.due_date}
+                  currencyCode={refs.currencies?.code}
+                />
+                <DeletePostedInvoiceButton invoiceId={invoice.id} country="pk" />
+              </>
             )}
           </>
         }

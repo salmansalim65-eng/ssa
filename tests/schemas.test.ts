@@ -52,6 +52,7 @@ describe("uaeLeaseSchema", () => {
     securityDeposit: 10000,
     currencyId: UUID_C,
     voucherDate: "2026-01-01",
+    remarks: "Test lease",
   };
 
   it("accepts a valid lease", () => {
@@ -84,6 +85,7 @@ describe("pkLeaseSchema", () => {
     securityDeposit: 50000,
     currencyId: UUID_C,
     voucherDate: "2026-01-01",
+    remarks: "Test lease",
   };
 
   it("accepts a valid lease", () => {

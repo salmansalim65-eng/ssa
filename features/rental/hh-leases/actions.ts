@@ -376,6 +376,19 @@ async function updateCombinedRentInvoice(
   const documentNo = (firstLease?.document_no as string | null) ?? undefined;
   const oldVoucherNo = (inv.voucher_no as string | null) ?? undefined;
 
+  // Capture the OLD voucher's property leases by id up front, so we can retire
+  // exactly those after the rebuild — matching on ids never misses a row the way
+  // a document-number match can, so no old property lingers to double the reports.
+  const { data: oldLeaseRows } = documentNo
+    ? await supabase
+        .schema("rental")
+        .from("uae_leases")
+        .select("id")
+        .eq("document_no", documentNo)
+        .is("deleted_at", null)
+    : { data: [] };
+  const oldLeaseIds = ((oldLeaseRows as { id: string }[]) ?? []).map((l) => l.id);
+
   // Build the edited voucher FRESH first (its own new document/voucher number).
   // Only if this fully succeeds do we remove the old one — so a failure never
   // deletes the old invoice (no data loss, and the edit page can still show the
@@ -393,13 +406,12 @@ async function updateCombinedRentInvoice(
   if (delErr) return { error: delErr.message };
 
   const { data: user } = await supabase.auth.getUser();
-  if (documentNo) {
+  if (oldLeaseIds.length) {
     await supabase
       .schema("rental")
       .from("uae_leases")
       .update({ deleted_at: new Date().toISOString(), deleted_by: user.user!.id })
-      .eq("document_no", documentNo)
-      .is("deleted_at", null);
+      .in("id", oldLeaseIds);
   }
 
   // Re-stamp the freshly built voucher with the original document / voucher

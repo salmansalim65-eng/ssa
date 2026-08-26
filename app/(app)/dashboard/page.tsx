@@ -151,7 +151,7 @@ export default async function DashboardPage({
     supabase
       .schema("reporting")
       .from("v_rental_income")
-      .select("country, amount, outstanding_balance, net_amount, net_outstanding, due_date, exchange_rate, currency_code")
+      .select("invoice_id, country, amount, outstanding_balance, net_amount, net_outstanding, due_date, exchange_rate, currency_code")
       .eq("company_id", companyId)
       .in("country", ["UAE", "PK"]),
     supabase
@@ -264,20 +264,74 @@ export default async function DashboardPage({
     PK: { billed: 0, outstanding: 0, overdue: 0, due: 0, upcoming: 0 },
   };
   const now = today();
+
+  // A combined UAE voucher is one invoice for a multi-month period with a single
+  // (period-end) due date. Left whole it would sit entirely in "upcoming", so the
+  // card's Due never reflects the current month. Expand each combined invoice into
+  // monthly slices (like the Rent Balance detail) so each month buckets correctly.
+  const round2card = (n: number) => Math.round(n * 100) / 100;
+  const monthFirstsCard = (start: string, end: string) => {
+    const out: string[] = [];
+    let y = Number(start.slice(0, 4));
+    let m = Number(start.slice(5, 7)) - 1;
+    const ey = Number(end.slice(0, 4));
+    const em = Number(end.slice(5, 7)) - 1;
+    while (y < ey || (y === ey && m <= em)) {
+      out.push(`${y}-${String(m + 1).padStart(2, "0")}-01`);
+      m += 1;
+      if (m > 11) { m = 0; y += 1; }
+    }
+    return out.length ? out : [`${start.slice(0, 7)}-01`];
+  };
+  const uaeRentInvoiceIds = [
+    ...new Set(
+      (rentRows ?? [])
+        .filter((r) => r.country === "UAE" && r.invoice_id)
+        .map((r) => r.invoice_id as string),
+    ),
+  ];
+  const { data: cardInvMeta } = uaeRentInvoiceIds.length
+    ? await supabase
+        .schema("rental")
+        .from("uae_rent_invoices")
+        .select("id, period_start, period_end, schedule_id")
+        .in("id", uaeRentInvoiceIds)
+    : { data: [] };
+  const cardMetaById = new Map(
+    ((cardInvMeta as { id: string; period_start: string; period_end: string; schedule_id: string | null }[]) ?? []).map(
+      (m) => [m.id, m],
+    ),
+  );
+
   for (const r of rentRows ?? []) {
     const g = rentByCountry[r.country as string];
     if (!g) continue;
     const netAmount = Number(r.net_amount);
     const netOutstanding = Number(r.net_outstanding);
-    const dueDate = String(r.due_date ?? "").slice(0, 10);
     g.billed += netAmount;
     g.outstanding += netOutstanding;
-    // Bucket by due MONTH (not exact day): overdue once the due month has fully
-    // passed; "Due" during its due month; anything whose due month hasn't started
-    // yet is upcoming (still part of the outstanding balance, but not yet due).
-    if (isRentOverdue(dueDate, now)) g.overdue += netOutstanding;
-    else if (dueDate && dueDate.slice(0, 7) <= now.slice(0, 7)) g.due += netOutstanding;
-    else g.upcoming += netOutstanding;
+
+    // Slices carry the due date the bucketing keys off. A combined voucher gets
+    // one slice per month (amount ÷ months); everything else is a single slice.
+    const meta = r.country === "UAE" && r.invoice_id ? cardMetaById.get(r.invoice_id as string) : null;
+    type Slice = { dueDate: string; out: number };
+    let slices: Slice[];
+    if (meta && !meta.schedule_id) {
+      const months = monthFirstsCard(meta.period_start, meta.period_end);
+      const n = months.length;
+      slices = months.map((mDate) => ({ dueDate: mDate, out: round2card(netOutstanding / n) }));
+    } else {
+      slices = [{ dueDate: String(r.due_date ?? "").slice(0, 10), out: netOutstanding }];
+    }
+
+    // Bucket each slice by due MONTH: overdue once the due month has fully passed;
+    // "Due" during its due month; a due month not yet started is upcoming (still
+    // part of the outstanding balance, but not yet due).
+    for (const s of slices) {
+      if (isRentOverdue(s.dueDate, now)) g.overdue += s.out;
+      else if (s.dueDate && s.dueDate.slice(0, 7) <= now.slice(0, 7)) g.due += s.out;
+      else g.upcoming += s.out;
+    }
   }
   const rentReceipts = (c: string) => rentByCountry[c].billed - rentByCountry[c].outstanding;
 

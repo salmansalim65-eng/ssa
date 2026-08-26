@@ -76,7 +76,7 @@ export function PkLeaseForm({
       leaseEnd: today(),
       monthlyRent: blankAmount,
       officialRent: blankAmount,
-      rentCycle: "monthly",
+      rentCycle: "yearly",
       advanceRent: blankAmount,
       securityDeposit: blankAmount,
       currencyId: defaultCurrencyId ?? currencies[0]?.id ?? "",

@@ -185,7 +185,7 @@ export function HhLeaseForm({
         setFormError(result.error);
         return;
       }
-      toast.success(`HH Lease ${result.documentNo} created (${result.count} lease line(s))`);
+      toast.success(`HH Rent Invoice ${result.documentNo} created (${result.count} propertie(s))`);
       if (result && "invoiceWarning" in result && result.invoiceWarning)
         toast.warning(result.invoiceWarning as string);
       router.push("/rental/uae/hh-lease");
@@ -418,7 +418,7 @@ export function HhLeaseForm({
 
         {formError && <p className="text-sm text-destructive">{formError}</p>}
         <Button type="submit" disabled={isPending} className="sm:w-fit">
-          {isPending ? "Saving…" : "Save HH Lease"}
+          {isPending ? "Saving…" : "Save HH Rent Invoice"}
         </Button>
       </form>
     </Form>

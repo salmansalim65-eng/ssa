@@ -912,7 +912,13 @@ async function loadDetail(
     rows = rawRows.flatMap((r) => {
       const meta = metaById.get(r.invoice_id as string);
       const docNo = meta ? docByFirstLease.get(meta.lease_id) : null;
-      const vLeases = docNo ? leasesByDoc.get(docNo) ?? [] : [];
+      const vLeasesRaw = docNo ? leasesByDoc.get(docNo) ?? [] : [];
+      // Guard the display: if a stray duplicate lease exists for the same
+      // property in a voucher, keep only the most recent so a property never
+      // shows twice here (leases come ordered oldest-first, so the last wins).
+      const byAsset = new Map<string, VLease>();
+      for (const l of vLeasesRaw) if (l.asset_id) byAsset.set(l.asset_id, l);
+      const vLeases = [...byAsset.values()];
       // Not an expandable combined voucher (schedule-based, or leases missing) →
       // keep the invoice's single row as-is.
       if (!meta || meta.schedule_id || vLeases.length === 0) return [{ ...r } as RentRow];

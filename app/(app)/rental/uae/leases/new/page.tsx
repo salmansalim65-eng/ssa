@@ -60,6 +60,7 @@ export default async function NewUaeRentInvoicePage() {
         createAction={createUaeRentInvoice}
         docLabel="UAE Rent Invoice"
         redirectHref="/rental/uae/leases"
+        managementPct={0.05}
       />
     </div>
   );

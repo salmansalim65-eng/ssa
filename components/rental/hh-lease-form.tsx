@@ -145,6 +145,7 @@ export function HhLeaseForm({
   createAction = createHhLease,
   docLabel = "HH Rent Invoice",
   redirectHref = "/rental/uae/hh-lease",
+  managementPct = 0.1,
 }: {
   assets: AssetOption[];
   tenants: TenantOption[];
@@ -161,6 +162,9 @@ export function HhLeaseForm({
   }>;
   docLabel?: string;
   redirectHref?: string;
+  // Management (agent) charge as a fraction of rent — HH 10%, UAE 5%. Shown as a
+  // column and deducted from the grand total.
+  managementPct?: number;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -182,11 +186,16 @@ export function HhLeaseForm({
   // Live column totals for the grid footer. Blank amount fields are "" so
   // `Number(x) || 0` keeps NaN out of the sums.
   const watchedLines = useWatch({ control: form.control, name: "lines" }) ?? [];
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const rowManagement = (rent: unknown) => round2((Number(rent) || 0) * managementPct);
   const totalRent = watchedLines.reduce((sum, l) => sum + (Number(l?.rentalAmount) || 0), 0);
+  const totalManagement = watchedLines.reduce((sum, l) => sum + rowManagement(l?.rentalAmount), 0);
   const totalExpenses = watchedLines.reduce(
     (sum, l) => sum + (l?.expenses ?? []).reduce((es, e) => es + (Number(e?.amount) || 0), 0),
     0,
   );
+  // Owner's net: rent LESS management (agent) charge LESS other expenses.
+  const grandTotal = round2(totalRent - totalManagement - totalExpenses);
   const fmtAmount = (n: number) =>
     n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -301,6 +310,7 @@ export function HhLeaseForm({
                   <th className="w-10">Sno</th>
                   <th className="min-w-[200px]">Asset</th>
                   <th className="w-32">Rent</th>
+                  <th className="w-28">Management</th>
                   <th className="w-40">Lease Start</th>
                   <th className="w-40">Lease End</th>
                   <th className="min-w-[260px]">Expenses</th>
@@ -350,6 +360,9 @@ export function HhLeaseForm({
                           </FormItem>
                         )}
                       />
+                    </td>
+                    <td className="pt-3 text-right font-mono tabular-nums text-muted-foreground">
+                      {fmtAmount(rowManagement(watchedLines[index]?.rentalAmount))}
                     </td>
                     <td>
                       <FormField
@@ -416,11 +429,12 @@ export function HhLeaseForm({
                   <td />
                   <td className="text-right text-muted-foreground">Total</td>
                   <td className="tabular-nums">{fmtAmount(totalRent)}</td>
+                  <td className="text-right tabular-nums">{fmtAmount(totalManagement)}</td>
                   <td />
                   <td />
                   <td className="tabular-nums">{fmtAmount(totalExpenses)}</td>
                   <td className="whitespace-nowrap tabular-nums">
-                    <span className="text-muted-foreground">Grand&nbsp;total:</span> {fmtAmount(totalRent + totalExpenses)}
+                    <span className="text-muted-foreground">Grand&nbsp;total:</span> {fmtAmount(grandTotal)}
                   </td>
                   <td />
                 </tr>

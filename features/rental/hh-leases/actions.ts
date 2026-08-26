@@ -98,7 +98,10 @@ async function createCombinedRentInvoice(
     tenant_id: tenantId,
     lease_start: line.leaseStart,
     lease_end: line.leaseEnd,
-    rental_amount: line.rentalAmount,
+    // The user enters the TOTAL rent for the whole period; store the MONTHLY
+    // figure (total ÷ months) so the month-wise Rent Report spreads it correctly
+    // across the period (e.g. 9000 over Aug–Sep → 4500 each).
+    rental_amount: round2(Number(line.rentalAmount) / monthsBetween(line.leaseStart, line.leaseEnd)),
     rent_cycle: parsed.data.rentCycle,
     security_deposit: 0,
     currency_id: parsed.data.currencyId,
@@ -171,8 +174,9 @@ async function createCombinedRentInvoice(
   for (let i = 0; i < created.length; i++) {
     const line = parsed.data.lines[i];
     if (!line) continue;
-    const months = monthsBetween(line.leaseStart, line.leaseEnd);
-    const lineTotal = round2(Number(line.rentalAmount) * months);
+    // The entered rent IS the total for the whole period — bill it as-is (no
+    // × months); the ledger and invoice show exactly what the tenant owes.
+    const lineTotal = round2(Number(line.rentalAmount));
     if (lineTotal <= 0) continue;
     const costCenterId = line.assetId ? await getAssetCostCenterId(line.assetId) : null;
     const { share, income } = agentRentSplit(lineTotal, opts.agentPct);

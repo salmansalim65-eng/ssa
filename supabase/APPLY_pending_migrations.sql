@@ -54,5 +54,11 @@ where ranked.id = l.id
 -- front). Default 'monthly' keeps every existing invoice unchanged.
 
 alter table rental.uae_rent_invoices
-  add column if not exists payment_terms text not null default 'monthly'
-  check (payment_terms in ('monthly', 'advance'));
+  add column if not exists payment_terms text not null default 'monthly';
+
+alter table rental.uae_rent_invoices
+  drop constraint if exists uae_rent_invoices_payment_terms_check;
+
+alter table rental.uae_rent_invoices
+  add constraint uae_rent_invoices_payment_terms_check
+  check (payment_terms in ('advance', 'monthly', 'quarterly', 'half_yearly', 'yearly'));

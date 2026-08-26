@@ -311,8 +311,11 @@ export function HhLeaseForm({
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="monthly">Monthly (due each month)</SelectItem>
                     <SelectItem value="advance">Advance (whole amount up front)</SelectItem>
+                    <SelectItem value="monthly">Monthly (every month)</SelectItem>
+                    <SelectItem value="quarterly">Quarterly (every 3 months)</SelectItem>
+                    <SelectItem value="half_yearly">Half yearly (every 6 months)</SelectItem>
+                    <SelectItem value="yearly">Yearly (every 12 months)</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />

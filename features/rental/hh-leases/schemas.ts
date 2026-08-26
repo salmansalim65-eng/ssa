@@ -35,9 +35,14 @@ export const hhLeaseSchema = z.object({
   currencyId: z.string().uuid("Select a currency"),
   rentCycle: z.enum(["monthly", "yearly"], { message: "Select a rent cycle" }),
   // How the rent falls due (the ledger always books the whole amount as one
-  // entry): "monthly" spreads the due month-by-month; "advance" makes the whole
-  // amount due in the starting month (tenant pays up front).
-  paymentTerms: z.enum(["monthly", "advance"]).default("monthly"),
+  // entry). The period is split into instalments and each instalment falls due
+  // at the start of its block:
+  //   advance     → the whole amount up front (one instalment)
+  //   monthly     → every month
+  //   quarterly   → every 3 months
+  //   half_yearly → every 6 months
+  //   yearly      → every 12 months
+  paymentTerms: z.enum(["advance", "monthly", "quarterly", "half_yearly", "yearly"]).default("monthly"),
   lines: z.array(hhLeaseLineSchema).min(1, "Add at least one asset line"),
 });
 

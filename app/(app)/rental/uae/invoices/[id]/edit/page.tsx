@@ -29,6 +29,16 @@ export default async function EditRentInvoicePage({ params }: { params: Promise<
   // the simple dialog.
   if (invoice.schedule_id) redirect(`/rental/uae/invoices/${id}`);
 
+  // Payment terms — read on its own and error-tolerant, so the edit page still
+  // works on a database where the column has not been added yet (defaults monthly).
+  const { data: ptRow } = await supabase
+    .schema("rental")
+    .from("uae_rent_invoices")
+    .select("payment_terms")
+    .eq("id", id)
+    .maybeSingle();
+  const paymentTerms = ((ptRow?.payment_terms as string | null) ?? "monthly") as "monthly" | "advance";
+
   const { data: firstLease } = await supabase
     .schema("rental")
     .from("uae_leases")
@@ -104,6 +114,7 @@ export default async function EditRentInvoicePage({ params }: { params: Promise<
     documentDate: invoice.invoice_date as string,
     currencyId: invoice.currency_id as string,
     rentCycle: (firstLease?.rent_cycle as "monthly" | "yearly") ?? "monthly",
+    paymentTerms,
     lines: leaseRows.map((l) => ({
       assetId: l.asset_id as string,
       // The lease stores the monthly rent, which is exactly what the grid takes.

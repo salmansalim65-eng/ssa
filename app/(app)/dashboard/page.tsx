@@ -302,6 +302,15 @@ export default async function DashboardPage({
       (m) => [m.id, m],
     ),
   );
+  // Payment terms per invoice — separate, error-tolerant fetch so a database
+  // without the column just behaves as monthly. "advance" makes the whole amount
+  // due in the starting month.
+  const { data: cardPtRows } = uaeRentInvoiceIds.length
+    ? await supabase.schema("rental").from("uae_rent_invoices").select("id, payment_terms").in("id", uaeRentInvoiceIds)
+    : { data: [] };
+  const cardTermsById = new Map(
+    ((cardPtRows as { id: string; payment_terms: string | null }[]) ?? []).map((m) => [m.id, m.payment_terms]),
+  );
 
   for (const r of rentRows ?? []) {
     const g = rentByCountry[r.country as string];
@@ -318,8 +327,14 @@ export default async function DashboardPage({
     let slices: Slice[];
     if (meta && !meta.schedule_id) {
       const months = monthFirstsCard(meta.period_start, meta.period_end);
-      const n = months.length;
-      slices = months.map((mDate) => ({ dueDate: mDate, out: round2card(netOutstanding / n) }));
+      const isAdvance = (cardTermsById.get(r.invoice_id as string) ?? "monthly") === "advance";
+      if (isAdvance) {
+        // Whole amount due in the starting month (paid up front).
+        slices = [{ dueDate: months[0], out: netOutstanding }];
+      } else {
+        const n = months.length;
+        slices = months.map((mDate) => ({ dueDate: mDate, out: round2card(netOutstanding / n) }));
+      }
     } else {
       slices = [{ dueDate: String(r.due_date ?? "").slice(0, 10), out: netOutstanding }];
     }
@@ -847,6 +862,17 @@ async function loadDetail(
       ((invMeta as { id: string; lease_id: string; schedule_id: string | null }[]) ?? []).map((m) => [m.id, m]),
     );
 
+    // Payment terms per invoice — fetched on its own and error-tolerant, so the
+    // dashboard keeps working on a database where the column is not added yet
+    // (everything then behaves as monthly). "advance" makes the whole amount due
+    // in the starting month instead of spreading it.
+    const { data: ptRows } = ids.length
+      ? await supabase.schema("rental").from("uae_rent_invoices").select("id, payment_terms").in("id", ids)
+      : { data: [] };
+    const termsById = new Map(
+      ((ptRows as { id: string; payment_terms: string | null }[]) ?? []).map((m) => [m.id, m.payment_terms]),
+    );
+
     // A combined voucher holds ONE invoice for MANY properties. Resolve it to
     // the voucher's property leases (shared document number) so the Rent Balance
     // lists every property, month by month — current month due, later months
@@ -929,6 +955,7 @@ async function loadDetail(
       const invOut = Number(r.net_outstanding) || 0;
       const paidRatio = invNet > 0 ? invOut / invNet : 1;
 
+      const isAdvance = (termsById.get(r.invoice_id as string) ?? "monthly") === "advance";
       const out: RentRow[] = [];
       for (const lease of vLeases) {
         const asset = lease.asset_id ? assetById.get(lease.asset_id) : null;
@@ -937,16 +964,39 @@ async function loadDetail(
         const isHh = lease.lease_type === "hh";
         const monthlyRent = Number(lease.rental_amount) || 0;
         const monthlyShare = round2(monthlyRent * (isHh ? 0.1 : 0.05));
-        // Named expenses are a whole-period total; spread across the months.
-        const monthlyExp = round2((expByLease.get(lease.id) ?? 0) / n);
+        const fullExp = expByLease.get(lease.id) ?? 0; // whole-period expense total
+        const common = {
+          asset_code: asset?.asset_code ?? r.asset_code,
+          asset_name: asset?.asset_name ?? r.asset_name,
+        };
+        if (isAdvance) {
+          // Advance: the property's WHOLE amount (monthly × months) is due in its
+          // starting month — the tenant pays up front.
+          const rent = round2(monthlyRent * n);
+          const share = round2(monthlyShare * n);
+          const net = round2(rent - share - fullExp);
+          out.push({
+            ...r,
+            ...common,
+            due_date: months[0],
+            amount: rent,
+            agent_share: share,
+            other_expenses: round2(fullExp),
+            net_amount: net,
+            net_outstanding: round2(net * paidRatio),
+            _rowKey: `${r.invoice_id}-${lease.id}-adv`,
+          } as RentRow);
+          continue;
+        }
+        // Monthly: one row per month; the whole-period expense is spread across.
+        const monthlyExp = round2(fullExp / n);
         const monthlyNet = round2(monthlyRent - monthlyShare - monthlyExp);
         const monthlyOut = round2(monthlyNet * paidRatio);
         months.forEach((mDate, i) => {
           out.push({
             ...r,
+            ...common,
             due_date: mDate,
-            asset_code: asset?.asset_code ?? r.asset_code,
-            asset_name: asset?.asset_name ?? r.asset_name,
             amount: monthlyRent,
             agent_share: monthlyShare,
             other_expenses: monthlyExp,

@@ -1,4 +1,3 @@
-import { Fragment } from "react";
 import Link from "next/link";
 import { KeyRoundIcon, PlusIcon } from "lucide-react";
 
@@ -38,7 +37,7 @@ export default async function HhLeasesPage() {
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
 
-  const [{ data: leases }, canCreate] = await Promise.all([
+  const [{ data: leases }, { data: invoices }, canCreate] = await Promise.all([
     supabase
       .schema("rental")
       .from("uae_leases")
@@ -49,6 +48,14 @@ export default async function HhLeasesPage() {
       .eq("lease_type", "hh")
       .is("deleted_at", null)
       .order("created_at", { ascending: false }),
+    // The combined invoice per HH voucher — one row each — so we can link a
+    // voucher to its invoice and show its posted total.
+    supabase
+      .schema("rental")
+      .from("uae_rent_invoices")
+      .select("id, lease_id, amount")
+      .eq("company_id", companyId)
+      .eq("invoice_type", "HH"),
     hasPermission("uae_rent_invoice", "create"),
   ]);
 
@@ -74,9 +81,7 @@ export default async function HhLeasesPage() {
     rows.map((r) => r.asset_id),
   );
 
-  // Group lease lines by their voucher (document_no) so each voucher renders its
-  // asset lines followed by a subtotal row. First-seen order is kept (rows are
-  // already newest-first); lines with no document number stand on their own.
+  // Group lease lines by their voucher (document_no) — one row per voucher.
   const groups: { docNo: string | null; lines: RawRow[] }[] = [];
   const groupIndex = new Map<string, number>();
   for (const r of rows) {
@@ -88,6 +93,20 @@ export default async function HhLeasesPage() {
     } else {
       groups[gi].lines.push(r);
     }
+  }
+
+  // Map each voucher (document_no) to its combined invoice, via the invoice's
+  // first lease. Clicking a voucher row opens that invoice.
+  const docByLease = new Map(rows.map((r) => [r.id, r.document_no] as const));
+  const invoiceByDoc = new Map<string, string>();
+  for (const inv of (invoices as { id: string; lease_id: string; amount: number }[]) ?? []) {
+    const doc = docByLease.get(inv.lease_id);
+    if (doc) invoiceByDoc.set(doc, inv.id);
+  }
+  const amountByDoc = new Map<string, number>();
+  for (const inv of (invoices as { id: string; lease_id: string; amount: number }[]) ?? []) {
+    const doc = docByLease.get(inv.lease_id);
+    if (doc) amountByDoc.set(doc, Number(inv.amount));
   }
 
   const newButton = canCreate && (
@@ -120,7 +139,7 @@ export default async function HhLeasesPage() {
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead>Doc No</TableHead>
-                <TableHead>Asset</TableHead>
+                <TableHead>Properties</TableHead>
                 <TableHead>Tenant</TableHead>
                 <TableHead>Term</TableHead>
                 <TableHead>Rent Month</TableHead>
@@ -131,43 +150,38 @@ export default async function HhLeasesPage() {
             </TableHeader>
             <TableBody>
               {groups.map((group) => {
-                const total = group.lines.reduce((sum, l) => sum + Number(l.rental_amount || 0), 0);
+                const first = group.lines[0];
+                const total = group.docNo && amountByDoc.has(group.docNo)
+                  ? amountByDoc.get(group.docNo)!
+                  : group.lines.reduce((sum, l) => sum + Number(l.rental_amount || 0), 0);
+                const firstAsset = assetsById.get(first.asset_id) ?? null;
+                const count = group.lines.length;
+                const propLabel = count > 1
+                  ? `${firstAsset?.asset_name ?? "—"} +${count - 1} more`
+                  : firstAsset?.asset_name ?? "—";
+                const start = group.lines.reduce((m, l) => (l.lease_start < m ? l.lease_start : m), first.lease_start);
+                const end = group.lines.reduce((m, l) => (l.lease_end > m ? l.lease_end : m), first.lease_end);
+                const invId = group.docNo ? invoiceByDoc.get(group.docNo) : undefined;
+                const href = invId ? `/rental/uae/invoices/${invId}` : `/rental/uae/leases/${first.id}`;
                 return (
-                  <Fragment key={group.docNo ?? group.lines[0].id}>
-                    {group.lines.map((lease) => {
-                      const asset = assetsById.get(lease.asset_id) ?? null;
-                      return (
-                        <TableRow key={lease.id}>
-                          <TableCell className="font-mono text-xs text-muted-foreground">{lease.document_no ?? "—"}</TableCell>
-                          <TableCell>
-                            <Link href={`/rental/uae/leases/${lease.id}`} className="font-medium text-primary hover:underline">
-                              {asset ? asset.asset_name : "—"}
-                            </Link>
-                          </TableCell>
-                          <TableCell>{lease.tenants?.name ?? "—"}</TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {formatDate(lease.lease_start)} – {formatDate(lease.lease_end)}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">{rentMonthLabel(lease.lease_start)}</TableCell>
-                          <TableCell className="text-right font-mono tabular-nums">{formatMoney(lease.rental_amount)}</TableCell>
-                          <TableCell className="capitalize">{lease.rent_cycle}</TableCell>
-                          <TableCell>
-                            <Badge variant={statusVariant[lease.status]}>{lease.status}</Badge>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                    {group.lines.length > 1 && (
-                      <TableRow className="border-b-2 bg-muted/50 font-semibold hover:bg-muted/50">
-                        <TableCell className="font-mono text-xs text-muted-foreground">{group.docNo ?? "—"}</TableCell>
-                        <TableCell colSpan={4} className="text-right text-muted-foreground">
-                          Voucher total ({group.lines.length} assets)
-                        </TableCell>
-                        <TableCell className="text-right font-mono tabular-nums">{formatMoney(total)}</TableCell>
-                        <TableCell colSpan={2} />
-                      </TableRow>
-                    )}
-                  </Fragment>
+                  <TableRow key={group.docNo ?? first.id}>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{group.docNo ?? "—"}</TableCell>
+                    <TableCell>
+                      <Link href={href} className="font-medium text-primary hover:underline">
+                        {propLabel}
+                      </Link>
+                    </TableCell>
+                    <TableCell>{first.tenants?.name ?? "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {formatDate(start)} – {formatDate(end)}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">{rentMonthLabel(start)}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{formatMoney(total)}</TableCell>
+                    <TableCell className="capitalize">{first.rent_cycle}</TableCell>
+                    <TableCell>
+                      <Badge variant={statusVariant[first.status]}>{first.status}</Badge>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
             </TableBody>

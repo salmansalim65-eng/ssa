@@ -61,6 +61,47 @@ export default async function UaeRentInvoiceDetailPage({ params }: { params: Pro
     isCurrentUserAdmin(),
   ]);
 
+  // For a combined (grid) invoice, load every property of the voucher so the
+  // detail shows the full multi-property breakdown (like the create form).
+  const monthsSpan = (start: string, end: string) => {
+    const s = new Date(`${start}T00:00:00`);
+    const e = new Date(`${end}T00:00:00`);
+    return Math.max(1, (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()) + 1);
+  };
+  let properties: { assetName: string; leaseStart: string; leaseEnd: string; rent: number }[] = [];
+  if (!invoice.schedule_id && invoice.lease_id) {
+    const { data: firstLease } = await supabase
+      .schema("rental")
+      .from("uae_leases")
+      .select("document_no")
+      .eq("id", invoice.lease_id)
+      .maybeSingle();
+    const docNo = firstLease?.document_no as string | null;
+    if (docNo) {
+      const { data: voucherLeases } = await supabase
+        .schema("rental")
+        .from("uae_leases")
+        .select("asset_id, rental_amount, lease_start, lease_end")
+        .eq("company_id", companyId)
+        .eq("document_no", docNo)
+        .is("deleted_at", null)
+        .order("created_at");
+      const vLeases = voucherLeases ?? [];
+      const propAssets = await fetchRefs<{ id: string; asset_name: string }>(
+        supabase, "assets", "assets", "asset_name", vLeases.map((l) => l.asset_id as string),
+      );
+      properties = vLeases.map((l) => {
+        const months = monthsSpan(l.lease_start as string, l.lease_end as string);
+        return {
+          assetName: propAssets.get(l.asset_id as string)?.asset_name ?? "—",
+          leaseStart: l.lease_start as string,
+          leaseEnd: l.lease_end as string,
+          rent: Math.round(Number(l.rental_amount) * months * 100) / 100,
+        };
+      });
+    }
+  }
+
   type Refs = {
     uae_leases: {
       assets: { asset_code: string; asset_name: string } | null;
@@ -201,6 +242,39 @@ export default async function UaeRentInvoiceDetailPage({ params }: { params: Pro
           </p>
         </div>
       </div>
+
+      {/* Property breakdown for a combined (grid) invoice */}
+      {properties.length > 0 && (
+        <div className="space-y-2">
+          <h2 className="text-lg font-medium">Properties</h2>
+          <div className="overflow-hidden rounded-lg border bg-card shadow-xs">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="w-10">Sno</TableHead>
+                  <TableHead>Property</TableHead>
+                  <TableHead>Term</TableHead>
+                  <TableHead className="text-right">Rent</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {properties.map((p, i) => (
+                  <TableRow key={`${p.assetName}-${i}`}>
+                    <TableCell className="text-muted-foreground">{i + 1}</TableCell>
+                    <TableCell className="font-medium">{p.assetName}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {formatDate(p.leaseStart)} – {formatDate(p.leaseEnd)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {formatMoney(p.rent)} {refs.currencies?.code}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
 
       {/* Invoice total */}
       <div className="flex items-center justify-between rounded-xl border-2 border-ledger/40 bg-ledger/10 px-5 py-3">

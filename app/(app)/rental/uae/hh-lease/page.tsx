@@ -162,7 +162,9 @@ export default async function HhLeasesPage() {
                 const start = group.lines.reduce((m, l) => (l.lease_start < m ? l.lease_start : m), first.lease_start);
                 const end = group.lines.reduce((m, l) => (l.lease_end > m ? l.lease_end : m), first.lease_end);
                 const invId = group.docNo ? invoiceByDoc.get(group.docNo) : undefined;
-                const href = invId ? `/rental/uae/invoices/${invId}` : `/rental/uae/leases/${first.id}`;
+                // Open the voucher straight into its multi-property grid (the same
+                // format it was created in), where properties can be changed/added.
+                const href = invId ? `/rental/uae/invoices/${invId}/edit` : `/rental/uae/leases/${first.id}`;
                 return (
                   <TableRow key={group.docNo ?? first.id}>
                     <TableCell className="font-mono text-xs text-muted-foreground">{group.docNo ?? "—"}</TableCell>

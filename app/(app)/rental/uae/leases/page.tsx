@@ -76,11 +76,28 @@ export default async function UaeLeasesPage() {
   );
 
   // Map each voucher (document_no) to its combined invoice so any of its lease
-  // rows opens the same grid it was created in.
-  const docByLease = new Map(rows.map((r) => [r.id, r.document_no] as const));
+  // rows opens the same grid it was created in. Resolve the invoice's lease
+  // through ALL leases (including soft-deleted ones): an invoice's stored
+  // lease_id can point at a lease that was later removed (e.g. a de-duplicated
+  // row), and we still need to reach the voucher's document number so the row
+  // links to the grid rather than the legacy lease detail.
+  const invoiceRows = (invoices as { id: string; lease_id: string }[]) ?? [];
+  const invoiceLeaseIds = [...new Set(invoiceRows.map((i) => i.lease_id).filter(Boolean))];
+  const { data: invLeases } = invoiceLeaseIds.length
+    ? await supabase
+        .schema("rental")
+        .from("uae_leases")
+        .select("id, document_no")
+        .in("id", invoiceLeaseIds)
+    : { data: [] };
+  const docByInvoiceLease = new Map(
+    ((invLeases as { id: string; document_no: string | null }[]) ?? []).map(
+      (l) => [l.id, l.document_no] as const,
+    ),
+  );
   const invoiceByDoc = new Map<string, string>();
-  for (const inv of (invoices as { id: string; lease_id: string }[]) ?? []) {
-    const doc = docByLease.get(inv.lease_id);
+  for (const inv of invoiceRows) {
+    const doc = docByInvoiceLease.get(inv.lease_id);
     if (doc) invoiceByDoc.set(doc, inv.id);
   }
 

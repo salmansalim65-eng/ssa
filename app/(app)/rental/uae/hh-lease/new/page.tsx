@@ -97,8 +97,8 @@ export default async function NewHhLeasePage() {
     <div className="space-y-5">
       <PageHeader
         eyebrow="Rentals"
-        title="New HH Lease"
-        description="Enter one tenant and many asset lines at once. Each line is saved as its own UAE lease under a shared document number."
+        title="New HH Rent Invoice"
+        description="Enter one tenant and many properties at once. It posts as a single rent invoice with one accounting entry for the whole voucher."
         backHref="/rental/uae/hh-lease"
       />
       <HhLeaseForm

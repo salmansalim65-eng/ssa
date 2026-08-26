@@ -93,7 +93,7 @@ export default async function HhLeasesPage() {
   const newButton = canCreate && (
     <Button asChild size="sm">
       <Link href="/rental/uae/hh-lease/new">
-        <PlusIcon /> New HH lease
+        <PlusIcon /> New HH Rent Invoice
       </Link>
     </Button>
   );
@@ -102,7 +102,7 @@ export default async function HhLeasesPage() {
     <div className="space-y-5">
       <PageHeader
         eyebrow="Rentals"
-        title="HH Leases"
+        title="HH Rent Invoices"
         description="Multi-asset UAE (HH) leases — one tenant, many properties under a shared document number."
         actions={newButton}
       />
@@ -111,8 +111,8 @@ export default async function HhLeasesPage() {
         {rows.length === 0 ? (
           <EmptyState
             icon={KeyRoundIcon}
-            title="No HH leases yet"
-            description="Create an HH lease to see it here."
+            title="No HH Rent Invoices yet"
+            description="Create an HH Rent Invoice to see it here."
             action={newButton}
           />
         ) : (

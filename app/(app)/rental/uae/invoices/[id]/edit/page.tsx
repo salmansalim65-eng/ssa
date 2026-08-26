@@ -48,7 +48,12 @@ export default async function EditRentInvoicePage({ params }: { params: Promise<
         .is("deleted_at", null)
         .order("created_at")
     : { data: [] };
-  const leaseRows = leases ?? [];
+  // A voucher bills each property once. If older data accidentally stored the
+  // same asset twice, keep the first so the grid shows one row per property and
+  // re-saving rebuilds the invoice at the correct (single) amount.
+  const leaseRows = (leases ?? []).filter(
+    (l, i, all) => all.findIndex((x) => x.asset_id === l.asset_id) === i,
+  );
 
   // Named expenses per lease.
   const { data: expenseRows } = await supabase

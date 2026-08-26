@@ -85,6 +85,14 @@ async function createCombinedRentInvoice(
   const parsed = hhLeaseSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
 
+  // A voucher can never bill the same property twice, so collapse any duplicate
+  // asset lines to the first occurrence. This guards against a grid that ends up
+  // with a repeated row, which would otherwise create two identical leases and
+  // double the invoice amount.
+  const inputLines = parsed.data.lines.filter(
+    (line, i, all) => all.findIndex((l) => l.assetId === line.assetId) === i,
+  );
+
   await requirePermission("uae_rent_invoice", "create");
   const companyId = await getCurrentCompanyId();
   const supabase = await createClient();
@@ -103,7 +111,7 @@ async function createCombinedRentInvoice(
   }
 
   const tenantId = await resolveTenantId(companyId, parsed.data.tenantId, createdBy);
-  const rows = parsed.data.lines.map((line) => ({
+  const rows = inputLines.map((line) => ({
     company_id: companyId,
     asset_id: line.assetId,
     tenant_id: tenantId,
@@ -138,7 +146,7 @@ async function createCombinedRentInvoice(
   // parsed.data.lines by index. These post Dr account / Cr tenant when the HH
   // invoice is generated.
   const expenseRows = (createdLeases ?? []).flatMap((lease, index) =>
-    (parsed.data.lines[index]?.expenses ?? [])
+    (inputLines[index]?.expenses ?? [])
       .filter((e) => (e.accountId ?? "") !== "" && Number(e.amount) > 0)
       .map((e) => ({
         company_id: companyId,
@@ -182,7 +190,7 @@ async function createCombinedRentInvoice(
   let maxEnd: string | null = null;
 
   for (let i = 0; i < created.length; i++) {
-    const line = parsed.data.lines[i];
+    const line = inputLines[i];
     if (!line) continue;
     // The entered rent is MONTHLY — the invoice bills it for every month of the
     // period (monthly rent × number of months).
@@ -331,12 +339,15 @@ async function updateCombinedRentInvoice(
   // and reports; the re-create below adds fresh ones under the same document no.
   if (documentNo) {
     const { data: user } = await supabase.auth.getUser();
-    await supabase
+    const { error: softDeleteErr } = await supabase
       .schema("rental")
       .from("uae_leases")
       .update({ deleted_at: new Date().toISOString(), deleted_by: user.user!.id })
       .eq("document_no", documentNo)
       .is("deleted_at", null);
+    // If the old leases can't be cleared, stop — recreating now would leave the
+    // old rows behind and double the voucher in the lists and reports.
+    if (softDeleteErr) return { error: softDeleteErr.message };
   }
 
   return createCombinedRentInvoice(input, {

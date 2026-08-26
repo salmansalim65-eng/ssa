@@ -191,16 +191,17 @@ async function createCombinedRentInvoice(
     if (lineTotal <= 0) continue;
     const costCenterId = line.assetId ? await getAssetCostCenterId(line.assetId) : null;
     const { share, income } = agentRentSplit(lineTotal, opts.agentPct);
-    lines.push({ accountId: receivableAccountId, costCenterId, debit: lineTotal, credit: 0, description: "HH rent invoice" });
-    lines.push({ accountId: rentalIncomeId, costCenterId, debit: 0, credit: income, description: "HH rent invoice" });
+    const desc = `${opts.invoiceType} rent invoice`;
+    lines.push({ accountId: receivableAccountId, costCenterId, debit: lineTotal, credit: 0, description: desc });
+    lines.push({ accountId: rentalIncomeId, costCenterId, debit: 0, credit: income, description: desc });
     if (share > 0) {
       lines.push({ accountId: samadRentId, costCenterId, debit: 0, credit: share, description: "Agent share (SAMAD RENT)" });
     }
     for (const e of line.expenses ?? []) {
       const amt = Number(e.amount);
       if (!e.accountId || amt <= 0) continue;
-      lines.push({ accountId: e.accountId as string, costCenterId, debit: amt, credit: 0, description: "HH lease expense" });
-      lines.push({ accountId: receivableAccountId, costCenterId, debit: 0, credit: amt, description: "HH lease expense" });
+      lines.push({ accountId: e.accountId as string, costCenterId, debit: amt, credit: 0, description: `${opts.invoiceType} lease expense` });
+      lines.push({ accountId: receivableAccountId, costCenterId, debit: 0, credit: amt, description: `${opts.invoiceType} lease expense` });
     }
     invoiceTotal = round2(invoiceTotal + lineTotal);
     if (!minStart || line.leaseStart < minStart) minStart = line.leaseStart;

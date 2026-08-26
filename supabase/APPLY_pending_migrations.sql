@@ -62,3 +62,45 @@ alter table rental.uae_rent_invoices
 alter table rental.uae_rent_invoices
   add constraint uae_rent_invoices_payment_terms_check
   check (payment_terms in ('advance', 'monthly', 'quarterly', 'half_yearly', 'yearly'));
+
+------------------------------------------------------------------------------
+-- 4) Admin lease-maintenance helpers (fix "new row violates RLS for uae_leases")
+------------------------------------------------------------------------------
+-- Editing / deleting a combined voucher retires (and, on edit, re-stamps) its
+-- property leases. Doing those as ordinary UPDATEs was rejected by the
+-- uae_leases RLS even for admins. These SECURITY DEFINER helpers run the same
+-- admin check as the delete function and bypass RLS.
+
+create or replace function rental.fn_admin_soft_delete_leases(p_lease_ids uuid[])
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not core.is_admin() then raise exception 'Only administrators can modify leases'; end if;
+  update rental.uae_leases
+  set deleted_at = now(), deleted_by = auth.uid()
+  where id = any(p_lease_ids) and company_id = core.current_company_id() and deleted_at is null;
+end;
+$$;
+
+create or replace function rental.fn_admin_soft_delete_voucher_leases(p_document_no text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not core.is_admin() then raise exception 'Only administrators can modify leases'; end if;
+  update rental.uae_leases
+  set deleted_at = now(), deleted_by = auth.uid()
+  where document_no = p_document_no and company_id = core.current_company_id() and deleted_at is null;
+end;
+$$;
+
+create or replace function rental.fn_admin_restamp_voucher_leases(p_from_doc text, p_to_doc text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not core.is_admin() then raise exception 'Only administrators can modify leases'; end if;
+  update rental.uae_leases
+  set document_no = p_to_doc
+  where document_no = p_from_doc and company_id = core.current_company_id() and deleted_at is null;
+end;
+$$;
+
+grant execute on function rental.fn_admin_soft_delete_leases(uuid[]) to authenticated;
+grant execute on function rental.fn_admin_soft_delete_voucher_leases(text) to authenticated;
+grant execute on function rental.fn_admin_restamp_voucher_leases(text, text) to authenticated;

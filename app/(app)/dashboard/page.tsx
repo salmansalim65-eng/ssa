@@ -28,6 +28,29 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// Split a combined voucher's months into due instalments per payment terms. Each
+// instalment falls due at the FIRST month of its block; `count` is how many
+// months it covers. advance = one block (whole period); monthly = 1-month blocks;
+// quarterly/half_yearly/yearly = 3/6/12-month blocks.
+function rentDueChunks(months: string[], terms: string | null | undefined): { dueMonth: string; count: number }[] {
+  const n = months.length;
+  if (n === 0) return [];
+  const size =
+    terms === "advance"
+      ? n
+      : terms === "quarterly"
+        ? 3
+        : terms === "half_yearly"
+          ? 6
+          : terms === "yearly"
+            ? 12
+            : 1; // monthly (default)
+  const step = Math.max(1, size);
+  const chunks: { dueMonth: string; count: number }[] = [];
+  for (let i = 0; i < n; i += step) chunks.push({ dueMonth: months[i], count: Math.min(step, n - i) });
+  return chunks;
+}
+
 // Rent KPI tile that lists one amount per currency (AED and PKR kept separate),
 // styled like KpiCard (green header over a light body).
 function RentCurrencyCard({
@@ -327,14 +350,13 @@ export default async function DashboardPage({
     let slices: Slice[];
     if (meta && !meta.schedule_id) {
       const months = monthFirstsCard(meta.period_start, meta.period_end);
-      const isAdvance = (cardTermsById.get(r.invoice_id as string) ?? "monthly") === "advance";
-      if (isAdvance) {
-        // Whole amount due in the starting month (paid up front).
-        slices = [{ dueDate: months[0], out: netOutstanding }];
-      } else {
-        const n = months.length;
-        slices = months.map((mDate) => ({ dueDate: mDate, out: round2card(netOutstanding / n) }));
-      }
+      const n = months.length || 1;
+      const terms = cardTermsById.get(r.invoice_id as string) ?? "monthly";
+      // Each instalment gets its share of the outstanding (its months ÷ total).
+      slices = rentDueChunks(months, terms).map((ch) => ({
+        dueDate: ch.dueMonth,
+        out: round2card(netOutstanding * (ch.count / n)),
+      }));
     } else {
       slices = [{ dueDate: String(r.due_date ?? "").slice(0, 10), out: netOutstanding }];
     }
@@ -955,7 +977,7 @@ async function loadDetail(
       const invOut = Number(r.net_outstanding) || 0;
       const paidRatio = invNet > 0 ? invOut / invNet : 1;
 
-      const isAdvance = (termsById.get(r.invoice_id as string) ?? "monthly") === "advance";
+      const terms = termsById.get(r.invoice_id as string) ?? "monthly";
       const out: RentRow[] = [];
       for (const lease of vLeases) {
         const asset = lease.asset_id ? assetById.get(lease.asset_id) : null;
@@ -969,42 +991,24 @@ async function loadDetail(
           asset_code: asset?.asset_code ?? r.asset_code,
           asset_name: asset?.asset_name ?? r.asset_name,
         };
-        if (isAdvance) {
-          // Advance: the property's WHOLE amount (monthly × months) is due in its
-          // starting month — the tenant pays up front.
-          const rent = round2(monthlyRent * n);
-          const share = round2(monthlyShare * n);
-          const net = round2(rent - share - fullExp);
+        // Each instalment covers `count` months and falls due in its first month.
+        for (const ch of rentDueChunks(months, terms)) {
+          const rent = round2(monthlyRent * ch.count);
+          const share = round2(monthlyShare * ch.count);
+          const exp = round2(fullExp * (ch.count / n));
+          const net = round2(rent - share - exp);
           out.push({
             ...r,
             ...common,
-            due_date: months[0],
+            due_date: ch.dueMonth,
             amount: rent,
             agent_share: share,
-            other_expenses: round2(fullExp),
+            other_expenses: exp,
             net_amount: net,
             net_outstanding: round2(net * paidRatio),
-            _rowKey: `${r.invoice_id}-${lease.id}-adv`,
+            _rowKey: `${r.invoice_id}-${lease.id}-${ch.dueMonth}`,
           } as RentRow);
-          continue;
         }
-        // Monthly: one row per month; the whole-period expense is spread across.
-        const monthlyExp = round2(fullExp / n);
-        const monthlyNet = round2(monthlyRent - monthlyShare - monthlyExp);
-        const monthlyOut = round2(monthlyNet * paidRatio);
-        months.forEach((mDate, i) => {
-          out.push({
-            ...r,
-            ...common,
-            due_date: mDate,
-            amount: monthlyRent,
-            agent_share: monthlyShare,
-            other_expenses: monthlyExp,
-            net_amount: monthlyNet,
-            net_outstanding: monthlyOut,
-            _rowKey: `${r.invoice_id}-${lease.id}-${i}`,
-          } as RentRow);
-        });
       }
       return out;
     });

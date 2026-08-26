@@ -62,13 +62,13 @@ export default async function UaeLeasesPage() {
     <div className="space-y-5">
       <PageHeader
         eyebrow="Rentals"
-        title="UAE Leases"
+        title="UAE Rent Invoices"
         description="Monthly or yearly rent cycles for UAE properties."
         actions={
           canCreate && (
             <Button asChild size="sm">
               <Link href="/rental/uae/leases/new">
-                <PlusIcon /> New lease
+                <PlusIcon /> New UAE Rent Invoice
               </Link>
             </Button>
           )
@@ -80,12 +80,12 @@ export default async function UaeLeasesPage() {
           <EmptyState
             icon={KeyRoundIcon}
             title="No leases yet"
-            description="Create a UAE lease to see it here."
+            description="Create a UAE Rent Invoice to see it here."
             action={
               canCreate && (
                 <Button asChild size="sm">
                   <Link href="/rental/uae/leases/new">
-                    <PlusIcon /> New lease
+                    <PlusIcon /> New UAE Rent Invoice
                   </Link>
                 </Button>
               )

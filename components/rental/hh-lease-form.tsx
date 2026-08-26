@@ -142,12 +142,25 @@ export function HhLeaseForm({
   currencies,
   defaultCurrencyId,
   expenseAccounts,
+  createAction = createHhLease,
+  docLabel = "HH Rent Invoice",
+  redirectHref = "/rental/uae/hh-lease",
 }: {
   assets: AssetOption[];
   tenants: TenantOption[];
   currencies: CurrencyOption[];
   defaultCurrencyId?: string;
   expenseAccounts: ExpenseAccountOption[];
+  // The server action that creates the voucher. Defaults to HH; UAE passes its
+  // own so this one grid drives both HH and UAE Rent Invoices.
+  createAction?: (values: HhLeaseInput) => Promise<{
+    error?: string;
+    documentNo?: string;
+    count?: number;
+    invoiceWarning?: string;
+  }>;
+  docLabel?: string;
+  redirectHref?: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -180,15 +193,15 @@ export function HhLeaseForm({
   function onSubmit(values: HhLeaseInput) {
     setFormError(null);
     startTransition(async () => {
-      const result = await createHhLease(values);
+      const result = await createAction(values);
       if (result?.error) {
         setFormError(result.error);
         return;
       }
-      toast.success(`HH Rent Invoice ${result.documentNo} created (${result.count} propertie(s))`);
+      toast.success(`${docLabel} ${result.documentNo} created (${result.count} propertie(s))`);
       if (result && "invoiceWarning" in result && result.invoiceWarning)
         toast.warning(result.invoiceWarning as string);
-      router.push("/rental/uae/hh-lease");
+      router.push(redirectHref);
     });
   }
 
@@ -418,7 +431,7 @@ export function HhLeaseForm({
 
         {formError && <p className="text-sm text-destructive">{formError}</p>}
         <Button type="submit" disabled={isPending} className="sm:w-fit">
-          {isPending ? "Saving…" : "Save HH Rent Invoice"}
+          {isPending ? "Saving…" : `Save ${docLabel}`}
         </Button>
       </form>
     </Form>

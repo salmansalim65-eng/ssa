@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { resolveTenantId } from "@/lib/rental/tenant-accounts";
 import { postUaeRentInvoice } from "@/features/rental/uae-rent-invoices/actions";
 import { createJournalEntry, getAccountIdByName, type EntryLineInput } from "@/lib/vouchers/engine";
-import { agentRentSplit, HH_AGENT_PCT } from "@/lib/rental/lease-accounting";
+import { agentRentSplit, HH_AGENT_PCT, UAE_AGENT_PCT } from "@/lib/rental/lease-accounting";
 import { hhLeaseSchema, type HhLeaseInput } from "./schemas";
 
 function round2(n: number): number {
@@ -68,7 +68,13 @@ async function getCurrentCompanyId() {
  * auto-generated payment schedule), all stamped with the shared document
  * number so the voucher can be recognised later.
  */
-export async function createHhLease(input: HhLeaseInput) {
+// Shared core for the multi-property Rent Invoice grid (HH and UAE). Both post a
+// single combined invoice + one journal entry per voucher; they differ only in
+// lease_type, agent percentage and the invoice_type badge.
+async function createCombinedRentInvoice(
+  input: HhLeaseInput,
+  opts: { leaseType: "standard" | "hh"; agentPct: number; invoiceType: "UAE" | "HH" },
+) {
   const parsed = hhLeaseSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
 
@@ -103,7 +109,7 @@ export async function createHhLease(input: HhLeaseInput) {
     remarks: line.remarks || null,
     document_no: documentNo as string,
     document_date: parsed.data.documentDate,
-    lease_type: "hh",
+    lease_type: opts.leaseType,
     created_by: createdBy,
   }));
 
@@ -169,7 +175,7 @@ export async function createHhLease(input: HhLeaseInput) {
     const lineTotal = round2(Number(line.rentalAmount) * months);
     if (lineTotal <= 0) continue;
     const costCenterId = line.assetId ? await getAssetCostCenterId(line.assetId) : null;
-    const { share, income } = agentRentSplit(lineTotal, HH_AGENT_PCT);
+    const { share, income } = agentRentSplit(lineTotal, opts.agentPct);
     lines.push({ accountId: receivableAccountId, costCenterId, debit: lineTotal, credit: 0, description: "HH rent invoice" });
     lines.push({ accountId: rentalIncomeId, costCenterId, debit: 0, credit: income, description: "HH rent invoice" });
     if (share > 0) {
@@ -194,7 +200,7 @@ export async function createHhLease(input: HhLeaseInput) {
       voucherId: invoiceId,
       entryDate: invoiceDate,
       currencyId: parsed.data.currencyId,
-      narration: "HH rent invoice",
+      narration: `${opts.invoiceType} rent invoice`,
       createdBy,
       lines,
     });
@@ -214,7 +220,7 @@ export async function createHhLease(input: HhLeaseInput) {
       currency_id: parsed.data.currencyId,
       exchange_rate: je.exchangeRate,
       outstanding_balance: invoiceTotal,
-      invoice_type: "HH",
+      invoice_type: opts.invoiceType,
       created_by: createdBy,
     });
     if (invErr) return { error: invErr.message };
@@ -237,4 +243,14 @@ export async function createHhLease(input: HhLeaseInput) {
   revalidatePath("/rental/invoices");
   revalidatePath("/dashboard");
   return { success: true, documentNo: documentNo as string, count: rows.length, invoiceWarning };
+}
+
+// HH Rent Invoice: multi-property, 10% agent share, lease_type 'hh'.
+export async function createHhLease(input: HhLeaseInput) {
+  return createCombinedRentInvoice(input, { leaseType: "hh", agentPct: HH_AGENT_PCT, invoiceType: "HH" });
+}
+
+// UAE Rent Invoice: same multi-property grid, 5% agent share, standard lease.
+export async function createUaeRentInvoice(input: HhLeaseInput) {
+  return createCombinedRentInvoice(input, { leaseType: "standard", agentPct: UAE_AGENT_PCT, invoiceType: "UAE" });
 }

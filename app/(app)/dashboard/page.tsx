@@ -766,19 +766,7 @@ async function loadDetail(
   // monthly rows, so the Rent Balance shows the rent due each month — current
   // month due, later months upcoming — while the ledger keeps a single entry.
   if (cfg.rentCountry === "UAE") {
-    const ids = rawRows.map((r) => r.invoice_id as string).filter(Boolean);
-    const { data: invMeta } = ids.length
-      ? await supabase
-          .schema("rental")
-          .from("uae_rent_invoices")
-          .select("id, period_start, period_end, schedule_id")
-          .in("id", ids)
-      : { data: [] };
-    const metaById = new Map(
-      ((invMeta as { id: string; period_start: string; period_end: string; schedule_id: string | null }[]) ?? []).map(
-        (m) => [m.id, m],
-      ),
-    );
+    const round2 = (n: number) => Math.round(n * 100) / 100;
     const monthFirsts = (start: string, end: string) => {
       const out: string[] = [];
       let y = Number(start.slice(0, 4));
@@ -792,23 +780,123 @@ async function loadDetail(
       }
       return out.length ? out : [`${start.slice(0, 7)}-01`];
     };
+
+    const ids = rawRows.map((r) => r.invoice_id as string).filter(Boolean);
+    const { data: invMeta } = ids.length
+      ? await supabase
+          .schema("rental")
+          .from("uae_rent_invoices")
+          .select("id, lease_id, schedule_id")
+          .in("id", ids)
+      : { data: [] };
+    const metaById = new Map(
+      ((invMeta as { id: string; lease_id: string; schedule_id: string | null }[]) ?? []).map((m) => [m.id, m]),
+    );
+
+    // A combined voucher holds ONE invoice for MANY properties. Resolve it to
+    // the voucher's property leases (shared document number) so the Rent Balance
+    // lists every property, month by month — current month due, later months
+    // upcoming — even though the ledger keeps a single combined entry. The
+    // invoice's own row in v_rental_income only carries the first property, which
+    // is why the others (e.g. SHAMAL) never appeared here before.
+    const firstLeaseIds = [...new Set([...metaById.values()].map((m) => m.lease_id).filter(Boolean))];
+    const { data: firstLeases } = firstLeaseIds.length
+      ? await supabase
+          .schema("rental")
+          .from("uae_leases")
+          .select("id, document_no")
+          .in("id", firstLeaseIds)
+      : { data: [] };
+    const docByFirstLease = new Map(
+      ((firstLeases as { id: string; document_no: string | null }[]) ?? []).map((l) => [l.id, l.document_no]),
+    );
+    const docNos = [...new Set([...docByFirstLease.values()].filter((d): d is string => Boolean(d)))];
+
+    type VLease = {
+      id: string;
+      document_no: string | null;
+      asset_id: string | null;
+      rental_amount: number;
+      lease_start: string;
+      lease_end: string;
+      lease_type: string | null;
+    };
+    const { data: voucherLeases } = docNos.length
+      ? await supabase
+          .schema("rental")
+          .from("uae_leases")
+          .select("id, document_no, asset_id, rental_amount, lease_start, lease_end, lease_type")
+          .in("document_no", docNos)
+          .is("deleted_at", null)
+          .order("created_at")
+      : { data: [] };
+    const leasesByDoc = new Map<string, VLease[]>();
+    for (const l of (voucherLeases as VLease[]) ?? []) {
+      const k = l.document_no as string;
+      const list = leasesByDoc.get(k) ?? [];
+      list.push(l);
+      leasesByDoc.set(k, list);
+    }
+
+    const assetIds = [...new Set(((voucherLeases as VLease[]) ?? []).map((l) => l.asset_id).filter(Boolean))] as string[];
+    const { data: assetRows } = assetIds.length
+      ? await supabase.schema("assets").from("assets").select("id, asset_code, asset_name").in("id", assetIds)
+      : { data: [] };
+    const assetById = new Map(
+      ((assetRows as { id: string; asset_code: string; asset_name: string }[]) ?? []).map((a) => [a.id, a]),
+    );
+
+    const leaseIdsAll = ((voucherLeases as VLease[]) ?? []).map((l) => l.id);
+    const { data: expRows } = leaseIdsAll.length
+      ? await supabase.schema("rental").from("lease_expenses").select("lease_id, amount").in("lease_id", leaseIdsAll)
+      : { data: [] };
+    const expByLease = new Map<string, number>();
+    for (const e of (expRows as { lease_id: string; amount: number }[]) ?? []) {
+      expByLease.set(e.lease_id, (expByLease.get(e.lease_id) ?? 0) + Number(e.amount));
+    }
+
     rows = rawRows.flatMap((r) => {
       const meta = metaById.get(r.invoice_id as string);
-      if (!meta || meta.schedule_id) return [{ ...r } as RentRow];
-      const months = monthFirsts(meta.period_start, meta.period_end);
-      if (months.length <= 1) return [{ ...r } as RentRow];
-      const n = months.length;
-      const per = (v: unknown) => Math.round((Number(v) / n) * 100) / 100;
-      return months.map((mDate, i) => ({
-        ...r,
-        due_date: mDate,
-        amount: per(r.amount),
-        agent_share: per(r.agent_share),
-        other_expenses: per(r.other_expenses),
-        net_amount: per(r.net_amount),
-        net_outstanding: per(r.net_outstanding),
-        _rowKey: `${r.invoice_id}-${i}`,
-      })) as RentRow[];
+      const docNo = meta ? docByFirstLease.get(meta.lease_id) : null;
+      const vLeases = docNo ? leasesByDoc.get(docNo) ?? [] : [];
+      // Not an expandable combined voucher (schedule-based, or leases missing) →
+      // keep the invoice's single row as-is.
+      if (!meta || meta.schedule_id || vLeases.length === 0) return [{ ...r } as RentRow];
+
+      // Preserve the invoice's paid proportion so a part-paid voucher still shows
+      // the right outstanding per property/month.
+      const invNet = Number(r.net_amount) || 0;
+      const invOut = Number(r.net_outstanding) || 0;
+      const paidRatio = invNet > 0 ? invOut / invNet : 1;
+
+      const out: RentRow[] = [];
+      for (const lease of vLeases) {
+        const asset = lease.asset_id ? assetById.get(lease.asset_id) : null;
+        const months = monthFirsts(lease.lease_start, lease.lease_end);
+        const n = months.length;
+        const isHh = lease.lease_type === "hh";
+        const monthlyRent = Number(lease.rental_amount) || 0;
+        const monthlyShare = round2(monthlyRent * (isHh ? 0.1 : 0.05));
+        // Named expenses are a whole-period total; spread across the months.
+        const monthlyExp = round2((expByLease.get(lease.id) ?? 0) / n);
+        const monthlyNet = round2(monthlyRent - monthlyShare - monthlyExp);
+        const monthlyOut = round2(monthlyNet * paidRatio);
+        months.forEach((mDate, i) => {
+          out.push({
+            ...r,
+            due_date: mDate,
+            asset_code: asset?.asset_code ?? r.asset_code,
+            asset_name: asset?.asset_name ?? r.asset_name,
+            amount: monthlyRent,
+            agent_share: monthlyShare,
+            other_expenses: monthlyExp,
+            net_amount: monthlyNet,
+            net_outstanding: monthlyOut,
+            _rowKey: `${r.invoice_id}-${lease.id}-${i}`,
+          } as RentRow);
+        });
+      }
+      return out;
     });
     rows.sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)));
   }

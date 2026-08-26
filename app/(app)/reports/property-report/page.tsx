@@ -17,6 +17,15 @@ function yearOf(date: string | null | undefined): number | null {
   return Number.isFinite(y) && y > 1900 ? y : null;
 }
 
+// Whole calendar months a period spans, inclusive — to spread a period-total
+// expense across the months so it is deducted once, not in full every month.
+function monthsSpan(start: string | null, end: string | null): number {
+  if (!start || !end) return 1;
+  const s = new Date(`${start}T00:00:00`);
+  const e = new Date(`${end}T00:00:00`);
+  return Math.max(1, (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()) + 1);
+}
+
 function monthLabel(date: string | null | undefined): string | null {
   if (!date) return null;
   const d = new Date(`${date}T00:00:00`);
@@ -211,7 +220,11 @@ export default async function PropertyReportPage() {
       l.rent_month as string | null,
       // Agent commission: HH lease 10%, standard UAE lease 5% (see lib/rental/lease-accounting.ts).
       l.lease_type === "hh" ? 0.1 : 0.05,
-      l.lease_type === "hh" ? expenseByLease.get(l.id as string) ?? 0 : 0,
+      // lease_expenses holds the whole-period total; spread per month so it is
+      // deducted once across the lease, not in full every month.
+      l.lease_type === "hh"
+        ? (expenseByLease.get(l.id as string) ?? 0) / monthsSpan(l.lease_start as string | null, l.lease_end as string | null)
+        : 0,
     );
   }
   for (const l of pkLeases ?? []) {

@@ -159,7 +159,7 @@ export function HhLeaseForm({
       tenantId: "",
       documentDate: today(),
       currencyId: defaultCurrencyId ?? currencies[0]?.id ?? "",
-      rentCycle: "yearly",
+      rentCycle: "monthly",
       lines: [emptyLine()],
     },
   });

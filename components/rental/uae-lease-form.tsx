@@ -75,7 +75,7 @@ export function UaeLeaseForm({
       leaseStart: today(),
       leaseEnd: today(),
       rentalAmount: blankAmount,
-      rentCycle: "yearly",
+      rentCycle: "monthly",
       securityDeposit: blankAmount,
       currencyId: defaultCurrencyId ?? currencies[0]?.id ?? "",
       dueDate: "",

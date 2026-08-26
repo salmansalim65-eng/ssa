@@ -228,9 +228,9 @@ async function createCombinedRentInvoice(
       lease_id: created[0].id,
       schedule_id: null,
       invoice_date: invoiceDate,
-      // Due month follows the rent START (the month rent begins), not the period
-      // end — so the Rent Balance card attributes it to the right month.
-      due_date: minStart ?? invoiceDate,
+      // Due at the END of the lease period so the whole combined amount is not
+      // flagged overdue during the lease — it becomes due when the lease ends.
+      due_date: maxEnd ?? invoiceDate,
       period_start: minStart ?? invoiceDate,
       period_end: maxEnd ?? invoiceDate,
       amount: invoiceTotal,

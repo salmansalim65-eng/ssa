@@ -56,7 +56,17 @@ export default async function UaeLeasesPage() {
     tenants: { name: string } | null;
   };
 
-  const rows = (leases as unknown as RawRow[]) ?? [];
+  // One property is billed once per voucher. Collapse any accidental duplicate
+  // (same voucher + same asset) so a single invoice never shows as two rows.
+  const allRows = (leases as unknown as RawRow[]) ?? [];
+  const seen = new Set<string>();
+  const rows = allRows.filter((r) => {
+    if (!r.document_no) return true;
+    const key = `${r.document_no}|${r.asset_id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
   const assetsById = await fetchRefs<{ id: string; asset_code: string; asset_name: string }>(
     supabase,
     "assets",

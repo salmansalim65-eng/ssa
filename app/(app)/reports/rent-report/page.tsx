@@ -20,6 +20,16 @@ const COUNTRY: Record<string, { label: string; code: string }> = {
   SA: { label: "Saudi Arabia", code: "SAR" },
 };
 
+// Whole calendar months a lease period spans, inclusive. Used to spread a
+// period-total expense across the months so it is deducted once, not per month.
+function leaseMonthCount(start: string | null, end: string | null): number {
+  if (!start || !end) return 1;
+  const s = new Date(`${start}T00:00:00`);
+  const e = new Date(`${end}T00:00:00`);
+  const n = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()) + 1;
+  return Math.max(1, n);
+}
+
 interface CcRow {
   id: string;
   code: string;
@@ -136,7 +146,10 @@ export default async function RentReportPage({
     // Net rent = rent − management (agent share: HH 10% / UAE 5%) − HH expenses.
     const isHh = l.lease_type === "hh";
     const management = gross * (isHh ? HH_AGENT_PCT : UAE_AGENT_PCT);
-    const expenses = isHh ? expenseByLease.get(l.id as string) ?? 0 : 0;
+    // lease_expenses stores the whole-period total; spread it per month so it is
+    // deducted once across the lease, not in full every month.
+    const months = leaseMonthCount(l.lease_start as string | null, l.lease_end as string | null);
+    const expenses = isHh ? (expenseByLease.get(l.id as string) ?? 0) / months : 0;
     const net = Math.max(0, gross - management - expenses);
     addLease(l.asset_id as string, {
       monthly: net,

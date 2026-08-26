@@ -419,23 +419,35 @@ async function updateCombinedRentInvoice(
 
   const { data: user } = await supabase.auth.getUser();
   if (oldLeaseIds.length) {
-    await supabase
+    // Retire the old leases through the admin helper (SECURITY DEFINER) so the
+    // uae_leases RLS can't silently reject the update and leave duplicates.
+    const { error: sdErr } = await supabase
       .schema("rental")
-      .from("uae_leases")
-      .update({ deleted_at: new Date().toISOString(), deleted_by: user.user!.id })
-      .in("id", oldLeaseIds);
+      .rpc("fn_admin_soft_delete_leases", { p_lease_ids: oldLeaseIds });
+    if (sdErr) {
+      await supabase
+        .schema("rental")
+        .from("uae_leases")
+        .update({ deleted_at: new Date().toISOString(), deleted_by: user.user!.id })
+        .in("id", oldLeaseIds);
+    }
   }
 
   // Re-stamp the freshly built voucher with the original document / voucher
   // number so, to the user, it stays the same document. The old number is now
   // free (the old invoice was just deleted above).
   if (documentNo && recreated.documentNo && recreated.documentNo !== documentNo) {
-    await supabase
+    const { error: rsErr } = await supabase
       .schema("rental")
-      .from("uae_leases")
-      .update({ document_no: documentNo })
-      .eq("document_no", recreated.documentNo)
-      .is("deleted_at", null);
+      .rpc("fn_admin_restamp_voucher_leases", { p_from_doc: recreated.documentNo, p_to_doc: documentNo });
+    if (rsErr) {
+      await supabase
+        .schema("rental")
+        .from("uae_leases")
+        .update({ document_no: documentNo })
+        .eq("document_no", recreated.documentNo)
+        .is("deleted_at", null);
+    }
   }
   if (oldVoucherNo) {
     await supabase

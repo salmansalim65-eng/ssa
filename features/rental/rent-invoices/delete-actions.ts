@@ -48,14 +48,22 @@ export async function deletePostedRentInvoice(invoiceId: string, country: "uae" 
   if (error) return { error: error.message };
 
   if (voucherDocNo) {
-    const { data: user } = await supabase.auth.getUser();
-    const { error: leaseErr } = await supabase
+    // Retire the voucher's leases through the admin helper (SECURITY DEFINER),
+    // which bypasses the uae_leases RLS that otherwise rejects the update even
+    // for admins. Fall back to a direct update on databases where the helper
+    // isn't added yet.
+    const { error: rpcErr } = await supabase
       .schema("rental")
-      .from("uae_leases")
-      .update({ deleted_at: new Date().toISOString(), deleted_by: user.user!.id })
-      .eq("document_no", voucherDocNo)
-      .is("deleted_at", null);
-    if (leaseErr) return { error: leaseErr.message };
+      .rpc("fn_admin_soft_delete_voucher_leases", { p_document_no: voucherDocNo });
+    if (rpcErr) {
+      const { data: user } = await supabase.auth.getUser();
+      await supabase
+        .schema("rental")
+        .from("uae_leases")
+        .update({ deleted_at: new Date().toISOString(), deleted_by: user.user!.id })
+        .eq("document_no", voucherDocNo)
+        .is("deleted_at", null);
+    }
   }
 
   revalidatePath(`/rental/${country}/invoices`);

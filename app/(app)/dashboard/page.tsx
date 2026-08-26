@@ -24,6 +24,11 @@ import { formatAccountCode, formatDate, formatMoney, formatVoucherNo } from "@/l
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { isRentOverdue } from "@/lib/rental/overdue";
 
+// Always render fresh — the dashboard reflects live invoices, rent balances and
+// ledger figures, so it must never be served from the route cache (otherwise a
+// newly added or deleted invoice only shows after a manual refresh).
+export const dynamic = "force-dynamic";
+
 function today() {
   return new Date().toISOString().slice(0, 10);
 }

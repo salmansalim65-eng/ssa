@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { PageHeader } from "@/components/ui/page-header";
 import { HhLeaseForm } from "@/components/rental/hh-lease-form";
+import { DeletePostedInvoiceButton } from "@/components/rental/delete-posted-invoice-button";
 import { updateHhRentInvoice, updateUaeRentInvoice } from "@/features/rental/hh-leases/actions";
 import { isCurrentUserAdmin } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
@@ -118,7 +119,14 @@ export default async function EditRentInvoicePage({ params }: { params: Promise<
         eyebrow="Rentals"
         title={`Edit ${docLabel}`}
         description="Change amounts, dates or properties, or add more. Saving rebuilds the invoice and its accounting entry, keeping the same document number."
-        backHref={`/rental/uae/invoices/${id}`}
+        backHref={isHh ? "/rental/uae/hh-lease" : "/rental/uae/leases"}
+        actions={
+          <DeletePostedInvoiceButton
+            invoiceId={id}
+            country="uae"
+            redirectHref={isHh ? "/rental/uae/hh-lease" : "/rental/uae/leases"}
+          />
+        }
       />
       <HhLeaseForm
         assets={assets ?? []}

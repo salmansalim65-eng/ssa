@@ -24,9 +24,11 @@ import { deletePostedRentInvoice } from "@/features/rental/rent-invoices/delete-
 export function DeletePostedInvoiceButton({
   invoiceId,
   country,
+  redirectHref,
 }: {
   invoiceId: string;
   country: "uae" | "pk";
+  redirectHref?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -41,7 +43,7 @@ export function DeletePostedInvoiceButton({
       }
       toast.success("Invoice deleted");
       setOpen(false);
-      router.push(`/rental/${country}/invoices`);
+      router.push(redirectHref ?? `/rental/${country}/invoices`);
     });
   }
 

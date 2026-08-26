@@ -253,6 +253,7 @@ async function createCombinedRentInvoice(
   }
 
   let invoiceWarning: string | undefined;
+  let createdInvoiceId: string | null = null;
   if (lines.length > 0 && invoiceTotal > 0 && created[0]) {
     const je = await createJournalEntry({
       companyId,
@@ -294,6 +295,7 @@ async function createCombinedRentInvoice(
       await rollbackLeases();
       return { error: invErr.message };
     }
+    createdInvoiceId = invoiceId;
 
     await supabase
       .schema("rental")
@@ -321,7 +323,7 @@ async function createCombinedRentInvoice(
   revalidatePath("/rental/uae/leases");
   revalidatePath("/rental/invoices");
   revalidatePath("/dashboard");
-  return { success: true, documentNo: documentNo as string, count: rows.length, invoiceWarning };
+  return { success: true, documentNo: documentNo as string, count: rows.length, invoiceWarning, invoiceId: createdInvoiceId };
 }
 
 // HH Rent Invoice: multi-property, 10% agent share, lease_type 'hh'.
@@ -374,32 +376,55 @@ async function updateCombinedRentInvoice(
   const documentNo = (firstLease?.document_no as string | null) ?? undefined;
   const oldVoucherNo = (inv.voucher_no as string | null) ?? undefined;
 
-  // Remove the old invoice + journal entry (reopens/clears its schedule).
+  // Build the edited voucher FRESH first (its own new document/voucher number).
+  // Only if this fully succeeds do we remove the old one — so a failure never
+  // deletes the old invoice (no data loss, and the edit page can still show the
+  // error instead of 404ing on a now-missing invoice).
+  const recreated = await createCombinedRentInvoice(input, opts);
+  if ("error" in recreated) return recreated;
+  if (!recreated.success || !recreated.invoiceId) {
+    return { error: "Could not rebuild the invoice; the original was left unchanged." };
+  }
+
+  // The rebuild worked — now retire the OLD invoice + entry and its leases.
   const { error: delErr } = await supabase
     .schema("rental")
     .rpc("fn_admin_delete_rent_invoice", { p_invoice_id: invoiceId, p_country: "uae" });
   if (delErr) return { error: delErr.message };
 
-  // Soft-delete the old voucher's property leases so they drop out of the lists
-  // and reports; the re-create below adds fresh ones under the same document no.
+  const { data: user } = await supabase.auth.getUser();
   if (documentNo) {
-    const { data: user } = await supabase.auth.getUser();
-    const { error: softDeleteErr } = await supabase
+    await supabase
       .schema("rental")
       .from("uae_leases")
       .update({ deleted_at: new Date().toISOString(), deleted_by: user.user!.id })
       .eq("document_no", documentNo)
       .is("deleted_at", null);
-    // If the old leases can't be cleared, stop — recreating now would leave the
-    // old rows behind and double the voucher in the lists and reports.
-    if (softDeleteErr) return { error: softDeleteErr.message };
   }
 
-  return createCombinedRentInvoice(input, {
-    ...opts,
-    preserveDocumentNo: documentNo,
-    preserveVoucherNo: oldVoucherNo,
-  });
+  // Re-stamp the freshly built voucher with the original document / voucher
+  // number so, to the user, it stays the same document. The old number is now
+  // free (the old invoice was just deleted above).
+  if (documentNo && recreated.documentNo && recreated.documentNo !== documentNo) {
+    await supabase
+      .schema("rental")
+      .from("uae_leases")
+      .update({ document_no: documentNo })
+      .eq("document_no", recreated.documentNo)
+      .is("deleted_at", null);
+  }
+  if (oldVoucherNo) {
+    await supabase
+      .schema("rental")
+      .from("uae_rent_invoices")
+      .update({ voucher_no: oldVoucherNo })
+      .eq("id", recreated.invoiceId);
+  }
+
+  revalidatePath("/rental/uae/leases");
+  revalidatePath("/rental/uae/hh-lease");
+  revalidatePath("/dashboard");
+  return { success: true, documentNo: documentNo ?? recreated.documentNo, count: recreated.count };
 }
 
 export async function updateHhRentInvoice(invoiceId: string, input: HhLeaseInput) {

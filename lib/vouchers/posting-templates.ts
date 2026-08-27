@@ -21,6 +21,7 @@ export const POSTING_TEMPLATE_ROLES: Partial<Record<VoucherType, PostingTemplate
   uae_rent_invoice: [
     { role: "tenant_receivable", label: "Tenant Receivable", side: "debit" },
     { role: "uae_rental_income", label: "UAE Rental Income", side: "credit" },
+    { role: "agent_share", label: "Agent Share (Commission)", side: "credit" },
   ],
   pk_rent_invoice: [
     { role: "tenant_receivable", label: "Tenant Receivable", side: "debit" },

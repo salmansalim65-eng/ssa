@@ -21,6 +21,15 @@ const COUNTRY: Record<string, { label: string; code: string }> = {
   SA: { label: "Saudi Arabia", code: "SAR" },
 };
 
+// The report is grouped by "segment" so HH and UAE invoices show under separate
+// headings (both are AED). Every other country is its own segment.
+const SEGMENT: Record<string, { label: string; code: string }> = {
+  HH: { label: "HH Invoice", code: "AED" },
+  UAE: { label: "UAE Invoice", code: "AED" },
+  PK: { label: "Pakistan", code: "PKR" },
+  SA: { label: "Saudi Arabia", code: "SAR" },
+};
+
 // Whole RENTAL months a lease period spans (3 Aug → 2 Sep = 1). Used to spread a
 // period-total expense across the months so it is deducted once, not per month.
 function leaseMonthCount(start: string | null, end: string | null): number {
@@ -33,6 +42,7 @@ interface CcRow {
   code: string;
   name: string;
   country: string;
+  segment: string; // "HH" | "UAE" | "PK" | country code — the grouping heading
   est: number;
   months: number[]; // 12 entries — rent billed per calendar month
   total: number;
@@ -119,6 +129,7 @@ export default async function RentReportPage({
     renew: string | null; // rent_month label, else derived from lease end
     tenantId: string | null;
     billingKeys: Set<string>; // "YYYY-MM" of each rental month the lease bills
+    leaseType: string | null; // "hh" for HH leases, else standard/PK
   }
   // A property can carry more than one active lease (e.g. an HH lease and a
   // plain UAE lease on the same unit), so collect ALL of them per asset and sum
@@ -141,6 +152,7 @@ export default async function RentReportPage({
       renew: (l.rent_month as string) || monthLabel(l.lease_end as string),
       tenantId: (l.tenant_id as string) ?? null,
       billingKeys: billingKeysOf((l.lease_start as string) ?? null, (l.lease_end as string) ?? null),
+      leaseType: null,
     });
   }
   // Drop any stray duplicate lease for the same property within one voucher
@@ -174,6 +186,7 @@ export default async function RentReportPage({
       renew: (l.rent_month as string) || monthLabel(l.lease_end as string),
       tenantId: (l.tenant_id as string) ?? null,
       billingKeys: billingKeysOf((l.lease_start as string) ?? null, (l.lease_end as string) ?? null),
+      leaseType: (l.lease_type as string | null) ?? null,
     });
   }
 
@@ -216,29 +229,35 @@ export default async function RentReportPage({
     }
     // "Net Rent" column = combined monthly net rent across the property's leases.
     const est = leases.reduce((s, l) => s + (l.monthly > 0 ? l.monthly : 0), 0);
+    const ccCountry = (cc.country as string) ?? "";
+    // UAE properties split into HH vs UAE by their lease type; other countries
+    // are their own segment. A vacant UAE property lists under UAE.
+    const segment =
+      ccCountry === "AE" ? (leases.some((l) => l.leaseType === "hh") ? "HH" : "UAE") : ccCountry;
     rows.set(cc.id as string, {
       id: cc.id as string,
       code: cc.code as string,
       name: cc.name as string,
-      country: (cc.country as string) ?? "",
+      country: ccCountry,
+      segment,
       est,
       months,
       total,
     });
   }
 
-  // Group rental properties by country — vacant ones included.
+  // Group rental properties by segment — vacant ones included.
   const byCountry = new Map<string, CcRow[]>();
   for (const row of rows.values()) {
-    const list = byCountry.get(row.country) ?? [];
+    const list = byCountry.get(row.segment) ?? [];
     list.push(row);
-    byCountry.set(row.country, list);
+    byCountry.set(row.segment, list);
   }
-  // Sections: UAE and PK first (as requested), then any other country present.
-  const order = ["AE", "PK", ...[...byCountry.keys()].filter((c) => c !== "AE" && c !== "PK")];
+  // Sections: HH, UAE, PK first (as requested), then any other segment present.
+  const order = ["HH", "UAE", "PK", ...[...byCountry.keys()].filter((c) => !["HH", "UAE", "PK"].includes(c))];
   const countryOptions = order
     .filter((c) => byCountry.has(c))
-    .map((c) => ({ value: c, label: COUNTRY[c]?.label ?? c }));
+    .map((c) => ({ value: c, label: SEGMENT[c]?.label ?? c }));
   const sections = order
     .filter((c) => byCountry.has(c) && (!countryParam || c === countryParam))
     .map((c) => ({ country: c, rows: byCountry.get(c)! }));
@@ -247,7 +266,7 @@ export default async function RentReportPage({
 
   // Property selector + selected property's lease term (start / end / renew).
   const assetOptions = [...rows.values()]
-    .filter((r) => !countryParam || r.country === countryParam)
+    .filter((r) => !countryParam || r.segment === countryParam)
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((r) => ({ value: r.id, label: r.name }));
   let selectedDetail:
@@ -294,7 +313,7 @@ export default async function RentReportPage({
   const exportRows = sections.flatMap((s) =>
     s.rows.map((r, i) => [
       i + 1,
-      COUNTRY[s.country]?.label ?? s.country,
+      SEGMENT[s.country]?.label ?? s.country,
       formatAccountCode(r.code),
       r.name,
       r.est,
@@ -391,13 +410,13 @@ export default async function RentReportPage({
         {sections.length > 0 && (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {sections.map((s) => {
-              const cur = COUNTRY[s.country]?.code ?? "";
+              const cur = SEGMENT[s.country]?.code ?? "";
               const symbol = symbolByCode.get(cur) ?? cur;
               const total = s.rows.reduce((a, r) => a + r.total, 0);
               return (
                 <Kpi
                   key={s.country}
-                  label={`${COUNTRY[s.country]?.label ?? s.country} — Annual Net Rent`}
+                  label={`${SEGMENT[s.country]?.label ?? s.country} — Annual Net Rent`}
                   value={`${symbol ? symbol + " " : ""}${formatMoney(total)}`}
                   sub={`${s.rows.length} propert${s.rows.length === 1 ? "y" : "ies"} · ${cur}`}
                 />
@@ -432,9 +451,9 @@ export default async function RentReportPage({
               </tr>
             )}
             {sections.map((section) => {
-              const cur = COUNTRY[section.country]?.code ?? "";
+              const cur = SEGMENT[section.country]?.code ?? "";
               const symbol = symbolByCode.get(cur) ?? cur;
-              const label = COUNTRY[section.country]?.label ?? section.country;
+              const label = SEGMENT[section.country]?.label ?? section.country;
               const money = (n: number) => (n ? `${symbol ? symbol + " " : ""}${formatMoney(n)}` : "");
               const secEst = section.rows.reduce((s, r) => s + r.est, 0);
               const secMonths = MONTHS.map((_, i) => section.rows.reduce((s, r) => s + r.months[i], 0));

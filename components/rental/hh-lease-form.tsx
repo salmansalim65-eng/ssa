@@ -51,8 +51,24 @@ function today() {
 }
 
 function emptyLine() {
-  return { assetId: "", rentalAmount: blankAmount, leaseStart: today(), leaseEnd: today(), expenses: [], remarks: "" };
+  return {
+    assetId: "",
+    rentalAmount: blankAmount,
+    leaseStart: today(),
+    leaseEnd: today(),
+    expenses: [],
+    remarks: "",
+    paymentTerms: "monthly" as const,
+  };
 }
+
+const PAYMENT_TERMS_OPTIONS = [
+  { value: "advance", label: "Advance" },
+  { value: "monthly", label: "Monthly" },
+  { value: "quarterly", label: "Quarterly" },
+  { value: "half_yearly", label: "Half yearly" },
+  { value: "yearly", label: "Yearly" },
+] as const;
 
 // Per-property monthly expenses: an expense account (from the "Rental Expenses"
 // CoA group) + amount. Each posts Dr <account> / Cr <tenant> when the HH invoice
@@ -182,7 +198,6 @@ export function HhLeaseForm({
       documentDate: today(),
       currencyId: defaultCurrencyId ?? currencies[0]?.id ?? "",
       rentCycle: "monthly",
-      paymentTerms: "monthly",
       lines: [emptyLine()],
     },
   });
@@ -298,30 +313,6 @@ export function HhLeaseForm({
               </FormItem>
             )}
           />
-          <FormField
-            control={form.control}
-            name="paymentTerms"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Payment terms</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select terms" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="advance">Advance (whole amount up front)</SelectItem>
-                    <SelectItem value="monthly">Monthly (every month)</SelectItem>
-                    <SelectItem value="quarterly">Quarterly (every 3 months)</SelectItem>
-                    <SelectItem value="half_yearly">Half yearly (every 6 months)</SelectItem>
-                    <SelectItem value="yearly">Yearly (every 12 months)</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
         </div>
 
         {/* Asset lines grid */}
@@ -343,6 +334,7 @@ export function HhLeaseForm({
                   <th className="w-28">Management</th>
                   <th className="w-40">Lease Start</th>
                   <th className="w-40">Lease End</th>
+                  <th className="w-36">Payment Terms</th>
                   <th className="min-w-[260px]">Expenses</th>
                   <th className="min-w-[160px]">Remarks</th>
                   <th className="w-10" />
@@ -423,6 +415,31 @@ export function HhLeaseForm({
                       />
                     </td>
                     <td>
+                      <FormField
+                        control={form.control}
+                        name={`lines.${index}.paymentTerms`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <Select onValueChange={field.onChange} value={(field.value as string) ?? "monthly"}>
+                              <FormControl>
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="Terms" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {PAYMENT_TERMS_OPTIONS.map((o) => (
+                                  <SelectItem key={o.value} value={o.value}>
+                                    {o.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </td>
+                    <td>
                       <LineExpenses control={form.control} index={index} expenseAccounts={expenseAccounts} />
                     </td>
                     <td>
@@ -460,6 +477,7 @@ export function HhLeaseForm({
                   <td className="text-right text-muted-foreground">Total</td>
                   <td className="tabular-nums">{fmtAmount(totalRent)}</td>
                   <td className="text-right tabular-nums">{fmtAmount(totalManagement)}</td>
+                  <td />
                   <td />
                   <td />
                   <td className="tabular-nums">{fmtAmount(totalExpenses)}</td>

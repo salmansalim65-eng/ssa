@@ -322,7 +322,6 @@ export default async function DashboardPage({
   // card's Due never reflects the current month. Expand each combined invoice into
   // monthly slices (like the Rent Balance detail) so each month buckets correctly.
   const round2card = (n: number) => Math.round(n * 100) / 100;
-  const monthFirstsCard = billingMonthStarts;
   const uaeRentInvoiceIds = [
     ...new Set(
       (rentRows ?? [])
@@ -334,23 +333,64 @@ export default async function DashboardPage({
     ? await supabase
         .schema("rental")
         .from("uae_rent_invoices")
-        .select("id, period_start, period_end, schedule_id")
+        .select("id, lease_id, schedule_id")
         .in("id", uaeRentInvoiceIds)
     : { data: [] };
-  const cardMetaById = new Map(
-    ((cardInvMeta as { id: string; period_start: string; period_end: string; schedule_id: string | null }[]) ?? []).map(
-      (m) => [m.id, m],
-    ),
-  );
-  // Payment terms per invoice — separate, error-tolerant fetch so a database
-  // without the column just behaves as monthly. "advance" makes the whole amount
-  // due in the starting month.
-  const { data: cardPtRows } = uaeRentInvoiceIds.length
-    ? await supabase.schema("rental").from("uae_rent_invoices").select("id, payment_terms").in("id", uaeRentInvoiceIds)
+  type CardMeta = { id: string; lease_id: string; schedule_id: string | null };
+  const cardMetaById = new Map(((cardInvMeta as CardMeta[]) ?? []).map((m) => [m.id, m]));
+
+  // Resolve each combined invoice to its voucher's properties (leases), with each
+  // property's own rent, period, type and payment terms — so the card buckets
+  // every property's due by ITS terms (one voucher can mix Advance and Monthly).
+  const cardFirstLeaseIds = [...new Set(((cardInvMeta as CardMeta[]) ?? []).map((m) => m.lease_id).filter(Boolean))];
+  const { data: cardFirstLeases } = cardFirstLeaseIds.length
+    ? await supabase.schema("rental").from("uae_leases").select("id, document_no").in("id", cardFirstLeaseIds)
     : { data: [] };
-  const cardTermsById = new Map(
-    ((cardPtRows as { id: string; payment_terms: string | null }[]) ?? []).map((m) => [m.id, m.payment_terms]),
+  const cardDocByFirstLease = new Map(
+    ((cardFirstLeases as { id: string; document_no: string | null }[]) ?? []).map((l) => [l.id, l.document_no]),
   );
+  const cardDocNos = [...new Set([...cardDocByFirstLease.values()].filter((d): d is string => Boolean(d)))];
+  type CardLease = {
+    id: string;
+    document_no: string | null;
+    asset_id: string | null;
+    rental_amount: number;
+    lease_start: string;
+    lease_end: string;
+    lease_type: string | null;
+  };
+  const { data: cardVoucherLeases } = cardDocNos.length
+    ? await supabase
+        .schema("rental")
+        .from("uae_leases")
+        .select("id, document_no, asset_id, rental_amount, lease_start, lease_end, lease_type")
+        .in("document_no", cardDocNos)
+        .is("deleted_at", null)
+        .order("created_at")
+    : { data: [] };
+  // Keep one lease per property per voucher (newest) so a stray duplicate never
+  // double-counts.
+  const cardLeasesByDoc = new Map<string, Map<string, CardLease>>();
+  for (const l of (cardVoucherLeases as CardLease[]) ?? []) {
+    const doc = l.document_no as string;
+    const byAsset = cardLeasesByDoc.get(doc) ?? new Map<string, CardLease>();
+    if (l.asset_id) byAsset.set(l.asset_id, l);
+    cardLeasesByDoc.set(doc, byAsset);
+  }
+  const cardLeaseIds = ((cardVoucherLeases as CardLease[]) ?? []).map((l) => l.id);
+  const { data: cardTermRows } = cardLeaseIds.length
+    ? await supabase.schema("rental").from("uae_leases").select("id, payment_terms").in("id", cardLeaseIds)
+    : { data: [] };
+  const cardTermsByLease = new Map(
+    ((cardTermRows as { id: string; payment_terms: string | null }[]) ?? []).map((t) => [t.id, t.payment_terms]),
+  );
+  const { data: cardExpRows } = cardLeaseIds.length
+    ? await supabase.schema("rental").from("lease_expenses").select("lease_id, amount").in("lease_id", cardLeaseIds)
+    : { data: [] };
+  const cardExpByLease = new Map<string, number>();
+  for (const e of (cardExpRows as { lease_id: string; amount: number }[]) ?? []) {
+    cardExpByLease.set(e.lease_id, (cardExpByLease.get(e.lease_id) ?? 0) + Number(e.amount));
+  }
 
   for (const r of rentRows ?? []) {
     const g = rentByCountry[r.country as string];
@@ -360,21 +400,34 @@ export default async function DashboardPage({
     g.billed += netAmount;
     g.outstanding += netOutstanding;
 
-    // Slices carry the due date the bucketing keys off. A combined voucher gets
-    // one slice per month (amount ÷ months); everything else is a single slice.
+    // Slices carry the due date the bucketing keys off. A combined voucher is
+    // expanded per property × per instalment (each by its own terms); everything
+    // else is a single slice on the invoice's own due date.
     const meta = r.country === "UAE" && r.invoice_id ? cardMetaById.get(r.invoice_id as string) : null;
+    const doc = meta && !meta.schedule_id ? cardDocByFirstLease.get(meta.lease_id) : null;
+    const vLeases = doc ? [...(cardLeasesByDoc.get(doc)?.values() ?? [])] : [];
     type Slice = { dueDate: string; out: number };
     let slices: Slice[];
-    if (meta && !meta.schedule_id) {
-      const months = monthFirstsCard(meta.period_start, meta.period_end);
-      const n = months.length || 1;
-      const terms = cardTermsById.get(r.invoice_id as string) ?? "monthly";
-      // Each instalment gets its share of the outstanding (its months ÷ total).
-      slices = rentDueChunks(months, terms).map((ch) => ({
-        dueDate: ch.dueMonth,
-        out: round2card(netOutstanding * (ch.count / n)),
-      }));
+    if (meta && !meta.schedule_id && vLeases.length) {
+      // Preserve the invoice's paid proportion across the split slices.
+      const paidRatio = netAmount > 0 ? netOutstanding / netAmount : 1;
+      slices = [];
+      for (const lease of vLeases) {
+        const months = billingMonthStarts(lease.lease_start, lease.lease_end);
+        const nn = months.length || 1;
+        const isHh = lease.lease_type === "hh";
+        const mRent = Number(lease.rental_amount) || 0;
+        const mShare = round2card(mRent * (isHh ? 0.1 : 0.05));
+        const fExp = cardExpByLease.get(lease.id) ?? 0;
+        const terms = cardTermsByLease.get(lease.id) ?? "monthly";
+        for (const ch of rentDueChunks(months, terms)) {
+          const net = round2card(mRent * ch.count - mShare * ch.count - (fExp * ch.count) / nn);
+          slices.push({ dueDate: ch.dueMonth, out: round2card(net * paidRatio) });
+        }
+      }
     } else {
+      // Schedule-based invoice, or a combined one with no resolvable leases:
+      // bucket the whole outstanding on the invoice's own due date.
       slices = [{ dueDate: String(r.due_date ?? "").slice(0, 10), out: netOutstanding }];
     }
 
@@ -890,17 +943,6 @@ async function loadDetail(
       ((invMeta as { id: string; lease_id: string; schedule_id: string | null }[]) ?? []).map((m) => [m.id, m]),
     );
 
-    // Payment terms per invoice — fetched on its own and error-tolerant, so the
-    // dashboard keeps working on a database where the column is not added yet
-    // (everything then behaves as monthly). "advance" makes the whole amount due
-    // in the starting month instead of spreading it.
-    const { data: ptRows } = ids.length
-      ? await supabase.schema("rental").from("uae_rent_invoices").select("id, payment_terms").in("id", ids)
-      : { data: [] };
-    const termsById = new Map(
-      ((ptRows as { id: string; payment_terms: string | null }[]) ?? []).map((m) => [m.id, m.payment_terms]),
-    );
-
     // A combined voucher holds ONE invoice for MANY properties. Resolve it to
     // the voucher's property leases (shared document number) so the Rent Balance
     // lists every property, month by month — current month due, later months
@@ -955,6 +997,14 @@ async function loadDetail(
     );
 
     const leaseIdsAll = ((voucherLeases as VLease[]) ?? []).map((l) => l.id);
+    // Per-property payment terms — its own error-tolerant query, so the dashboard
+    // works before the uae_leases.payment_terms migration (defaults to monthly).
+    const { data: termRows } = leaseIdsAll.length
+      ? await supabase.schema("rental").from("uae_leases").select("id, payment_terms").in("id", leaseIdsAll)
+      : { data: [] };
+    const termsByLease = new Map(
+      ((termRows as { id: string; payment_terms: string | null }[]) ?? []).map((t) => [t.id, t.payment_terms]),
+    );
     const { data: expRows } = leaseIdsAll.length
       ? await supabase.schema("rental").from("lease_expenses").select("lease_id, amount").in("lease_id", leaseIdsAll)
       : { data: [] };
@@ -983,7 +1033,6 @@ async function loadDetail(
       const invOut = Number(r.net_outstanding) || 0;
       const paidRatio = invNet > 0 ? invOut / invNet : 1;
 
-      const terms = termsById.get(r.invoice_id as string) ?? "monthly";
       const out: RentRow[] = [];
       for (const lease of vLeases) {
         const asset = lease.asset_id ? assetById.get(lease.asset_id) : null;
@@ -993,6 +1042,8 @@ async function loadDetail(
         const monthlyRent = Number(lease.rental_amount) || 0;
         const monthlyShare = round2(monthlyRent * (isHh ? 0.1 : 0.05));
         const fullExp = expByLease.get(lease.id) ?? 0; // whole-period expense total
+        // This property's OWN payment terms drive its due schedule.
+        const terms = termsByLease.get(lease.id) ?? "monthly";
         const common = {
           asset_code: asset?.asset_code ?? r.asset_code,
           asset_name: asset?.asset_name ?? r.asset_name,

@@ -167,6 +167,20 @@ async function createCombinedRentInvoice(
     .select("id");
   if (error) return { error: error.message };
 
+  // Store each property's payment terms. Done as its own per-lease update and
+  // error-tolerant, so the voucher still saves on a database where the
+  // uae_leases.payment_terms column hasn't been added yet (everything then
+  // behaves as monthly until the migration runs).
+  for (let i = 0; i < (createdLeases ?? []).length; i++) {
+    const term = inputLines[i]?.paymentTerms ?? "monthly";
+    if (term === "monthly") continue;
+    await supabase
+      .schema("rental")
+      .from("uae_leases")
+      .update({ payment_terms: term })
+      .eq("id", (createdLeases ?? [])[i].id);
+  }
+
   // Persist each property's monthly expenses (an expense account + amount),
   // dropping blank rows. Each created lease line lines up with
   // parsed.data.lines by index. These post Dr account / Cr tenant when the HH
@@ -225,7 +239,11 @@ async function createCombinedRentInvoice(
 
   const invoiceId = crypto.randomUUID();
   const invoiceDate = parsed.data.documentDate;
-  const paymentTerms = parsed.data.paymentTerms ?? "monthly";
+  // Any property paid in advance means money starts falling due at the period
+  // start; otherwise the aggregate isn't due until the period end. The Rent
+  // Balance itself uses each property's own terms — this only sets the invoice's
+  // single fallback due date.
+  const anyAdvance = inputLines.some((l) => l.paymentTerms === "advance");
   const lines: EntryLineInput[] = [];
   let invoiceTotal = 0;
   let minStart: string | null = null;
@@ -286,7 +304,7 @@ async function createCombinedRentInvoice(
       // (paid up front). Monthly terms: due at the period END so the combined
       // amount is not flagged overdue during the lease (the Rent Balance still
       // spreads it month-by-month for display).
-      due_date: paymentTerms === "advance" ? minStart ?? invoiceDate : maxEnd ?? invoiceDate,
+      due_date: anyAdvance ? minStart ?? invoiceDate : maxEnd ?? invoiceDate,
       period_start: minStart ?? invoiceDate,
       period_end: maxEnd ?? invoiceDate,
       amount: invoiceTotal,
@@ -303,15 +321,6 @@ async function createCombinedRentInvoice(
       return { error: invErr.message };
     }
     createdInvoiceId = invoiceId;
-
-    // Store the payment terms. Done as its own update and error-tolerant so the
-    // voucher still saves on a database where the payment_terms column has not
-    // been added yet (it simply behaves as monthly until the migration runs).
-    await supabase
-      .schema("rental")
-      .from("uae_rent_invoices")
-      .update({ payment_terms: paymentTerms })
-      .eq("id", invoiceId);
 
     await supabase
       .schema("rental")

@@ -104,3 +104,19 @@ $$;
 grant execute on function rental.fn_admin_soft_delete_leases(uuid[]) to authenticated;
 grant execute on function rental.fn_admin_soft_delete_voucher_leases(text) to authenticated;
 grant execute on function rental.fn_admin_restamp_voucher_leases(text, text) to authenticated;
+
+------------------------------------------------------------------------------
+-- 5) Per-property payment terms
+------------------------------------------------------------------------------
+-- Payment terms move from the invoice to the lease, so one voucher can bill one
+-- property in Advance and another Monthly. Ledger still books one entry.
+
+alter table rental.uae_leases
+  add column if not exists payment_terms text not null default 'monthly';
+
+alter table rental.uae_leases
+  drop constraint if exists uae_leases_payment_terms_check;
+
+alter table rental.uae_leases
+  add constraint uae_leases_payment_terms_check
+  check (payment_terms in ('advance', 'monthly', 'quarterly', 'half_yearly', 'yearly'));

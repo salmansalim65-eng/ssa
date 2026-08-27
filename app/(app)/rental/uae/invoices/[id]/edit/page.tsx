@@ -29,15 +29,6 @@ export default async function EditRentInvoicePage({ params }: { params: Promise<
   // the simple dialog.
   if (invoice.schedule_id) redirect(`/rental/uae/invoices/${id}`);
 
-  // Payment terms — read on its own and error-tolerant, so the edit page still
-  // works on a database where the column has not been added yet (defaults monthly).
-  const { data: ptRow } = await supabase
-    .schema("rental")
-    .from("uae_rent_invoices")
-    .select("payment_terms")
-    .eq("id", id)
-    .maybeSingle();
-  const paymentTerms = ((ptRow?.payment_terms as string | null) ?? "monthly") as "monthly" | "advance";
 
   const { data: firstLease } = await supabase
     .schema("rental")
@@ -63,6 +54,17 @@ export default async function EditRentInvoicePage({ params }: { params: Promise<
   // re-saving rebuilds the invoice at the correct (single) amount.
   const leaseRows = (leases ?? []).filter(
     (l, i, all) => all.findIndex((x) => x.asset_id === l.asset_id) === i,
+  );
+
+  // Per-property payment terms — read on their own and error-tolerant, so the
+  // edit page still works before the uae_leases.payment_terms migration runs.
+  const { data: termRows } = await supabase
+    .schema("rental")
+    .from("uae_leases")
+    .select("id, payment_terms")
+    .in("id", leaseRows.map((l) => l.id));
+  const termsByLease = new Map(
+    ((termRows as { id: string; payment_terms: string | null }[]) ?? []).map((t) => [t.id, t.payment_terms]),
   );
 
   // Named expenses per lease.
@@ -114,7 +116,6 @@ export default async function EditRentInvoicePage({ params }: { params: Promise<
     documentDate: invoice.invoice_date as string,
     currencyId: invoice.currency_id as string,
     rentCycle: (firstLease?.rent_cycle as "monthly" | "yearly") ?? "monthly",
-    paymentTerms,
     lines: leaseRows.map((l) => ({
       assetId: l.asset_id as string,
       // The lease stores the monthly rent, which is exactly what the grid takes.
@@ -123,6 +124,12 @@ export default async function EditRentInvoicePage({ params }: { params: Promise<
       leaseEnd: l.lease_end as string,
       expenses: expensesByLease.get(l.id as string) ?? [],
       remarks: (l.remarks as string | null) ?? "",
+      paymentTerms: ((termsByLease.get(l.id as string) as string | null) ?? "monthly") as
+        | "advance"
+        | "monthly"
+        | "quarterly"
+        | "half_yearly"
+        | "yearly",
     })),
   };
 

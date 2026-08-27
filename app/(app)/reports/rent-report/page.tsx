@@ -414,13 +414,13 @@ export default async function RentReportPage({
             <tr className="bg-primary text-primary-foreground [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:border-r [&>th]:border-primary/40 [&>th]:bg-primary [&>th]:px-3 [&>th]:py-2.5 [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide">
               <th className="sticky left-0 top-0 z-30 w-12 bg-primary text-right">S.No</th>
               <th className="sticky left-12 top-0 z-30 min-w-[240px] bg-primary text-left">Cost centre</th>
-              <th className="whitespace-nowrap text-right">Net Rent</th>
+              <th className="whitespace-nowrap text-right bg-white/20">Net Rent</th>
               {MONTHS.map((m, i) => (
                 <th key={m} className={cn("whitespace-nowrap text-right", i === thisMonth && "bg-white/15")}>
                   {m}
                 </th>
               ))}
-              <th className="whitespace-nowrap text-right">Total</th>
+              <th className="whitespace-nowrap text-right bg-white/20">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -473,7 +473,9 @@ export default async function RentReportPage({
                             </span>
                           )}
                         </td>
-                        <td className="text-right font-mono tabular-nums text-muted-foreground">{r.est ? money(r.est) : dash}</td>
+                        <td className="text-right font-mono font-semibold tabular-nums text-foreground bg-primary/[0.07]">
+                          {r.est ? money(r.est) : dash}
+                        </td>
                         {r.months.map((v, i) => {
                           // A month entirely before the accounting period started,
                           // or in the future, is blank — never flagged "Vacant".
@@ -484,8 +486,11 @@ export default async function RentReportPage({
                               key={i}
                               className={cn(
                                 "text-right font-mono tabular-nums",
-                                i === thisMonth && "bg-primary/[0.04]",
-                                blankMonth && "text-muted-foreground/40",
+                                // Current month stands out in bold dark green.
+                                i === thisMonth && "bg-primary/[0.08] font-semibold text-green-700 dark:text-green-400",
+                                // Only empty (dash) cells are muted — real amounts in
+                                // any month show in the normal colour, not faded.
+                                blankMonth && !v && "text-muted-foreground/40",
                               )}
                             >
                               {v ? (
@@ -500,20 +505,22 @@ export default async function RentReportPage({
                             </td>
                           );
                         })}
-                        <td className="text-right font-mono font-semibold tabular-nums text-foreground">{money(r.total)}</td>
+                        <td className="text-right font-mono font-semibold tabular-nums text-foreground bg-primary/[0.07]">
+                          {money(r.total)}
+                        </td>
                       </tr>
                     );
                   })}
                   {/* Country total */}
                   <tr className="bg-primary font-semibold text-primary-foreground [&>td]:px-3 [&>td]:py-2">
                     <td colSpan={2} className="sticky left-0 z-10 bg-primary text-xs uppercase tracking-wide">Total — {label}</td>
-                    <td className="text-right font-mono tabular-nums">{secEst ? money(secEst) : dash}</td>
+                    <td className="text-right font-mono tabular-nums bg-white/20">{secEst ? money(secEst) : dash}</td>
                     {secMonths.map((v, i) => (
-                      <td key={i} className={cn("text-right font-mono tabular-nums", i === thisMonth && "bg-white/15")}>
+                      <td key={i} className={cn("text-right font-mono tabular-nums", i === thisMonth && "bg-white/20")}>
                         {v ? money(v) : dash}
                       </td>
                     ))}
-                    <td className="text-right font-mono tabular-nums">{money(secTotal)}</td>
+                    <td className="text-right font-mono tabular-nums bg-white/20">{money(secTotal)}</td>
                   </tr>
                 </Fragment>
               );

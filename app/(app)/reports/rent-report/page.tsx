@@ -10,6 +10,7 @@ import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
 import { formatAccountCode, formatDate, formatMoney } from "@/lib/format";
 import { HH_AGENT_PCT, UAE_AGENT_PCT } from "@/lib/rental/lease-accounting";
+import { billingMonthStarts, billingMonthCount } from "@/lib/rental/billing-months";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -20,14 +21,11 @@ const COUNTRY: Record<string, { label: string; code: string }> = {
   SA: { label: "Saudi Arabia", code: "SAR" },
 };
 
-// Whole calendar months a lease period spans, inclusive. Used to spread a
+// Whole RENTAL months a lease period spans (3 Aug → 2 Sep = 1). Used to spread a
 // period-total expense across the months so it is deducted once, not per month.
 function leaseMonthCount(start: string | null, end: string | null): number {
   if (!start || !end) return 1;
-  const s = new Date(`${start}T00:00:00`);
-  const e = new Date(`${end}T00:00:00`);
-  const n = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()) + 1;
-  return Math.max(1, n);
+  return billingMonthCount(start, end);
 }
 
 interface CcRow {
@@ -120,6 +118,7 @@ export default async function RentReportPage({
     end: string | null;
     renew: string | null; // rent_month label, else derived from lease end
     tenantId: string | null;
+    billingKeys: Set<string>; // "YYYY-MM" of each rental month the lease bills
   }
   // A property can carry more than one active lease (e.g. an HH lease and a
   // plain UAE lease on the same unit), so collect ALL of them per asset and sum
@@ -130,6 +129,8 @@ export default async function RentReportPage({
     arr.push(lease);
     leaseByAsset.set(assetId, arr);
   };
+  const billingKeysOf = (start: string | null, end: string | null) =>
+    new Set(start && end ? billingMonthStarts(start, end).map((d) => d.slice(0, 7)) : []);
   for (const l of pkLeases ?? []) {
     if (!l.asset_id) continue;
     addLease(l.asset_id as string, {
@@ -139,6 +140,7 @@ export default async function RentReportPage({
       end: (l.lease_end as string) ?? null,
       renew: (l.rent_month as string) || monthLabel(l.lease_end as string),
       tenantId: (l.tenant_id as string) ?? null,
+      billingKeys: billingKeysOf((l.lease_start as string) ?? null, (l.lease_end as string) ?? null),
     });
   }
   // Drop any stray duplicate lease for the same property within one voucher
@@ -171,11 +173,11 @@ export default async function RentReportPage({
       end: (l.lease_end as string) ?? null,
       renew: (l.rent_month as string) || monthLabel(l.lease_end as string),
       tenantId: (l.tenant_id as string) ?? null,
+      billingKeys: billingKeysOf((l.lease_start as string) ?? null, (l.lease_end as string) ?? null),
     });
   }
 
-  // Month boundaries for the selected year (YYYY-MM-DD, safe for string compare).
-  const monthStart = (m: number) => `${year}-${String(m + 1).padStart(2, "0")}-01`;
+  // Month end boundary for the selected year (used to blank pre-period months).
   const monthEnd = (m: number) => `${year}-${String(m + 1).padStart(2, "0")}-${String(new Date(year, m + 1, 0).getDate())}`;
 
   // Accounting-period start: the company setting when set, else the earliest
@@ -204,7 +206,9 @@ export default async function RentReportPage({
       let monthSum = 0;
       for (const lease of leases) {
         if (lease.monthly <= 0) continue;
-        const active = (!lease.start || lease.start <= monthEnd(m)) && (!lease.end || lease.end >= monthStart(m));
+        // A property bills in a calendar month only if a rental month STARTS in
+        // it — so a 3 Aug → 2 Sep lease shows in August only, not September.
+        const active = lease.billingKeys.has(`${year}-${String(m + 1).padStart(2, "0")}`);
         if (active) monthSum += lease.monthly;
       }
       months[m] = monthSum;

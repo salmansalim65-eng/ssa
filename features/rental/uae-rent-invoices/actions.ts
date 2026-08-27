@@ -51,6 +51,11 @@ async function getTenantAccountId(companyId: string, tenantId: string) {
 // that belongs to a tenant (a tenant can share that exact name, which makes a
 // plain lookup ambiguous and silently fail).
 async function getAgentShareAccountId(companyId: string): Promise<string | null> {
+  // Prefer the Posting Template "Agent Share" account (changeable in the UI);
+  // fall back to the account named "SAMAD RENT", excluding tenant accounts.
+  const configured = await getPostingAccount(companyId, "agent_share");
+  if (configured) return configured;
+
   const supabase = await createClient();
   const [{ data: accts }, { data: tenants }] = await Promise.all([
     supabase

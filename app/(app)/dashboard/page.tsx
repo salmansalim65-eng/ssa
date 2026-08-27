@@ -23,6 +23,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatAccountCode, formatDate, formatMoney, formatVoucherNo } from "@/lib/format";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { isRentOverdue } from "@/lib/rental/overdue";
+import { billingMonthStarts } from "@/lib/rental/billing-months";
 
 // Always render fresh — the dashboard reflects live invoices, rent balances and
 // ledger figures, so it must never be served from the route cache (otherwise a
@@ -321,19 +322,7 @@ export default async function DashboardPage({
   // card's Due never reflects the current month. Expand each combined invoice into
   // monthly slices (like the Rent Balance detail) so each month buckets correctly.
   const round2card = (n: number) => Math.round(n * 100) / 100;
-  const monthFirstsCard = (start: string, end: string) => {
-    const out: string[] = [];
-    let y = Number(start.slice(0, 4));
-    let m = Number(start.slice(5, 7)) - 1;
-    const ey = Number(end.slice(0, 4));
-    const em = Number(end.slice(5, 7)) - 1;
-    while (y < ey || (y === ey && m <= em)) {
-      out.push(`${y}-${String(m + 1).padStart(2, "0")}-01`);
-      m += 1;
-      if (m > 11) { m = 0; y += 1; }
-    }
-    return out.length ? out : [`${start.slice(0, 7)}-01`];
-  };
+  const monthFirstsCard = billingMonthStarts;
   const uaeRentInvoiceIds = [
     ...new Set(
       (rentRows ?? [])
@@ -887,19 +876,7 @@ async function loadDetail(
   // month due, later months upcoming — while the ledger keeps a single entry.
   if (cfg.rentCountry === "UAE") {
     const round2 = (n: number) => Math.round(n * 100) / 100;
-    const monthFirsts = (start: string, end: string) => {
-      const out: string[] = [];
-      let y = Number(start.slice(0, 4));
-      let m = Number(start.slice(5, 7)) - 1;
-      const ey = Number(end.slice(0, 4));
-      const em = Number(end.slice(5, 7)) - 1;
-      while (y < ey || (y === ey && m <= em)) {
-        out.push(`${y}-${String(m + 1).padStart(2, "0")}-01`);
-        m += 1;
-        if (m > 11) { m = 0; y += 1; }
-      }
-      return out.length ? out : [`${start.slice(0, 7)}-01`];
-    };
+    const monthFirsts = billingMonthStarts;
 
     const ids = rawRows.map((r) => r.invoice_id as string).filter(Boolean);
     const { data: invMeta } = ids.length

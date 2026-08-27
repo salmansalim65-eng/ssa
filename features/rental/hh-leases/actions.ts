@@ -8,18 +8,16 @@ import { resolveTenantId } from "@/lib/rental/tenant-accounts";
 import { postUaeRentInvoice } from "@/features/rental/uae-rent-invoices/actions";
 import { createJournalEntry, type EntryLineInput } from "@/lib/vouchers/engine";
 import { agentRentSplit, HH_AGENT_PCT, UAE_AGENT_PCT } from "@/lib/rental/lease-accounting";
+import { billingMonthCount } from "@/lib/rental/billing-months";
 import { hhLeaseSchema, type HhLeaseInput } from "./schemas";
 
 function round2(n: number): number {
   return Math.round((Number.isFinite(n) ? n : 0) * 100) / 100;
 }
 
-// Whole calendar months a lease period spans, inclusive (2026-08 → 2027-01 = 6).
+// Whole RENTAL months a lease period spans (3 Aug → 2 Sep = 1, not 2).
 function monthsBetween(start: string, end: string): number {
-  const s = new Date(`${start}T00:00:00`);
-  const e = new Date(`${end}T00:00:00`);
-  const n = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()) + 1;
-  return Math.max(1, n);
+  return billingMonthCount(start, end);
 }
 
 async function getPostingAccount(companyId: string, accountRole: string) {
@@ -48,6 +46,12 @@ async function getAssetCostCenterId(assetId: string) {
 // name lookup is ambiguous and fails. Resolve the posting account by name but
 // exclude any account that belongs to a tenant, so the real agent account wins.
 async function getAgentShareAccountId(companyId: string): Promise<string | null> {
+  // Prefer the account configured under Posting Templates → UAE Rent Invoice →
+  // "Agent Share", so it can be changed from the UI. Fall back to the account
+  // named "SAMAD RENT" (excluding tenant accounts) for setups not yet configured.
+  const configured = await getPostingAccount(companyId, "agent_share");
+  if (configured) return configured;
+
   const supabase = await createClient();
   const [{ data: accts }, { data: tenants }] = await Promise.all([
     supabase

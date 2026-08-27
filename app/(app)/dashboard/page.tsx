@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { SummaryCard, StatCol } from "@/components/dashboard/summary-card";
+import { DashboardLiveRefresh } from "@/components/dashboard/live-refresh";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
 import { formatAccountCode, formatDate, formatMoney, formatVoucherNo } from "@/lib/format";
@@ -493,6 +494,7 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-6">
+      <DashboardLiveRefresh />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard
           title="Balances UAE"

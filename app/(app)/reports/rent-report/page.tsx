@@ -420,7 +420,7 @@ export default async function RentReportPage({
                   {m}
                 </th>
               ))}
-              <th className="whitespace-nowrap text-right">Total</th>
+              <th className="whitespace-nowrap text-right bg-white/20">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -505,7 +505,9 @@ export default async function RentReportPage({
                             </td>
                           );
                         })}
-                        <td className="text-right font-mono font-semibold tabular-nums text-foreground">{money(r.total)}</td>
+                        <td className="text-right font-mono font-semibold tabular-nums text-foreground bg-primary/[0.07]">
+                          {money(r.total)}
+                        </td>
                       </tr>
                     );
                   })}
@@ -518,7 +520,7 @@ export default async function RentReportPage({
                         {v ? money(v) : dash}
                       </td>
                     ))}
-                    <td className="text-right font-mono tabular-nums">{money(secTotal)}</td>
+                    <td className="text-right font-mono tabular-nums bg-white/20">{money(secTotal)}</td>
                   </tr>
                 </Fragment>
               );

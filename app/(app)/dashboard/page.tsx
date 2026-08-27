@@ -127,6 +127,28 @@ function isExcludedFromBalances(r: {
   return Boolean(r.is_cash || r.is_bank || r.is_tenant_account || r.is_fixed_asset_account);
 }
 
+// Ledger accounts that are fixed assets, so the "Balances" cards can leave them
+// out. Catches an account linked to a registered asset (linked_asset_id) AND any
+// account sitting under a "Fixed Asset(s)" group in the chart-of-accounts tree —
+// which covers fixed-asset accounts (e.g. a Van) that were created by hand and
+// never linked to an asset record.
+function computeFixedAssetAccountIds(
+  rows: { id: string; parent_id?: string | null; account_name?: string | null; linked_asset_id?: string | null }[],
+): Set<string> {
+  const byId = new Map(rows.map((a) => [a.id, a]));
+  const isFixedName = (n?: string | null) => /fixed[\s_-]*assets?/i.test(n ?? "");
+  const underFixed = (id: string) => {
+    let cur = byId.get(id);
+    let guard = 0;
+    while (cur && guard++ < 64) {
+      if (isFixedName(cur.account_name)) return true;
+      cur = cur.parent_id ? byId.get(cur.parent_id) : undefined;
+    }
+    return false;
+  };
+  return new Set(rows.filter((a) => a.linked_asset_id || underFixed(a.id)).map((a) => a.id));
+}
+
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -144,11 +166,12 @@ export default async function DashboardPage({
   const { data: coaCountries } = await supabase
     .schema("accounting")
     .from("chart_of_accounts")
-    .select("id, country")
+    .select("id, country, parent_id, account_name, linked_asset_id")
     .eq("company_id", companyId);
   const coaCountryById = new Map<string, string | null>(
     (coaCountries ?? []).map((a) => [a.id as string, (a.country as string | null) ?? null]),
   );
+  const fixedAssetAccountIds = computeFixedAssetAccountIds(coaCountries ?? []);
   const countryAccountIds = (coaCountries ?? [])
     .filter((a) => normCountry(a.country as string | null))
     .map((a) => a.id as string);
@@ -275,7 +298,7 @@ export default async function DashboardPage({
     );
     const b = country ? balByCountry[country] : undefined;
     if (!b) continue;
-    if (isExcludedFromBalances(r)) continue;
+    if (isExcludedFromBalances(r) || fixedAssetAccountIds.has(r.account_id as string)) continue;
     b.debit += Number(r.doc_debit_amount);
     b.credit += Number(r.doc_credit_amount);
   }
@@ -737,11 +760,12 @@ async function loadDetail(
     const { data: coaCountries } = await supabase
       .schema("accounting")
       .from("chart_of_accounts")
-      .select("id, country")
+      .select("id, country, parent_id, account_name, linked_asset_id")
       .eq("company_id", companyId);
     const coaCountryById = new Map<string, string | null>(
       (coaCountries ?? []).map((a) => [a.id as string, (a.country as string | null) ?? null]),
     );
+    const fixedAssetAccountIds = computeFixedAssetAccountIds(coaCountries ?? []);
     const countryAccountIds = (coaCountries ?? [])
       .filter((a) => normCountry(a.country as string | null))
       .map((a) => a.id as string);
@@ -767,7 +791,7 @@ async function loadDetail(
         (r.cost_center_country as string | null) ?? coaCountryById.get(r.account_id as string),
       );
       if (country !== normCountry(cfg.ccCountry)) continue;
-      if (isExcludedFromBalances(r)) continue;
+      if (isExcludedFromBalances(r) || fixedAssetAccountIds.has(r.account_id as string)) continue;
       const k = r.account_code as string;
       const a = byAccount.get(k) ?? { id: r.account_id as string, name: r.account_name as string, debit: 0, credit: 0 };
       a.debit += Number(r.doc_debit_amount);

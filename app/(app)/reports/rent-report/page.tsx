@@ -262,6 +262,16 @@ export default async function RentReportPage({
     .filter((c) => byCountry.has(c) && (!countryParam || c === countryParam))
     .map((c) => ({ country: c, rows: byCountry.get(c)! }));
 
+  // Group the sections by currency so segments that share a currency (HH + UAE,
+  // both AED) get one combined "Total" row underneath them in that currency.
+  const currencyGroups: { code: string; sections: typeof sections }[] = [];
+  for (const s of sections) {
+    const code = SEGMENT[s.country]?.code ?? "";
+    const last = currencyGroups[currencyGroups.length - 1];
+    if (last && last.code === code) last.sections.push(s);
+    else currencyGroups.push({ code, sections: [s] });
+  }
+
   const yearOptions = [1, 2, 3, 4].map((n) => ({ value: String(currentYear - n), label: String(currentYear - n) }));
 
   // Property selector + selected property's lease term (start / end / renew).
@@ -450,22 +460,37 @@ export default async function RentReportPage({
                 </td>
               </tr>
             )}
-            {sections.map((section) => {
-              const cur = SEGMENT[section.country]?.code ?? "";
-              const symbol = symbolByCode.get(cur) ?? cur;
-              const label = SEGMENT[section.country]?.label ?? section.country;
+            {currencyGroups.map((group) => {
+              const symbol = symbolByCode.get(group.code) ?? group.code;
               const money = (n: number) => (n ? `${symbol ? symbol + " " : ""}${formatMoney(n)}` : "");
+              const gEst = group.sections.reduce((a, s) => a + s.rows.reduce((x, r) => x + r.est, 0), 0);
+              const gMonths = MONTHS.map((_, i) =>
+                group.sections.reduce((a, s) => a + s.rows.reduce((x, r) => x + r.months[i], 0), 0),
+              );
+              const gTotal = group.sections.reduce((a, s) => a + s.rows.reduce((x, r) => x + r.total, 0), 0);
+              return (
+                <Fragment key={group.code}>
+                  {group.sections.map((section) => {
+              const cur = group.code;
+              const label = SEGMENT[section.country]?.label ?? section.country;
               const secEst = section.rows.reduce((s, r) => s + r.est, 0);
               const secMonths = MONTHS.map((_, i) => section.rows.reduce((s, r) => s + r.months[i], 0));
               const secTotal = section.rows.reduce((s, r) => s + r.total, 0);
               return (
                 <Fragment key={section.country}>
-                  {/* Country band */}
-                  <tr className="bg-ledger-dark text-white">
-                    <td colSpan={totalCols} className="sticky left-0 bg-ledger-dark px-3 py-2 text-xs font-bold uppercase tracking-wide">
+                  {/* Section band (green) — carries the segment's own totals */}
+                  <tr className="bg-ledger-dark font-semibold text-white [&>td]:px-3 [&>td]:py-2">
+                    <td colSpan={2} className="sticky left-0 z-10 bg-ledger-dark text-xs font-bold uppercase tracking-wide">
                       {label}
                       {symbol ? ` · ${cur}` : ""}
                     </td>
+                    <td className="text-right font-mono tabular-nums bg-white/15">{secEst ? money(secEst) : dash}</td>
+                    {secMonths.map((v, i) => (
+                      <td key={i} className={cn("text-right font-mono tabular-nums", i === thisMonth && "bg-white/15")}>
+                        {v ? money(v) : dash}
+                      </td>
+                    ))}
+                    <td className="text-right font-mono tabular-nums bg-white/15">{secTotal ? money(secTotal) : dash}</td>
                   </tr>
                   {/* Property rows */}
                   {section.rows.map((r, ri) => {
@@ -530,16 +555,22 @@ export default async function RentReportPage({
                       </tr>
                     );
                   })}
-                  {/* Country total */}
+                </Fragment>
+              );
+            })}
+                  {/* Combined total for the currency group (blue) — e.g. HH + UAE
+                      shown together in AED. */}
                   <tr className="bg-primary font-semibold text-primary-foreground [&>td]:px-3 [&>td]:py-2">
-                    <td colSpan={2} className="sticky left-0 z-10 bg-primary text-xs uppercase tracking-wide">Total — {label}</td>
-                    <td className="text-right font-mono tabular-nums bg-white/20">{secEst ? money(secEst) : dash}</td>
-                    {secMonths.map((v, i) => (
+                    <td colSpan={2} className="sticky left-0 z-10 bg-primary text-xs uppercase tracking-wide">
+                      Total — {group.code}
+                    </td>
+                    <td className="text-right font-mono tabular-nums bg-white/20">{gEst ? money(gEst) : dash}</td>
+                    {gMonths.map((v, i) => (
                       <td key={i} className={cn("text-right font-mono tabular-nums", i === thisMonth && "bg-white/20")}>
                         {v ? money(v) : dash}
                       </td>
                     ))}
-                    <td className="text-right font-mono tabular-nums bg-white/20">{money(secTotal)}</td>
+                    <td className="text-right font-mono tabular-nums bg-white/20">{money(gTotal)}</td>
                   </tr>
                 </Fragment>
               );

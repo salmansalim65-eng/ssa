@@ -336,6 +336,7 @@ export function HhLeaseForm({
                   <th className="w-40">Lease End</th>
                   <th className="w-36">Payment Terms</th>
                   <th className="min-w-[260px]">Expenses</th>
+                  <th className="w-28 text-right">Total</th>
                   <th className="min-w-[160px]">Remarks</th>
                   <th className="w-10" />
                 </tr>
@@ -442,6 +443,18 @@ export function HhLeaseForm({
                     <td>
                       <LineExpenses control={form.control} index={index} expenseAccounts={expenseAccounts} />
                     </td>
+                    <td className="pt-3 text-right font-mono font-medium tabular-nums">
+                      {fmtAmount(
+                        round2(
+                          (Number(watchedLines[index]?.rentalAmount) || 0) -
+                            rowManagement(watchedLines[index]?.rentalAmount) -
+                            (watchedLines[index]?.expenses ?? []).reduce(
+                              (es, e) => es + (Number(e?.amount) || 0),
+                              0,
+                            ),
+                        ),
+                      )}
+                    </td>
                     <td>
                       <FormField
                         control={form.control}
@@ -481,9 +494,10 @@ export function HhLeaseForm({
                   <td />
                   <td />
                   <td className="tabular-nums">{fmtAmount(totalExpenses)}</td>
-                  <td className="whitespace-nowrap tabular-nums">
+                  <td className="whitespace-nowrap text-right tabular-nums">
                     <span className="text-muted-foreground">Grand&nbsp;total:</span> {fmtAmount(grandTotal)}
                   </td>
+                  <td />
                   <td />
                 </tr>
               </tfoot>

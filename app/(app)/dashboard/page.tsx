@@ -1093,6 +1093,26 @@ async function loadDetail(
     }),
     { rent: 0, share: 0, expenses: 0, net: 0, outstanding: 0 },
   );
+  // Per-month subtotals for every amount column (rows are ordered by due date,
+  // so months are contiguous), shown as a total row at the end of each month.
+  const monthTotals = new Map<
+    string,
+    { rent: number; share: number; expenses: number; net: number; received: number; outstanding: number }
+  >();
+  for (const r of rows) {
+    const k = String(r.due_date ?? "").slice(0, 7);
+    const t = monthTotals.get(k) ?? { rent: 0, share: 0, expenses: 0, net: 0, received: 0, outstanding: 0 };
+    const bal = Number(r.net_amount);
+    const out = Number(r.net_outstanding);
+    t.rent += Number(r.amount);
+    t.share += Number(r.agent_share);
+    t.expenses += Number(r.other_expenses);
+    t.net += bal;
+    t.received += bal - out;
+    t.outstanding += out;
+    monthTotals.set(k, t);
+  }
+
   // Columns: Date, Voucher, Due Month, Due Date, Property, Tenant, Rent,
   // [Management, Other Expenses], Balance Rent, Receipt, Outstanding.
   const colCount = showAgentCols ? 12 : 10;
@@ -1147,7 +1167,7 @@ async function loadDetail(
                   </TableCell>
                 </TableRow>
               ) : null;
-            return [
+            const out = [
               monthHeader,
             <TableRow key={r._rowKey ?? r.invoice_id} className={paid ? "bg-emerald-50 dark:bg-emerald-950/30" : undefined}>
               <TableCell className="text-muted-foreground">{formatDate(r.invoice_date)}</TableCell>
@@ -1177,6 +1197,34 @@ async function loadDetail(
               </TableCell>
             </TableRow>,
             ];
+            // At the end of each month's rows, add a totals row for that month.
+            const nextKey = i < rows.length - 1 ? String(rows[i + 1].due_date ?? "").slice(0, 7) : null;
+            if (nextKey !== monthKey) {
+              const mt = monthTotals.get(monthKey) ?? {
+                rent: 0,
+                share: 0,
+                expenses: 0,
+                net: 0,
+                received: 0,
+                outstanding: 0,
+              };
+              out.push(
+                <TableRow key={`sub-${monthKey}`} className="border-t bg-muted/50 font-semibold hover:bg-muted/50">
+                  <TableCell colSpan={6} className="text-right text-xs uppercase tracking-wide text-muted-foreground">
+                    {dueMonth(r.due_date as string)} total
+                  </TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">{fmt(mt.rent)}</TableCell>
+                  {showAgentCols && <TableCell className="text-right font-mono tabular-nums">{fmt(mt.share)}</TableCell>}
+                  {showAgentCols && (
+                    <TableCell className="text-right font-mono tabular-nums">{fmt(mt.expenses)}</TableCell>
+                  )}
+                  <TableCell className="text-right font-mono tabular-nums">{fmt(mt.net)}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">{fmt(mt.received)}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">{fmt(mt.outstanding)}</TableCell>
+                </TableRow>,
+              );
+            }
+            return out;
           })}
           {rows.length === 0 && (
             <TableRow className="hover:bg-transparent">

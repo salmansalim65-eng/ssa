@@ -3,27 +3,24 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
-// Keeps the dashboard's server-rendered figures live. It re-fetches:
-//   - once when the dashboard is opened (so navigating in from a just-saved
-//     entry always shows the latest numbers, not a cached render), and
-//   - whenever the tab/window regains focus (so coming back after making an
-//     entry elsewhere refreshes it too).
-// router.refresh() only re-runs the server render; it keeps client state and
-// does not remount this component, so there is no refresh loop.
+// Refreshes the dashboard's figures when the tab/window regains focus — e.g.
+// after switching away to make an entry and coming back. It does NOT refresh on
+// open (that would re-run all the dashboard queries on every visit and make it
+// slow); a fresh render on navigation is handled server-side, and every posted
+// entry busts the dashboard cache. router.refresh() only re-runs the server
+// render, keeping client state, so there's no loop.
 export function DashboardLiveRefresh() {
   const router = useRouter();
-  const didInitialRefresh = useRef(false);
+  const lastRefresh = useRef(0);
 
   useEffect(() => {
-    // Pull fresh data on open. Guarded so React's double-invoke in dev (and any
-    // re-run of this effect) can't fire it twice.
-    if (!didInitialRefresh.current) {
-      didInitialRefresh.current = true;
-      router.refresh();
-    }
-
     const onVisible = () => {
-      if (document.visibilityState === "visible") router.refresh();
+      if (document.visibilityState !== "visible") return;
+      // Throttle so a burst of focus/visibility events can't hammer the server.
+      const now = Date.now();
+      if (now - lastRefresh.current < 3000) return;
+      lastRefresh.current = now;
+      router.refresh();
     };
     window.addEventListener("focus", onVisible);
     document.addEventListener("visibilitychange", onVisible);

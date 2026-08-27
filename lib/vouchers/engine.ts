@@ -1,6 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
+import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import type { ApprovalStatus, VoucherType } from "@/types/database.types";
@@ -225,6 +226,15 @@ export async function postVoucher(params: {
     .eq("id", params.journalEntryId);
 
   if (postError) return { error: postError.message };
+
+  // Every posted entry changes the dashboard figures, so invalidate its cache
+  // here (one place all vouchers pass through) — the dashboard then shows fresh
+  // numbers on the next visit without a manual reload.
+  try {
+    revalidatePath("/dashboard");
+  } catch {
+    // revalidatePath is a no-op outside a request context (e.g. tests).
+  }
 
   return { voucherNo: voucherNo as string };
 }

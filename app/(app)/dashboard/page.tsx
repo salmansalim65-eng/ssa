@@ -1156,15 +1156,32 @@ async function loadDetail(
             // list month-wise.
             const monthKey = String(r.due_date ?? "").slice(0, 7);
             const prevKey = i > 0 ? String(rows[i - 1].due_date ?? "").slice(0, 7) : null;
+            const mt = monthTotals.get(monthKey) ?? {
+              rent: 0,
+              share: 0,
+              expenses: 0,
+              net: 0,
+              received: 0,
+              outstanding: 0,
+            };
+            // The month band (green bar) also carries that month's column totals,
+            // so no separate subtotal row is needed.
+            const bandCell = "bg-ledger/15 py-1.5 text-right font-mono text-xs font-semibold tabular-nums text-ledger dark:bg-ledger/25";
             const monthHeader =
               monthKey !== prevKey ? (
                 <TableRow key={`grp-${monthKey}`} className="hover:bg-transparent">
                   <TableCell
-                    colSpan={colCount}
+                    colSpan={6}
                     className="bg-ledger/15 py-1.5 text-xs font-semibold uppercase tracking-wide text-ledger dark:bg-ledger/25"
                   >
                     {dueMonth(r.due_date as string)}
                   </TableCell>
+                  <TableCell className={bandCell}>{fmt(mt.rent)}</TableCell>
+                  {showAgentCols && <TableCell className={bandCell}>{fmt(mt.share)}</TableCell>}
+                  {showAgentCols && <TableCell className={bandCell}>{fmt(mt.expenses)}</TableCell>}
+                  <TableCell className={bandCell}>{fmt(mt.net)}</TableCell>
+                  <TableCell className={bandCell}>{fmt(mt.received)}</TableCell>
+                  <TableCell className={bandCell}>{fmt(mt.outstanding)}</TableCell>
                 </TableRow>
               ) : null;
             const out = [
@@ -1197,33 +1214,6 @@ async function loadDetail(
               </TableCell>
             </TableRow>,
             ];
-            // At the end of each month's rows, add a totals row for that month.
-            const nextKey = i < rows.length - 1 ? String(rows[i + 1].due_date ?? "").slice(0, 7) : null;
-            if (nextKey !== monthKey) {
-              const mt = monthTotals.get(monthKey) ?? {
-                rent: 0,
-                share: 0,
-                expenses: 0,
-                net: 0,
-                received: 0,
-                outstanding: 0,
-              };
-              out.push(
-                <TableRow key={`sub-${monthKey}`} className="border-t bg-muted/50 font-semibold hover:bg-muted/50">
-                  <TableCell colSpan={6} className="text-right text-xs uppercase tracking-wide text-muted-foreground">
-                    {dueMonth(r.due_date as string)} total
-                  </TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{fmt(mt.rent)}</TableCell>
-                  {showAgentCols && <TableCell className="text-right font-mono tabular-nums">{fmt(mt.share)}</TableCell>}
-                  {showAgentCols && (
-                    <TableCell className="text-right font-mono tabular-nums">{fmt(mt.expenses)}</TableCell>
-                  )}
-                  <TableCell className="text-right font-mono tabular-nums">{fmt(mt.net)}</TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{fmt(mt.received)}</TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{fmt(mt.outstanding)}</TableCell>
-                </TableRow>,
-              );
-            }
             return out;
           })}
           {rows.length === 0 && (

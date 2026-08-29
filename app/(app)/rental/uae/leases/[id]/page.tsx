@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { PageHeader } from "@/components/ui/page-header";
 import { GenerateInvoiceButton } from "@/components/rental/generate-invoice-button";
+import { EditScheduleDueDateButton } from "@/components/rental/edit-schedule-due-date-button";
 import { GenerateAllInvoicesButton } from "@/components/rental/generate-all-invoices-button";
 import { PostAllInvoicesButton } from "@/components/rental/post-all-invoices-button";
 import { LeaseDeleteButton } from "@/components/rental/lease-delete-button";
@@ -226,7 +227,12 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
                     <Badge variant={scheduleStatusVariant[s.status as keyof typeof scheduleStatusVariant]}>{s.status}</Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    {s.status === "pending" && canCreate && <GenerateInvoiceButton scheduleId={s.id} />}
+                    <div className="flex items-center justify-end gap-2">
+                      {canEdit && (
+                        <EditScheduleDueDateButton scheduleId={s.id} currentDueDate={s.due_date as string} />
+                      )}
+                      {s.status === "pending" && canCreate && <GenerateInvoiceButton scheduleId={s.id} />}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

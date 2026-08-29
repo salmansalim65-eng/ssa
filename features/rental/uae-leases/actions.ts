@@ -178,3 +178,47 @@ export async function deleteUaeLease(leaseId: string) {
   revalidatePath("/rental/uae/leases");
   return { success: true };
 }
+
+// Change a payment-schedule row's due date — and the invoice it generated, when
+// there is one — so an admin can e.g. pull September's rent forward to be due in
+// August (August then shows both months' amount due). Only the due date moves;
+// the amount, the posted ledger entry and the invoice number are untouched.
+export async function updateUaeScheduleDueDate(scheduleId: string, dueDate: string) {
+  await requirePermission("uae_rent_invoice", "edit");
+  const companyId = await getCurrentCompanyId();
+  const supabase = await createClient();
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return { error: "Enter a valid due date" };
+
+  const { data: sched } = await supabase
+    .schema("rental")
+    .from("uae_payment_schedules")
+    .select("id, lease_id")
+    .eq("company_id", companyId)
+    .eq("id", scheduleId)
+    .maybeSingle();
+  if (!sched) return { error: "Schedule row not found" };
+
+  const { error: schedErr } = await supabase
+    .schema("rental")
+    .from("uae_payment_schedules")
+    .update({ due_date: dueDate })
+    .eq("company_id", companyId)
+    .eq("id", scheduleId);
+  if (schedErr) return { error: schedErr.message };
+
+  // The Rent Balance / dashboard bucket by the invoice's due date, so move the
+  // generated invoice too (no-op when the row hasn't been invoiced yet).
+  const { error: invErr } = await supabase
+    .schema("rental")
+    .from("uae_rent_invoices")
+    .update({ due_date: dueDate })
+    .eq("company_id", companyId)
+    .eq("schedule_id", scheduleId);
+  if (invErr) return { error: invErr.message };
+
+  revalidatePath(`/rental/uae/leases/${sched.lease_id}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/rental/invoices");
+  return { success: true };
+}

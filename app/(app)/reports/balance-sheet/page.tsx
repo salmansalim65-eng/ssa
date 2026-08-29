@@ -221,8 +221,15 @@ export default async function BalanceSheetPage({
   for (const list of Object.values(buckets)) list.sort((a, b) => a.account_code.localeCompare(b.account_code));
 
   // Converted balance per account id (base ledger amounts × currency factor).
+  // Each account is NETTED first and placed on ONE side by its balance, so a
+  // single account with both debits and credits shows its net balance (e.g.
+  // 172,046 Dr) rather than its gross movements split across both columns. Group
+  // rows roll these up, so their Debit/Credit columns net the same way.
   const balById = new Map<string, { debit: number; credit: number }>();
-  for (const [id, a] of byAccount) balById.set(id, { debit: a.debit * factor, credit: a.credit * factor });
+  for (const [id, a] of byAccount) {
+    const net = (a.debit - a.credit) * factor;
+    balById.set(id, { debit: net >= 0 ? net : 0, credit: net < 0 ? -net : 0 });
+  }
   // Roll a group's balance up from its descendants (leaf accounts read balById).
   const nodeTotals = new Map<string, { debit: number; credit: number }>();
   function totalsFor(node: CoaNode): { debit: number; credit: number } {

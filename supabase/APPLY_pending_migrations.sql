@@ -32,8 +32,15 @@ begin
     raise exception 'Not authorized to edit invoices';
   end if;
 
-  update rental.uae_payment_schedules set due_date = p_due_date where id = p_schedule_id;
-  update rental.uae_rent_invoices set due_date = p_due_date where schedule_id = p_schedule_id;
+  -- Once a row is invoiced, the Rent Balance / dashboard bucket by the INVOICE's
+  -- due date, so move only that (the schedule row keeps its date — moving it onto
+  -- another month's date would violate the (lease_id, due_date) unique key). A
+  -- not-yet-invoiced row has no invoice, so move the schedule row itself.
+  if exists (select 1 from rental.uae_rent_invoices where schedule_id = p_schedule_id) then
+    update rental.uae_rent_invoices set due_date = p_due_date where schedule_id = p_schedule_id;
+  else
+    update rental.uae_payment_schedules set due_date = p_due_date where id = p_schedule_id;
+  end if;
 end;
 $$;
 

@@ -31,6 +31,7 @@ import { getVoucherDetail } from "@/lib/vouchers/queries";
 import { postChequeReturnVoucher } from "@/features/accounting/vouchers/cheque-return/actions";
 import { postJournalVoucher } from "@/features/accounting/vouchers/journal/actions";
 import { postJvMaintenanceVoucher } from "@/features/accounting/vouchers/jv-maintenance/actions";
+import { postMultiCurrencyJournal } from "@/features/accounting/vouchers/multi-currency-journal/actions";
 import { postOpeningBalanceVoucher } from "@/features/accounting/vouchers/opening-balance/actions";
 import { postPaymentVoucher } from "@/features/accounting/vouchers/payment/actions";
 import { postPdcPaymentVoucher, setPdcPaymentStatus } from "@/features/accounting/vouchers/pdc-payment/actions";
@@ -49,6 +50,7 @@ const EDITABLE_VOUCHER_TYPES = [
   "opening_balance_voucher",
   "journal_voucher",
   "jv_maintenance_voucher",
+  "multi_currency_journal",
 ] as const;
 
 const POST_ACTIONS = {
@@ -60,6 +62,7 @@ const POST_ACTIONS = {
   journal_voucher: postJournalVoucher,
   jv_maintenance_voucher: postJvMaintenanceVoucher,
   opening_balance_voucher: postOpeningBalanceVoucher,
+  multi_currency_journal: postMultiCurrencyJournal,
 } as const;
 
 export default async function VoucherDetailPage({
@@ -104,9 +107,18 @@ export default async function VoucherDetailPage({
 
   const totalDebit = detail.lines.reduce((sum, l) => sum + l.debit, 0);
   const hasReference = detail.lines.some((l) => l.reference);
+  // A Multi-Currency Journal has a different currency per line; show each line's
+  // amount in its OWN currency, and total the entry in the base currency (raw
+  // amounts across currencies don't add up). Everything else is single-currency.
+  const isMultiCurrency = voucherType === "multi_currency_journal";
+  const baseDebitTotal = detail.lines.reduce((sum, l) => sum + (l.baseDebit ?? 0), 0);
+  const baseCreditTotal = detail.lines.reduce((sum, l) => sum + (l.baseCredit ?? 0), 0);
   // Prefix line amounts with the voucher's transaction-currency symbol (e.g.
   // "Rs 200,000,000"); fall back to a bare number when none is set.
   const money = (n: number) => (detail.currencySymbol ? `${detail.currencySymbol} ${formatMoney(n)}` : formatMoney(n));
+  // Per-line money for a multi-currency voucher: use the line's own currency.
+  const lineMoney = (n: number, symbol: string | null | undefined) =>
+    symbol ? `${symbol} ${formatMoney(n)}` : formatMoney(n);
 
   // Signing URLs is the one step that depends on the attachment rows; do it in
   // parallel across whatever files exist.
@@ -143,7 +155,7 @@ export default async function VoucherDetailPage({
                   </Link>
                 </Button>
               )}
-            {canCreate && voucherType !== "cheque_return_voucher" && (
+            {canCreate && voucherType !== "cheque_return_voucher" && voucherType !== "multi_currency_journal" && (
               <CopyVoucherButton
                 id={detail.id}
                 onCopy={copyAccountingVoucher.bind(null, voucherType)}
@@ -202,6 +214,7 @@ export default async function VoucherDetailPage({
               <TableHead>Cost center</TableHead>
               {hasReference && <TableHead>Reference</TableHead>}
               <TableHead>Description</TableHead>
+              {isMultiCurrency && <TableHead>Currency</TableHead>}
               <TableHead className="text-right">Debit</TableHead>
               <TableHead className="text-right">Credit</TableHead>
             </TableRow>
@@ -216,21 +229,30 @@ export default async function VoucherDetailPage({
                 <TableCell>{line.costCenterName ?? "—"}</TableCell>
                 {hasReference && <TableCell>{line.reference ?? "—"}</TableCell>}
                 <TableCell>{line.description ?? "—"}</TableCell>
+                {isMultiCurrency && <TableCell className="font-mono text-xs">{line.currencyCode ?? "—"}</TableCell>}
                 <TableCell className="text-right font-mono tabular-nums">
-                  {line.debit ? money(line.debit) : ""}
+                  {line.debit ? (isMultiCurrency ? lineMoney(line.debit, line.currencySymbol) : money(line.debit)) : ""}
                 </TableCell>
                 <TableCell className="text-right font-mono tabular-nums">
-                  {line.credit ? money(line.credit) : ""}
+                  {line.credit ? (isMultiCurrency ? lineMoney(line.credit, line.currencySymbol) : money(line.credit)) : ""}
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
           <TableFooter>
-            <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={hasReference ? 4 : 3}>Total</TableCell>
-              <TableCell className="text-right font-mono tabular-nums">{money(totalDebit)}</TableCell>
-              <TableCell className="text-right font-mono tabular-nums">{money(totalDebit)}</TableCell>
-            </TableRow>
+            {isMultiCurrency ? (
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={hasReference ? 5 : 4}>Total (base {detail.currencyCode})</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{money(baseDebitTotal)}</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{money(baseCreditTotal)}</TableCell>
+              </TableRow>
+            ) : (
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={hasReference ? 4 : 3}>Total</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{money(totalDebit)}</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{money(totalDebit)}</TableCell>
+              </TableRow>
+            )}
           </TableFooter>
         </Table>
       </div>

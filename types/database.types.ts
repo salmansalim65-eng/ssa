@@ -18,6 +18,7 @@ export const VOUCHER_TYPES = [
   "uae_rent_invoice",
   "pk_rent_invoice",
   "asset_sales",
+  "multi_currency_journal",
 ] as const;
 export type VoucherType = (typeof VOUCHER_TYPES)[number];
 

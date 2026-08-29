@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { JournalVoucherForm } from "@/components/vouchers/forms/journal-voucher-form";
 import { JvMaintenanceVoucherForm } from "@/components/vouchers/forms/jv-maintenance-voucher-form";
+import { MultiCurrencyJournalForm } from "@/components/vouchers/forms/multi-currency-journal-form";
 import { OpeningBalanceVoucherForm } from "@/components/vouchers/forms/opening-balance-voucher-form";
 import { PaymentVoucherForm } from "@/components/vouchers/forms/payment-voucher-form";
 import { PdcPaymentVoucherForm } from "@/components/vouchers/forms/pdc-payment-voucher-form";
@@ -25,6 +26,7 @@ const EDITABLE_TABLE = {
   opening_balance_voucher: "opening_balance_vouchers",
   journal_voucher: "journal_vouchers",
   jv_maintenance_voucher: "jv_maintenance_vouchers",
+  multi_currency_journal: "multi_currency_journal_vouchers",
 } as const;
 type EditableVoucherType = keyof typeof EDITABLE_TABLE;
 
@@ -98,6 +100,7 @@ export default async function EditVoucherPage({
   // journal entry's lines and take the currency from the entry header.
   const isMultiLine = MULTI_LINE_TYPES.includes(voucherType);
   const isJvMaintenance = voucherType === "jv_maintenance_voucher";
+  const isMultiCurrencyJournal = voucherType === "multi_currency_journal";
   // The Journal Voucher keeps its own line grid (cost centre + debit account +
   // credit account + amount) in its dedicated line table; each row expands into
   // a balanced Dr/Cr pair of journal_entry_lines at post time.
@@ -151,6 +154,37 @@ export default async function EditVoucherPage({
     }));
   }
 
+  // The Multi-Currency Journal has no single voucher currency — each journal
+  // entry line carries its own. Rebuild the raw Dr/Cr grid straight from
+  // journal_entry_lines (account + side + currency + rate + amount).
+  let mcjLines: {
+    costCenterId: string;
+    accountId: string;
+    side: "debit" | "credit";
+    currencyId: string;
+    exchangeRate: number;
+    amount: number;
+  }[] = [];
+  if (isMultiCurrencyJournal && jeEmbed) {
+    const { data: lines } = await supabase
+      .schema("accounting")
+      .from("journal_entry_lines")
+      .select("account_id, cost_center_id, debit_amount, credit_amount, currency_id, exchange_rate")
+      .eq("journal_entry_id", (voucher as unknown as { journal_entry_id: string }).journal_entry_id)
+      .order("line_no");
+    mcjLines = (lines ?? []).map((l) => {
+      const isDebit = Number(l.debit_amount) > 0;
+      return {
+        costCenterId: (l.cost_center_id as string | null) ?? "",
+        accountId: l.account_id as string,
+        side: isDebit ? ("debit" as const) : ("credit" as const),
+        currencyId: l.currency_id as string,
+        exchangeRate: Number(l.exchange_rate) || 1,
+        amount: Number(isDebit ? l.debit_amount : l.credit_amount) || 0,
+      };
+    });
+  }
+
   const jeCurrency = jeEmbed?.currency_id ?? "";
   const jeExchangeRate = jeEmbed?.exchange_rate ?? 1;
 
@@ -174,7 +208,7 @@ export default async function EditVoucherPage({
     allocations?: { invoiceId: string; country: "UAE" | "PK"; amount: number }[];
   }[] = [];
   let obLines: { accountId: string; debit: number; credit: number; remarks: string }[] = [];
-  if (isHeaderDoc || isOpeningBalance || isMultiLine || isJvMaintenance) {
+  if (isHeaderDoc || isOpeningBalance || isMultiLine || isJvMaintenance || isMultiCurrencyJournal) {
     const today = new Date().toISOString().slice(0, 10);
     const [{ data: ccs }, rates] = await Promise.all([
       supabase
@@ -446,6 +480,24 @@ export default async function EditVoucherPage({
                     periodTill: "",
                     remarks: "",
                   },
+                ],
+          }}
+        />
+      )}
+      {voucherType === "multi_currency_journal" && (
+        <MultiCurrencyJournalForm
+          accounts={accountOptions}
+          currencies={docCurrencies}
+          costCenters={docCostCenters}
+          voucherId={id}
+          initialValues={{
+            entryDate: v.entry_date as string,
+            narration: (v.narration as string | null) ?? "",
+            lines: mcjLines.length
+              ? mcjLines
+              : [
+                  { costCenterId: "", accountId: "", side: "debit", currencyId: "", exchangeRate: 1, amount: 0 },
+                  { costCenterId: "", accountId: "", side: "credit", currencyId: "", exchangeRate: 1, amount: 0 },
                 ],
           }}
         />

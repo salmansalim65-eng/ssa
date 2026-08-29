@@ -1,0 +1,402 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { useFieldArray, useForm, useWatch } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { AlertCircleIcon, FileTextIcon, ListPlusIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import { FormSection } from "@/components/ui/form-section";
+import { Input } from "@/components/ui/input";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AccountCombobox, type AccountOption } from "@/components/vouchers/account-combobox";
+import { type CurrencyOption } from "@/components/vouchers/currency-select";
+import { DateInput } from "@/components/vouchers/date-input";
+import { cn } from "@/lib/utils";
+import { blankAmount, amountValue } from "@/lib/forms/amount";
+import {
+  createMultiCurrencyJournal,
+  updateMultiCurrencyJournal,
+} from "@/features/accounting/vouchers/multi-currency-journal/actions";
+import {
+  multiCurrencyJournalSchema,
+  type MultiCurrencyJournalFormValues,
+  type MultiCurrencyJournalInput,
+} from "@/features/accounting/vouchers/multi-currency-journal/schemas";
+
+export interface CostCenterOption {
+  id: string;
+  name: string;
+}
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function round2(n: number) {
+  return Math.round(n * 100) / 100;
+}
+
+function fmt(n: number) {
+  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+export function MultiCurrencyJournalForm({
+  accounts,
+  currencies,
+  costCenters,
+  voucherId,
+  initialValues,
+}: {
+  accounts: AccountOption[];
+  currencies: CurrencyOption[];
+  costCenters: CostCenterOption[];
+  voucherId?: string;
+  initialValues?: MultiCurrencyJournalFormValues;
+}) {
+  const router = useRouter();
+  const isEdit = !!voucherId;
+  const [isPending, startTransition] = useTransition();
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const defaultCurrency = currencies[0]?.id ?? "";
+  const defaultRate = currencies[0]?.rate ?? 1;
+  const emptyLine = (side: "debit" | "credit") => ({
+    costCenterId: "",
+    accountId: "",
+    side,
+    currencyId: defaultCurrency,
+    exchangeRate: defaultRate,
+    amount: blankAmount,
+  });
+
+  const form = useForm<MultiCurrencyJournalFormValues, unknown, MultiCurrencyJournalInput>({
+    resolver: zodResolver(multiCurrencyJournalSchema),
+    defaultValues: initialValues ?? {
+      entryDate: today(),
+      narration: "",
+      lines: [emptyLine("debit"), emptyLine("credit")],
+    },
+  });
+
+  const rateById = new Map(currencies.map((c) => [c.id, c.rate ?? 1] as const));
+
+  const { fields, append, remove } = useFieldArray({ control: form.control, name: "lines" });
+  const watchedLines = useWatch({ control: form.control, name: "lines" });
+
+  // Running base-currency totals so the user can see the entry balance as they
+  // type (base = amount × rate). Balanced when debit total = credit total.
+  let baseDebit = 0;
+  let baseCredit = 0;
+  for (const l of watchedLines ?? []) {
+    const base = round2((Number(l?.amount) || 0) * (Number(l?.exchangeRate) || 0));
+    if (l?.side === "credit") baseCredit += base;
+    else baseDebit += base;
+  }
+  const diff = round2(baseDebit - baseCredit);
+  const balanced = baseDebit > 0 && Math.abs(diff) < 0.01;
+
+  function onSubmit(values: MultiCurrencyJournalInput) {
+    setFormError(null);
+    startTransition(async () => {
+      const result = isEdit
+        ? await updateMultiCurrencyJournal(voucherId!, values)
+        : await createMultiCurrencyJournal(values);
+      if (result?.error) {
+        setFormError(result.error);
+        return;
+      }
+      toast.success(isEdit ? "Multi-currency journal updated" : "Multi-currency journal created");
+      router.push(`/accounting/vouchers/multi_currency_journal/${isEdit ? voucherId : result.id}`);
+    });
+  }
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+        {/* Document header */}
+        <FormSection
+          title="Document information"
+          description="Each line carries its own currency and conversion rate; the entry balances in the base currency."
+          icon={FileTextIcon}
+        >
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <FormItem>
+              <FormLabel>Document No.</FormLabel>
+              <Input value="Auto" disabled readOnly />
+            </FormItem>
+            <FormField
+              control={form.control}
+              name="entryDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Date</FormLabel>
+                  <FormControl>
+                    <DateInput {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="narration"
+              render={({ field }) => (
+                <FormItem className="sm:col-span-2 lg:col-span-1">
+                  <FormLabel>Narration</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Optional" {...field} value={(field.value as string) ?? ""} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </FormSection>
+
+        {/* Line entries */}
+        <FormSection
+          title="Journal lines"
+          description="Post each account on one side (Dr / Cr) in its own currency. Base amount = amount × rate."
+          icon={ListPlusIcon}
+          contentClassName="p-0"
+          actions={
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => append(emptyLine("debit"))}>
+                <PlusIcon /> Add debit
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => append(emptyLine("credit"))}>
+                <PlusIcon /> Add credit
+              </Button>
+            </div>
+          }
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1040px] text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50 text-left [&_th]:px-3 [&_th]:py-2 [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground">
+                  <th className="w-10">Sno</th>
+                  <th className="min-w-[160px]">Cost Center</th>
+                  <th className="min-w-[240px]">Account</th>
+                  <th className="w-28">Dr / Cr</th>
+                  <th className="w-28">Currency</th>
+                  <th className="w-32 text-right">Rate</th>
+                  <th className="w-36 text-right">Amount</th>
+                  <th className="w-36 text-right">Base</th>
+                  <th className="w-10" />
+                </tr>
+              </thead>
+              <tbody>
+                {fields.map((line, index) => {
+                  const row = watchedLines?.[index];
+                  const base = round2((Number(row?.amount) || 0) * (Number(row?.exchangeRate) || 0));
+                  return (
+                    <tr key={line.id} className="border-b align-top last:border-0 [&_td]:px-3 [&_td]:py-2">
+                      <td className="pt-4 text-muted-foreground tabular-nums">{index + 1}</td>
+                      <td>
+                        <FormField
+                          control={form.control}
+                          name={`lines.${index}.costCenterId`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <Select
+                                value={field.value ? field.value : "none"}
+                                onValueChange={(v) => field.onChange(v === "none" ? "" : v)}
+                              >
+                                <FormControl>
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="None" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="none">— None —</SelectItem>
+                                  {costCenters.map((c) => (
+                                    <SelectItem key={c.id} value={c.id}>
+                                      {c.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </td>
+                      <td>
+                        <FormField
+                          control={form.control}
+                          name={`lines.${index}.accountId`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <AccountCombobox accounts={accounts} value={field.value} onValueChange={field.onChange} />
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </td>
+                      <td>
+                        <FormField
+                          control={form.control}
+                          name={`lines.${index}.side`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <Select value={field.value} onValueChange={field.onChange}>
+                                <FormControl>
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="debit">Debit</SelectItem>
+                                  <SelectItem value="credit">Credit</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </td>
+                      <td>
+                        <FormField
+                          control={form.control}
+                          name={`lines.${index}.currencyId`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <Select
+                                value={field.value}
+                                onValueChange={(v) => {
+                                  field.onChange(v);
+                                  form.setValue(`lines.${index}.exchangeRate`, rateById.get(v) ?? 1, {
+                                    shouldValidate: true,
+                                  });
+                                }}
+                              >
+                                <FormControl>
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {currencies.map((c) => (
+                                    <SelectItem key={c.id} value={c.id}>
+                                      {c.code}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </td>
+                      <td>
+                        <FormField
+                          control={form.control}
+                          name={`lines.${index}.exchangeRate`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  step="0.000001"
+                                  min="0"
+                                  className="text-right tabular-nums"
+                                  {...field}
+                                  value={field.value as number}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </td>
+                      <td>
+                        <FormField
+                          control={form.control}
+                          name={`lines.${index}.amount`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  className="text-right tabular-nums"
+                                  {...field}
+                                  value={amountValue(field.value)}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </td>
+                      <td className="pt-4 text-right font-mono text-xs tabular-nums text-muted-foreground">
+                        {base ? fmt(base) : "—"}
+                      </td>
+                      <td className="pt-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground hover:text-destructive"
+                          disabled={fields.length <= 2}
+                          onClick={() => remove(index)}
+                          aria-label="Remove row"
+                        >
+                          <Trash2Icon className="size-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Balance bar — base-currency debit / credit totals + balanced flag. */}
+          <div className="flex flex-wrap items-center justify-end gap-x-8 gap-y-2 border-t bg-muted/30 px-4 py-3">
+            <span className="text-sm text-muted-foreground">
+              Base Debit <span className="ml-1 font-mono font-semibold tabular-nums text-foreground">{fmt(baseDebit)}</span>
+            </span>
+            <span className="text-sm text-muted-foreground">
+              Base Credit{" "}
+              <span className="ml-1 font-mono font-semibold tabular-nums text-foreground">{fmt(baseCredit)}</span>
+            </span>
+            <span
+              className={cn(
+                "rounded-md px-2.5 py-1 text-sm font-semibold",
+                balanced
+                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                  : "bg-destructive/10 text-destructive",
+              )}
+            >
+              {balanced ? "Balanced" : `Out by ${fmt(Math.abs(diff))}`}
+            </span>
+          </div>
+        </FormSection>
+
+        {formError && (
+          <p className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            <AlertCircleIcon className="size-4 shrink-0" />
+            {formError}
+          </p>
+        )}
+
+        {/* Actions */}
+        <div className="flex items-center justify-end gap-2 border-t pt-4">
+          <Button type="button" variant="outline" asChild>
+            <Link href="/accounting/vouchers/multi_currency_journal">Cancel</Link>
+          </Button>
+          <Button type="submit" disabled={isPending || !balanced}>
+            {isPending ? (isEdit ? "Saving…" : "Creating…") : isEdit ? "Save changes" : "Create journal"}
+          </Button>
+        </div>
+      </form>
+    </Form>
+  );
+}

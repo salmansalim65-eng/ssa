@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { ChequeReturnVoucherForm, type ReturnablePdcOption } from "@/components/vouchers/forms/cheque-return-voucher-form";
 import { JournalVoucherForm } from "@/components/vouchers/forms/journal-voucher-form";
 import { JvMaintenanceVoucherForm } from "@/components/vouchers/forms/jv-maintenance-voucher-form";
+import { MultiCurrencyJournalForm } from "@/components/vouchers/forms/multi-currency-journal-form";
 import { OpeningBalanceVoucherForm } from "@/components/vouchers/forms/opening-balance-voucher-form";
 import { PaymentVoucherForm } from "@/components/vouchers/forms/payment-voucher-form";
 import { PdcPaymentVoucherForm } from "@/components/vouchers/forms/pdc-payment-voucher-form";
@@ -212,6 +213,13 @@ export default async function NewVoucherPage({
       )}
       {voucherType === "jv_maintenance_voucher" && (
         <JvMaintenanceVoucherForm
+          accounts={accountOptions}
+          currencies={currencyOptions}
+          costCenters={costCenterOptions}
+        />
+      )}
+      {voucherType === "multi_currency_journal" && (
+        <MultiCurrencyJournalForm
           accounts={accountOptions}
           currencies={currencyOptions}
           costCenters={costCenterOptions}

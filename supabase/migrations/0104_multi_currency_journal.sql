@@ -1,15 +1,15 @@
--- Pending fix: run once in Supabase → SQL Editor. Safe to re-run.
--- ============================================================================
+-- =============================================================================
 -- Multi-Currency Journal voucher
 -- A raw journal where EACH line carries its own currency + exchange rate, so a
--- party account held in AED (DHR) can be CREDITED in AED while a loan account
--- held in PKR is DEBITED in PKR — the entry balances in the company BASE
--- currency. accounting.journal_entry_lines already stores per-line currency /
--- rate / base amounts; this adds the new voucher_type, its header table,
--- numbering and permissions.
--- ============================================================================
+-- party account held in AED can be credited in AED while a loan account held in
+-- PKR is debited in PKR — the entry balances in the company BASE currency
+-- (sum of base debits = sum of base credits, already enforced by
+-- accounting.fn_enforce_balanced_entry). accounting.journal_entry_lines already
+-- stores per-line currency_id / exchange_rate / base amounts, so this migration
+-- only adds the new voucher_type, its header table, numbering and permissions.
+-- =============================================================================
 
--- 1) Allow the new voucher_type value on the constrained tables. -------------
+-- 1. Allow the new voucher_type value on the constrained tables. -------------
 alter table accounting.journal_entries drop constraint if exists journal_entries_voucher_type_check;
 alter table accounting.journal_entries add constraint journal_entries_voucher_type_check
   check (voucher_type = any (array[
@@ -19,7 +19,7 @@ alter table accounting.journal_entries add constraint journal_entries_voucher_ty
     'pk_rent_invoice','asset_sales','multi_currency_journal'
   ]));
 
-alter table core.document_sequences drop constraint if exists document_sequences_voucher_type_check;
+alter table core.document_sequences drop constraint document_sequences_voucher_type_check;
 alter table core.document_sequences add constraint document_sequences_voucher_type_check
   check (voucher_type = any (array[
     'purchase_voucher','receipt_voucher','payment_voucher','pdc_payment_voucher',
@@ -28,8 +28,8 @@ alter table core.document_sequences add constraint document_sequences_voucher_ty
     'assets','cost_centers','chart_of_accounts','hh_lease','multi_currency_journal'
   ]));
 
--- 2) Header table (voucher_no + narration). Line-level data lives in
---    accounting.journal_entry_lines (one Dr/Cr line per row, each currency). ---
+-- 2. Header table (voucher_no + narration). The line-level accounting data lives
+--    in accounting.journal_entry_lines (one Dr/Cr line per row, each currency). -
 create table if not exists accounting.multi_currency_journal_vouchers (
   id                uuid primary key default gen_random_uuid(),
   company_id        uuid not null references core.companies(id) on delete cascade,
@@ -42,25 +42,19 @@ create table if not exists accounting.multi_currency_journal_vouchers (
   constraint multi_currency_journal_vouchers_no_unique unique (company_id, voucher_no)
 );
 
-drop trigger if exists trg_audit_multi_currency_journal_vouchers on accounting.multi_currency_journal_vouchers;
 create trigger trg_audit_multi_currency_journal_vouchers
   after insert or update or delete on accounting.multi_currency_journal_vouchers
   for each row execute function audit.fn_row_audit();
 
 alter table accounting.multi_currency_journal_vouchers enable row level security;
 
-drop policy if exists multi_currency_journal_vouchers_select on accounting.multi_currency_journal_vouchers;
 create policy multi_currency_journal_vouchers_select on accounting.multi_currency_journal_vouchers
   for select using (company_id = core.current_company_id());
-
-drop policy if exists multi_currency_journal_vouchers_insert on accounting.multi_currency_journal_vouchers;
 create policy multi_currency_journal_vouchers_insert on accounting.multi_currency_journal_vouchers
   for insert with check (
     company_id = core.current_company_id()
     and core.user_has_permission('multi_currency_journal', 'create')
   );
-
-drop policy if exists multi_currency_journal_vouchers_update on accounting.multi_currency_journal_vouchers;
 create policy multi_currency_journal_vouchers_update on accounting.multi_currency_journal_vouchers
   for update using (
     company_id = core.current_company_id()
@@ -70,18 +64,19 @@ create policy multi_currency_journal_vouchers_update on accounting.multi_currenc
     )
   );
 
--- 3) Document numbering (prefix MCJ) for every existing company. -------------
+-- 3. Document numbering (prefix MCJ) for every existing company. --------------
 insert into core.document_sequences (company_id, voucher_type, prefix, padding, next_number)
 select id, 'multi_currency_journal', 'MCJ', 6, 1 from core.companies
 on conflict (company_id, voucher_type) do nothing;
 
--- 4) Permission catalog rows (admins bypass; lets the permission UI grant it). -
+-- 4. Permission catalog rows. Admins bypass permission checks; these rows let
+--    the permission UI grant the voucher to non-admin users/roles later. -------
 insert into core.permissions (module_key, action, label)
 select 'multi_currency_journal', a.action, initcap(a.action) || ' multi-currency journal'
 from (values ('view'),('create'),('edit'),('delete'),('print'),('export'),('approve'),('reject'),('post')) as a(action)
 on conflict (module_key, action) do nothing;
 
--- 5) Teach the draft + posted delete helpers about the new type. -------------
+-- 5. Teach the draft + posted delete helpers about the new type. --------------
 create or replace function accounting.fn_delete_draft_voucher(p_voucher_type text, p_id uuid)
 returns void
 language plpgsql

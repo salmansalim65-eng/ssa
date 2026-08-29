@@ -185,37 +185,29 @@ export async function deleteUaeLease(leaseId: string) {
 // the amount, the posted ledger entry and the invoice number are untouched.
 export async function updateUaeScheduleDueDate(scheduleId: string, dueDate: string) {
   await requirePermission("uae_rent_invoice", "edit");
-  const companyId = await getCurrentCompanyId();
   const supabase = await createClient();
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return { error: "Enter a valid due date" };
 
+  // Read the lease id (the schedule table has no company_id; RLS scopes reads by
+  // lease → company) so we can revalidate the right page after the change.
   const { data: sched } = await supabase
     .schema("rental")
     .from("uae_payment_schedules")
-    .select("id, lease_id")
-    .eq("company_id", companyId)
+    .select("lease_id")
     .eq("id", scheduleId)
     .maybeSingle();
   if (!sched) return { error: "Schedule row not found" };
 
-  const { error: schedErr } = await supabase
-    .schema("rental")
-    .from("uae_payment_schedules")
-    .update({ due_date: dueDate })
-    .eq("company_id", companyId)
-    .eq("id", scheduleId);
-  if (schedErr) return { error: schedErr.message };
-
-  // The Rent Balance / dashboard bucket by the invoice's due date, so move the
-  // generated invoice too (no-op when the row hasn't been invoiced yet).
-  const { error: invErr } = await supabase
-    .schema("rental")
-    .from("uae_rent_invoices")
-    .update({ due_date: dueDate })
-    .eq("company_id", companyId)
-    .eq("schedule_id", scheduleId);
-  if (invErr) return { error: invErr.message };
+  // The schedule table has no UPDATE policy, so the write goes through a
+  // SECURITY DEFINER function that re-checks company + permission and moves both
+  // the schedule row and the invoice it generated (which the Rent Balance /
+  // dashboard bucket by).
+  const { error } = await supabase.schema("rental").rpc("fn_update_uae_schedule_due_date", {
+    p_schedule_id: scheduleId,
+    p_due_date: dueDate,
+  });
+  if (error) return { error: error.message };
 
   revalidatePath(`/rental/uae/leases/${sched.lease_id}`);
   revalidatePath("/dashboard");

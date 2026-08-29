@@ -287,10 +287,13 @@ export default async function DashboardPage({
   // Ledger balances in each country's own currency (document amounts). The
   // balance cards reflect operating balances only, so Cash & Bank, Fixed Asset
   // and Tenant accounts are excluded from the totals (and the drill-down below).
-  const balByCountry: Record<string, { debit: number; credit: number }> = {
-    AE: { debit: 0, credit: 0 },
-    PK: { debit: 0, credit: 0 },
-  };
+  // Net each account first (debits − credits), then place it on ONE side by its
+  // balance: an account with a net debit balance adds to Debit, a net credit
+  // balance to Credit. (Summing gross movements instead would split a single
+  // account's own debits and credits across both columns — e.g. an account with
+  // a 223k debit and a 51k credit would show as 223k Dr / 51k Cr rather than its
+  // 172k Dr balance.)
+  const netByCountryAccount: Record<string, Map<string, number>> = { AE: new Map(), PK: new Map() };
   for (const r of ledgerRows ?? []) {
     // Attribute by cost centre, falling back to the account's own country so a
     // party account (e.g. a supplier opening balance) booked without a cost
@@ -298,11 +301,21 @@ export default async function DashboardPage({
     const country = normCountry(
       (r.cost_center_country as string | null) ?? coaCountryById.get(r.account_id as string),
     );
-    const b = country ? balByCountry[country] : undefined;
-    if (!b) continue;
+    const m = country ? netByCountryAccount[country] : undefined;
+    if (!m) continue;
     if (isExcludedFromBalances(r) || fixedAssetAccountIds.has(r.account_id as string)) continue;
-    b.debit += Number(r.doc_debit_amount);
-    b.credit += Number(r.doc_credit_amount);
+    const k = r.account_id as string;
+    m.set(k, (m.get(k) ?? 0) + Number(r.doc_debit_amount) - Number(r.doc_credit_amount));
+  }
+  const balByCountry: Record<string, { debit: number; credit: number }> = {
+    AE: { debit: 0, credit: 0 },
+    PK: { debit: 0, credit: 0 },
+  };
+  for (const country of ["AE", "PK"] as const) {
+    for (const net of netByCountryAccount[country].values()) {
+      if (net >= 0) balByCountry[country].debit += net;
+      else balByCountry[country].credit += -net;
+    }
   }
 
   // Rent figures in each country's own currency (document amounts), NET of the
@@ -842,7 +855,13 @@ async function loadDetail(
       a.credit += Number(r.doc_credit_amount);
       byAccount.set(k, a);
     }
-    const rows = [...byAccount.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    // Present each account by its net balance (one side), matching the card.
+    const rows = [...byAccount.entries()]
+      .map(([code, a]) => {
+        const net = a.debit - a.credit;
+        return [code, { ...a, debit: net >= 0 ? net : 0, credit: net < 0 ? -net : 0, net }] as const;
+      })
+      .sort((a, b) => a[0].localeCompare(b[0]));
     const totalDebit = rows.reduce((s, [, a]) => s + a.debit, 0);
     const totalCredit = rows.reduce((s, [, a]) => s + a.credit, 0);
 

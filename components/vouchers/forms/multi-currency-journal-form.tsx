@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertCircleIcon, FileTextIcon, ListPlusIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { AlertCircleIcon, FileTextIcon, ListPlusIcon, PlusIcon, ScaleIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -100,6 +100,38 @@ export function MultiCurrencyJournalForm({
   const diff = round2(baseDebit - baseCredit);
   const balanced = baseDebit > 0 && Math.abs(diff) < 0.01;
 
+  // Auto-balance: fill THIS line's amount so the whole entry balances in the
+  // base currency — amount = (opposite-side base − same-side other base) ÷ this
+  // line's rate. So you type the amount you know on one side (e.g. 4,000,000
+  // RS), then click ⇄ on the other line (its currency + rate set) to get the
+  // matching amount without hand-calculating.
+  function autoBalance(index: number) {
+    const rows = form.getValues("lines");
+    const row = rows[index];
+    const rate = Number(row?.exchangeRate) || 0;
+    if (!rate) {
+      toast.error("Set this line's currency and rate first.");
+      return;
+    }
+    let oppositeBase = 0;
+    let sameOtherBase = 0;
+    rows.forEach((l, i) => {
+      if (i === index) return;
+      const base = round2((Number(l.amount) || 0) * (Number(l.exchangeRate) || 0));
+      if (l.side === row.side) sameOtherBase += base;
+      else oppositeBase += base;
+    });
+    const targetBase = round2(oppositeBase - sameOtherBase);
+    if (targetBase <= 0) {
+      toast.error("Fill the other side's amount first, then auto-balance.");
+      return;
+    }
+    form.setValue(`lines.${index}.amount`, round2(targetBase / rate), {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+  }
+
   function onSubmit(values: MultiCurrencyJournalInput) {
     setFormError(null);
     startTransition(async () => {
@@ -161,7 +193,7 @@ export function MultiCurrencyJournalForm({
         {/* Line entries */}
         <FormSection
           title="Journal lines"
-          description="Post each account on one side (Dr / Cr) in its own currency. Base amount = amount × rate."
+          description="Post each account on one side (Dr / Cr) in its own currency. Base = amount × rate. Fill one side, then press ⚖ on the other line to auto-fill its amount and balance the entry."
           icon={ListPlusIcon}
           contentClassName="p-0"
           actions={
@@ -335,8 +367,23 @@ export function MultiCurrencyJournalForm({
                           )}
                         />
                       </td>
-                      <td className="pt-4 text-right font-mono text-xs tabular-nums text-muted-foreground">
-                        {base ? fmt(base) : "—"}
+                      <td className="pt-2 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                            {base ? fmt(base) : "—"}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-7 text-muted-foreground hover:text-primary"
+                            onClick={() => autoBalance(index)}
+                            title="Auto-fill this amount to balance the entry"
+                            aria-label="Auto-balance this line"
+                          >
+                            <ScaleIcon className="size-4" />
+                          </Button>
+                        </div>
                       </td>
                       <td className="pt-1">
                         <Button

@@ -1,12 +1,8 @@
--- Pending fix: run once in Supabase → SQL Editor. Safe to re-run.
--- ============================================================================
--- Edit a UAE payment-schedule row's due date
--- Move a month's rent (and the invoice it generated) to a different due date —
+-- Move a UAE payment-schedule row's due date (and the invoice it generated) —
 -- e.g. pull September's rent forward to be due in August so August shows both
 -- months' amount due. rental.uae_payment_schedules has only a SELECT policy (no
 -- UPDATE policy), so this runs as a SECURITY DEFINER function that re-checks the
 -- company and the uae_rent_invoice edit permission before writing.
--- ============================================================================
 create or replace function rental.fn_update_uae_schedule_due_date(p_schedule_id uuid, p_due_date date)
 returns void
 language plpgsql

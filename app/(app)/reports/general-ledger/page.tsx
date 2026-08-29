@@ -48,6 +48,14 @@ interface LedgerRow {
   cost_center_id: string | null;
   debit_amount: number;
   credit_amount: number;
+  // The line's own transaction amount + currency (before base conversion). Used
+  // when the line's currency already matches the account's display currency —
+  // e.g. a Multi-Currency Journal line whose per-line rate differs from the
+  // exchange-rate table, so converting base back by the table rate would be
+  // wrong; the stored doc amount is the true figure.
+  doc_debit_amount: number;
+  doc_credit_amount: number;
+  currency_code: string | null;
   description: string | null;
   narration: string | null;
 }
@@ -178,25 +186,35 @@ export default async function GeneralLedgerPage({
     const currencyCode = (targetCurrencyId ? codeById.get(targetCurrencyId) : baseCurrency?.code) ?? "";
     const symbol = (targetCurrencyId ? symbolById.get(targetCurrencyId) : baseCurrency?.symbol) ?? currencyCode;
 
+    // A line already booked in the display currency shows its stored doc amount;
+    // anything else is converted from base by the table rate.
+    const toDisplay = (base: number, doc: number, code: string | null) =>
+      code && code === currencyCode ? doc : round2(base * factor);
+
     let priorQuery = supabase
       .schema("reporting")
       .from("v_ledger_entries")
-      .select("debit_amount, credit_amount")
+      .select("debit_amount, credit_amount, doc_debit_amount, doc_credit_amount, currency_code")
       .eq("company_id", companyId)
       .eq("account_id", acc.id)
       .lt("entry_date", from);
     if (costCenterId) priorQuery = priorQuery.eq("cost_center_id", costCenterId);
     const { data: priorLines } = await priorQuery;
-    const priorDebit = (priorLines ?? []).reduce((sum, l) => sum + l.debit_amount, 0);
-    const priorCredit = (priorLines ?? []).reduce((sum, l) => sum + l.credit_amount, 0);
-    const openingBase = isDebitNormal ? priorDebit - priorCredit : priorCredit - priorDebit;
-    const opening = round2(openingBase * factor);
+    const priorDebit = ((priorLines as unknown as LedgerRow[]) ?? []).reduce(
+      (sum, l) => sum + toDisplay(l.debit_amount, l.doc_debit_amount, l.currency_code),
+      0,
+    );
+    const priorCredit = ((priorLines as unknown as LedgerRow[]) ?? []).reduce(
+      (sum, l) => sum + toDisplay(l.credit_amount, l.doc_credit_amount, l.currency_code),
+      0,
+    );
+    const opening = round2(isDebitNormal ? priorDebit - priorCredit : priorCredit - priorDebit);
 
     let lineQuery = supabase
       .schema("reporting")
       .from("v_ledger_entries")
       .select(
-        "journal_entry_id, entry_date, due_date, voucher_type, voucher_id, voucher_no, cost_center_id, debit_amount, credit_amount, description, narration",
+        "journal_entry_id, entry_date, due_date, voucher_type, voucher_id, voucher_no, cost_center_id, debit_amount, credit_amount, doc_debit_amount, doc_credit_amount, currency_code, description, narration",
       )
       .eq("company_id", companyId)
       .eq("account_id", acc.id)
@@ -210,8 +228,8 @@ export default async function GeneralLedgerPage({
 
     let rows = ((lineRows as unknown as LedgerRow[]) ?? []).map((r) => ({
       ...r,
-      debit_amount: round2(r.debit_amount * factor),
-      credit_amount: round2(r.credit_amount * factor),
+      debit_amount: toDisplay(r.debit_amount, r.doc_debit_amount, r.currency_code),
+      credit_amount: toDisplay(r.credit_amount, r.doc_credit_amount, r.currency_code),
     }));
 
     // Column filters (applied to the displayed period rows).

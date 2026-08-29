@@ -96,7 +96,7 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
     supabase
       .schema("rental")
       .from("uae_rent_invoices")
-      .select("id, voucher_no, invoice_date, amount, outstanding_balance, journal_entry_id")
+      .select("id, voucher_no, invoice_date, due_date, schedule_id, amount, outstanding_balance, journal_entry_id")
       .eq("lease_id", id)
       .order("invoice_date", { ascending: false }),
   ]);
@@ -105,11 +105,18 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
     id: string;
     voucher_no: string | null;
     invoice_date: string;
+    due_date: string | null;
+    schedule_id: string | null;
     amount: number;
     outstanding_balance: number;
     journal_entry_id: string | null;
   };
   const invoiceRows = (invoices as unknown as InvoiceRow[]) ?? [];
+  // Once a schedule row is invoiced, its "due date" is the invoice's due date —
+  // which the Change-due-date action moves (the schedule row keeps its own date).
+  const invoiceDueBySchedule = new Map(
+    invoiceRows.filter((r) => r.schedule_id && r.due_date).map((r) => [r.schedule_id as string, r.due_date as string]),
+  );
   const pendingScheduleCount = (schedules ?? []).filter((s) => s.status === "pending").length;
   // journal_entries live in the `accounting` schema (cross-schema from rental).
   const invoiceStatusById = await fetchRefs<{ id: string; status: JournalEntryStatus }>(
@@ -219,9 +226,11 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(schedules ?? []).map((s) => (
+              {(schedules ?? []).map((s) => {
+                const effectiveDue = invoiceDueBySchedule.get(s.id as string) ?? (s.due_date as string);
+                return (
                 <TableRow key={s.id}>
-                  <TableCell className="text-muted-foreground">{formatDate(s.due_date)}</TableCell>
+                  <TableCell className="text-muted-foreground">{formatDate(effectiveDue)}</TableCell>
                   <TableCell className="text-right font-mono tabular-nums">{formatMoney(s.amount)}</TableCell>
                   <TableCell>
                     <Badge variant={scheduleStatusVariant[s.status as keyof typeof scheduleStatusVariant]}>{s.status}</Badge>
@@ -229,13 +238,14 @@ export default async function UaeLeaseDetailPage({ params }: { params: Promise<{
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
                       {canEdit && (
-                        <EditScheduleDueDateButton scheduleId={s.id} currentDueDate={s.due_date as string} />
+                        <EditScheduleDueDateButton scheduleId={s.id} currentDueDate={effectiveDue} />
                       )}
                       {s.status === "pending" && canCreate && <GenerateInvoiceButton scheduleId={s.id} />}
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
               {(schedules ?? []).length === 0 && (
                 <TableRow className="hover:bg-transparent">
                   <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">

@@ -152,14 +152,18 @@ export default async function ProfitAndLossPage({
   const income: AccountBalance[] = [];
   const expense: AccountBalance[] = [];
   for (const a of byAccount.values()) {
-    const debit = a.debit * factor;
-    const credit = a.credit * factor;
+    // Net each account first, then show it on ONE side by its balance, so an
+    // account with both debits and credits shows its net rather than the gross
+    // movements split across both columns.
+    const netSigned = (a.debit - a.credit) * factor; // positive = net debit
+    const debit = netSigned > 0 ? netSigned : 0;
+    const credit = netSigned < 0 ? -netSigned : 0;
     if (a.account_type === "income") {
-      const balance = credit - debit;
+      const balance = -netSigned; // income is credit-normal
       if (balance !== 0)
         income.push({ account_code: a.account_code, account_name: a.account_name, debit, credit, balance });
     } else {
-      const balance = debit - credit;
+      const balance = netSigned;
       if (balance !== 0)
         expense.push({ account_code: a.account_code, account_name: a.account_name, debit, credit, balance });
     }
@@ -202,8 +206,13 @@ export default async function ProfitAndLossPage({
   }
   for (const list of childrenOf.values()) list.sort((a, b) => a.account_code.localeCompare(b.account_code));
 
+  // Net-bucketed per account (matches the section rows), so group Debit/Credit
+  // columns roll up as net balances too.
   const balById = new Map<string, { debit: number; credit: number }>();
-  for (const [id, a] of byAccount) balById.set(id, { debit: a.debit * factor, credit: a.credit * factor });
+  for (const [id, a] of byAccount) {
+    const netSigned = (a.debit - a.credit) * factor;
+    balById.set(id, { debit: netSigned > 0 ? netSigned : 0, credit: netSigned < 0 ? -netSigned : 0 });
+  }
   const nodeTotals = new Map<string, { debit: number; credit: number }>();
   function totalsFor(node: CoaNode): { debit: number; credit: number } {
     const cached = nodeTotals.get(node.id);

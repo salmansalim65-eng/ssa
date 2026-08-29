@@ -84,6 +84,35 @@ export function MultiCurrencyJournalForm({
   });
 
   const rateById = new Map(currencies.map((c) => [c.id, c.rate ?? 1] as const));
+  const codeOf = (id: string) => currencies.find((c) => c.id === id)?.code ?? "";
+
+  // Cross-rate helper: "1 [A] = x [B]". Applying it makes A the reference
+  // (rate 1) and every B line rate = 1 / x — so the user enters just one number
+  // (e.g. 1 DHR = 77.5 RS) instead of the per-line to-base rates.
+  const [crossA, setCrossA] = useState(currencies[0]?.id ?? "");
+  const [crossB, setCrossB] = useState(currencies[1]?.id ?? currencies[0]?.id ?? "");
+  const [crossVal, setCrossVal] = useState("");
+
+  function applyCrossRate() {
+    const x = Number(crossVal);
+    if (!crossA || !crossB || crossA === crossB) {
+      toast.error("Pick two different currencies.");
+      return;
+    }
+    if (!(x > 0)) {
+      toast.error("Enter the rate, e.g. 77.5.");
+      return;
+    }
+    const other = Math.round((1 / x) * 1e6) / 1e6;
+    const rows = form.getValues("lines");
+    rows.forEach((l, i) => {
+      if (l.currencyId === crossA)
+        form.setValue(`lines.${i}.exchangeRate`, 1, { shouldValidate: true, shouldDirty: true });
+      else if (l.currencyId === crossB)
+        form.setValue(`lines.${i}.exchangeRate`, other, { shouldValidate: true, shouldDirty: true });
+    });
+    toast.success(`Rates set — 1 ${codeOf(crossA)} = ${x} ${codeOf(crossB)}`);
+  }
 
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "lines" });
   const watchedLines = useWatch({ control: form.control, name: "lines" });
@@ -207,6 +236,52 @@ export function MultiCurrencyJournalForm({
             </div>
           }
         >
+          {/* Cross-rate helper — set both currencies' rates from one number. */}
+          <div className="flex flex-wrap items-center gap-2 border-b bg-muted/20 px-4 py-3">
+            <span className="text-sm font-medium text-muted-foreground">Cross rate:</span>
+            <span className="text-sm">1</span>
+            <Select value={crossA} onValueChange={setCrossA}>
+              <SelectTrigger className="w-24">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {currencies.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.code}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="text-sm">=</span>
+            <Input
+              type="number"
+              step="0.0001"
+              min="0"
+              value={crossVal}
+              onChange={(e) => setCrossVal(e.target.value)}
+              placeholder="77.5"
+              className="w-28 text-right tabular-nums"
+            />
+            <Select value={crossB} onValueChange={setCrossB}>
+              <SelectTrigger className="w-24">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {currencies.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.code}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button type="button" variant="outline" size="sm" onClick={applyCrossRate}>
+              Apply rates
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              Sets {codeOf(crossA) || "A"} as reference (rate 1) and {codeOf(crossB) || "B"} = 1 ÷ rate.
+            </span>
+          </div>
+
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1040px] text-sm">
               <thead>

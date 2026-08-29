@@ -520,8 +520,8 @@ export default async function DashboardPage({
           }
         >
           <div className="flex justify-between gap-2">
-            <StatCol value={money("", balByCountry.AE.debit)} label="Debit" />
-            <StatCol value={money("", balByCountry.AE.credit)} label="Credit" align="right" />
+            <StatCol value={balByCountry.AE.debit ? money("", balByCountry.AE.debit) : ""} label="Debit" />
+            <StatCol value={balByCountry.AE.credit ? money("", balByCountry.AE.credit) : ""} label="Credit" align="right" />
           </div>
         </SummaryCard>
 
@@ -536,8 +536,8 @@ export default async function DashboardPage({
           }
         >
           <div className="flex justify-between gap-2">
-            <StatCol value={money("", balByCountry.PK.debit)} label="Debit" />
-            <StatCol value={money("", balByCountry.PK.credit)} label="Credit" align="right" />
+            <StatCol value={balByCountry.PK.debit ? money("", balByCountry.PK.debit) : ""} label="Debit" />
+            <StatCol value={balByCountry.PK.credit ? money("", balByCountry.PK.credit) : ""} label="Credit" align="right" />
           </div>
         </SummaryCard>
 
@@ -811,6 +811,9 @@ async function loadDetail(
   const supabase = await createClient();
   const cfg = BALANCE_PANELS[key];
   const fmt = (n: number) => money(symbol, n);
+  // A side with no amount is left blank (not "Rs 0"), so each account reads as a
+  // single Dr or Cr figure.
+  const fmtOrBlank = (n: number) => (Math.abs(n) < 0.005 ? "" : fmt(n));
 
   if (cfg.kind === "balances") {
     // Party account → own country, read from the base table (no view-column dep).
@@ -892,8 +895,8 @@ async function loadDetail(
                       <span className="text-primary">{a.name}</span>
                     </Link>
                   </TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{fmt(a.debit)}</TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{fmt(a.credit)}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">{fmtOrBlank(a.debit)}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">{fmtOrBlank(a.credit)}</TableCell>
                   <TableCell className="text-right font-mono tabular-nums">
                     {fmt(Math.abs(net))} {net >= 0 ? "Dr" : "Cr"}
                   </TableCell>
@@ -912,8 +915,8 @@ async function loadDetail(
             <tfoot className="border-t bg-muted/40">
               <TableRow className="hover:bg-transparent">
                 <TableCell className="font-medium">Total</TableCell>
-                <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totalDebit)}</TableCell>
-                <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totalCredit)}</TableCell>
+                <TableCell className="text-right font-mono font-semibold tabular-nums">{fmtOrBlank(totalDebit)}</TableCell>
+                <TableCell className="text-right font-mono font-semibold tabular-nums">{fmtOrBlank(totalCredit)}</TableCell>
                 <TableCell className="text-right font-mono font-semibold tabular-nums">
                   {fmt(Math.abs(totalDebit - totalCredit))} {totalDebit - totalCredit >= 0 ? "Dr" : "Cr"}
                 </TableCell>

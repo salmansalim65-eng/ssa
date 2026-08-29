@@ -47,6 +47,14 @@ export interface VoucherDetail {
     credit: number;
     description: string | null;
     reference?: string | null;
+    /** Per-line transaction currency + base amounts. Set for vouchers whose
+     * lines can each be in a different currency (Multi-Currency Journal); the
+     * debit/credit above are then in this currency and base is the converted
+     * amount used for balancing. */
+    currencyCode?: string | null;
+    currencySymbol?: string | null;
+    baseDebit?: number;
+    baseCredit?: number;
   }[];
 }
 
@@ -255,6 +263,23 @@ export async function getVoucherListRows(
         status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
       }));
     }
+    case "multi_currency_journal": {
+      const { data } = await supabase
+        .schema("accounting")
+        .from("multi_currency_journal_vouchers")
+        .select("id, voucher_no, entry_date, narration, journal_entry_id, journal_entries:journal_entry_id(status)")
+        .eq("company_id", companyId)
+        .order("created_at", { ascending: false });
+      return (data ?? []).map((r) => ({
+        id: r.id,
+        voucherNo: r.voucher_no,
+        date: r.entry_date,
+        party: r.narration ?? "—",
+        amount: 0,
+        journalEntryId: r.journal_entry_id,
+        status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
+      }));
+    }
     case "opening_balance_voucher": {
       const { data } = await supabase
         .schema("accounting")
@@ -334,7 +359,7 @@ async function getJournalEntryWithLines(journalEntryId: string) {
       .schema("accounting")
       .from("journal_entry_lines")
       .select(
-        "debit_amount, credit_amount, description, reference, chart_of_accounts:account_id(account_code, account_name), cost_centers:cost_center_id(name)",
+        "debit_amount, credit_amount, currency_id, base_debit_amount, base_credit_amount, description, reference, chart_of_accounts:account_id(account_code, account_name), cost_centers:cost_center_id(name)",
       )
       .eq("journal_entry_id", journalEntryId)
       .order("line_no"),
@@ -345,6 +370,20 @@ async function getJournalEntryWithLines(journalEntryId: string) {
     : { data: null };
   const cur = currency as { code: string; symbol: string } | null;
 
+  // Per-line currencies (Multi-Currency Journal): resolve every distinct
+  // currency_id on the lines to its code/symbol in one lookup (a cross-schema
+  // embed can't be nested here).
+  const lineCurrencyIds = [...new Set((lines ?? []).map((l) => l.currency_id as string).filter(Boolean))];
+  const lineCurrencyById = new Map<string, { code: string; symbol: string }>();
+  if (lineCurrencyIds.length) {
+    const { data: curRows } = await supabase
+      .schema("core")
+      .from("currencies")
+      .select("id, code, symbol")
+      .in("id", lineCurrencyIds);
+    for (const c of curRows ?? []) lineCurrencyById.set(c.id as string, { code: c.code as string, symbol: c.symbol as string });
+  }
+
   return {
     status: (je?.status ?? "draft") as JournalEntryStatus,
     narration: je?.narration ?? null,
@@ -354,6 +393,7 @@ async function getJournalEntryWithLines(journalEntryId: string) {
     lines: (lines ?? []).map((l) => {
       const account = l.chart_of_accounts as unknown as { account_code: string; account_name: string } | null;
       const costCenter = l.cost_centers as unknown as { name: string } | null;
+      const lineCur = lineCurrencyById.get(l.currency_id as string) ?? null;
       return {
         accountCode: account?.account_code ?? "",
         accountName: account?.account_name ?? "",
@@ -362,6 +402,10 @@ async function getJournalEntryWithLines(journalEntryId: string) {
         credit: l.credit_amount,
         description: l.description,
         reference: (l.reference as string | null) ?? null,
+        currencyCode: lineCur?.code ?? null,
+        currencySymbol: lineCur?.symbol ?? null,
+        baseDebit: Number(l.base_debit_amount) || 0,
+        baseCredit: Number(l.base_credit_amount) || 0,
       };
     }),
   };
@@ -617,6 +661,38 @@ export async function getVoucherDetail(
           { label: "Cost center", value: costCenter?.name ?? "—" },
           { label: "Currency conv.", value: formatRate(v.exchange_rate) },
           { label: "Total", value: v.total_amount.toLocaleString() },
+        ],
+        lines: je.lines,
+      };
+    }
+    case "multi_currency_journal": {
+      const { data: v } = await supabase
+        .schema("accounting")
+        .from("multi_currency_journal_vouchers")
+        .select("*")
+        .eq("company_id", companyId)
+        .eq("id", id)
+        .maybeSingle();
+      if (!v) return null;
+      const je = await getJournalEntryWithLines(v.journal_entry_id);
+      const baseDebitTotal = je.lines.reduce((s, l) => s + (l.baseDebit ?? 0), 0);
+      return {
+        id: v.id,
+        voucherNo: v.voucher_no,
+        date: v.entry_date,
+        narration: v.narration,
+        journalEntryId: v.journal_entry_id,
+        status: je.status,
+        // The header carries the base currency; each line shows its own.
+        currencyCode: je.currencyCode,
+        currencySymbol: je.currencySymbol,
+        exchangeRate: je.exchangeRate,
+        fields: [
+          { label: "Base currency", value: je.currencyCode || "—" },
+          {
+            label: `Total (base ${je.currencyCode})`.trim(),
+            value: `${je.currencySymbol ? je.currencySymbol + " " : ""}${baseDebitTotal.toLocaleString()}`,
+          },
         ],
         lines: je.lines,
       };

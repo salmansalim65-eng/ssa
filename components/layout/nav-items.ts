@@ -109,6 +109,7 @@ export const navSections: NavSection[] = [
       { label: "PDC Receipts", href: "/accounting/vouchers/pdc_receipt_voucher", icon: ClockIcon },
       { label: "Cheque Returns", href: "/accounting/vouchers/cheque_return_voucher", icon: RotateCcwIcon },
       { label: "Journal Vouchers", href: "/accounting/vouchers/journal_voucher", icon: BookOpenIcon },
+      { label: "Multi-Currency Journal", href: "/accounting/vouchers/multi_currency_journal", icon: BookOpenIcon },
       { label: "Opening Balances", href: "/accounting/vouchers/opening_balance_voucher", icon: ScaleIcon },
       { label: "Voucher Register", href: "/accounting/voucher-register", icon: ListOrderedIcon },
     ],

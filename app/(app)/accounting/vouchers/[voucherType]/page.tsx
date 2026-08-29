@@ -13,7 +13,7 @@ import { getVoucherListRows } from "@/lib/vouchers/queries";
 import { isPhase5VoucherType, VOUCHER_TYPE_LABELS } from "@/lib/vouchers/meta";
 import { isJournalTabType, VoucherTypeTabs } from "@/components/vouchers/voucher-type-tabs";
 
-const NO_AMOUNT_TYPES = new Set(["journal_voucher", "jv_maintenance_voucher"]);
+const NO_AMOUNT_TYPES = new Set(["journal_voucher", "jv_maintenance_voucher", "multi_currency_journal"]);
 const PARTY_LABELS: Record<string, string> = {
   receipt_voucher: "Received from",
   payment_voucher: "Paid to",
@@ -23,6 +23,7 @@ const PARTY_LABELS: Record<string, string> = {
   journal_voucher: "Narration",
   jv_maintenance_voucher: "Remarks",
   opening_balance_voucher: "Account",
+  multi_currency_journal: "Narration",
 };
 
 export default async function VoucherListPage({

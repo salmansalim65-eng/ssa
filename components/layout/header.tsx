@@ -20,11 +20,13 @@ export function Header({
   email,
   companyName,
   allowedModules = null,
+  isAdmin = false,
 }: {
   fullName: string;
   email: string;
   companyName: string;
   allowedModules?: string[] | null;
+  isAdmin?: boolean;
 }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   // Same calendar-day string on server and client; the span carries
@@ -61,21 +63,25 @@ export function Header({
       </div>
 
       <div className="ml-auto flex items-center gap-1.5">
-        <a
-          href="https://erp.vista-group.co"
-          target="_blank"
-          rel="noopener noreferrer"
-          title="Open Vista Group ERP"
-          className="hidden items-center rounded-md bg-white px-2 py-1 shadow-sm ring-1 ring-black/5 transition-opacity hover:opacity-90 sm:inline-flex"
-        >
-          <Image
-            src="/vista-logo.svg"
-            alt="Vista Group"
-            width={24}
-            height={24}
-            className="h-6 w-auto"
-          />
-        </a>
+        {/* Vista Group branding links out to the parent ERP — shown to
+            administrators only. */}
+        {isAdmin && (
+          <a
+            href="https://erp.vista-group.co"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Open Vista Group ERP"
+            className="hidden items-center rounded-md bg-white px-2 py-1 shadow-sm ring-1 ring-black/5 transition-opacity hover:opacity-90 sm:inline-flex"
+          >
+            <Image
+              src="/vista-logo.svg"
+              alt="Vista Group"
+              width={24}
+              height={24}
+              className="h-6 w-auto"
+            />
+          </a>
+        )}
         <span className="hidden items-center gap-1.5 rounded-md border border-white/25 bg-white/10 px-2.5 py-1 text-xs font-medium text-white sm:inline-flex">
           <CalendarDaysIcon className="size-3.5 text-white/70" />
           <span className="tabular-nums" suppressHydrationWarning>

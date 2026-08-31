@@ -48,7 +48,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     supabase.schema("core").rpc("is_admin"),
     supabase.schema("core").rpc("user_permitted_view_modules"),
   ]);
-  const allowedModules = isAdmin ? null : ((permittedModules as string[] | null) ?? []);
+  // null = no restriction (admin, or the RPC isn't available yet — before its
+  // migration runs — so we don't lock a non-admin out with an empty menu). Only
+  // a real array from the function restricts the nav.
+  const allowedModules = isAdmin || !Array.isArray(permittedModules) ? null : (permittedModules as string[]);
 
   return (
     <AppShell

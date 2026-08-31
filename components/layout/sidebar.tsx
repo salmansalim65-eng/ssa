@@ -29,7 +29,7 @@ function setCollapsedPref(next: boolean) {
   for (const l of listeners) l();
 }
 
-export function Sidebar() {
+export function Sidebar({ allowedModules }: { allowedModules: string[] | null }) {
   const collapsed = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   function toggle() {
@@ -83,7 +83,7 @@ export function Sidebar() {
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain">
-          <SidebarNav collapsed={collapsed} />
+          <SidebarNav collapsed={collapsed} allowedModules={allowedModules} />
         </div>
       </aside>
     </TooltipProvider>

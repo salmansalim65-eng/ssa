@@ -41,21 +41,27 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect("/onboarding");
   }
 
-  const { data: company } = await supabase
-    .schema("core")
-    .from("companies")
-    .select("name")
-    .eq("id", companyId)
-    .single();
+  // Modules this user may view — the sidebar shows only those sections. Admins
+  // get every module (null = no restriction).
+  const [{ data: company }, { data: isAdmin }, { data: permittedModules }] = await Promise.all([
+    supabase.schema("core").from("companies").select("name").eq("id", companyId).single(),
+    supabase.schema("core").rpc("is_admin"),
+    supabase.schema("core").rpc("user_permitted_view_modules"),
+  ]);
+  // null = no restriction (admin, or the RPC isn't available yet — before its
+  // migration runs — so we don't lock a non-admin out with an empty menu). Only
+  // a real array from the function restricts the nav.
+  const allowedModules = isAdmin || !Array.isArray(permittedModules) ? null : (permittedModules as string[]);
 
   return (
     <AppShell
-      sidebar={<Sidebar />}
+      sidebar={<Sidebar allowedModules={allowedModules} />}
       header={
         <Header
           fullName={profile?.full_name ?? ""}
           email={user.email ?? ""}
           companyName={company?.name ?? ""}
+          allowedModules={allowedModules}
         />
       }
     >

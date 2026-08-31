@@ -1,12 +1,8 @@
--- Pending fix: run once in Supabase → SQL Editor. Safe to re-run.
--- ============================================================================
--- Voucher visibility: users see only the vouchers THEY created
--- A user sees the vouchers they created — not other users'. Admins still see
--- everything, and so does anyone who can approve or post that voucher type
--- (they need to see others' vouchers to act on them). Enforced by the SELECT
--- RLS policy on every accounting voucher header table, so both the voucher list
--- and the detail respect it.
--- ============================================================================
+-- Restrict voucher visibility to the creator: a user sees the vouchers THEY
+-- created; not other users'. Admins still see everything, and so does anyone who
+-- can approve or post that voucher type (they need to see others' vouchers to
+-- act on them). Applies to every accounting voucher header table — the list and
+-- the detail both read through these SELECT policies.
 do $$
 declare
   t text;

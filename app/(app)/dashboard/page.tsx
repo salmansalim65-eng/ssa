@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
 import { formatAccountCode, formatDate, formatMoney, formatVoucherNo } from "@/lib/format";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
+import { hasPermission } from "@/lib/auth/permissions";
 import { isRentOverdue } from "@/lib/rental/overdue";
 import { billingMonthStarts } from "@/lib/rental/billing-months";
 
@@ -505,10 +506,22 @@ export default async function DashboardPage({
   const pkr = sym("PKR");
   const drCr = (symbol: string, net: number) => `${money(symbol, Math.abs(net))} ${net >= 0 ? "Dr" : "Cr"}`;
 
+  // Each dashboard card is gated by the permission for what it reveals, so a
+  // limited role (e.g. an Accountant with no rental access) doesn't see cards it
+  // isn't allowed into. Admins have every permission.
+  const [canReports, canRentalUae, canRentalPk, canApprovals] = await Promise.all([
+    hasPermission("reports", "view"),
+    hasPermission("uae_rent_invoice", "view"),
+    hasPermission("pk_rent_invoice", "view"),
+    hasPermission("approval_workflows", "view"),
+  ]);
+  const canRental = canRentalUae || canRentalPk;
+
   return (
     <div className="space-y-6">
       <DashboardLiveRefresh />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {canReports && (
         <SummaryCard
           title="Balances UAE"
           href={cardHref("balances-uae")}
@@ -524,7 +537,9 @@ export default async function DashboardPage({
             <StatCol value={balByCountry.AE.credit ? money("", balByCountry.AE.credit) : ""} label="Credit" align="right" />
           </div>
         </SummaryCard>
+        )}
 
+        {canReports && (
         <SummaryCard
           title="Balances PK"
           href={cardHref("balances-pk")}
@@ -540,7 +555,9 @@ export default async function DashboardPage({
             <StatCol value={balByCountry.PK.credit ? money("", balByCountry.PK.credit) : ""} label="Credit" align="right" />
           </div>
         </SummaryCard>
+        )}
 
+        {canRentalUae && (
         <SummaryCard
           title="Rent Balance UAE"
           href={cardHref("rent-uae")}
@@ -560,7 +577,9 @@ export default async function DashboardPage({
             <StatCol value={money("", rentByCountry.UAE.overdue + rentByCountry.UAE.due)} label="Total" align="right" />
           </div>
         </SummaryCard>
+        )}
 
+        {canRentalPk && (
         <SummaryCard
           title="Rent Balance PK"
           href={cardHref("rent-pk")}
@@ -580,9 +599,11 @@ export default async function DashboardPage({
             <StatCol value={money("", rentByCountry.PK.overdue + rentByCountry.PK.due)} label="Total" align="right" />
           </div>
         </SummaryCard>
+        )}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        {canReports && (
         <SummaryCard
           title="Bank"
           href={cardHref("bank")}
@@ -606,7 +627,9 @@ export default async function DashboardPage({
             <div className="py-1 text-sm text-muted-foreground">No bank accounts yet.</div>
           )}
         </SummaryCard>
+        )}
 
+        {canReports && (
         <SummaryCard
           title="Cash"
           href={cardHref("cash")}
@@ -630,7 +653,9 @@ export default async function DashboardPage({
             <div className="py-1 text-sm text-muted-foreground">No cash accounts yet.</div>
           )}
         </SummaryCard>
+        )}
 
+        {canRental && (
         <SummaryCard
           title="Rental Reports"
           footer={
@@ -662,7 +687,9 @@ export default async function DashboardPage({
             </Link>
           </div>
         </SummaryCard>
+        )}
 
+        {canReports && (
         <KpiCard
           label={`Expenses (${new Date().getFullYear()})`}
           value={`${baseSymbol ? baseSymbol + " " : ""}${formatMoney(expenseTotal)}`}
@@ -670,7 +697,9 @@ export default async function DashboardPage({
           icon={WalletIcon}
           href="/reports/expense-report"
         />
+        )}
 
+        {canApprovals && (
         <KpiCard
           label="Pending approvals"
           value={(pendingApprovals ?? 0).toLocaleString()}
@@ -679,10 +708,12 @@ export default async function DashboardPage({
           tone={(pendingApprovals ?? 0) > 0 ? "warning" : undefined}
           href="/accounting/voucher-register"
         />
+        )}
 
       </div>
 
       {/* Analytics — KPIs and charts below the report cards. */}
+      {canRental && (
       <div className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Analytics</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -703,6 +734,7 @@ export default async function DashboardPage({
           />
         </div>
       </div>
+      )}
 
       {/* The selected tab's detail/report renders here — below ALL the cards. */}
       {detail && (

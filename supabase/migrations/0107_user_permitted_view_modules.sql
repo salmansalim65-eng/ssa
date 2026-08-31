@@ -1,10 +1,8 @@
--- Pending fix: run once in Supabase → SQL Editor. Safe to re-run.
--- ============================================================================
--- Sidebar visibility by permission
--- Returns the module_keys the current user may VIEW (same precedence as
--- core.user_has_permission: admin sees all; per-user overrides win over role
--- permissions). The app sidebar shows only the sections a user is allowed into.
--- ============================================================================
+-- Returns the set of permission module_keys the current user may VIEW, using the
+-- same precedence as core.user_has_permission: an admin sees every module;
+-- otherwise per-user overrides (when any exist for the company) win over the
+-- user's role permissions. The sidebar uses this to show only the sections a
+-- user is allowed into.
 create or replace function core.user_permitted_view_modules()
 returns text[]
 language sql

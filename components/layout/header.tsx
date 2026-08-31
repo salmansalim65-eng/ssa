@@ -19,10 +19,12 @@ export function Header({
   fullName,
   email,
   companyName,
+  allowedModules = null,
 }: {
   fullName: string;
   email: string;
   companyName: string;
+  allowedModules?: string[] | null;
 }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   // Same calendar-day string on server and client; the span carries
@@ -49,7 +51,7 @@ export function Header({
             </SheetTitle>
           </SheetHeader>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-            <SidebarNav onNavigate={() => setMobileNavOpen(false)} />
+            <SidebarNav onNavigate={() => setMobileNavOpen(false)} allowedModules={allowedModules} />
           </div>
         </SheetContent>
       </Sheet>

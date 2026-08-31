@@ -7,7 +7,7 @@ import { ChevronDownIcon, ChevronsDownUpIcon, ChevronsUpDownIcon } from "lucide-
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { navSections } from "./nav-items";
+import { navSections, filterNavSections } from "./nav-items";
 import { openTab, goHome, useWorkspace } from "./workspace-store";
 
 // Which section headings the user has EXPANDED, persisted in localStorage and
@@ -53,17 +53,19 @@ function setAllSectionsPref(labels: string[]) {
   for (const l of sectionListeners) l();
 }
 
-// The labels of every collapsible (labelled) nav section.
-const collapsibleSectionLabels = navSections.filter((s) => s.label).map((s) => s.label!);
-
 export function SidebarNav({
   onNavigate,
   collapsed = false,
+  allowedModules = null,
 }: {
   onNavigate?: () => void;
   collapsed?: boolean;
+  allowedModules?: string[] | null;
 }) {
   const pathname = usePathname();
+  // Only the sections/items this user may view.
+  const sections = filterNavSections(navSections, allowedModules);
+  const collapsibleSectionLabels = sections.filter((s) => s.label).map((s) => s.label!);
   const { tabs, activeId } = useWorkspace();
   const expandedList = useSyncExternalStore(subscribeSections, getExpandedSnapshot, getExpandedServerSnapshot);
   const expandedSections = new Set(expandedList);
@@ -171,7 +173,7 @@ export function SidebarNav({
           )}
         </button>
       )}
-      {navSections.map((section, sectionIndex) => {
+      {sections.map((section, sectionIndex) => {
         // Unlabelled group (e.g. Dashboard) and the icon-rail mode are never
         // collapsible — they always render their items.
         if (!section.label || collapsed) {

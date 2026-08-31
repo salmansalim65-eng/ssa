@@ -291,10 +291,10 @@ export default async function VoucherDetailPage({
       )}
 
       {detail.status === "posted" && voucherType === "pdc_payment_voucher" && canSubmit && (
-        <PdcStatusActions onSetStatus={(status) => setPdcPaymentStatus(detail.id, status)} />
+        <PdcStatusActions onSetStatus={setPdcPaymentStatus.bind(null, detail.id)} />
       )}
       {detail.status === "posted" && voucherType === "pdc_receipt_voucher" && canSubmit && (
-        <PdcStatusActions onSetStatus={(status) => setPdcReceiptStatus(detail.id, status)} />
+        <PdcStatusActions onSetStatus={setPdcReceiptStatus.bind(null, detail.id)} />
       )}
     </div>
   );

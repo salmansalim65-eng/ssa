@@ -17,7 +17,27 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .eq("id", user.id)
     .single();
 
-  if (!profile?.default_company_id) {
+  // A user added by an admin gets a company membership but their profile's
+  // default_company_id may be unset (older accounts). Since core.current_company_id()
+  // reads default_company_id, an unset one would leave them stranded on the
+  // "Set up your company" onboarding. Adopt their existing membership instead and
+  // persist it (self-update policy allows), so the whole app scopes correctly.
+  let companyId = profile?.default_company_id as string | null | undefined;
+  if (!companyId) {
+    const { data: membership } = await supabase
+      .schema("core")
+      .from("user_companies")
+      .select("company_id")
+      .eq("user_id", user.id)
+      .limit(1)
+      .maybeSingle();
+    companyId = (membership?.company_id as string | undefined) ?? null;
+    if (companyId) {
+      await supabase.schema("core").from("user_profiles").update({ default_company_id: companyId }).eq("id", user.id);
+    }
+  }
+
+  if (!companyId) {
     redirect("/onboarding");
   }
 
@@ -25,7 +45,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .schema("core")
     .from("companies")
     .select("name")
-    .eq("id", profile.default_company_id)
+    .eq("id", companyId)
     .single();
 
   return (
@@ -33,7 +53,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       sidebar={<Sidebar />}
       header={
         <Header
-          fullName={profile.full_name}
+          fullName={profile?.full_name ?? ""}
           email={user.email ?? ""}
           companyName={company?.name ?? ""}
         />

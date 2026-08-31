@@ -46,13 +46,15 @@ export async function addUser(input: AddUserInput) {
     return { error: createError?.message ?? "Failed to create user" };
   }
 
-  // The signup trigger creates the user_profiles row; set the username on it via
-  // the service-role client (RLS on the admin update policy requires membership,
-  // which isn't inserted yet).
+  // The signup trigger creates the user_profiles row; set the username AND the
+  // default company on it via the service-role client (RLS on the admin update
+  // policy requires membership, which isn't inserted yet). Without
+  // default_company_id, core.current_company_id() returns null for this user and
+  // they land on the "Set up your company" onboarding screen instead of joining.
   const { error: usernameError } = await admin
     .schema("core")
     .from("user_profiles")
-    .update({ username: parsed.data.username })
+    .update({ username: parsed.data.username, default_company_id: companyId })
     .eq("id", created.user.id);
   if (usernameError) return { error: `User created, but username couldn't be set: ${usernameError.message}` };
 

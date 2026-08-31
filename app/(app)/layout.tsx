@@ -62,6 +62,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           email={user.email ?? ""}
           companyName={company?.name ?? ""}
           allowedModules={allowedModules}
+          isAdmin={isAdmin === true}
         />
       }
     >

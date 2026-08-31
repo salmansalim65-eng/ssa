@@ -142,7 +142,7 @@ export async function getVoucherListRows(
         currencySymbol: symbolFor(r.currency_id),
         baseAmount: Number(r.total_amount) * Number(r.exchange_rate ?? 1),
         journalEntryId: r.journal_entry_id,
-        status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
+        status: (r.journal_entries as unknown as { status: JournalEntryStatus } | null)?.status ?? "draft",
       }));
     }
     case "payment_voucher": {
@@ -169,7 +169,7 @@ export async function getVoucherListRows(
         currencySymbol: symbolFor(r.currency_id),
         baseAmount: Number(r.total_amount) * Number(r.exchange_rate ?? 1),
         journalEntryId: r.journal_entry_id,
-        status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
+        status: (r.journal_entries as unknown as { status: JournalEntryStatus } | null)?.status ?? "draft",
       }));
     }
     case "pdc_payment_voucher": {
@@ -188,7 +188,7 @@ export async function getVoucherListRows(
         currencySymbol: symbolFor(r.currency_id),
         baseAmount: Number(r.total_amount) * Number(r.exchange_rate ?? 1),
         journalEntryId: r.journal_entry_id,
-        status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
+        status: (r.journal_entries as unknown as { status: JournalEntryStatus } | null)?.status ?? "draft",
       }));
     }
     case "pdc_receipt_voucher": {
@@ -207,7 +207,7 @@ export async function getVoucherListRows(
         currencySymbol: symbolFor(r.currency_id),
         baseAmount: Number(r.total_amount) * Number(r.exchange_rate ?? 1),
         journalEntryId: r.journal_entry_id,
-        status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
+        status: (r.journal_entries as unknown as { status: JournalEntryStatus } | null)?.status ?? "draft",
       }));
     }
     case "cheque_return_voucher": {
@@ -226,7 +226,7 @@ export async function getVoucherListRows(
         currencySymbol: symbolFor(r.currency_id),
         baseAmount: Number(r.penalty_amount) * Number(r.exchange_rate ?? 1),
         journalEntryId: r.journal_entry_id,
-        status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
+        status: (r.journal_entries as unknown as { status: JournalEntryStatus } | null)?.status ?? "draft",
       }));
     }
     case "journal_voucher": {
@@ -243,7 +243,7 @@ export async function getVoucherListRows(
         party: r.narration,
         amount: 0,
         journalEntryId: r.journal_entry_id,
-        status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
+        status: (r.journal_entries as unknown as { status: JournalEntryStatus } | null)?.status ?? "draft",
       }));
     }
     case "jv_maintenance_voucher": {
@@ -260,7 +260,7 @@ export async function getVoucherListRows(
         party: r.narration,
         amount: 0,
         journalEntryId: r.journal_entry_id,
-        status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
+        status: (r.journal_entries as unknown as { status: JournalEntryStatus } | null)?.status ?? "draft",
       }));
     }
     case "multi_currency_journal": {
@@ -277,7 +277,7 @@ export async function getVoucherListRows(
         party: r.narration ?? "—",
         amount: 0,
         journalEntryId: r.journal_entry_id,
-        status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
+        status: (r.journal_entries as unknown as { status: JournalEntryStatus } | null)?.status ?? "draft",
       }));
     }
     case "opening_balance_voucher": {
@@ -336,7 +336,7 @@ export async function getVoucherListRows(
           currencySymbol: symbolFor(r.currency_id),
           baseAmount: Number(r.total_amount) * Number(r.exchange_rate ?? 1),
           journalEntryId: r.journal_entry_id,
-          status: (r.journal_entries as unknown as { status: JournalEntryStatus }).status,
+          status: (r.journal_entries as unknown as { status: JournalEntryStatus } | null)?.status ?? "draft",
         };
       });
     }

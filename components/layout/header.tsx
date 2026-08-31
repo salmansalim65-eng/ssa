@@ -88,7 +88,7 @@ export function Header({
             {todayLabel}
           </span>
         </span>
-        {companyName && (
+        {isAdmin && companyName && (
           <span className="hidden items-center gap-1.5 rounded-md border border-white/25 bg-white/10 px-2.5 py-1 text-xs font-medium text-white sm:inline-flex">
             <Building2Icon className="size-3.5 text-white/70" />
             {companyName}

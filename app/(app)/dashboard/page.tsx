@@ -515,7 +515,6 @@ export default async function DashboardPage({
     hasPermission("pk_rent_invoice", "view"),
     hasPermission("approval_workflows", "view"),
   ]);
-  const canRental = canRentalUae || canRentalPk;
 
   return (
     <div className="space-y-6">
@@ -655,7 +654,7 @@ export default async function DashboardPage({
         </SummaryCard>
         )}
 
-        {canRental && (
+        {canReports && (
         <SummaryCard
           title="Rental Reports"
           footer={
@@ -713,7 +712,7 @@ export default async function DashboardPage({
       </div>
 
       {/* Analytics — KPIs and charts below the report cards. */}
-      {canRental && (
+      {canReports && (
       <div className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Analytics</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

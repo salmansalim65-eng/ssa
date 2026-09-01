@@ -479,13 +479,16 @@ export default async function DashboardPage({
   const isBank = panel === "bank";
   const isCash = panel === "cash";
   const selected = (panel in BALANCE_PANELS ? panel : "") as PanelKey | "";
-  // Rent Balance drill-downs default to the CURRENT MONTH when no range is set,
-  // so the panel opens on this month's rent rather than the whole history.
+  // A Rent Balance is cumulative, so its drill-down opens with NO start date —
+  // every invoice from the beginning up to the end of the current month. It used
+  // to start at the first of the current month, which hid the earlier months
+  // still carrying an unpaid balance (an August invoice never showed in
+  // September). The end still defaults to this month, so the panel reads as the
+  // balance as at month end; either box can be set to narrow it.
   const isRentPanel = selected === "rent-uae" || selected === "rent-pk";
-  const monthStart = `${now.slice(0, 7)}-01`;
   const monthLastDay = new Date(Number(now.slice(0, 4)), Number(now.slice(5, 7)), 0).getDate();
   const monthEnd = `${now.slice(0, 7)}-${String(monthLastDay).padStart(2, "0")}`;
-  const rangeFrom = isRentPanel ? dateFrom ?? monthStart : dateFrom;
+  const rangeFrom = dateFrom;
   const rangeTo = isRentPanel ? dateTo ?? monthEnd : dateTo;
   const detail = selected
     ? await loadDetail(companyId, selected, sym(BALANCE_PANELS[selected].currency), rangeFrom, rangeTo)

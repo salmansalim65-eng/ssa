@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
+import { formatMonth } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { createJournalEntry, getCurrentCompanyId, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { receiptVoucherSchema, type ReceiptVoucherInput } from "./schemas";
@@ -14,7 +15,7 @@ function round2(n: number) {
 // The journal-line description carries the line's rent month + remarks so they
 // show on the (generic) voucher detail page.
 function lineDescription(rentMonth?: string, remarks?: string) {
-  const parts = [rentMonth || "", remarks || ""].filter(Boolean);
+  const parts = [formatMonth(rentMonth), remarks || ""].filter(Boolean);
   return parts.length ? parts.join(" — ") : "Receipt";
 }
 

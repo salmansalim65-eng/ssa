@@ -5,7 +5,8 @@ import { z } from "zod";
 export const receiptVoucherLineSchema = z.object({
   accountId: z.string().uuid("Select the account"),
   amount: z.coerce.number().nonnegative("Must be zero or more"),
-  rentMonth: z.string().date("Enter a valid date").optional().or(z.literal("")),
+  // Picked by month name; stored as the first day of that month.
+  rentMonth: z.string().date("Pick a valid rent month").optional().or(z.literal("")),
   remarks: z.string().trim().max(200, "Keep it under 200 characters").optional().or(z.literal("")),
   // Optional bill adjustments: how the line amount is split across the party's
   // outstanding rental invoices (entered through the adjustment dialog).

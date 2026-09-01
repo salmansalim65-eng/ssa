@@ -1,4 +1,4 @@
-# Rental & Accounting Multi-Currency ERP
+# SSA ERP
 
 Enterprise-grade, multi-company, multi-currency ERP for managing rental real
 estate assets (Pakistan & UAE) and full double-entry accounting.

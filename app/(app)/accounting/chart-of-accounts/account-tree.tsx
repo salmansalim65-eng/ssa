@@ -212,6 +212,9 @@ export function AccountTree({
   canCreate,
   canEdit,
   canDelete,
+  canCreateGroup,
+  canEditGroup,
+  canDeleteGroup,
   assetFieldsById = {},
   assetFieldsByAccountId = {},
 }: {
@@ -221,6 +224,10 @@ export function AccountTree({
   canCreate: boolean;
   canEdit: boolean;
   canDelete: boolean;
+  /** Group accounts shape the chart, so they carry their own permissions. */
+  canCreateGroup: boolean;
+  canEditGroup: boolean;
+  canDeleteGroup: boolean;
   /** Property fields of each linked asset, keyed by asset id — prefills the
    *  Property details section when editing a property account. */
   assetFieldsById?: Record<string, LinkedAssetFields>;
@@ -368,7 +375,10 @@ export function AccountTree({
     });
   }
 
-  const canReorder = canEdit && sortMode === "manual" && !filtersActive;
+  const reorderable = sortMode === "manual" && !filtersActive;
+  // Either permission puts an "Add account" button on screen: the dialog decides
+  // which of the two the account will be, and the server checks it again.
+  const canAddAny = canCreate || canCreateGroup;
 
   // `guides` carries, for each distant-ancestor column (all but the immediate
   // parent), whether a vertical rail should continue through this row — i.e. that
@@ -378,6 +388,11 @@ export function AccountTree({
     const siblings = orderedChildren.get(parentKey) ?? [];
     const visibleRows = visibleIds ? siblings.filter((a) => visibleIds.has(a.id)) : siblings;
     return visibleRows.flatMap((account, siblingIndex) => {
+      // A group row is governed by the Account Groups module, a posting row by
+      // Chart of Accounts.
+      const mayEdit = account.is_group ? canEditGroup : canEdit;
+      const mayDelete = account.is_group ? canDeleteGroup : canDelete;
+      const canReorder = mayEdit && reorderable;
       const children = orderedChildren.get(account.id) ?? [];
       const visibleChildren = visibleIds
         ? children.filter((c) => visibleIds.has(c.id))
@@ -516,7 +531,7 @@ export function AccountTree({
 
           {/* Actions */}
           <td className="p-3 text-right align-middle">
-            {(canCreate || canEdit || canDelete) && (
+            {(canAddAny || mayEdit || mayDelete) && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -530,7 +545,7 @@ export function AccountTree({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  {canCreate && account.is_group && (
+                  {canAddAny && account.is_group && (
                     <DropdownMenuItem onSelect={() => setDialog({ mode: "create", parentId: account.id })}>
                       <PlusIcon className="size-4" /> Add child account
                     </DropdownMenuItem>
@@ -564,12 +579,12 @@ export function AccountTree({
                       <DropdownMenuSeparator />
                     </>
                   )}
-                  {canEdit && (
+                  {mayEdit && (
                     <DropdownMenuItem onSelect={() => setDialog({ mode: "edit", account })}>
                       Edit
                     </DropdownMenuItem>
                   )}
-                  {canEdit && (
+                  {mayEdit && (
                     <DropdownMenuItem
                       onSelect={() =>
                         run(
@@ -581,7 +596,7 @@ export function AccountTree({
                       {account.is_active ? "Disable" : "Enable"}
                     </DropdownMenuItem>
                   )}
-                  {canDelete && (
+                  {mayDelete && (
                     <>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
@@ -616,7 +631,7 @@ export function AccountTree({
         title="Chart of Accounts"
         description="Manage your organization's account hierarchy. Group accounts organize the structure; only posting accounts carry balances and can be posted to."
         actions={
-          canCreate && (
+          canAddAny && (
             <Button onClick={() => setDialog({ mode: "create", parentId: null })}>
               <PlusIcon /> Add account
             </Button>
@@ -713,7 +728,7 @@ export function AccountTree({
             title="No accounts yet"
             description="Build your chart of accounts by adding your first root account."
             action={
-              canCreate && (
+              canAddAny && (
                 <Button onClick={() => setDialog({ mode: "create", parentId: null })}>
                   <PlusIcon /> Add account
                 </Button>
@@ -822,6 +837,7 @@ export function AccountTree({
               submitLabel={dialog.mode === "edit" ? "Save changes" : "Add account"}
               accountId={dialog.mode === "edit" ? dialog.account.id : undefined}
               linkedProperty={dialog.mode === "edit" && dialog.account.linked_asset_id != null}
+              canManageGroups={dialog.mode === "edit" ? canEditGroup : canCreateGroup}
               onSubmit={async (values) => {
                 const result =
                   dialog.mode === "edit"

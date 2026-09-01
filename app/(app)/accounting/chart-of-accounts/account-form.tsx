@@ -67,6 +67,7 @@ export function AccountForm({
   submitLabel,
   accountId,
   linkedProperty = false,
+  canManageGroups = true,
 }: {
   defaultValues: AccountInput;
   parentOptions: ParentOption[];
@@ -78,6 +79,9 @@ export function AccountForm({
   accountId?: string;
   /** True when the account already has a linked property in the Assets module. */
   linkedProperty?: boolean;
+  /** False when the viewer may not create or edit group accounts — the Group
+   *  toggle is then locked (the server rejects the write either way). */
+  canManageGroups?: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
@@ -259,13 +263,18 @@ export function AccountForm({
             render={({ field }) => (
               <FormItem className="flex flex-row items-start gap-2.5 rounded-lg border p-3">
                 <FormControl>
-                  <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    disabled={!canManageGroups}
+                  />
                 </FormControl>
                 <div className="space-y-1 leading-none">
                   <FormLabel>Group / header account</FormLabel>
                   <FormDescription>
-                    Groups organize the tree and can have child accounts, but
-                    can&apos;t be posted to directly.
+                    {canManageGroups
+                      ? "Groups organize the tree and can have child accounts, but can't be posted to directly."
+                      : "You don't have permission to manage group accounts."}
                   </FormDescription>
                 </div>
               </FormItem>

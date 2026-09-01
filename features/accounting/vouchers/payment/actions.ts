@@ -19,8 +19,11 @@ function lineDescription(remarks?: string) {
 type PaymentSupabase = Awaited<ReturnType<typeof createClient>>;
 type PaymentLine = PaymentVoucherInput["lines"][number];
 
-// Write the per-line bill adjustments into payment_invoice_expenses (an "other
-// expense" against each invoice). Returns an error message or null.
+// Write the per-line bill adjustments. Rental-invoice allocations go into
+// payment_invoice_expenses (an "other expense" against each invoice); JV-item
+// allocations go into jv_open_item_settlements (settling an open Journal Voucher
+// payable on the party account — side 'credit', since a payment debits the
+// party). Returns an error message or null.
 async function writePaymentExpenses(
   supabase: PaymentSupabase,
   companyId: string,
@@ -29,20 +32,44 @@ async function writePaymentExpenses(
   insertedLines: { id: string; line_no: number }[],
 ) {
   const idByLineNo = new Map(insertedLines.map((l) => [l.line_no, l.id]));
-  const rows = lines.flatMap((l, index) =>
-    (l.allocations ?? []).map((a) => ({
-      company_id: companyId,
-      payment_voucher_id: voucherId,
-      payment_line_id: idByLineNo.get(index + 1) ?? null,
-      country: a.country,
-      uae_invoice_id: a.country === "UAE" ? a.invoiceId : null,
-      pk_invoice_id: a.country === "PK" ? a.invoiceId : null,
-      amount: a.amount,
-    })),
+
+  const rentalRows = lines.flatMap((l, index) =>
+    (l.allocations ?? [])
+      .filter((a) => a.source !== "jv")
+      .map((a) => ({
+        company_id: companyId,
+        payment_voucher_id: voucherId,
+        payment_line_id: idByLineNo.get(index + 1) ?? null,
+        country: a.country,
+        uae_invoice_id: a.country === "UAE" ? a.invoiceId : null,
+        pk_invoice_id: a.country === "PK" ? a.invoiceId : null,
+        amount: a.amount,
+      })),
   );
-  if (!rows.length) return null;
-  const { error } = await supabase.schema("rental").from("payment_invoice_expenses").insert(rows);
-  return error ? error.message : null;
+  if (rentalRows.length) {
+    const { error } = await supabase.schema("rental").from("payment_invoice_expenses").insert(rentalRows);
+    if (error) return error.message;
+  }
+
+  const jvRows = lines.flatMap((l, index) =>
+    (l.allocations ?? [])
+      .filter((a) => a.source === "jv")
+      .map((a) => ({
+        company_id: companyId,
+        journal_line_id: a.invoiceId,
+        account_id: l.accountId,
+        side: "credit" as const,
+        payment_voucher_id: voucherId,
+        payment_line_id: idByLineNo.get(index + 1) ?? null,
+        amount: a.amount,
+      })),
+  );
+  if (jvRows.length) {
+    const { error } = await supabase.schema("accounting").from("jv_open_item_settlements").insert(jvRows);
+    if (error) return error.message;
+  }
+
+  return null;
 }
 
 export async function createPaymentVoucher(input: PaymentVoucherInput, options?: { autoPostIfAdmin?: boolean }) {

@@ -15,6 +15,9 @@ import { formatDate } from "@/lib/format";
 
 export interface OutstandingBill {
   id: string;
+  // "rental" = a rental invoice (default); "jv" = an open Journal Voucher
+  // ledger item on the party account. Same dialog, different save target.
+  source?: "rental" | "jv";
   country: "UAE" | "PK";
   accountId: string | null;
   reference: string;
@@ -24,6 +27,7 @@ export interface OutstandingBill {
 
 export interface BillAllocation {
   invoiceId: string;
+  source?: "rental" | "jv";
   country: "UAE" | "PK";
   amount: number;
 }
@@ -82,7 +86,12 @@ export function InvoiceAdjustDialog({
   function save() {
     const allocations = bills
       .filter((b) => Number(draft[b.id]) > 0)
-      .map((b) => ({ invoiceId: b.id, country: b.country, amount: round2(Number(draft[b.id])) }));
+      .map((b) => ({
+        invoiceId: b.id,
+        source: b.source ?? "rental",
+        country: b.country,
+        amount: round2(Number(draft[b.id])),
+      }));
     onSave(allocations);
     onOpenChange(false);
   }

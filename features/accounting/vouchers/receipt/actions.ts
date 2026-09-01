@@ -21,9 +21,11 @@ function lineDescription(rentMonth?: string, remarks?: string) {
 type ReceiptSupabase = Awaited<ReturnType<typeof createClient>>;
 type ReceiptLine = ReceiptVoucherInput["lines"][number];
 
-// Write the per-line bill adjustments into receipt_invoice_allocations, whose
-// trigger reduces each invoice's outstanding balance. Returns an error message
-// or null. No-op when no line has allocations.
+// Write the per-line bill adjustments. Rental-invoice allocations go into
+// receipt_invoice_allocations (its trigger reduces the invoice's outstanding);
+// JV-item allocations go into jv_open_item_settlements (settling an open Journal
+// Voucher receivable on the party account — side 'debit', since a receipt
+// credits the party). Returns an error message or null.
 async function writeReceiptAllocations(
   supabase: ReceiptSupabase,
   companyId: string,
@@ -32,20 +34,44 @@ async function writeReceiptAllocations(
   insertedLines: { id: string; line_no: number }[],
 ) {
   const idByLineNo = new Map(insertedLines.map((l) => [l.line_no, l.id]));
-  const rows = lines.flatMap((l, index) =>
-    (l.allocations ?? []).map((a) => ({
-      company_id: companyId,
-      receipt_voucher_id: voucherId,
-      receipt_line_id: idByLineNo.get(index + 1) ?? null,
-      country: a.country,
-      uae_invoice_id: a.country === "UAE" ? a.invoiceId : null,
-      pk_invoice_id: a.country === "PK" ? a.invoiceId : null,
-      amount: a.amount,
-    })),
+
+  const rentalRows = lines.flatMap((l, index) =>
+    (l.allocations ?? [])
+      .filter((a) => a.source !== "jv")
+      .map((a) => ({
+        company_id: companyId,
+        receipt_voucher_id: voucherId,
+        receipt_line_id: idByLineNo.get(index + 1) ?? null,
+        country: a.country,
+        uae_invoice_id: a.country === "UAE" ? a.invoiceId : null,
+        pk_invoice_id: a.country === "PK" ? a.invoiceId : null,
+        amount: a.amount,
+      })),
   );
-  if (!rows.length) return null;
-  const { error } = await supabase.schema("rental").from("receipt_invoice_allocations").insert(rows);
-  return error ? error.message : null;
+  if (rentalRows.length) {
+    const { error } = await supabase.schema("rental").from("receipt_invoice_allocations").insert(rentalRows);
+    if (error) return error.message;
+  }
+
+  const jvRows = lines.flatMap((l, index) =>
+    (l.allocations ?? [])
+      .filter((a) => a.source === "jv")
+      .map((a) => ({
+        company_id: companyId,
+        journal_line_id: a.invoiceId,
+        account_id: l.accountId,
+        side: "debit" as const,
+        receipt_voucher_id: voucherId,
+        receipt_line_id: idByLineNo.get(index + 1) ?? null,
+        amount: a.amount,
+      })),
+  );
+  if (jvRows.length) {
+    const { error } = await supabase.schema("accounting").from("jv_open_item_settlements").insert(jvRows);
+    if (error) return error.message;
+  }
+
+  return null;
 }
 
 export async function createReceiptVoucher(input: ReceiptVoucherInput, options?: { autoPostIfAdmin?: boolean }) {

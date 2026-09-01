@@ -99,6 +99,7 @@ export default async function NewVoucherPage({
   // grouped by the party (tenant) account so the dialog shows only that account.
   let outstandingBills: {
     id: string;
+    source?: "rental" | "jv";
     country: "UAE" | "PK";
     accountId: string | null;
     reference: string;
@@ -119,12 +120,36 @@ export default async function NewVoucherPage({
       .order("due_date");
     outstandingBills = (inv ?? []).map((r) => ({
       id: r.invoice_id as string,
+      source: "rental" as const,
       country: r.country as "UAE" | "PK",
       accountId: (r.tenant_account_id as string | null) ?? null,
       reference: [r.voucher_no ?? "Draft", r.tenant_name, r.asset_name].filter(Boolean).join(" · "),
       dueDate: (r.due_date as string | null) ?? null,
       billAmount: Number(r.net_outstanding),
     }));
+  }
+
+  // Open Journal Voucher ledger items on a party account — a receipt settles its
+  // debit side (receivable), a payment its credit side (payable).
+  if (voucherType === "receipt_voucher" || voucherType === "payment_voucher") {
+    const side = voucherType === "receipt_voucher" ? "debit" : "credit";
+    const { data: jv } = await supabase
+      .schema("accounting")
+      .rpc("fn_open_jv_items", { p_side: side });
+    const jvBills = ((jv ?? []) as Array<Record<string, unknown>>)
+      .map((r) => ({
+        id: r.journal_line_id as string,
+        source: "jv" as const,
+        country: "PK" as const,
+        accountId: (r.account_id as string | null) ?? null,
+        reference: ["JV", (r.voucher_no as string | null) ?? "Draft", (r.narration as string | null) ?? ""]
+          .filter(Boolean)
+          .join(" · "),
+        dueDate: (r.entry_date as string | null) ?? null,
+        billAmount: Number(r.remaining),
+      }))
+      .filter((b) => b.billAmount > 0);
+    outstandingBills = [...outstandingBills, ...jvBills];
   }
 
   let extra: { pdcOptions?: ReturnablePdcOption[] } = {};

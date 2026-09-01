@@ -200,12 +200,13 @@ export default async function EditVoucherPage({
   const isOpeningBalance = voucherType === "opening_balance_voucher";
   let docCostCenters: { id: string; name: string }[] = [];
   let docCurrencies: { id: string; code: string; rate: number }[] = [];
+  type DocAllocation = { invoiceId: string; source: "rental" | "jv"; country: "UAE" | "PK"; amount: number };
   let docLines: {
     accountId: string;
     amount: number;
     rentMonth: string;
     remarks: string;
-    allocations?: { invoiceId: string; country: "UAE" | "PK"; amount: number }[];
+    allocations?: DocAllocation[];
   }[] = [];
   let obLines: { accountId: string; debit: number; credit: number; remarks: string }[] = [];
   if (isHeaderDoc || isOpeningBalance || isMultiLine || isJvMaintenance || isMultiCurrencyJournal) {
@@ -251,7 +252,12 @@ export default async function EditVoucherPage({
       allocations: [],
     }));
     // Round-trip existing bill adjustments (receipt & payment), keyed by line id.
-    const byLine = new Map<string, { invoiceId: string; country: "UAE" | "PK"; amount: number }[]>();
+    const byLine = new Map<string, DocAllocation[]>();
+    const pushAlloc = (key: string, a: DocAllocation) => {
+      const list = byLine.get(key) ?? [];
+      list.push(a);
+      byLine.set(key, list);
+    };
     if (voucherType === "receipt_voucher") {
       const { data: allocs } = await supabase
         .schema("rental")
@@ -262,9 +268,7 @@ export default async function EditVoucherPage({
         const key = a.receipt_line_id as string | null;
         const invoiceId = (a.uae_invoice_id ?? a.pk_invoice_id) as string | null;
         if (!key || !invoiceId) continue;
-        const list = byLine.get(key) ?? [];
-        list.push({ invoiceId, country: a.country as "UAE" | "PK", amount: Number(a.amount) });
-        byLine.set(key, list);
+        pushAlloc(key, { invoiceId, source: "rental", country: a.country as "UAE" | "PK", amount: Number(a.amount) });
       }
     } else if (voucherType === "payment_voucher") {
       const { data: allocs } = await supabase
@@ -276,9 +280,7 @@ export default async function EditVoucherPage({
         const key = a.payment_line_id as string | null;
         const invoiceId = (a.uae_invoice_id ?? a.pk_invoice_id) as string | null;
         if (!key || !invoiceId) continue;
-        const list = byLine.get(key) ?? [];
-        list.push({ invoiceId, country: a.country as "UAE" | "PK", amount: Number(a.amount) });
-        byLine.set(key, list);
+        pushAlloc(key, { invoiceId, source: "rental", country: a.country as "UAE" | "PK", amount: Number(a.amount) });
       }
     } else if (voucherType === "pdc_receipt_voucher") {
       const { data: allocs } = await supabase
@@ -290,9 +292,23 @@ export default async function EditVoucherPage({
         const key = a.pdc_receipt_line_id as string | null;
         const invoiceId = (a.uae_invoice_id ?? a.pk_invoice_id) as string | null;
         if (!key || !invoiceId) continue;
-        const list = byLine.get(key) ?? [];
-        list.push({ invoiceId, country: a.country as "UAE" | "PK", amount: Number(a.amount) });
-        byLine.set(key, list);
+        pushAlloc(key, { invoiceId, source: "rental", country: a.country as "UAE" | "PK", amount: Number(a.amount) });
+      }
+    }
+    // JV open-item settlements (receipt & payment), keyed by their voucher line.
+    if (voucherType === "receipt_voucher" || voucherType === "payment_voucher") {
+      const lineCol = voucherType === "receipt_voucher" ? "receipt_line_id" : "payment_line_id";
+      const voucherCol = voucherType === "receipt_voucher" ? "receipt_voucher_id" : "payment_voucher_id";
+      const { data: settles } = await supabase
+        .schema("accounting")
+        .from("jv_open_item_settlements")
+        .select(`journal_line_id, ${lineCol}, amount`)
+        .eq(voucherCol, id);
+      for (const s of settles ?? []) {
+        const key = (s as Record<string, unknown>)[lineCol] as string | null;
+        const journalLineId = s.journal_line_id as string | null;
+        if (!key || !journalLineId) continue;
+        pushAlloc(key, { invoiceId: journalLineId, source: "jv", country: "PK", amount: Number(s.amount) });
       }
     }
     if (byLine.size) {
@@ -317,6 +333,7 @@ export default async function EditVoucherPage({
   // Outstanding rental bills a receipt/payment line can be adjusted against.
   let outstandingBills: {
     id: string;
+    source?: "rental" | "jv";
     country: "UAE" | "PK";
     accountId: string | null;
     reference: string;
@@ -337,12 +354,52 @@ export default async function EditVoucherPage({
       .order("due_date");
     outstandingBills = (inv ?? []).map((r) => ({
       id: r.invoice_id as string,
+      source: "rental" as const,
       country: r.country as "UAE" | "PK",
       accountId: (r.tenant_account_id as string | null) ?? null,
       reference: [r.voucher_no ?? "Draft", r.tenant_name, r.asset_name].filter(Boolean).join(" · "),
       dueDate: (r.due_date as string | null) ?? null,
       billAmount: Number(r.net_outstanding),
     }));
+  }
+
+  // Open Journal Voucher ledger items on a party account (receipt → debit side,
+  // payment → credit side). The already-settled part of THIS voucher is added
+  // back below so the amount stays editable.
+  if (voucherType === "receipt_voucher" || voucherType === "payment_voucher") {
+    const side = voucherType === "receipt_voucher" ? "debit" : "credit";
+    const { data: jv } = await supabase
+      .schema("accounting")
+      .rpc("fn_open_jv_items", { p_side: side });
+    const settleCol = voucherType === "receipt_voucher" ? "receipt_voucher_id" : "payment_voucher_id";
+    const { data: mySettles } = await supabase
+      .schema("accounting")
+      .from("jv_open_item_settlements")
+      .select("journal_line_id, amount")
+      .eq(settleCol, id);
+    const backByLine = new Map<string, number>();
+    for (const s of mySettles ?? []) {
+      const key = s.journal_line_id as string;
+      backByLine.set(key, (backByLine.get(key) ?? 0) + Number(s.amount));
+    }
+    const jvBills = ((jv ?? []) as Array<Record<string, unknown>>)
+      .map((r) => {
+        const lineId = r.journal_line_id as string;
+        const billAmount = Number(r.remaining) + (backByLine.get(lineId) ?? 0);
+        return {
+          id: lineId,
+          source: "jv" as const,
+          country: "PK" as const,
+          accountId: (r.account_id as string | null) ?? null,
+          reference: ["JV", (r.voucher_no as string | null) ?? "Draft", (r.narration as string | null) ?? ""]
+            .filter(Boolean)
+            .join(" · "),
+          dueDate: (r.entry_date as string | null) ?? null,
+          billAmount,
+        };
+      })
+      .filter((b) => b.billAmount > 0);
+    outstandingBills = [...outstandingBills, ...jvBills];
   }
 
   return (

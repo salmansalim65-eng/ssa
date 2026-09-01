@@ -1,4 +1,3 @@
--- Pending fix: run once in Supabase → SQL Editor. Safe to re-run.
 -- Replace the v_open_jv_items view with a SECURITY DEFINER function.
 --
 -- As a security_invoker view, v_open_jv_items depended on the caller's RLS +
@@ -77,6 +76,3 @@ as $$
 $$;
 
 grant execute on function accounting.fn_open_jv_items(text) to authenticated;
-
--- Reload PostgREST so the new function is exposed to the API immediately.
-notify pgrst, 'reload schema';

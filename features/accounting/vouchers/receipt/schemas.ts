@@ -13,6 +13,9 @@ export const receiptVoucherLineSchema = z.object({
     .array(
       z.object({
         invoiceId: z.string().uuid(),
+        // "rental" applies to a rental invoice; "jv" settles an open Journal
+        // Voucher ledger item on the party account.
+        source: z.enum(["rental", "jv"]).optional().default("rental"),
         country: z.enum(["UAE", "PK"]),
         amount: z.coerce.number().positive(),
       }),

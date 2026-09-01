@@ -706,6 +706,8 @@ export interface Database {
           cheque_no: string;
           cheque_date: string;
           due_date: string | null;
+          // The voucher's own date; the cheque columns above mirror the first line.
+          voucher_date: string;
           payee: string;
           debit_account_id: string | null;
           credit_account_id: string;
@@ -724,6 +726,7 @@ export interface Database {
           journal_entry_id: string;
           cheque_no: string;
           cheque_date: string;
+          voucher_date: string;
           payee: string;
           credit_account_id: string;
           currency_id: string;
@@ -737,6 +740,10 @@ export interface Database {
           voucher_id: string;
           line_no: number;
           account_id: string;
+          // One line is one cheque.
+          cheque_no: string;
+          cheque_date: string;
+          due_date: string | null;
           amount: number;
           rent_month: string | null;
           remarks: string | null;
@@ -746,6 +753,8 @@ export interface Database {
           voucher_id: string;
           line_no: number;
           account_id: string;
+          cheque_no: string;
+          cheque_date: string;
           amount: number;
         };
         Update: Partial<Database["accounting"]["Tables"]["pdc_payment_voucher_lines"]["Row"]>;
@@ -759,6 +768,8 @@ export interface Database {
           cheque_no: string;
           cheque_date: string;
           due_date: string | null;
+          // The voucher's own date; the cheque columns above mirror the first line.
+          voucher_date: string;
           payer: string;
           debit_account_id: string;
           credit_account_id: string | null;
@@ -777,6 +788,7 @@ export interface Database {
           journal_entry_id: string;
           cheque_no: string;
           cheque_date: string;
+          voucher_date: string;
           payer: string;
           debit_account_id: string;
           currency_id: string;
@@ -790,6 +802,10 @@ export interface Database {
           voucher_id: string;
           line_no: number;
           account_id: string;
+          // One line is one cheque.
+          cheque_no: string;
+          cheque_date: string;
+          due_date: string | null;
           amount: number;
           rent_month: string | null;
           remarks: string | null;
@@ -799,6 +815,8 @@ export interface Database {
           voucher_id: string;
           line_no: number;
           account_id: string;
+          cheque_no: string;
+          cheque_date: string;
           amount: number;
         };
         Update: Partial<Database["accounting"]["Tables"]["pdc_receipt_voucher_lines"]["Row"]>;

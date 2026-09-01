@@ -207,6 +207,10 @@ export default async function EditVoucherPage({
     amount: number;
     rentMonth: string;
     remarks: string;
+    // PDC lines only — a PDC voucher's cheques live on its lines.
+    chequeNo: string;
+    chequeDate: string;
+    dueDate: string;
     allocations?: DocAllocation[];
   }[] = [];
   let obLines: { accountId: string; debit: number; credit: number; remarks: string }[] = [];
@@ -241,17 +245,23 @@ export default async function EditVoucherPage({
     const { data: dlines } = await supabase
       .schema("accounting")
       .from(HEADER_DOC_LINES[voucherType])
-      .select("id, account_id, amount, rent_month, remarks")
+      .select("*")
       .eq("voucher_id", id)
       .order("line_no");
     const lineIds = (dlines ?? []).map((l) => l.id as string);
-    docLines = (dlines ?? []).map((l) => ({
-      accountId: l.account_id,
-      amount: l.amount,
-      rentMonth: l.rent_month ?? "",
-      remarks: l.remarks ?? "",
-      allocations: [],
-    }));
+    docLines = (dlines ?? []).map((l) => {
+      const row = l as unknown as Record<string, unknown>;
+      return {
+        accountId: row.account_id as string,
+        amount: row.amount as number,
+        rentMonth: (row.rent_month as string | null) ?? "",
+        remarks: (row.remarks as string | null) ?? "",
+        chequeNo: (row.cheque_no as string | null) ?? "",
+        chequeDate: (row.cheque_date as string | null) ?? "",
+        dueDate: (row.due_date as string | null) ?? "",
+        allocations: [] as DocAllocation[],
+      };
+    });
     // Round-trip existing bill adjustments (receipt & payment), keyed by line id.
     const byLine = new Map<string, DocAllocation[]>();
     const pushAlloc = (key: string, a: DocAllocation) => {
@@ -466,16 +476,26 @@ export default async function EditVoucherPage({
           costCenters={docCostCenters}
           voucherId={id}
           initialValues={{
-            chequeDate: v.cheque_date as string,
-            dueDate: (v.due_date as string | null) ?? "",
-            chequeNo: v.cheque_no as string,
+            voucherDate: v.voucher_date as string,
             payee: v.payee as string,
             creditAccountId: v.credit_account_id as string,
             costCenterId: (v.cost_center_id as string | null) ?? "",
             currencyId: v.currency_id as string,
             exchangeRate: v.exchange_rate as number,
             narration: (v.narration as string | null) ?? "",
-            lines: docLines.length ? docLines : [{ accountId: "", amount: 0, rentMonth: "", remarks: "" }],
+            lines: docLines.length
+              ? docLines
+              : [
+                  {
+                    accountId: "",
+                    chequeNo: "",
+                    chequeDate: "",
+                    dueDate: "",
+                    amount: 0,
+                    rentMonth: "",
+                    remarks: "",
+                  },
+                ],
           }}
         />
       )}
@@ -487,9 +507,7 @@ export default async function EditVoucherPage({
           outstandingBills={outstandingBills}
           voucherId={id}
           initialValues={{
-            chequeDate: v.cheque_date as string,
-            dueDate: (v.due_date as string | null) ?? "",
-            chequeNo: v.cheque_no as string,
+            voucherDate: v.voucher_date as string,
             payer: v.payer as string,
             debitAccountId: v.debit_account_id as string,
             costCenterId: (v.cost_center_id as string | null) ?? "",
@@ -499,12 +517,26 @@ export default async function EditVoucherPage({
             lines: docLines.length
               ? docLines.map((l) => ({
                   accountId: l.accountId,
+                  chequeNo: l.chequeNo,
+                  chequeDate: l.chequeDate,
+                  dueDate: l.dueDate,
                   amount: l.amount,
                   rentMonth: l.rentMonth,
                   remarks: l.remarks,
                   allocations: l.allocations ?? [],
                 }))
-              : [{ accountId: "", amount: 0, rentMonth: "", remarks: "", allocations: [] }],
+              : [
+                  {
+                    accountId: "",
+                    chequeNo: "",
+                    chequeDate: "",
+                    dueDate: "",
+                    amount: 0,
+                    rentMonth: "",
+                    remarks: "",
+                    allocations: [],
+                  },
+                ],
           }}
         />
       )}

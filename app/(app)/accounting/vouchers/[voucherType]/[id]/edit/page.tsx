@@ -280,6 +280,20 @@ export default async function EditVoucherPage({
         list.push({ invoiceId, country: a.country as "UAE" | "PK", amount: Number(a.amount) });
         byLine.set(key, list);
       }
+    } else if (voucherType === "pdc_receipt_voucher") {
+      const { data: allocs } = await supabase
+        .schema("rental")
+        .from("receipt_invoice_allocations")
+        .select("pdc_receipt_line_id, country, uae_invoice_id, pk_invoice_id, amount")
+        .eq("pdc_receipt_voucher_id", id);
+      for (const a of allocs ?? []) {
+        const key = a.pdc_receipt_line_id as string | null;
+        const invoiceId = (a.uae_invoice_id ?? a.pk_invoice_id) as string | null;
+        if (!key || !invoiceId) continue;
+        const list = byLine.get(key) ?? [];
+        list.push({ invoiceId, country: a.country as "UAE" | "PK", amount: Number(a.amount) });
+        byLine.set(key, list);
+      }
     }
     if (byLine.size) {
       docLines = docLines.map((dl, i) => ({ ...dl, allocations: byLine.get(lineIds[i]) ?? [] }));
@@ -309,7 +323,11 @@ export default async function EditVoucherPage({
     dueDate: string | null;
     billAmount: number;
   }[] = [];
-  if (voucherType === "receipt_voucher" || voucherType === "payment_voucher") {
+  if (
+    voucherType === "receipt_voucher" ||
+    voucherType === "payment_voucher" ||
+    voucherType === "pdc_receipt_voucher"
+  ) {
     const { data: inv } = await supabase
       .schema("reporting")
       .from("v_outstanding_rent")
@@ -408,6 +426,7 @@ export default async function EditVoucherPage({
           accounts={accountOptions}
           currencies={docCurrencies}
           costCenters={docCostCenters}
+          outstandingBills={outstandingBills}
           voucherId={id}
           initialValues={{
             chequeDate: v.cheque_date as string,
@@ -419,7 +438,15 @@ export default async function EditVoucherPage({
             currencyId: v.currency_id as string,
             exchangeRate: v.exchange_rate as number,
             narration: (v.narration as string | null) ?? "",
-            lines: docLines.length ? docLines : [{ accountId: "", amount: 0, rentMonth: "", remarks: "" }],
+            lines: docLines.length
+              ? docLines.map((l) => ({
+                  accountId: l.accountId,
+                  amount: l.amount,
+                  rentMonth: l.rentMonth,
+                  remarks: l.remarks,
+                  allocations: l.allocations ?? [],
+                }))
+              : [{ accountId: "", amount: 0, rentMonth: "", remarks: "", allocations: [] }],
           }}
         />
       )}

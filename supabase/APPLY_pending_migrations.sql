@@ -77,3 +77,6 @@ as $$
 $$;
 
 grant execute on function accounting.fn_open_jv_items(text) to authenticated;
+
+-- Reload PostgREST so the new function is exposed to the API immediately.
+notify pgrst, 'reload schema';

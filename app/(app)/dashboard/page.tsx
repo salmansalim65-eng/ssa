@@ -114,6 +114,11 @@ function normCountry(c: string | null | undefined): "AE" | "PK" | null {
 
 const money = (symbol: string, n: number) => (symbol ? `${symbol} ${formatMoney(n)}` : formatMoney(n));
 
+// A balance with the side it sits on: a net debit reads "Dr", a net credit "Cr".
+// A nil balance has no side, so it is shown as the bare figure.
+const drCr = (symbol: string, net: number) =>
+  Math.abs(net) < 0.005 ? money(symbol, 0) : `${money(symbol, Math.abs(net))} ${net > 0 ? "Dr" : "Cr"}`;
+
 // The "Balances" cards read as operating balances, so they exclude Cash & Bank,
 // Fixed Asset and Tenant accounts, and also Equity, Revenue (income) and Expense
 // account types — leaving asset/liability postings. Flags and account_type come
@@ -507,7 +512,6 @@ export default async function DashboardPage({
 
   const aed = sym("AED");
   const pkr = sym("PKR");
-  const drCr = (symbol: string, net: number) => `${money(symbol, Math.abs(net))} ${net >= 0 ? "Dr" : "Cr"}`;
 
   // Each dashboard card is gated by the permission for what it reveals, so a
   // limited role (e.g. an Accountant with no rental access) doesn't see cards it
@@ -621,7 +625,7 @@ export default async function DashboardPage({
               {bankOnly.map((a) => (
                 <div key={a.code} className="flex items-baseline justify-between gap-3">
                   <span className="truncate text-muted-foreground">{a.name}</span>
-                  <span className="shrink-0 font-mono font-medium tabular-nums">{money(a.symbol, a.balance)}</span>
+                  <span className="shrink-0 font-mono font-medium tabular-nums">{drCr(a.symbol, a.balance)}</span>
                 </div>
               ))}
             </div>
@@ -647,7 +651,7 @@ export default async function DashboardPage({
               {cashOnly.map((a) => (
                 <div key={a.code} className="flex items-baseline justify-between gap-3">
                   <span className="truncate text-muted-foreground">{a.name}</span>
-                  <span className="shrink-0 font-mono font-medium tabular-nums">{money(a.symbol, a.balance)}</span>
+                  <span className="shrink-0 font-mono font-medium tabular-nums">{drCr(a.symbol, a.balance)}</span>
                 </div>
               ))}
             </div>
@@ -818,7 +822,7 @@ function bankDetail(
                 </Link>
               </TableCell>
               <TableCell className="text-muted-foreground">{a.symbol || "—"}</TableCell>
-              <TableCell className="text-right font-mono tabular-nums">{money(a.symbol, a.balance)}</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">{drCr(a.symbol, a.balance)}</TableCell>
             </TableRow>
           ))}
           {accounts.length === 0 && (

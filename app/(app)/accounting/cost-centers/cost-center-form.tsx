@@ -48,11 +48,15 @@ export function CostCenterForm({
   parentOptions,
   onSubmit,
   submitLabel,
+  canManageGroups = true,
 }: {
   defaultValues: CostCenterInput;
   parentOptions: CostCenterParentOption[];
   onSubmit: (values: CostCenterInput) => Promise<{ error?: string } | undefined>;
   submitLabel: string;
+  /** False when the viewer may not create or edit group cost centres — the
+   *  Group toggle is then locked (the server rejects the write either way). */
+  canManageGroups?: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
@@ -122,13 +126,18 @@ export function CostCenterForm({
           render={({ field }) => (
             <FormItem className="flex flex-row items-start gap-2.5 rounded-lg border p-3 sm:col-span-2">
               <FormControl>
-                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                <Checkbox
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  disabled={!canManageGroups}
+                />
               </FormControl>
               <div className="space-y-1 leading-none">
                 <FormLabel>Group / header cost centre</FormLabel>
                 <FormDescription>
-                  A group organises other cost centres under it (e.g. a Properties group with
-                  country subgroups) and isn&apos;t posted to directly.
+                  {canManageGroups
+                    ? "A group organises other cost centres under it (e.g. a Properties group with country subgroups) and isn't posted to directly."
+                    : "You don't have permission to manage group cost centres."}
                 </FormDescription>
               </div>
             </FormItem>

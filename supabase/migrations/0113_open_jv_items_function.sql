@@ -1,4 +1,3 @@
--- Pending fix: run once in Supabase → SQL Editor. Safe to re-run.
 -- Replace the v_open_jv_items view with a SECURITY DEFINER function.
 --
 -- As a security_invoker view, v_open_jv_items depended on the caller's RLS +

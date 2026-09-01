@@ -370,11 +370,7 @@ export default async function EditVoucherPage({
     const side = voucherType === "receipt_voucher" ? "debit" : "credit";
     const { data: jv } = await supabase
       .schema("accounting")
-      .from("v_open_jv_items")
-      .select("journal_line_id, account_id, voucher_no, entry_date, narration, remaining")
-      .eq("company_id", companyId)
-      .eq("side", side)
-      .order("entry_date");
+      .rpc("fn_open_jv_items", { p_side: side });
     const settleCol = voucherType === "receipt_voucher" ? "receipt_voucher_id" : "payment_voucher_id";
     const { data: mySettles } = await supabase
       .schema("accounting")
@@ -386,7 +382,7 @@ export default async function EditVoucherPage({
       const key = s.journal_line_id as string;
       backByLine.set(key, (backByLine.get(key) ?? 0) + Number(s.amount));
     }
-    const jvBills = (jv ?? [])
+    const jvBills = ((jv ?? []) as Array<Record<string, unknown>>)
       .map((r) => {
         const lineId = r.journal_line_id as string;
         const billAmount = Number(r.remaining) + (backByLine.get(lineId) ?? 0);
@@ -395,7 +391,9 @@ export default async function EditVoucherPage({
           source: "jv" as const,
           country: "PK" as const,
           accountId: (r.account_id as string | null) ?? null,
-          reference: ["JV", r.voucher_no ?? "Draft", r.narration].filter(Boolean).join(" · "),
+          reference: ["JV", (r.voucher_no as string | null) ?? "Draft", (r.narration as string | null) ?? ""]
+            .filter(Boolean)
+            .join(" · "),
           dueDate: (r.entry_date as string | null) ?? null,
           billAmount,
         };

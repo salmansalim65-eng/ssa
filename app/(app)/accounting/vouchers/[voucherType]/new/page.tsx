@@ -135,18 +135,16 @@ export default async function NewVoucherPage({
     const side = voucherType === "receipt_voucher" ? "debit" : "credit";
     const { data: jv } = await supabase
       .schema("accounting")
-      .from("v_open_jv_items")
-      .select("journal_line_id, account_id, voucher_no, entry_date, narration, remaining")
-      .eq("company_id", companyId)
-      .eq("side", side)
-      .order("entry_date");
-    const jvBills = (jv ?? [])
+      .rpc("fn_open_jv_items", { p_side: side });
+    const jvBills = ((jv ?? []) as Array<Record<string, unknown>>)
       .map((r) => ({
         id: r.journal_line_id as string,
         source: "jv" as const,
         country: "PK" as const,
         accountId: (r.account_id as string | null) ?? null,
-        reference: ["JV", r.voucher_no ?? "Draft", r.narration].filter(Boolean).join(" · "),
+        reference: ["JV", (r.voucher_no as string | null) ?? "Draft", (r.narration as string | null) ?? ""]
+          .filter(Boolean)
+          .join(" · "),
         dueDate: (r.entry_date as string | null) ?? null,
         billAmount: Number(r.remaining),
       }))

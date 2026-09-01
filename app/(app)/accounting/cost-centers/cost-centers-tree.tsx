@@ -47,11 +47,16 @@ export function CostCentersTree({
   rows,
   canEdit,
   canDelete,
+  canEditGroup,
+  canDeleteGroup,
   parentOptions,
 }: {
   rows: CostCenterRow[];
   canEdit: boolean;
   canDelete: boolean;
+  /** Group cost centres organise the tree, so they carry their own permissions. */
+  canEditGroup: boolean;
+  canDeleteGroup: boolean;
   parentOptions: CostCenterParentOption[];
 }) {
   // Group cost centres (PROPERTIES, DUBAI PROPERTIES, …) start expanded; clicking
@@ -152,8 +157,9 @@ export function CostCentersTree({
             <CostCenterRowActions
               costCenterId={cc.id}
               isActive={cc.is_active}
-              canEdit={canEdit}
-              canDelete={canDelete}
+              canEdit={isGroup ? canEditGroup : canEdit}
+              canDelete={isGroup ? canDeleteGroup : canDelete}
+              canManageGroups={canEditGroup}
               parentOptions={rowParentOptions}
               defaultValues={{
                 name: cc.name,

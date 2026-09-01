@@ -28,13 +28,35 @@ function toRow(input: CostCenterInput) {
   };
 }
 
+/**
+ * Which permission module governs a cost centre. A GROUP cost centre organises
+ * the tree, so it is governed by `cost_center_groups`; an ordinary one, the
+ * thing transactions are tagged with, by `cost_centers`. That lets an
+ * administrator let someone add cost centres without restructuring the tree.
+ */
+function costCenterModule(isGroup: boolean) {
+  return isGroup ? "cost_center_groups" : "cost_centers";
+}
+
+/** The stored group flag of a cost centre, so a write can be checked against it. */
+async function isGroupCostCenter(costCenterId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .schema("accounting")
+    .from("cost_centers")
+    .select("is_group")
+    .eq("id", costCenterId)
+    .maybeSingle();
+  return Boolean(data?.is_group);
+}
+
 export async function createCostCenter(input: CostCenterInput) {
   const parsed = costCenterSchema.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
 
-  await requirePermission("cost_centers", "create");
+  await requirePermission(costCenterModule(parsed.data.isGroup), "create");
   const companyId = await getCurrentCompanyId();
 
   const supabase = await createClient();
@@ -65,7 +87,13 @@ export async function updateCostCenter(costCenterId: string, input: CostCenterIn
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
 
-  await requirePermission("cost_centers", "edit");
+  // Checked against what the cost centre IS — and, when it is being converted
+  // between a group and an ordinary one, against what it is becoming too.
+  const wasGroup = await isGroupCostCenter(costCenterId);
+  await requirePermission(costCenterModule(wasGroup), "edit");
+  if (parsed.data.isGroup !== wasGroup) {
+    await requirePermission(costCenterModule(parsed.data.isGroup), "edit");
+  }
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -81,7 +109,7 @@ export async function updateCostCenter(costCenterId: string, input: CostCenterIn
 }
 
 export async function setCostCenterActive(costCenterId: string, isActive: boolean) {
-  await requirePermission("cost_centers", "edit");
+  await requirePermission(costCenterModule(await isGroupCostCenter(costCenterId)), "edit");
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -97,7 +125,7 @@ export async function setCostCenterActive(costCenterId: string, isActive: boolea
 }
 
 export async function deleteCostCenter(costCenterId: string) {
-  await requirePermission("cost_centers", "delete");
+  await requirePermission(costCenterModule(await isGroupCostCenter(costCenterId)), "delete");
 
   const supabase = await createClient();
   // Soft-delete via SECURITY DEFINER RPC: stamping deleted_at through the

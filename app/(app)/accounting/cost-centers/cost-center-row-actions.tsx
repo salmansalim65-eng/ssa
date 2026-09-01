@@ -33,6 +33,7 @@ export function CostCenterRowActions({
   isActive,
   canEdit,
   canDelete,
+  canManageGroups,
 }: {
   costCenterId: string;
   defaultValues: CostCenterInput;
@@ -40,6 +41,8 @@ export function CostCenterRowActions({
   isActive: boolean;
   canEdit: boolean;
   canDelete: boolean;
+  /** False when the viewer may not manage group cost centres. */
+  canManageGroups: boolean;
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -100,6 +103,7 @@ export function CostCenterRowActions({
           <CostCenterForm
             defaultValues={defaultValues}
             parentOptions={parentOptions}
+            canManageGroups={canManageGroups}
             submitLabel="Save changes"
             onSubmit={async (values) => {
               const result = await updateCostCenter(costCenterId, values);

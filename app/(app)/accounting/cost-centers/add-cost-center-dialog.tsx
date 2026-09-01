@@ -31,8 +31,11 @@ const emptyValues: CostCenterInput = {
 
 export function AddCostCenterDialog({
   parentOptions,
+  canCreateGroup,
 }: {
   parentOptions: CostCenterParentOption[];
+  /** False when the viewer may not create group cost centres. */
+  canCreateGroup: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -50,6 +53,7 @@ export function AddCostCenterDialog({
         <CostCenterForm
           defaultValues={emptyValues}
           parentOptions={parentOptions}
+          canManageGroups={canCreateGroup}
           submitLabel="Add cost center"
           onSubmit={async (values) => {
             const result = await createCostCenter(values);

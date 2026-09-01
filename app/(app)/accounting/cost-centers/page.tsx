@@ -17,7 +17,8 @@ export default async function CostCentersPage() {
 
   const companyId = await getCurrentCompanyId();
 
-  const [{ data: costCenters }, canCreate, canEdit, canDelete] = await Promise.all([
+  const [{ data: costCenters }, canCreate, canEdit, canDelete, canCreateGroup, canEditGroup, canDeleteGroup] =
+    await Promise.all([
     supabase
       .schema("accounting")
       .from("cost_centers")
@@ -28,6 +29,11 @@ export default async function CostCentersPage() {
     hasPermission("cost_centers", "create"),
     hasPermission("cost_centers", "edit"),
     hasPermission("cost_centers", "delete"),
+    // A group cost centre organises the tree, so it has its own module —
+    // someone may be allowed to add cost centres but not to restructure them.
+    hasPermission("cost_center_groups", "create"),
+    hasPermission("cost_center_groups", "edit"),
+    hasPermission("cost_center_groups", "delete"),
   ]);
 
   const rows: CostCenterRow[] = costCenters ?? [];
@@ -43,7 +49,11 @@ export default async function CostCentersPage() {
         eyebrow="Accounting"
         title="Cost Centers"
         description="Track one cost center per registered asset to tag transactions and drive property-level reporting."
-        actions={canCreate && <AddCostCenterDialog parentOptions={parentOptions} />}
+        actions={
+          (canCreate || canCreateGroup) && (
+            <AddCostCenterDialog parentOptions={parentOptions} canCreateGroup={canCreateGroup} />
+          )
+        }
       />
 
       <div className="rounded-lg border bg-card shadow-xs">
@@ -52,13 +62,19 @@ export default async function CostCentersPage() {
             icon={LandmarkIcon}
             title="No cost centers yet"
             description="Cost centers let you attribute income and costs to individual properties."
-            action={canCreate && <AddCostCenterDialog parentOptions={parentOptions} />}
+            action={
+              (canCreate || canCreateGroup) && (
+                <AddCostCenterDialog parentOptions={parentOptions} canCreateGroup={canCreateGroup} />
+              )
+            }
           />
         ) : (
           <CostCentersTree
             rows={rows}
             canEdit={canEdit}
             canDelete={canDelete}
+            canEditGroup={canEditGroup}
+            canDeleteGroup={canDeleteGroup}
             parentOptions={parentOptions}
           />
         )}

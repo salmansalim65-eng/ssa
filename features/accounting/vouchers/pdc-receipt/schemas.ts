@@ -6,6 +6,18 @@ export const pdcReceiptVoucherLineSchema = z.object({
   amount: z.coerce.number().nonnegative("Must be zero or more"),
   rentMonth: z.string().date("Enter a valid date").optional().or(z.literal("")),
   remarks: z.string().trim().max(200, "Keep it under 200 characters").optional().or(z.literal("")),
+  // How the line amount is applied against the party's outstanding rental
+  // invoices (entered through the adjustment dialog) — same as a Receipt.
+  allocations: z
+    .array(
+      z.object({
+        invoiceId: z.string().uuid(),
+        country: z.enum(["UAE", "PK"]),
+        amount: z.coerce.number().positive(),
+      }),
+    )
+    .optional()
+    .default([]),
 });
 
 export const pdcReceiptVoucherSchema = z.object({

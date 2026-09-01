@@ -190,6 +190,7 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
           amount: l.amount,
           rentMonth: l.rent_month ?? "",
           remarks: l.remarks ?? "",
+          allocations: [],
         })),
       }, { autoPostIfAdmin: false });
     }

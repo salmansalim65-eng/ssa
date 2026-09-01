@@ -16,6 +16,37 @@ function lineDescription(chequeNo: string, rentMonth?: string, remarks?: string)
   return parts.length ? parts.join(" — ") : `PDC ${chequeNo}`;
 }
 
+type PdcSupabase = Awaited<ReturnType<typeof createClient>>;
+type PdcLine = PdcReceiptVoucherInput["lines"][number];
+
+// Write the per-line bill adjustments into rental.receipt_invoice_allocations
+// (whose trigger reduces each invoice's outstanding balance) — same table as
+// the Receipt voucher, but owned by a PDC receipt. Returns an error message or
+// null; no-op when no line has allocations.
+async function writePdcReceiptAllocations(
+  supabase: PdcSupabase,
+  companyId: string,
+  voucherId: string,
+  lines: PdcLine[],
+  insertedLines: { id: string; line_no: number }[],
+) {
+  const idByLineNo = new Map(insertedLines.map((l) => [l.line_no, l.id]));
+  const rows = lines.flatMap((l, index) =>
+    (l.allocations ?? []).map((a) => ({
+      company_id: companyId,
+      pdc_receipt_voucher_id: voucherId,
+      pdc_receipt_line_id: idByLineNo.get(index + 1) ?? null,
+      country: a.country,
+      uae_invoice_id: a.country === "UAE" ? a.invoiceId : null,
+      pk_invoice_id: a.country === "PK" ? a.invoiceId : null,
+      amount: a.amount,
+    })),
+  );
+  if (!rows.length) return null;
+  const { error } = await supabase.schema("rental").from("receipt_invoice_allocations").insert(rows);
+  return error ? error.message : null;
+}
+
 export async function createPdcReceiptVoucher(input: PdcReceiptVoucherInput, options?: { autoPostIfAdmin?: boolean }) {
   const parsed = pdcReceiptVoucherSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -89,13 +120,18 @@ export async function createPdcReceiptVoucher(input: PdcReceiptVoucherInput, opt
     rent_month: l.rentMonth || null,
     remarks: l.remarks || null,
   }));
-  const { error: linesError } = await supabase
+  const { data: insertedLines, error: linesError } = await supabase
     .schema("accounting")
     .from("pdc_receipt_voucher_lines")
-    .insert(lineRows);
+    .insert(lineRows)
+    .select("id, line_no");
   if (linesError) return { error: linesError.message };
 
+  const allocErr = await writePdcReceiptAllocations(supabase, companyId, voucherId, lines, insertedLines ?? []);
+  if (allocErr) return { error: allocErr };
+
   revalidatePath("/accounting/vouchers/pdc_receipt_voucher");
+  revalidatePath("/dashboard");
   if (options?.autoPostIfAdmin !== false && (await isCurrentUserAdmin())) {
     try {
       await postPdcReceiptVoucher(voucherId, je.journalEntryId);
@@ -204,11 +240,17 @@ export async function updatePdcReceiptVoucher(id: string, input: PdcReceiptVouch
     rent_month: l.rentMonth || null,
     remarks: l.remarks || null,
   }));
-  const { error: insLines } = await supabase
+  const { data: insertedLines, error: insLines } = await supabase
     .schema("accounting")
     .from("pdc_receipt_voucher_lines")
-    .insert(lineRows);
+    .insert(lineRows)
+    .select("id, line_no");
   if (insLines) return { error: insLines.message };
+
+  // Deleting the old lines above cascaded their allocations away (restoring the
+  // invoices' outstanding); write the new adjustments here.
+  const allocErr = await writePdcReceiptAllocations(supabase, companyId, id, lines, insertedLines ?? []);
+  if (allocErr) return { error: allocErr };
 
   const { error: vErr } = await supabase
     .schema("accounting")

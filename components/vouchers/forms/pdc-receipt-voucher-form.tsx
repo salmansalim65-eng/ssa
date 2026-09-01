@@ -26,6 +26,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  InvoiceAdjustDialog,
+  type BillAllocation,
+  type OutstandingBill,
+} from "@/components/vouchers/invoice-adjust-dialog";
 import { AccountCombobox, type AccountOption } from "@/components/vouchers/account-combobox";
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
 import { DateInput } from "@/components/vouchers/date-input";
@@ -47,19 +52,21 @@ function today() {
 }
 
 function emptyLine() {
-  return { accountId: "", amount: blankAmount, rentMonth: "", remarks: "" };
+  return { accountId: "", amount: blankAmount, rentMonth: "", remarks: "", allocations: [] as BillAllocation[] };
 }
 
 export function PdcReceiptVoucherForm({
   accounts,
   currencies,
   costCenters,
+  outstandingBills = [],
   voucherId,
   initialValues,
 }: {
   accounts: AccountOption[];
   currencies: CurrencyOption[];
   costCenters: CostCenterOption[];
+  outstandingBills?: OutstandingBill[];
   voucherId?: string;
   initialValues?: PdcReceiptVoucherFormValues;
 }) {
@@ -67,6 +74,7 @@ export function PdcReceiptVoucherForm({
   const isEdit = !!voucherId;
   const [isPending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
+  const [adjustLine, setAdjustLine] = useState<number | null>(null);
 
   const form = useForm<PdcReceiptVoucherFormValues, unknown, PdcReceiptVoucherInput>({
     resolver: zodResolver(pdcReceiptVoucherSchema),
@@ -91,6 +99,11 @@ export function PdcReceiptVoucherForm({
   const currencyId = useWatch({ control: form.control, name: "currencyId" });
   const total = (watchedLines ?? []).reduce((sum, l) => sum + (Number(l?.amount) || 0), 0);
   const currencyCode = currencies.find((c) => c.id === currencyId)?.code ?? "";
+
+  // Outstanding bills for the account a line credits (the party). Adjustment is
+  // optional for a PDC (the cheque may not fully cover an invoice).
+  const billsFor = (accountId?: string) =>
+    accountId ? outstandingBills.filter((b) => b.accountId === accountId) : [];
 
   function onSubmit(values: PdcReceiptVoucherInput) {
     setFormError(null);
@@ -280,6 +293,7 @@ export function PdcReceiptVoucherForm({
                   <th className="w-40 text-right">Amount</th>
                   <th className="w-40">Rent Month</th>
                   <th className="min-w-[150px]">Remarks</th>
+                  <th className="w-24">Adjust</th>
                   <th className="w-10" />
                 </tr>
               </thead>
@@ -348,6 +362,19 @@ export function PdcReceiptVoucherForm({
                         )}
                       />
                     </td>
+                    <td className="pt-2">
+                      {(() => {
+                        const acct = watchedLines?.[index]?.accountId;
+                        const nBills = billsFor(acct).length;
+                        const nAlloc = (watchedLines?.[index]?.allocations ?? []).length;
+                        if (nBills === 0) return <span className="text-xs text-muted-foreground">—</span>;
+                        return (
+                          <Button type="button" variant="outline" size="sm" onClick={() => setAdjustLine(index)}>
+                            {nAlloc > 0 ? `Adjusted (${nAlloc})` : "Adjust"}
+                          </Button>
+                        );
+                      })()}
+                    </td>
                     <td className="pt-1">
                       <Button
                         type="button"
@@ -393,6 +420,18 @@ export function PdcReceiptVoucherForm({
             {isPending ? (isEdit ? "Saving…" : "Creating…") : isEdit ? "Save changes" : "Create PDC receipt voucher"}
           </Button>
         </div>
+
+        {adjustLine !== null && (
+          <InvoiceAdjustDialog
+            open={adjustLine !== null}
+            onOpenChange={(v) => !v && setAdjustLine(null)}
+            lineAmount={Number(watchedLines?.[adjustLine]?.amount) || 0}
+            currencyCode={currencyCode}
+            bills={outstandingBills.filter((b) => b.accountId === watchedLines?.[adjustLine]?.accountId)}
+            value={(watchedLines?.[adjustLine]?.allocations ?? []) as BillAllocation[]}
+            onSave={(allocations) => form.setValue(`lines.${adjustLine}.allocations`, allocations)}
+          />
+        )}
       </form>
     </Form>
   );

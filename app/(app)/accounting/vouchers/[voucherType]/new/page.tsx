@@ -105,7 +105,11 @@ export default async function NewVoucherPage({
     dueDate: string | null;
     billAmount: number;
   }[] = [];
-  if (voucherType === "receipt_voucher" || voucherType === "payment_voucher") {
+  if (
+    voucherType === "receipt_voucher" ||
+    voucherType === "payment_voucher" ||
+    voucherType === "pdc_receipt_voucher"
+  ) {
     const { data: inv } = await supabase
       .schema("reporting")
       .from("v_outstanding_rent")
@@ -195,6 +199,7 @@ export default async function NewVoucherPage({
           accounts={accountOptions}
           currencies={currencyOptions}
           costCenters={costCenterOptions}
+          outstandingBills={outstandingBills}
         />
       )}
       {voucherType === "opening_balance_voucher" && (

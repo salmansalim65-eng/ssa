@@ -108,7 +108,8 @@ export default async function NewVoucherPage({
   if (
     voucherType === "receipt_voucher" ||
     voucherType === "payment_voucher" ||
-    voucherType === "pdc_receipt_voucher"
+    voucherType === "pdc_receipt_voucher" ||
+    voucherType === "journal_voucher"
   ) {
     const { data: inv } = await supabase
       .schema("reporting")
@@ -214,6 +215,7 @@ export default async function NewVoucherPage({
           accounts={accountOptions}
           currencies={currencyOptions}
           costCenters={costCenterOptions}
+          outstandingBills={outstandingBills}
         />
       )}
       {voucherType === "jv_maintenance_voucher" && (

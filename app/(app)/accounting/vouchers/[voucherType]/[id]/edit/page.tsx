@@ -109,19 +109,44 @@ export default async function EditVoucherPage({
     debitAccountId: string;
     creditAccountId: string;
     amount: number;
+    allocations: { invoiceId: string; country: "UAE" | "PK"; amount: number; direction: "increase" | "decrease" }[];
   }[] = [];
   if (isMultiLine) {
     const { data: lines } = await supabase
       .schema("accounting")
       .from("journal_voucher_lines")
-      .select("cost_center_id, debit_account_id, credit_account_id, amount")
+      .select("id, cost_center_id, debit_account_id, credit_account_id, amount")
       .eq("voucher_id", id)
       .order("line_no");
+    // Round-trip existing bill adjustments, keyed by journal line id.
+    const { data: allocs } = await supabase
+      .schema("rental")
+      .from("journal_invoice_allocations")
+      .select("journal_line_id, country, uae_invoice_id, pk_invoice_id, amount, direction")
+      .eq("journal_voucher_id", id);
+    const byLine = new Map<
+      string,
+      { invoiceId: string; country: "UAE" | "PK"; amount: number; direction: "increase" | "decrease" }[]
+    >();
+    for (const a of allocs ?? []) {
+      const key = a.journal_line_id as string | null;
+      const invoiceId = (a.uae_invoice_id ?? a.pk_invoice_id) as string | null;
+      if (!key || !invoiceId) continue;
+      const list = byLine.get(key) ?? [];
+      list.push({
+        invoiceId,
+        country: a.country as "UAE" | "PK",
+        amount: Number(a.amount),
+        direction: a.direction as "increase" | "decrease",
+      });
+      byLine.set(key, list);
+    }
     journalLines = (lines ?? []).map((l) => ({
       costCenterId: l.cost_center_id ?? "",
       debitAccountId: l.debit_account_id,
       creditAccountId: l.credit_account_id,
       amount: l.amount,
+      allocations: byLine.get(l.id as string) ?? [],
     }));
   }
 
@@ -326,7 +351,8 @@ export default async function EditVoucherPage({
   if (
     voucherType === "receipt_voucher" ||
     voucherType === "payment_voucher" ||
-    voucherType === "pdc_receipt_voucher"
+    voucherType === "pdc_receipt_voucher" ||
+    voucherType === "journal_voucher"
   ) {
     const { data: inv } = await supabase
       .schema("reporting")
@@ -472,6 +498,7 @@ export default async function EditVoucherPage({
           accounts={accountOptions}
           currencies={docCurrencies}
           costCenters={docCostCenters}
+          outstandingBills={outstandingBills}
           voucherId={id}
           initialValues={{
             entryDate: v.entry_date as string,
@@ -480,7 +507,7 @@ export default async function EditVoucherPage({
             narration: (v.narration as string | null) ?? "",
             lines: journalLines.length
               ? journalLines
-              : [{ costCenterId: "", debitAccountId: "", creditAccountId: "", amount: 0 }],
+              : [{ costCenterId: "", debitAccountId: "", creditAccountId: "", amount: 0, allocations: [] }],
           }}
         />
       )}

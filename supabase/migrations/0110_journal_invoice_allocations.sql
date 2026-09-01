@@ -1,15 +1,17 @@
--- Pending fix: run once in Supabase → SQL Editor. Safe to re-run.
--- ============================================================================
--- Journal Voucher → rental invoice adjustment (bidirectional)
--- A Journal Voucher can now be applied to a rental invoice like the Receipt /
--- PDC Receipt adjustment, but bidirectional: because a JV line has both a debit
--- and a credit account and the tenant can be on either side —
+-- Journal Voucher → rental invoice adjustment.
+--
+-- A Journal Voucher can now be "applied to" a specific rental invoice, exactly
+-- like the Receipt / PDC Receipt adjustment — but bidirectional, because a JV
+-- line has both a debit and a credit account and the tenant can be on either
+-- side:
 --   * tenant DEBITED  (billing)    → INCREASE that invoice's outstanding
 --   * tenant CREDITED (collection) → DECREASE that invoice's outstanding
+--
 -- This is what lets a JV like "JULY RENT BALANCE" (Dr Tenant / Cr Rent Income)
 -- raise the tenant's outstanding so a later Receipt voucher can collect against
--- it (the Receipt adjustment reads reporting.v_outstanding_rent).
--- ============================================================================
+-- it — the Receipt adjustment reads reporting.v_outstanding_rent, which is fed
+-- by these invoice balances.
+
 create table if not exists rental.journal_invoice_allocations (
   id                 uuid primary key default gen_random_uuid(),
   company_id         uuid not null references core.companies(id) on delete cascade,

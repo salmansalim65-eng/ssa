@@ -223,6 +223,7 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
           debitAccountId: l.debit_account_id,
           creditAccountId: l.credit_account_id,
           amount: l.amount,
+          allocations: [],
         })),
       }, { autoPostIfAdmin: false });
     }

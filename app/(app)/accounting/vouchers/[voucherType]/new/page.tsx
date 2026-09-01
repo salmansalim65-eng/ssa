@@ -139,17 +139,18 @@ export default async function NewVoucherPage({
       .select("journal_line_id, account_id, voucher_no, entry_date, narration, remaining")
       .eq("company_id", companyId)
       .eq("side", side)
-      .gt("remaining", 0)
       .order("entry_date");
-    const jvBills = (jv ?? []).map((r) => ({
-      id: r.journal_line_id as string,
-      source: "jv" as const,
-      country: "PK" as const,
-      accountId: (r.account_id as string | null) ?? null,
-      reference: ["JV", r.voucher_no ?? "Draft", r.narration].filter(Boolean).join(" · "),
-      dueDate: (r.entry_date as string | null) ?? null,
-      billAmount: Number(r.remaining),
-    }));
+    const jvBills = (jv ?? [])
+      .map((r) => ({
+        id: r.journal_line_id as string,
+        source: "jv" as const,
+        country: "PK" as const,
+        accountId: (r.account_id as string | null) ?? null,
+        reference: ["JV", r.voucher_no ?? "Draft", r.narration].filter(Boolean).join(" · "),
+        dueDate: (r.entry_date as string | null) ?? null,
+        billAmount: Number(r.remaining),
+      }))
+      .filter((b) => b.billAmount > 0);
     outstandingBills = [...outstandingBills, ...jvBills];
   }
 

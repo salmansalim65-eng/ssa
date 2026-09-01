@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertCircleIcon, FileTextIcon, ListPlusIcon, PlusIcon, Trash2Icon } from "lucide-react";
@@ -28,6 +28,7 @@ import {
 import { AccountCombobox, type AccountOption } from "@/components/vouchers/account-combobox";
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
 import { DateInput } from "@/components/vouchers/date-input";
+import { accountsForCurrency, buildAccountCurrency } from "@/lib/vouchers/account-currency";
 import { blankAmount, amountValue } from "@/lib/forms/amount";
 import {
   createOpeningBalanceVoucher,
@@ -90,6 +91,27 @@ export function OpeningBalanceVoucherForm({
   const sumDebit = (watchedLines ?? []).reduce((sum, l) => sum + (Number(l?.debit) || 0), 0);
   const sumCredit = (watchedLines ?? []).reduce((sum, l) => sum + (Number(l?.credit) || 0), 0);
   const net = Math.round((sumDebit - sumCredit) * 100) / 100;
+
+  const currencyId = useWatch({ control: form.control, name: "currencyId" });
+  const contraAccountId = useWatch({ control: form.control, name: "contraAccountId" });
+
+  // An account carries its own currency, so the first one picked sets the
+  // voucher's: choose MEEZAN BANK and the voucher becomes PKR. From then on the
+  // voucher is anchored and every account picker offers only that currency's
+  // accounts (plus the currency-less ones, e.g. CAPITAL), so a voucher can't mix
+  // a PKR account with an AED one.
+  const currencyOf = useMemo(() => buildAccountCurrency(accounts, currencies), [accounts, currencies]);
+  function applyAccountCurrency(accountId: string) {
+    const cur = currencyOf(accountId);
+    if (!cur || !rateById.has(cur)) return;
+    form.setValue("currencyId", cur, { shouldValidate: true });
+    form.setValue("exchangeRate", rateById.get(cur) ?? 1, { shouldValidate: true });
+  }
+  const anchored =
+    !!currencyOf(contraAccountId) || (watchedLines ?? []).some((l) => !!currencyOf(l?.accountId));
+  /** The accounts a picker may offer; `value` is its own, never filtered away. */
+  const accountsFor = (value?: string) =>
+    anchored ? accountsForCurrency(accounts, currencyId, currencyOf, value) : accounts;
 
   function onSubmit(values: OpeningBalanceVoucherInput) {
     setFormError(null);
@@ -169,7 +191,14 @@ export function OpeningBalanceVoucherForm({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Contra account (Opening Balance Equity)</FormLabel>
-                <AccountCombobox accounts={accounts} value={field.value} onValueChange={field.onChange} />
+                <AccountCombobox
+                  accounts={accountsFor(field.value)}
+                  value={field.value}
+                  onValueChange={(v) => {
+                    field.onChange(v);
+                    applyAccountCurrency(v);
+                  }}
+                />
                 <FormMessage />
               </FormItem>
             )}
@@ -251,7 +280,14 @@ export function OpeningBalanceVoucherForm({
                         name={`lines.${index}.accountId`}
                         render={({ field }) => (
                           <FormItem>
-                            <AccountCombobox accounts={accounts} value={field.value} onValueChange={field.onChange} />
+                            <AccountCombobox
+                              accounts={accountsFor(field.value)}
+                              value={field.value}
+                              onValueChange={(v) => {
+                                field.onChange(v);
+                                applyAccountCurrency(v);
+                              }}
+                            />
                             <FormMessage />
                           </FormItem>
                         )}

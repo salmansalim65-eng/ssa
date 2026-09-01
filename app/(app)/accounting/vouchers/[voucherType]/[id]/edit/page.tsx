@@ -11,6 +11,7 @@ import { PdcReceiptVoucherForm } from "@/components/vouchers/forms/pdc-receipt-v
 import { ReceiptVoucherForm } from "@/components/vouchers/forms/receipt-voucher-form";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { toAccountOptions, type RawAccountRow } from "@/lib/vouchers/account-currency";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { isPhase5VoucherType, VOUCHER_TYPE_LABELS } from "@/lib/vouchers/meta";
 import type { JournalEntryStatus } from "@/types/database.types";
@@ -54,7 +55,7 @@ export default async function EditVoucherPage({
     supabase
       .schema("accounting")
       .from("chart_of_accounts")
-      .select("id, account_code, account_name")
+      .select("id, account_code, account_name, currency_id, country")
       .eq("company_id", companyId)
       .eq("is_group", false)
       .eq("is_active", true)
@@ -68,7 +69,7 @@ export default async function EditVoucherPage({
       .eq("is_active", true),
   ]);
 
-  const accountOptions = accounts ?? [];
+  const accountOptions = toAccountOptions(accounts as RawAccountRow[] | null);
   type RawCurrency = { currencies: { id: string; code: string } | null };
 
   const table = EDITABLE_TABLE[editableType];

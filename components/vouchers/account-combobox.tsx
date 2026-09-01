@@ -10,6 +10,10 @@ import { cn } from "@/lib/utils";
 export interface AccountOption {
   id: string;
   account_name: string;
+  /** The account's own currency, when it has one (`accounting.chart_of_accounts.currency_id`). */
+  currencyId?: string | null;
+  /** The account's country (AE / PK / SA), used when it carries no currency of its own. */
+  country?: string | null;
 }
 
 interface Position {

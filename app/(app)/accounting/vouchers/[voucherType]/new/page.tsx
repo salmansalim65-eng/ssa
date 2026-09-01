@@ -12,6 +12,7 @@ import { PdcReceiptVoucherForm } from "@/components/vouchers/forms/pdc-receipt-v
 import { ReceiptVoucherForm } from "@/components/vouchers/forms/receipt-voucher-form";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { toAccountOptions, type RawAccountRow } from "@/lib/vouchers/account-currency";
 import { mapVoucherCurrencies, type RawCompanyCurrency } from "@/lib/vouchers/currencies";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { isPhase5VoucherType, VOUCHER_TYPE_LABELS } from "@/lib/vouchers/meta";
@@ -35,7 +36,7 @@ export default async function NewVoucherPage({
     supabase
       .schema("accounting")
       .from("chart_of_accounts")
-      .select("id, account_code, account_name")
+      .select("id, account_code, account_name, currency_id, country")
       .eq("company_id", companyId)
       .eq("is_group", false)
       .eq("is_active", true)
@@ -57,7 +58,7 @@ export default async function NewVoucherPage({
       .order("name"),
   ]);
 
-  const accountOptions = accounts ?? [];
+  const accountOptions = toAccountOptions(accounts as RawAccountRow[] | null);
 
   // Enrich cost centres with the JV Service Charges auto-fill amount: the linked
   // asset's Service Charges Amount (UAE) or Property Tax (Pakistan).

@@ -23,6 +23,9 @@ export default async function ChartOfAccountsPage() {
     canCreate,
     canEdit,
     canDelete,
+    canCreateGroup,
+    canEditGroup,
+    canDeleteGroup,
   ] = await Promise.all([
       supabase
         .schema("accounting")
@@ -52,6 +55,11 @@ export default async function ChartOfAccountsPage() {
       hasPermission("chart_of_accounts", "create"),
       hasPermission("chart_of_accounts", "edit"),
       hasPermission("chart_of_accounts", "delete"),
+      // A group account shapes the chart, so it is governed by its own module —
+      // someone may be allowed to add accounts but not to restructure the chart.
+      hasPermission("account_groups", "create"),
+      hasPermission("account_groups", "edit"),
+      hasPermission("account_groups", "delete"),
     ]);
 
   // Property fields of each asset, keyed by asset id AND by the account it links
@@ -166,6 +174,9 @@ export default async function ChartOfAccountsPage() {
       canCreate={canCreate}
       canEdit={canEdit}
       canDelete={canDelete}
+      canCreateGroup={canCreateGroup}
+      canEditGroup={canEditGroup}
+      canDeleteGroup={canDeleteGroup}
       assetFieldsById={assetFieldsById}
       assetFieldsByAccountId={assetFieldsByAccountId}
     />

@@ -377,13 +377,35 @@ async function ensureLinkedAsset(params: {
   return { assetId: asset.id };
 }
 
+/**
+ * Which permission module governs an account. A GROUP account shapes the chart
+ * itself, so it is governed by `account_groups`; a posting account, which is
+ * day-to-day data entry, by `chart_of_accounts`. That lets an administrator let
+ * someone add accounts without letting them restructure the chart.
+ */
+function accountModule(isGroup: boolean) {
+  return isGroup ? "account_groups" : "chart_of_accounts";
+}
+
+/** The stored group flag of an account, so a write can be checked against it. */
+async function isGroupAccount(accountId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .schema("accounting")
+    .from("chart_of_accounts")
+    .select("is_group")
+    .eq("id", accountId)
+    .maybeSingle();
+  return Boolean(data?.is_group);
+}
+
 export async function createAccount(input: AccountInput) {
   const parsed = accountSchema.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
 
-  await requirePermission("chart_of_accounts", "create");
+  await requirePermission(accountModule(parsed.data.isGroup), "create");
   const companyId = await getCurrentCompanyId();
   const currencyId = parsed.data.currencyId || null;
 
@@ -650,7 +672,13 @@ export async function updateAccount(accountId: string, input: AccountInput) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
 
-  await requirePermission("chart_of_accounts", "edit");
+  // Checked against what the account IS — and, when it is being converted
+  // between a group and a posting account, against what it is becoming too.
+  const wasGroup = await isGroupAccount(accountId);
+  await requirePermission(accountModule(wasGroup), "edit");
+  if (parsed.data.isGroup !== wasGroup) {
+    await requirePermission(accountModule(parsed.data.isGroup), "edit");
+  }
   const companyId = await getCurrentCompanyId();
   const currencyId = parsed.data.currencyId || null;
 
@@ -822,7 +850,7 @@ export async function getAccountAttachment(accountId: string, slot: AccountAttac
 }
 
 export async function setAccountActive(accountId: string, isActive: boolean) {
-  await requirePermission("chart_of_accounts", "edit");
+  await requirePermission(accountModule(await isGroupAccount(accountId)), "edit");
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -842,7 +870,7 @@ export async function setAccountActive(accountId: string, isActive: boolean) {
 // account_code or accounting history — so the move is inherently
 // hierarchy-safe. `direction` slides the account within its sibling list.
 export async function moveAccount(accountId: string, direction: "up" | "down" | "top" | "bottom") {
-  await requirePermission("chart_of_accounts", "edit");
+  await requirePermission(accountModule(await isGroupAccount(accountId)), "edit");
   const companyId = await getCurrentCompanyId();
   const supabase = await createClient();
 
@@ -901,7 +929,7 @@ export async function moveAccount(accountId: string, direction: "up" | "down" | 
 }
 
 export async function deleteAccount(accountId: string) {
-  await requirePermission("chart_of_accounts", "delete");
+  await requirePermission(accountModule(await isGroupAccount(accountId)), "delete");
 
   const supabase = await createClient();
   // Definer guard: blocks accounts with active children or transaction history,

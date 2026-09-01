@@ -31,38 +31,6 @@ function toVoucherLines(voucherId: string, lines: JournalVoucherInput["lines"]) 
   }));
 }
 
-type JournalSupabase = Awaited<ReturnType<typeof createClient>>;
-type JournalLine = JournalVoucherInput["lines"][number];
-
-// Write each line's bill adjustments into rental.journal_invoice_allocations.
-// Its trigger moves the invoice's outstanding balance — up when the tenant is
-// debited (direction 'increase' = billing), down when credited ('decrease' =
-// collection). Returns an error message or null; no-op when nothing is adjusted.
-async function writeJournalAllocations(
-  supabase: JournalSupabase,
-  companyId: string,
-  voucherId: string,
-  lines: JournalLine[],
-  insertedLines: { id: string; line_no: number }[],
-) {
-  const idByLineNo = new Map(insertedLines.map((l) => [l.line_no, l.id]));
-  const rows = lines.flatMap((l, index) =>
-    (l.allocations ?? []).map((a) => ({
-      company_id: companyId,
-      journal_voucher_id: voucherId,
-      journal_line_id: idByLineNo.get(index + 1) ?? null,
-      country: a.country,
-      uae_invoice_id: a.country === "UAE" ? a.invoiceId : null,
-      pk_invoice_id: a.country === "PK" ? a.invoiceId : null,
-      direction: a.direction,
-      amount: a.amount,
-    })),
-  );
-  if (!rows.length) return null;
-  const { error } = await supabase.schema("rental").from("journal_invoice_allocations").insert(rows);
-  return error ? error.message : null;
-}
-
 export async function createJournalVoucher(input: JournalVoucherInput, options?: { autoPostIfAdmin?: boolean }) {
   const parsed = journalVoucherSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -97,18 +65,13 @@ export async function createJournalVoucher(input: JournalVoucherInput, options?:
   });
   if (error) return { error: error.message };
 
-  const { data: insertedLines, error: linesErr } = await supabase
+  const { error: linesErr } = await supabase
     .schema("accounting")
     .from("journal_voucher_lines")
-    .insert(toVoucherLines(voucherId, parsed.data.lines))
-    .select("id, line_no");
+    .insert(toVoucherLines(voucherId, parsed.data.lines));
   if (linesErr) return { error: linesErr.message };
 
-  const allocErr = await writeJournalAllocations(supabase, companyId, voucherId, parsed.data.lines, insertedLines ?? []);
-  if (allocErr) return { error: allocErr };
-
   revalidatePath("/accounting/vouchers/journal_voucher");
-  revalidatePath("/dashboard");
   if (options?.autoPostIfAdmin !== false && (await isCurrentUserAdmin())) {
     try {
       await postJournalVoucher(voucherId, je.journalEntryId);
@@ -193,8 +156,6 @@ export async function updateJournalVoucher(id: string, input: JournalVoucherInpu
     .eq("id", id);
   if (vErr) return { error: vErr.message };
 
-  // Deleting the old lines cascades their allocations away (restoring the
-  // invoices' outstanding); the new adjustments are written below.
   const { error: delLinesErr } = await supabase
     .schema("accounting")
     .from("journal_voucher_lines")
@@ -202,19 +163,14 @@ export async function updateJournalVoucher(id: string, input: JournalVoucherInpu
     .eq("voucher_id", id);
   if (delLinesErr) return { error: delLinesErr.message };
 
-  const { data: insertedLines, error: insLinesErr } = await supabase
+  const { error: insLinesErr } = await supabase
     .schema("accounting")
     .from("journal_voucher_lines")
-    .insert(toVoucherLines(id, parsed.data.lines))
-    .select("id, line_no");
+    .insert(toVoucherLines(id, parsed.data.lines));
   if (insLinesErr) return { error: insLinesErr.message };
-
-  const allocErr = await writeJournalAllocations(supabase, companyId, id, parsed.data.lines, insertedLines ?? []);
-  if (allocErr) return { error: allocErr };
 
   revalidatePath("/accounting/vouchers/journal_voucher");
   revalidatePath(`/accounting/vouchers/journal_voucher/${id}`);
-  revalidatePath("/dashboard");
   return { success: true, id };
 }
 

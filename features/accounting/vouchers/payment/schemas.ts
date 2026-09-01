@@ -12,6 +12,9 @@ export const paymentVoucherLineSchema = z.object({
     .array(
       z.object({
         invoiceId: z.string().uuid(),
+        // "rental" books an expense against a rental invoice; "jv" settles an
+        // open Journal Voucher ledger item (payable) on the party account.
+        source: z.enum(["rental", "jv"]).optional().default("rental"),
         country: z.enum(["UAE", "PK"]),
         amount: z.coerce.number().positive(),
       }),

@@ -99,6 +99,7 @@ export default async function NewVoucherPage({
   // grouped by the party (tenant) account so the dialog shows only that account.
   let outstandingBills: {
     id: string;
+    source?: "rental" | "jv";
     country: "UAE" | "PK";
     accountId: string | null;
     reference: string;
@@ -108,8 +109,7 @@ export default async function NewVoucherPage({
   if (
     voucherType === "receipt_voucher" ||
     voucherType === "payment_voucher" ||
-    voucherType === "pdc_receipt_voucher" ||
-    voucherType === "journal_voucher"
+    voucherType === "pdc_receipt_voucher"
   ) {
     const { data: inv } = await supabase
       .schema("reporting")
@@ -120,12 +120,37 @@ export default async function NewVoucherPage({
       .order("due_date");
     outstandingBills = (inv ?? []).map((r) => ({
       id: r.invoice_id as string,
+      source: "rental" as const,
       country: r.country as "UAE" | "PK",
       accountId: (r.tenant_account_id as string | null) ?? null,
       reference: [r.voucher_no ?? "Draft", r.tenant_name, r.asset_name].filter(Boolean).join(" · "),
       dueDate: (r.due_date as string | null) ?? null,
       billAmount: Number(r.net_outstanding),
     }));
+  }
+
+  // Open Journal Voucher ledger items on a party account — a receipt settles its
+  // debit side (receivable), a payment its credit side (payable).
+  if (voucherType === "receipt_voucher" || voucherType === "payment_voucher") {
+    const side = voucherType === "receipt_voucher" ? "debit" : "credit";
+    const { data: jv } = await supabase
+      .schema("accounting")
+      .from("v_open_jv_items")
+      .select("journal_line_id, account_id, voucher_no, entry_date, narration, remaining")
+      .eq("company_id", companyId)
+      .eq("side", side)
+      .gt("remaining", 0)
+      .order("entry_date");
+    const jvBills = (jv ?? []).map((r) => ({
+      id: r.journal_line_id as string,
+      source: "jv" as const,
+      country: "PK" as const,
+      accountId: (r.account_id as string | null) ?? null,
+      reference: ["JV", r.voucher_no ?? "Draft", r.narration].filter(Boolean).join(" · "),
+      dueDate: (r.entry_date as string | null) ?? null,
+      billAmount: Number(r.remaining),
+    }));
+    outstandingBills = [...outstandingBills, ...jvBills];
   }
 
   let extra: { pdcOptions?: ReturnablePdcOption[] } = {};
@@ -215,7 +240,6 @@ export default async function NewVoucherPage({
           accounts={accountOptions}
           currencies={currencyOptions}
           costCenters={costCenterOptions}
-          outstandingBills={outstandingBills}
         />
       )}
       {voucherType === "jv_maintenance_voucher" && (

@@ -1,4 +1,3 @@
--- Pending fix: run once in Supabase → SQL Editor. Safe to re-run.
 -- Settle a Journal Voucher's party-account balance from a Receipt / Payment.
 --
 -- A JV can post a Dr or Cr straight to a party account (e.g. Dr UHF SOLUTIONS /

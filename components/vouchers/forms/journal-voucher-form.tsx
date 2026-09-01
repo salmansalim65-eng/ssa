@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertCircleIcon, FileTextIcon, ListPlusIcon, PlusIcon, SlidersHorizontalIcon, Trash2Icon } from "lucide-react";
+import { AlertCircleIcon, FileTextIcon, ListPlusIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -19,16 +19,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  InvoiceAdjustDialog,
-  type BillAllocation,
-  type OutstandingBill,
-} from "@/components/vouchers/invoice-adjust-dialog";
 import { AccountCombobox, type AccountOption } from "@/components/vouchers/account-combobox";
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
 import { DateInput } from "@/components/vouchers/date-input";
 import { blankAmount, amountValue } from "@/lib/forms/amount";
-import type { JournalAllocationInput } from "@/features/accounting/vouchers/journal/schemas";
 import { createJournalVoucher, updateJournalVoucher } from "@/features/accounting/vouchers/journal/actions";
 import {
   journalVoucherSchema,
@@ -46,27 +40,19 @@ function today() {
 }
 
 function emptyLine() {
-  return {
-    costCenterId: "",
-    debitAccountId: "",
-    creditAccountId: "",
-    amount: blankAmount,
-    allocations: [] as JournalAllocationInput[],
-  };
+  return { costCenterId: "", debitAccountId: "", creditAccountId: "", amount: blankAmount };
 }
 
 export function JournalVoucherForm({
   accounts,
   currencies,
   costCenters,
-  outstandingBills = [],
   voucherId,
   initialValues,
 }: {
   accounts: AccountOption[];
   currencies: CurrencyOption[];
   costCenters: CostCenterOption[];
-  outstandingBills?: OutstandingBill[];
   voucherId?: string;
   initialValues?: JournalVoucherFormValues;
 }) {
@@ -74,7 +60,6 @@ export function JournalVoucherForm({
   const isEdit = !!voucherId;
   const [isPending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
-  const [adjustLine, setAdjustLine] = useState<number | null>(null);
 
   const form = useForm<JournalVoucherFormValues, unknown, JournalVoucherInput>({
     resolver: zodResolver(journalVoucherSchema),
@@ -94,19 +79,6 @@ export function JournalVoucherForm({
   const currencyId = useWatch({ control: form.control, name: "currencyId" });
   const total = (watchedLines ?? []).reduce((sum, l) => sum + (Number(l?.amount) || 0), 0);
   const currencyCode = currencies.find((c) => c.id === currencyId)?.code ?? "";
-
-  // A JV line can be adjusted against outstanding rental bills of the account on
-  // EITHER side: bills of the debit account are billed up (increase), bills of
-  // the credit account are collected down (decrease).
-  const billsForLine = (debitAccountId?: string, creditAccountId?: string) =>
-    outstandingBills.filter((b) => b.accountId === debitAccountId || b.accountId === creditAccountId);
-
-  // Which way an adjustment moves a given invoice's outstanding: 'increase' when
-  // its tenant account is the line's debit account (billing), else 'decrease'.
-  const directionFor = (invoiceId: string, debitAccountId?: string): "increase" | "decrease" => {
-    const bill = outstandingBills.find((b) => b.id === invoiceId);
-    return bill?.accountId && bill.accountId === debitAccountId ? "increase" : "decrease";
-  };
 
   function onSubmit(values: JournalVoucherInput) {
     setFormError(null);
@@ -212,7 +184,6 @@ export function JournalVoucherForm({
                   <th className="min-w-[240px]">Debit Account</th>
                   <th className="min-w-[240px]">Credit Account</th>
                   <th className="w-40 text-right">Amount</th>
-                  <th className="w-24 text-center">Adjust</th>
                   <th className="w-10" />
                 </tr>
               </thead>
@@ -294,34 +265,6 @@ export function JournalVoucherForm({
                         )}
                       />
                     </td>
-                    <td className="pt-1 text-center">
-                      {(() => {
-                        const l = watchedLines?.[index];
-                        const bills = billsForLine(l?.debitAccountId, l?.creditAccountId);
-                        const adjusted = (l?.allocations ?? []).reduce(
-                          (s, a) => s + (Number(a?.amount) || 0),
-                          0,
-                        );
-                        return (
-                          <Button
-                            type="button"
-                            variant={adjusted > 0 ? "default" : "outline"}
-                            size="sm"
-                            className="h-8"
-                            disabled={bills.length === 0}
-                            onClick={() => setAdjustLine(index)}
-                            title={
-                              bills.length === 0
-                                ? "No outstanding bills for these accounts"
-                                : "Adjust against outstanding bills"
-                            }
-                          >
-                            <SlidersHorizontalIcon className="size-3.5" />
-                            {adjusted > 0 ? adjusted.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "Adjust"}
-                          </Button>
-                        );
-                      })()}
-                    </td>
                     <td className="pt-1">
                       <Button
                         type="button"
@@ -367,28 +310,6 @@ export function JournalVoucherForm({
             {isPending ? (isEdit ? "Saving…" : "Creating…") : isEdit ? "Save changes" : "Create journal voucher"}
           </Button>
         </div>
-
-        {adjustLine !== null && (
-          <InvoiceAdjustDialog
-            open={adjustLine !== null}
-            onOpenChange={(v) => !v && setAdjustLine(null)}
-            lineAmount={Number(watchedLines?.[adjustLine]?.amount) || 0}
-            currencyCode={currencyCode}
-            bills={billsForLine(
-              watchedLines?.[adjustLine]?.debitAccountId,
-              watchedLines?.[adjustLine]?.creditAccountId,
-            )}
-            value={(watchedLines?.[adjustLine]?.allocations ?? []) as BillAllocation[]}
-            onSave={(allocations) => {
-              const debitAccountId = watchedLines?.[adjustLine]?.debitAccountId;
-              const withDirection: JournalAllocationInput[] = allocations.map((a) => ({
-                ...a,
-                direction: directionFor(a.invoiceId, debitAccountId),
-              }));
-              form.setValue(`lines.${adjustLine}.allocations`, withDirection);
-            }}
-          />
-        )}
       </form>
     </Form>
   );

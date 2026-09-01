@@ -4,7 +4,7 @@ import type { MetadataRoute } from "next";
 // on desktop or mobile home screens.
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Rental & Accounting ERP",
+    name: "SSA ERP",
     short_name: "SSA ERP",
     description: "Multi-company, multi-currency rental and accounting ERP",
     start_url: "/",

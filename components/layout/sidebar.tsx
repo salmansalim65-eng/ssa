@@ -67,8 +67,10 @@ export function Sidebar({ allowedModules }: { allowedModules: string[] | null })
             <>
               <Image src="/logo.svg" alt="SSA logo" width={32} height={32} priority className="size-8 shrink-0" />
               <div className="min-w-0 leading-tight">
-                <p className="truncate text-sm font-semibold text-white">Rental &amp; Accounting</p>
-                <p className="truncate text-[0.7rem] uppercase tracking-wider text-white/70">Enterprise ERP</p>
+                <p className="truncate text-sm font-semibold text-white">SSA ERP</p>
+                <p className="truncate text-[0.7rem] uppercase tracking-wider text-white/70">
+                  Enterprise Finance Suite
+                </p>
               </div>
               <button
                 type="button"

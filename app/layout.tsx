@@ -18,7 +18,7 @@ const mono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Rental & Accounting ERP",
+  title: "SSA ERP",
   description: "Multi-company, multi-currency rental and accounting ERP",
 };
 

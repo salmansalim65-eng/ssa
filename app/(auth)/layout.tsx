@@ -9,7 +9,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             <Image src="/logo.svg" alt="SSA logo" width={30} height={30} className="size-7" priority />
           </span>
           <div className="space-y-0.5">
-            <p className="text-base font-semibold tracking-tight text-foreground">Rental &amp; Accounting ERP</p>
+            <p className="text-base font-semibold tracking-tight text-foreground">SSA ERP</p>
             <p className="text-xs uppercase tracking-wider text-muted-foreground">
               Enterprise Finance Suite
             </p>

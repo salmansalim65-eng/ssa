@@ -49,7 +49,7 @@ export function Header({
           <SheetHeader className="shrink-0 border-b bg-ledger p-4 text-white">
             <SheetTitle className="flex items-center gap-2.5 text-white">
               <Image src="/logo.svg" alt="SSA logo" width={28} height={28} className="size-7" />
-              Rental &amp; Accounting ERP
+              SSA ERP
             </SheetTitle>
           </SheetHeader>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">

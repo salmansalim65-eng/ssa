@@ -67,6 +67,35 @@ export function formatRate(value: number | null | undefined): string {
  * other string through unchanged and renders null/undefined as an em dash. This
  * is the single source of truth for on-screen date formatting.
  */
+/** Month names, January first — the labels the rent-month picker offers. */
+export const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
+
+/**
+ * A rent month for display: "Sep 2026". Takes the ISO date the month is stored
+ * as (its first day) and reads the year and month straight off the string, so
+ * no timezone can shift it into the neighbouring month.
+ */
+export function formatMonth(value: string | null | undefined): string {
+  const match = /^(\d{4})-(\d{2})/.exec(String(value ?? ""));
+  if (!match) return "";
+  const monthIndex = Number(match[2]) - 1;
+  if (monthIndex < 0 || monthIndex > 11) return "";
+  return `${MONTH_NAMES[monthIndex].slice(0, 3)} ${match[1]}`;
+}
+
 export function formatDate(value: string | Date | null | undefined): string {
   if (!value) return "—";
   const iso = value instanceof Date ? value.toISOString() : value;

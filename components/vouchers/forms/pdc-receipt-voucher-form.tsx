@@ -34,6 +34,7 @@ import {
 import { AccountCombobox, type AccountOption } from "@/components/vouchers/account-combobox";
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
 import { DateInput } from "@/components/vouchers/date-input";
+import { MonthInput } from "@/components/vouchers/month-input";
 import { accountsForCurrency, buildAccountCurrency } from "@/lib/vouchers/account-currency";
 import { blankAmount, amountValue } from "@/lib/forms/amount";
 import { createPdcReceiptVoucher, updatePdcReceiptVoucher } from "@/features/accounting/vouchers/pdc-receipt/actions";
@@ -293,7 +294,7 @@ export function PdcReceiptVoucherForm({
                   <th className="w-40">Cheque Date</th>
                   <th className="w-40">Due Date</th>
                   <th className="w-40 text-right">Amount</th>
-                  <th className="w-40">Rent Month</th>
+                  <th className="w-56">Rent Month</th>
                   <th className="min-w-[150px]">Remarks</th>
                   <th className="w-24">Adjust</th>
                   <th className="w-10" />
@@ -391,9 +392,10 @@ export function PdcReceiptVoucherForm({
                         name={`lines.${index}.rentMonth`}
                         render={({ field }) => (
                           <FormItem>
-                            <FormControl>
-                              <DateInput {...field} value={(field.value as string) ?? ""} />
-                            </FormControl>
+                            <MonthInput
+                              value={(field.value as string) ?? ""}
+                              onChange={field.onChange}
+                            />
                             <FormMessage />
                           </FormItem>
                         )}

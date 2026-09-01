@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
+import { formatMonth } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { createJournalEntry, getCurrentCompanyId, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { pdcReceiptVoucherSchema, type PdcReceiptVoucherInput } from "./schemas";
@@ -12,7 +13,7 @@ function round2(n: number) {
 }
 
 function lineDescription(chequeNo: string, rentMonth?: string, remarks?: string) {
-  const parts = [rentMonth || "", remarks || ""].filter(Boolean);
+  const parts = [formatMonth(rentMonth), remarks || ""].filter(Boolean);
   return parts.length ? parts.join(" — ") : `PDC ${chequeNo}`;
 }
 

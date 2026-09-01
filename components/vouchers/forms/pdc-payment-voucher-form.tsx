@@ -48,7 +48,7 @@ function today() {
 }
 
 function emptyLine() {
-  return { accountId: "", amount: blankAmount, rentMonth: "", remarks: "" };
+  return { accountId: "", chequeNo: "", chequeDate: today(), dueDate: "", amount: blankAmount, rentMonth: "", remarks: "" };
 }
 
 export function PdcPaymentVoucherForm({
@@ -72,9 +72,7 @@ export function PdcPaymentVoucherForm({
   const form = useForm<PdcPaymentVoucherFormValues, unknown, PdcPaymentVoucherInput>({
     resolver: zodResolver(pdcPaymentVoucherSchema),
     defaultValues: initialValues ?? {
-      chequeDate: today(),
-      dueDate: "",
-      chequeNo: "",
+      voucherDate: today(),
       payee: "",
       creditAccountId: "",
       costCenterId: "",
@@ -143,38 +141,12 @@ export function PdcPaymentVoucherForm({
           </FormItem>
           <FormField
             control={form.control}
-            name="chequeDate"
+            name="voucherDate"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Cheque date</FormLabel>
+                <FormLabel>Date</FormLabel>
                 <FormControl>
                   <DateInput {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="dueDate"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Due Date</FormLabel>
-                <FormControl>
-                  <DateInput {...field} value={(field.value as string) ?? ""} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="chequeNo"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Cheque number</FormLabel>
-                <FormControl>
-                  <Input {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -299,11 +271,14 @@ export function PdcPaymentVoucherForm({
           }
         >
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-sm">
+            <table className="w-full min-w-[1280px] text-sm">
               <thead>
                 <tr className="border-b bg-muted/50 text-left [&_th]:px-3 [&_th]:py-2 [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground">
                   <th className="w-10">Sno</th>
                   <th className="min-w-[240px]">Account (Dr)</th>
+                  <th className="w-36">Cheque No.</th>
+                  <th className="w-40">Cheque Date</th>
+                  <th className="w-40">Due Date</th>
                   <th className="w-40 text-right">Amount</th>
                   <th className="w-40">Rent Month</th>
                   <th className="min-w-[150px]">Remarks</th>
@@ -328,6 +303,48 @@ export function PdcPaymentVoucherForm({
                                 applyAccountCurrency(v);
                               }}
                             />
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </td>
+                    <td>
+                      <FormField
+                        control={form.control}
+                        name={`lines.${index}.chequeNo`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Input {...field} value={(field.value as string) ?? ""} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </td>
+                    <td>
+                      <FormField
+                        control={form.control}
+                        name={`lines.${index}.chequeDate`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <DateInput {...field} value={(field.value as string) ?? ""} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </td>
+                    <td>
+                      <FormField
+                        control={form.control}
+                        name={`lines.${index}.dueDate`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <DateInput {...field} value={(field.value as string) ?? ""} />
+                            </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}

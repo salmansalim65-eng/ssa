@@ -16,6 +16,14 @@ function lineDescription(chequeNo: string, rentMonth?: string, remarks?: string)
   return parts.length ? parts.join(" — ") : `PDC ${chequeNo}`;
 }
 
+// The control line and the fallback narration cover the whole voucher, so they
+// name the cheques it holds rather than a single one.
+function chequeSummary(lines: { chequeNo: string }[]) {
+  const nos = [...new Set(lines.map((l) => l.chequeNo).filter(Boolean))];
+  if (nos.length <= 3) return nos.join(", ");
+  return `${nos.slice(0, 3).join(", ")} +${nos.length - 3} more`;
+}
+
 type PdcSupabase = Awaited<ReturnType<typeof createClient>>;
 type PdcLine = PdcReceiptVoucherInput["lines"][number];
 
@@ -70,14 +78,14 @@ export async function createPdcReceiptVoucher(input: PdcReceiptVoucherInput, opt
       costCenterId,
       debit: total,
       credit: 0,
-      description: `PDC ${parsed.data.chequeNo}`,
+      description: `PDC ${chequeSummary(lines)}`,
     },
     ...lines.map((l) => ({
       accountId: l.accountId,
       costCenterId,
       debit: 0,
       credit: l.amount,
-      description: lineDescription(parsed.data.chequeNo, l.rentMonth, l.remarks),
+      description: lineDescription(l.chequeNo, l.rentMonth, l.remarks),
     })),
   ];
 
@@ -85,9 +93,9 @@ export async function createPdcReceiptVoucher(input: PdcReceiptVoucherInput, opt
     companyId,
     voucherType: "pdc_receipt_voucher",
     voucherId,
-    entryDate: parsed.data.chequeDate,
+    entryDate: parsed.data.voucherDate,
     currencyId: parsed.data.currencyId,
-    narration: parsed.data.narration || `PDC ${parsed.data.chequeNo}`,
+    narration: parsed.data.narration || `PDC ${chequeSummary(lines)}`,
     createdBy,
     lines: jeLines,
     exchangeRate: parsed.data.exchangeRate,
@@ -98,9 +106,12 @@ export async function createPdcReceiptVoucher(input: PdcReceiptVoucherInput, opt
     id: voucherId,
     company_id: companyId,
     journal_entry_id: je.journalEntryId,
-    cheque_no: parsed.data.chequeNo,
-    cheque_date: parsed.data.chequeDate,
-    due_date: parsed.data.dueDate || null,
+    voucher_date: parsed.data.voucherDate,
+    // The header's cheque columns mirror the FIRST line, so the voucher lists,
+    // the Cheque Return picker and the reports reading them keep working.
+    cheque_no: lines[0].chequeNo,
+    cheque_date: lines[0].chequeDate,
+    due_date: lines[0].dueDate || null,
     payer: parsed.data.payer,
     debit_account_id: parsed.data.debitAccountId,
     cost_center_id: costCenterId,
@@ -116,6 +127,9 @@ export async function createPdcReceiptVoucher(input: PdcReceiptVoucherInput, opt
     voucher_id: voucherId,
     line_no: index + 1,
     account_id: l.accountId,
+    cheque_no: l.chequeNo,
+    cheque_date: l.chequeDate,
+    due_date: l.dueDate || null,
     amount: l.amount,
     rent_month: l.rentMonth || null,
     remarks: l.remarks || null,
@@ -179,10 +193,10 @@ export async function updatePdcReceiptVoucher(id: string, input: PdcReceiptVouch
     .schema("accounting")
     .from("journal_entries")
     .update({
-      entry_date: parsed.data.chequeDate,
+      entry_date: parsed.data.voucherDate,
       currency_id: parsed.data.currencyId,
       exchange_rate: rate,
-      narration: parsed.data.narration || `PDC ${parsed.data.chequeNo}`,
+      narration: parsed.data.narration || `PDC ${chequeSummary(lines)}`,
     })
     .eq("id", jeId);
   if (jeErr) return { error: jeErr.message };
@@ -206,7 +220,7 @@ export async function updatePdcReceiptVoucher(id: string, input: PdcReceiptVouch
       exchange_rate: rate,
       base_debit_amount: round2(total * rate),
       base_credit_amount: 0,
-      description: `PDC ${parsed.data.chequeNo}`,
+      description: `PDC ${chequeSummary(lines)}`,
     },
     ...lines.map((l, index) => ({
       journal_entry_id: jeId,
@@ -219,7 +233,7 @@ export async function updatePdcReceiptVoucher(id: string, input: PdcReceiptVouch
       exchange_rate: rate,
       base_debit_amount: 0,
       base_credit_amount: round2(l.amount * rate),
-      description: lineDescription(parsed.data.chequeNo, l.rentMonth, l.remarks),
+      description: lineDescription(l.chequeNo, l.rentMonth, l.remarks),
     })),
   ];
   const { error: insJe } = await supabase.schema("accounting").from("journal_entry_lines").insert(jeRows);
@@ -236,6 +250,9 @@ export async function updatePdcReceiptVoucher(id: string, input: PdcReceiptVouch
     voucher_id: id,
     line_no: index + 1,
     account_id: l.accountId,
+    cheque_no: l.chequeNo,
+    cheque_date: l.chequeDate,
+    due_date: l.dueDate || null,
     amount: l.amount,
     rent_month: l.rentMonth || null,
     remarks: l.remarks || null,
@@ -256,9 +273,12 @@ export async function updatePdcReceiptVoucher(id: string, input: PdcReceiptVouch
     .schema("accounting")
     .from("pdc_receipt_vouchers")
     .update({
-      cheque_no: parsed.data.chequeNo,
-      cheque_date: parsed.data.chequeDate,
-      due_date: parsed.data.dueDate || null,
+      voucher_date: parsed.data.voucherDate,
+      // The header's cheque columns mirror the FIRST line, so the voucher lists,
+      // the Cheque Return picker and the reports reading them keep working.
+      cheque_no: lines[0].chequeNo,
+      cheque_date: lines[0].chequeDate,
+      due_date: lines[0].dueDate || null,
       payer: parsed.data.payer,
       debit_account_id: parsed.data.debitAccountId,
       cost_center_id: costCenterId,

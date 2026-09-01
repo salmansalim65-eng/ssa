@@ -1,8 +1,14 @@
 import { z } from "zod";
 
-// One line credits an Account for an amount (optional rent month + remarks).
+// One line is one cheque: it credits an Account for an amount, and carries the
+// cheque's number, date and due date (optional rent month + remarks).
 export const pdcReceiptVoucherLineSchema = z.object({
   accountId: z.string().uuid("Select the account"),
+  // The cheque itself belongs to the line: one PDC voucher can carry several
+  // cheques, each with its own number, date and due date.
+  chequeNo: z.string().min(1, "Required"),
+  chequeDate: z.string().date("Enter a valid date"),
+  dueDate: z.string().date("Enter a valid date").optional().or(z.literal("")),
   amount: z.coerce.number().nonnegative("Must be zero or more"),
   rentMonth: z.string().date("Enter a valid date").optional().or(z.literal("")),
   remarks: z.string().trim().max(200, "Keep it under 200 characters").optional().or(z.literal("")),
@@ -21,9 +27,9 @@ export const pdcReceiptVoucherLineSchema = z.object({
 });
 
 export const pdcReceiptVoucherSchema = z.object({
-  chequeDate: z.string().date("Enter a valid date"),
-  dueDate: z.string().date("Enter a valid date").optional().or(z.literal("")),
-  chequeNo: z.string().min(1, "Required"),
+  // The voucher's own date — it dates the journal entry, which used to be dated
+  // by the (single) header cheque.
+  voucherDate: z.string().date("Enter a valid date"),
   payer: z.string().min(1, "Required"),
   debitAccountId: z.string().uuid("Select the PDC asset account"),
   costCenterId: z.string().uuid("Select a cost center").optional().or(z.literal("")),

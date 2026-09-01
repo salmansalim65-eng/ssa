@@ -5,6 +5,24 @@ import { formatAccountCode, formatDate, formatRate } from "@/lib/format";
 import type { JournalEntryStatus } from "@/types/database.types";
 import type { Phase5VoucherType } from "./meta";
 
+/**
+ * One summary line per cheque on a PDC voucher — "CHQ-001 · 12 Sep 2026 · due
+ * 30 Sep 2026" — since the cheques live on the lines and a voucher can hold
+ * several of them.
+ */
+function formatCheques(
+  rows: { cheque_no: string; cheque_date: string; due_date: string | null }[] | null,
+) {
+  if (!rows?.length) return "—";
+  return rows
+    .map((c) =>
+      [c.cheque_no, formatDate(c.cheque_date), c.due_date ? `due ${formatDate(c.due_date)}` : ""]
+        .filter(Boolean)
+        .join(" · "),
+    )
+    .join(", ");
+}
+
 export interface VoucherListRow {
   id: string;
   voucherNo: string | null;
@@ -176,13 +194,13 @@ export async function getVoucherListRows(
       const { data } = await supabase
         .schema("accounting")
         .from("pdc_payment_vouchers")
-        .select("id, voucher_no, cheque_date, payee, total_amount, exchange_rate, currency_id, journal_entry_id, journal_entries:journal_entry_id(status)")
+        .select("id, voucher_no, voucher_date, payee, total_amount, exchange_rate, currency_id, journal_entry_id, journal_entries:journal_entry_id(status)")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false });
       return (data ?? []).map((r) => ({
         id: r.id,
         voucherNo: r.voucher_no,
-        date: r.cheque_date,
+        date: r.voucher_date,
         party: r.payee,
         amount: r.total_amount,
         currencySymbol: symbolFor(r.currency_id),
@@ -195,13 +213,13 @@ export async function getVoucherListRows(
       const { data } = await supabase
         .schema("accounting")
         .from("pdc_receipt_vouchers")
-        .select("id, voucher_no, cheque_date, payer, total_amount, exchange_rate, currency_id, journal_entry_id, journal_entries:journal_entry_id(status)")
+        .select("id, voucher_no, voucher_date, payer, total_amount, exchange_rate, currency_id, journal_entry_id, journal_entries:journal_entry_id(status)")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false });
       return (data ?? []).map((r) => ({
         id: r.id,
         voucherNo: r.voucher_no,
-        date: r.cheque_date,
+        date: r.voucher_date,
         party: r.payer,
         amount: r.total_amount,
         currencySymbol: symbolFor(r.currency_id),
@@ -492,12 +510,19 @@ export async function getVoucherDetail(
         .maybeSingle();
       if (!v) return null;
       const je = await getJournalEntryWithLines(v.journal_entry_id);
+      // The cheques live on the lines now — one voucher can hold several.
+      const { data: cheques } = await supabase
+        .schema("accounting")
+        .from("pdc_payment_voucher_lines")
+        .select("cheque_no, cheque_date, due_date")
+        .eq("voucher_id", id)
+        .order("line_no");
       const credit = v.credit as unknown as { account_code: string; account_name: string } | null;
       const costCenter = v.cost_center as unknown as { name: string } | null;
       return {
         id: v.id,
         voucherNo: v.voucher_no,
-        date: v.cheque_date,
+        date: v.voucher_date,
         narration: v.narration,
         journalEntryId: v.journal_entry_id,
         status: je.status,
@@ -507,8 +532,7 @@ export async function getVoucherDetail(
         fields: [
           { label: "Credit account (PDC liability)", value: credit ? `${formatAccountCode(credit.account_code)} — ${credit.account_name}` : "—" },
           { label: "Payee", value: v.payee },
-          { label: "Cheque number", value: v.cheque_no },
-          { label: "Due date", value: v.due_date ?? "—" },
+          { label: "Cheques", value: formatCheques(cheques) },
           { label: "Cheque status", value: v.pdc_status },
           { label: "Cost center", value: costCenter?.name ?? "—" },
           { label: "Currency conv.", value: formatRate(v.exchange_rate) },
@@ -527,12 +551,19 @@ export async function getVoucherDetail(
         .maybeSingle();
       if (!v) return null;
       const je = await getJournalEntryWithLines(v.journal_entry_id);
+      // The cheques live on the lines now — one voucher can hold several.
+      const { data: cheques } = await supabase
+        .schema("accounting")
+        .from("pdc_receipt_voucher_lines")
+        .select("cheque_no, cheque_date, due_date")
+        .eq("voucher_id", id)
+        .order("line_no");
       const debit = v.debit as unknown as { account_code: string; account_name: string } | null;
       const costCenter = v.cost_center as unknown as { name: string } | null;
       return {
         id: v.id,
         voucherNo: v.voucher_no,
-        date: v.cheque_date,
+        date: v.voucher_date,
         narration: v.narration,
         journalEntryId: v.journal_entry_id,
         status: je.status,
@@ -542,8 +573,7 @@ export async function getVoucherDetail(
         fields: [
           { label: "Debit account (PDC asset)", value: debit ? `${formatAccountCode(debit.account_code)} — ${debit.account_name}` : "—" },
           { label: "Payer", value: v.payer },
-          { label: "Cheque number", value: v.cheque_no },
-          { label: "Due date", value: v.due_date ?? "—" },
+          { label: "Cheques", value: formatCheques(cheques) },
           { label: "Cheque status", value: v.pdc_status },
           { label: "Cost center", value: costCenter?.name ?? "—" },
           { label: "Currency conv.", value: formatRate(v.exchange_rate) },

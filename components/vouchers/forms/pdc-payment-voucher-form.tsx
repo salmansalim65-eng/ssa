@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertCircleIcon, FileTextIcon, ListPlusIcon, PlusIcon, Trash2Icon } from "lucide-react";
@@ -29,6 +29,7 @@ import {
 import { AccountCombobox, type AccountOption } from "@/components/vouchers/account-combobox";
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
 import { DateInput } from "@/components/vouchers/date-input";
+import { accountsForCurrency, buildAccountCurrency } from "@/lib/vouchers/account-currency";
 import { blankAmount, amountValue } from "@/lib/forms/amount";
 import { createPdcPaymentVoucher, updatePdcPaymentVoucher } from "@/features/accounting/vouchers/pdc-payment/actions";
 import {
@@ -91,6 +92,25 @@ export function PdcPaymentVoucherForm({
   const currencyId = useWatch({ control: form.control, name: "currencyId" });
   const total = (watchedLines ?? []).reduce((sum, l) => sum + (Number(l?.amount) || 0), 0);
   const currencyCode = currencies.find((c) => c.id === currencyId)?.code ?? "";
+  const headerAccountId = useWatch({ control: form.control, name: "creditAccountId" });
+
+  // An account carries its own currency, so the first one picked sets the
+  // voucher's: choose MEEZAN BANK and the voucher becomes PKR. From then on the
+  // voucher is anchored and every account picker offers only that currency's
+  // accounts (plus the currency-less ones, e.g. CAPITAL), so a voucher can't mix
+  // a PKR bank with an AED party.
+  const currencyOf = useMemo(() => buildAccountCurrency(accounts, currencies), [accounts, currencies]);
+  function applyAccountCurrency(accountId: string) {
+    const cur = currencyOf(accountId);
+    if (!cur || !rateById.has(cur)) return;
+    form.setValue("currencyId", cur, { shouldValidate: true });
+    form.setValue("exchangeRate", rateById.get(cur) ?? 1, { shouldValidate: true });
+  }
+  const anchored =
+    !!currencyOf(headerAccountId) || (watchedLines ?? []).some((l) => !!currencyOf(l?.accountId));
+  /** The accounts a picker may offer; `value` is its own, never filtered away. */
+  const accountsFor = (value?: string) =>
+    anchored ? accountsForCurrency(accounts, currencyId, currencyOf, value) : accounts;
 
   function onSubmit(values: PdcPaymentVoucherInput) {
     setFormError(null);
@@ -210,7 +230,14 @@ export function PdcPaymentVoucherForm({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Credit account (PDC liability)</FormLabel>
-                <AccountCombobox accounts={accounts} value={field.value} onValueChange={field.onChange} />
+                <AccountCombobox
+                  accounts={accountsFor(field.value)}
+                  value={field.value}
+                  onValueChange={(v) => {
+                    field.onChange(v);
+                    applyAccountCurrency(v);
+                  }}
+                />
                 <FormMessage />
               </FormItem>
             )}
@@ -293,7 +320,14 @@ export function PdcPaymentVoucherForm({
                         name={`lines.${index}.accountId`}
                         render={({ field }) => (
                           <FormItem>
-                            <AccountCombobox accounts={accounts} value={field.value} onValueChange={field.onChange} />
+                            <AccountCombobox
+                              accounts={accountsFor(field.value)}
+                              value={field.value}
+                              onValueChange={(v) => {
+                                field.onChange(v);
+                                applyAccountCurrency(v);
+                              }}
+                            />
                             <FormMessage />
                           </FormItem>
                         )}

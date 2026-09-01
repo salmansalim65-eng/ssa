@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertCircleIcon, FileTextIcon, ListPlusIcon, PlusIcon, ScaleIcon, Trash2Icon } from "lucide-react";
@@ -17,6 +17,7 @@ import { AccountCombobox, type AccountOption } from "@/components/vouchers/accou
 import { type CurrencyOption } from "@/components/vouchers/currency-select";
 import { DateInput } from "@/components/vouchers/date-input";
 import { cn } from "@/lib/utils";
+import { buildAccountCurrency } from "@/lib/vouchers/account-currency";
 import { blankAmount, amountValue } from "@/lib/forms/amount";
 import {
   createMultiCurrencyJournal,
@@ -85,6 +86,17 @@ export function MultiCurrencyJournalForm({
 
   const rateById = new Map(currencies.map((c) => [c.id, c.rate ?? 1] as const));
   const codeOf = (id: string) => currencies.find((c) => c.id === id)?.code ?? "";
+
+  // Each line carries its own currency here (that is the point of this voucher),
+  // so an account sets the currency of ITS line only — and the account lists stay
+  // unfiltered, since mixing currencies across lines is exactly what's wanted.
+  const currencyOf = useMemo(() => buildAccountCurrency(accounts, currencies), [accounts, currencies]);
+  function applyLineAccountCurrency(index: number, accountId: string) {
+    const cur = currencyOf(accountId);
+    if (!cur || !rateById.has(cur)) return;
+    form.setValue(`lines.${index}.currencyId`, cur, { shouldValidate: true });
+    form.setValue(`lines.${index}.exchangeRate`, rateById.get(cur) ?? 1, { shouldValidate: true });
+  }
 
   // Cross-rate helper: "1 [A] = x [B]". Applying it makes A the reference
   // (rate 1) and every B line rate = 1 / x — so the user enters just one number
@@ -339,7 +351,14 @@ export function MultiCurrencyJournalForm({
                           name={`lines.${index}.accountId`}
                           render={({ field }) => (
                             <FormItem>
-                              <AccountCombobox accounts={accounts} value={field.value} onValueChange={field.onChange} />
+                              <AccountCombobox
+                                accounts={accounts}
+                                value={field.value}
+                                onValueChange={(v) => {
+                                  field.onChange(v);
+                                  applyLineAccountCurrency(index, v);
+                                }}
+                              />
                               <FormMessage />
                             </FormItem>
                           )}

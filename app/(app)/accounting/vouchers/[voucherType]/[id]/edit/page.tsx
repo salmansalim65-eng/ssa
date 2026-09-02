@@ -9,10 +9,9 @@ import { PaymentVoucherForm } from "@/components/vouchers/forms/payment-voucher-
 import { PdcPaymentVoucherForm } from "@/components/vouchers/forms/pdc-payment-voucher-form";
 import { PdcReceiptVoucherForm } from "@/components/vouchers/forms/pdc-receipt-voucher-form";
 import { ReceiptVoucherForm } from "@/components/vouchers/forms/receipt-voucher-form";
-import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { toAccountOptions, type RawAccountRow } from "@/lib/vouchers/account-currency";
-import { EDITABLE_STATUSES, getCurrentCompanyId } from "@/lib/vouchers/engine";
+import { canEditVoucher, EDITABLE_STATUSES, getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { isPhase5VoucherType, VOUCHER_TYPE_LABELS } from "@/lib/vouchers/meta";
 import type { JournalEntryStatus } from "@/types/database.types";
 
@@ -45,9 +44,6 @@ export default async function EditVoucherPage({
   if (!(voucherType in EDITABLE_TABLE)) redirect(detailHref);
   const editableType = voucherType as EditableVoucherType;
 
-  const canEdit = await hasPermission(voucherType, "edit");
-  if (!canEdit) redirect(detailHref);
-
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
 
@@ -76,16 +72,30 @@ export default async function EditVoucherPage({
   const { data: voucher } = await supabase
     .schema("accounting")
     .from(table)
-    .select("*, journal_entries:journal_entry_id(status, currency_id, exchange_rate)")
+    .select("*, journal_entries:journal_entry_id(status, created_by, currency_id, exchange_rate)")
     .eq("company_id", companyId)
     .eq("id", id)
     .maybeSingle();
   if (!voucher) notFound();
 
   const jeEmbed = (voucher as unknown as {
-    journal_entries: { status: JournalEntryStatus; currency_id: string; exchange_rate: number } | null;
+    journal_entries: {
+      status: JournalEntryStatus;
+      created_by: string | null;
+      currency_id: string;
+      exchange_rate: number;
+    } | null;
   }).journal_entries;
   const status = jeEmbed?.status ?? "draft";
+
+  // The Edit permission opens any voucher; without it you may still open your
+  // OWN voucher while it is unposted, so a sent-back voucher can be corrected
+  // by the clerk who raised it.
+  const canEdit = await canEditVoucher(editableType, {
+    status,
+    created_by: jeEmbed?.created_by ?? null,
+  });
+  if (!canEdit) redirect(detailHref);
   // Nothing has reached the ledger while a voucher is draft, pending or sent
   // back, so all three stay editable — a sent-back voucher exists precisely to
   // be corrected, and saving it sends it to the approver again. Two types stay

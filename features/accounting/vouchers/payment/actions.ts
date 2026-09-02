@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
-import { createJournalEntry, EDITABLE_STATUSES, getCurrentCompanyId, postVoucher, resubmitEditedVoucher, routeNewVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
+import { createJournalEntry, EDITABLE_STATUSES, ensureCanEditVoucher, getCurrentCompanyId, postVoucher, resubmitEditedVoucher, routeNewVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { paymentVoucherSchema, type PaymentVoucherInput } from "./schemas";
 
 function round2(n: number) {
@@ -171,7 +171,6 @@ export async function updatePaymentVoucher(id: string, input: PaymentVoucherInpu
   const parsed = paymentVoucherSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
 
-  await requirePermission("payment_voucher", "edit");
   const companyId = await getCurrentCompanyId();
   const supabase = await createClient();
 
@@ -188,10 +187,13 @@ export async function updatePaymentVoucher(id: string, input: PaymentVoucherInpu
   const { data: je } = await supabase
     .schema("accounting")
     .from("journal_entries")
-    .select("status")
+    .select("status, created_by")
     .eq("id", jeId)
     .single();
   if (!je) return { error: "Voucher not found" };
+  // The Edit permission, or your own voucher while it is unposted.
+  const notAllowed = await ensureCanEditVoucher("payment_voucher", je);
+  if (notAllowed) return { error: notAllowed };
   if (!EDITABLE_STATUSES.includes(je.status)) {
     return { error: "A posted voucher can no longer be edited" };
   }

@@ -10,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { CsvExportButton } from "@/components/reports/csv-export-button";
+import { ReportCountryFilter } from "@/components/reports/report-country-filter";
 import { ReportNav } from "@/components/reports/report-nav";
 import { ReportSelectFilter } from "@/components/reports/report-select-filter";
 import { PrintButton } from "@/components/vouchers/print-button";
@@ -29,10 +30,10 @@ function monthIndex(d: string | null | undefined) {
 export default async function ExpenseReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ year?: string; country?: string; cc?: string }>;
+  searchParams: Promise<{ year?: string; country?: string; cc?: string; cur?: string }>;
 }) {
   const currentYear = new Date().getFullYear();
-  const { year: yearParam = "", country = "", cc = "" } = await searchParams;
+  const { year: yearParam = "", country = "", cc = "", cur = "" } = await searchParams;
   const year = Number(yearParam) || currentYear;
   const from = `${year}-01-01`;
   const to = `${year}-12-31`;
@@ -59,15 +60,38 @@ export default async function ExpenseReportPage({
     supabase
       .schema("core")
       .from("company_currencies")
-      .select("is_base_currency, currencies:currency_id(code, symbol)")
+      .select("is_base_currency, currencies:currency_id(id, code, symbol)")
       .eq("company_id", companyId)
       .eq("is_active", true),
     loadReportCountries(companyId),
   ]);
 
-  type RawCurrency = { is_base_currency: boolean; currencies: { code: string; symbol: string } | null };
-  const baseCur = ((companyCurrencies as unknown as RawCurrency[]) ?? []).find((c) => c.is_base_currency)?.currencies;
-  const symbol = baseCur?.symbol ?? baseCur?.code ?? "";
+  // Ledger amounts are stored in the base currency; picking another company
+  // currency restates every figure in the report at that currency's rate as of
+  // the year end. Selecting a country picks its currency along with it.
+  type RawCurrency = { is_base_currency: boolean; currencies: { id: string; code: string; symbol: string } | null };
+  const currencyList = ((companyCurrencies as unknown as RawCurrency[]) ?? []).filter((c) => c.currencies);
+  const baseCurrency = currencyList.find((c) => c.is_base_currency)?.currencies ?? null;
+  const currencyOptions = currencyList
+    .map((c) => ({ value: c.currencies!.id, label: c.currencies!.code }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  const selectedCurrencyId = cur || baseCurrency?.id || "";
+  const selectedCurrency =
+    currencyList.find((c) => c.currencies!.id === selectedCurrencyId)?.currencies ?? baseCurrency;
+
+  // No rate configured (or base selected) leaves the figures in base rather
+  // than failing the report.
+  let factor = 1;
+  if (selectedCurrencyId && baseCurrency && selectedCurrencyId !== baseCurrency.id) {
+    const { data: rate, error } = await supabase.schema("core").rpc("fn_exchange_rate_to_base", {
+      p_company_id: companyId,
+      p_currency_id: selectedCurrencyId,
+      p_as_of_date: to,
+    });
+    if (!error && rate) factor = 1 / (rate as number);
+  }
+
+  const symbol = selectedCurrency?.symbol ?? selectedCurrency?.code ?? "";
   const money = (n: number) => (n ? `${symbol ? symbol + " " : ""}${formatMoney(n)}` : "");
 
   const ccById = new Map(
@@ -92,7 +116,7 @@ export default async function ExpenseReportPage({
     if (country && (meta?.country ?? "") !== country) continue;
     if (cc && ccId !== cc) continue;
 
-    const net = Number(l.debit_amount) - Number(l.credit_amount);
+    const net = (Number(l.debit_amount) - Number(l.credit_amount)) * factor;
     const m = monthIndex(l.entry_date as string);
     const ccKey = ccId ?? UNASSIGNED;
     ccNameOf.set(ccKey, meta?.name ?? "Unassigned");
@@ -178,14 +202,7 @@ export default async function ExpenseReportPage({
             />
           </Suspense>
           <Suspense>
-            <ReportSelectFilter
-              label="Country"
-              param="country"
-              allLabel="All countries"
-              options={countries.map((c) => ({ value: c.code, label: c.name }))}
-              selected={country}
-              width="w-44"
-            />
+            <ReportCountryFilter countries={countries} selected={country} currencyOptions={currencyOptions} />
           </Suspense>
           <Suspense>
             <ReportSelectFilter
@@ -196,10 +213,20 @@ export default async function ExpenseReportPage({
               selected={cc}
             />
           </Suspense>
+          <Suspense>
+            <ReportSelectFilter
+              label="Currency"
+              param="cur"
+              allLabel={baseCurrency ? `Base (${baseCurrency.code})` : "Base"}
+              options={currencyOptions}
+              selected={cur}
+              width="w-40"
+            />
+          </Suspense>
         </div>
         <div className="flex items-center gap-2">
           <CsvExportButton
-            filename={`expense-report-${year}.csv`}
+            filename={`expense-report-${year}${selectedCurrency ? `-${selectedCurrency.code}` : ""}.csv`}
             headers={["S.No", "Cost centre", "Code", "Account", ...MONTHS, "Total"]}
             rows={exportRows}
           />
@@ -210,7 +237,9 @@ export default async function ExpenseReportPage({
       {/* KPIs */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Kpi
-          label={`Total Expenses — ${year}${countryName ? ` · ${countryName}` : ""}`}
+          label={`Total Expenses — ${year}${countryName ? ` · ${countryName}` : ""}${
+            selectedCurrency ? ` · ${selectedCurrency.code}` : ""
+          }`}
           value={`${symbol ? symbol + " " : ""}${formatMoney(grand)}`}
           sub={`${byCostCentre.length} cost centre${byCostCentre.length === 1 ? "" : "s"} · ${byAccount.length} account${byAccount.length === 1 ? "" : "s"}`}
         />

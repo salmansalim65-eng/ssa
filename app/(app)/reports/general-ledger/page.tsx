@@ -18,6 +18,7 @@ import { computeRunningBalances } from "@/lib/reports/ledger-balance";
 import { loadAccountingPeriodStart } from "@/lib/reports/period";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
+import { accountIdsForCostCentre } from "@/lib/reports/cost-centres";
 import { formatAccountCode, formatDate, formatMoney, formatVoucherNo } from "@/lib/format";
 import { voucherHref } from "@/lib/vouchers/meta";
 import type { AccountType, VoucherType } from "@/types/database.types";
@@ -163,7 +164,20 @@ export default async function GeneralLedgerPage({
   };
   const sections: Section[] = [];
 
+  // Accounts that name the chosen cost centre as their default. Their lines
+  // belong to it even when the voucher was raised without one, so for those
+  // accounts an untagged line counts too.
+  const ccAccountIds = new Set(await accountIdsForCostCentre(companyId, costCenterId));
+
   for (const acc of selectedAccounts) {
+    // Whichever filter this account needs, applied the same way to both queries.
+    const untaggedCounts = ccAccountIds.has(acc.id as string);
+    const byCostCentre = <T extends { eq: (c: string, v: string) => T; or: (f: string) => T }>(q: T): T => {
+      if (!costCenterId) return q;
+      return untaggedCounts
+        ? q.or(`cost_center_id.eq.${costCenterId},cost_center_id.is.null`)
+        : q.eq("cost_center_id", costCenterId);
+    };
     const isDebitNormal = DEBIT_NORMAL.includes(acc.account_type);
     // Show each account in its true currency: the report-wide reporting currency
     // if chosen, else the account's own configured currency, else — when the
@@ -197,7 +211,7 @@ export default async function GeneralLedgerPage({
       .eq("company_id", companyId)
       .eq("account_id", acc.id)
       .lt("entry_date", from);
-    if (costCenterId) priorQuery = priorQuery.eq("cost_center_id", costCenterId);
+    priorQuery = byCostCentre(priorQuery);
     const { data: priorLines } = await priorQuery;
     const priorDebit = ((priorLines as unknown as LedgerRow[]) ?? []).reduce(
       (sum, l) => sum + toDisplay(l.debit_amount, l.doc_debit_amount, l.currency_code),
@@ -219,7 +233,7 @@ export default async function GeneralLedgerPage({
       .eq("account_id", acc.id)
       .gte("entry_date", from)
       .lte("entry_date", to);
-    if (costCenterId) lineQuery = lineQuery.eq("cost_center_id", costCenterId);
+    lineQuery = byCostCentre(lineQuery);
     const { data: lineRows } = await lineQuery
       .order("entry_date")
       .order("voucher_no", { nullsFirst: false })

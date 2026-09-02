@@ -41,7 +41,13 @@ export default async function ExpenseReportPage({
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
 
-  const [{ data: lines }, { data: costCenters }, { data: companyCurrencies }, countries] = await Promise.all([
+  const [
+    { data: lines },
+    { data: costCenters },
+    { data: companyCurrencies },
+    countries,
+    { data: defaultCcRows },
+  ] = await Promise.all([
     supabase
       .schema("reporting")
       .from("v_ledger_entries")
@@ -64,6 +70,13 @@ export default async function ExpenseReportPage({
       .eq("company_id", companyId)
       .eq("is_active", true),
     loadReportCountries(companyId),
+    supabase
+      .schema("accounting")
+      .from("chart_of_accounts")
+      .select("id, default_cost_center_id")
+      .eq("company_id", companyId)
+      .not("default_cost_center_id", "is", null)
+      .is("deleted_at", null),
   ]);
 
   // Ledger amounts are stored in the base currency; picking another company
@@ -94,6 +107,12 @@ export default async function ExpenseReportPage({
   const symbol = selectedCurrency?.symbol ?? selectedCurrency?.code ?? "";
   const money = (n: number) => (n ? `${symbol ? symbol + " " : ""}${formatMoney(n)}` : "");
 
+  // A line with no cost centre still belongs to one when its account names it as
+  // its default, so those lines are read as if they carried it.
+  const defaultCcByAccount = new Map(
+    (defaultCcRows ?? []).map((a) => [a.id as string, a.default_cost_center_id as string]),
+  );
+
   const ccById = new Map(
     (costCenters ?? []).map((c) => [c.id as string, { name: c.name as string, country: (c.country as string) ?? "" }]),
   );
@@ -111,7 +130,8 @@ export default async function ExpenseReportPage({
   let grand = 0;
 
   for (const l of lines ?? []) {
-    const ccId = (l.cost_center_id as string | null) ?? null;
+    const ccId =
+      (l.cost_center_id as string | null) ?? defaultCcByAccount.get(l.account_id as string) ?? null;
     const meta = ccId ? ccById.get(ccId) : undefined;
     if (country && (meta?.country ?? "") !== country) continue;
     if (cc && ccId !== cc) continue;

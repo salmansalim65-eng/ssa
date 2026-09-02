@@ -445,6 +445,7 @@ export async function createAccount(input: AccountInput) {
       phone: parsed.data.phone || null,
       email: parsed.data.email || null,
       country: parsed.data.country || null,
+      default_cost_center_id: parsed.data.defaultCostCenterId || null,
       created_by: user.user!.id,
     })
     .select("id")
@@ -743,6 +744,7 @@ export async function updateAccount(accountId: string, input: AccountInput) {
       phone: parsed.data.phone || null,
       email: parsed.data.email || null,
       country: parsed.data.country || null,
+      default_cost_center_id: parsed.data.defaultCostCenterId || null,
     })
     .eq("id", accountId);
 

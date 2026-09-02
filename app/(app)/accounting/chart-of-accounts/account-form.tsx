@@ -58,11 +58,17 @@ export interface CountryOption {
   name: string;
 }
 
+export interface CostCentreOption {
+  id: string;
+  name: string;
+}
+
 export function AccountForm({
   defaultValues,
   parentOptions,
   currencies,
   countries,
+  costCentres,
   onSubmit,
   submitLabel,
   accountId,
@@ -73,6 +79,7 @@ export function AccountForm({
   parentOptions: ParentOption[];
   currencies: CurrencyOption[];
   countries: CountryOption[];
+  costCentres: CostCentreOption[];
   onSubmit: (values: AccountInput) => Promise<{ error?: string } | undefined>;
   submitLabel: string;
   /** Present when editing an existing account — enables the document uploads. */
@@ -452,6 +459,45 @@ export function AccountForm({
                     </SelectContent>
                   </Select>
                   <FormDescription>Attributes this account to a country in the dashboard balances.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </FormSection>
+        )}
+
+        {/* The cost centre this account's postings belong to. Optional — leave
+            it unset for an account that has no cost centre of its own. */}
+        {!isGroup && (
+          <FormSection title="Cost centre">
+            <FormField
+              control={form.control}
+              name="defaultCostCenterId"
+              render={({ field }) => (
+                <FormItem className="sm:max-w-xs">
+                  <FormLabel>Default cost centre</FormLabel>
+                  <Select
+                    onValueChange={(v) => field.onChange(v === "none" ? "" : v)}
+                    value={field.value || "none"}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">Not set</SelectItem>
+                      {costCentres.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Prefills the cost centre on vouchers, and stands in on the cost-centre reports
+                    for entries posted without one. Leave it unset if this account has no cost centre.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

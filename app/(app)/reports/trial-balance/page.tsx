@@ -18,6 +18,7 @@ import { aggregateByAccount } from "@/lib/reports/account-aggregation";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
 import { loadReportCountries, equivalentCountryCodes } from "@/lib/reports/countries";
+import { accountIdsForCostCentre, costCentreOrFilter } from "@/lib/reports/cost-centres";
 import { formatAccountCode, formatDate, formatMoney } from "@/lib/format";
 
 function today() {
@@ -66,7 +67,13 @@ export default async function TrialBalancePage({
         )
       : linesQuery.in("cost_center_country", countryCodes);
   }
-  if (cc) linesQuery = linesQuery.eq("cost_center_id", cc);
+  // A line with no cost centre still belongs to one when its account names it
+  // as its default, so those lines come along too.
+  if (cc) {
+    const ccAccountIds = await accountIdsForCostCentre(companyId, cc);
+    const ccFilter = costCentreOrFilter(cc, ccAccountIds);
+    linesQuery = ccFilter ? linesQuery.or(ccFilter) : linesQuery.eq("cost_center_id", cc);
+  }
   const [{ data: lines }, countries, { data: companyCurrencies }, { data: costCenters }] = await Promise.all([
     linesQuery,
     loadReportCountries(companyId),

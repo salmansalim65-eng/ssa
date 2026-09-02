@@ -30,7 +30,7 @@ export default async function ChartOfAccountsPage() {
       supabase
         .schema("accounting")
         .from("chart_of_accounts")
-        .select("id, account_code, account_name, parent_id, account_type, currency_id, opening_balance, is_group, is_active, is_cash, is_bank, is_tenant_group, linked_asset_id, sort_order, id_number, contact_person, phone, email, country")
+        .select("id, account_code, account_name, parent_id, account_type, currency_id, opening_balance, is_group, is_active, is_cash, is_bank, is_tenant_group, linked_asset_id, sort_order, id_number, contact_person, phone, email, country, default_cost_center_id")
         .eq("company_id", companyId)
         .is("deleted_at", null),
       supabase
@@ -124,6 +124,7 @@ export default async function ChartOfAccountsPage() {
     phone: string | null;
     email: string | null;
     country: string | null;
+    default_cost_center_id: string | null;
   };
 
   const rows = (accounts as unknown as RawAccount[]) ?? [];
@@ -157,6 +158,7 @@ export default async function ChartOfAccountsPage() {
     phone: a.phone,
     email: a.email,
     country: a.country,
+    default_cost_center_id: a.default_cost_center_id,
   }));
 
   type RawCompanyCurrency = { is_base_currency: boolean; currencies: { id: string; code: string } | null };
@@ -166,11 +168,24 @@ export default async function ChartOfAccountsPage() {
 
   const countries = await loadReportCountries(companyId);
 
+  // Cost centres an account can be tied to, so its postings reach the
+  // cost-centre reports even when a voucher was raised without one.
+  const { data: costCentreRows } = await supabase
+    .schema("accounting")
+    .from("cost_centers")
+    .select("id, name")
+    .eq("company_id", companyId)
+    .eq("is_active", true)
+    .is("deleted_at", null)
+    .order("name");
+  const costCentres = (costCentreRows ?? []).map((c) => ({ id: c.id as string, name: c.name as string }));
+
   return (
     <AccountTree
       accounts={accountRows}
       currencies={currencyOptions}
       countries={countries}
+      costCentres={costCentres}
       canCreate={canCreate}
       canEdit={canEdit}
       canDelete={canDelete}

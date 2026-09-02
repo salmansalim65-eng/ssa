@@ -121,7 +121,10 @@ export default async function OutstandingRentPage({
                   <span className="font-medium">{r.asset_name}</span>
                 </TableCell>
                 <TableCell>{r.tenant_name}</TableCell>
-                <TableCell className="text-right font-mono tabular-nums">
+                {/* Overdue money reads red — the amount, not just the day count. */}
+                <TableCell
+                  className={`text-right font-mono tabular-nums ${r.days_overdue > 0 ? "font-medium text-destructive" : ""}`}
+                >
                   {money(convert(r.outstanding_balance, r.exchange_rate))}
                 </TableCell>
                 <TableCell className={`text-right tabular-nums ${r.days_overdue > 0 ? "text-destructive" : ""}`}>

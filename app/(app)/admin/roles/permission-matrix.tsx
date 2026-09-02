@@ -86,13 +86,15 @@ export function PermissionMatrix({
   }
 
   return (
-    <div className="overflow-x-auto rounded-md border">
+    <div className="max-h-[70vh] overflow-auto rounded-md border">
       <Table>
-        <TableHeader>
+        <TableHeader className="sticky top-0 z-20">
           <TableRow>
-            <TableHead className="sticky left-0 bg-header">Module</TableHead>
+            {/* z-30: the corner cell is frozen both ways, so it has to sit above
+                the rest of the header row and above the frozen first column. */}
+            <TableHead className="sticky left-0 z-30 bg-header">Module</TableHead>
             {ACTIONS.map((action) => (
-              <TableHead key={action} className="text-center capitalize">
+              <TableHead key={action} className="bg-header text-center capitalize">
                 {action}
               </TableHead>
             ))}

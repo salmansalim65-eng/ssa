@@ -24,9 +24,10 @@ export function PageHeader({
   backLabel?: string;
   className?: string;
 }) {
-  // Nothing to show (no nav, no actions) → render nothing so the page starts at
-  // its content instead of leaving an empty band.
-  if (!backHref && !actions) return null;
+  // The Home link is always worth showing — it used to render only when a
+  // caller passed a backHref, which left most top-level screens (the voucher
+  // lists, the reports) with no way back to the dashboard. Back still needs a
+  // target, so it appears only when one is given.
 
   return (
     <div
@@ -35,7 +36,9 @@ export function PageHeader({
         className,
       )}
     >
-      <div className="min-w-0">{backHref && <PageNav backHref={backHref} backLabel={backLabel} />}</div>
+      <div className="min-w-0">
+        <PageNav backHref={backHref} backLabel={backLabel} />
+      </div>
       {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );

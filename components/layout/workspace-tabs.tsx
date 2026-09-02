@@ -4,14 +4,27 @@ import { type ReactNode } from "react";
 import { XIcon, HomeIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { useWorkspace, setActive, closeTab, goHome } from "./workspace-store";
+import { useRouter } from "next/navigation";
+
+import { useWorkspace, setActive, closeTab, goHome, isEmbeddedWindow } from "./workspace-store";
 
 // Renders the in-app tab strip and the content area. The base "home" content
 // (the current route) shows when no tab is focused; each open tab renders its
 // route inside an isolated iframe that stays mounted, so switching tabs never
 // reloads or loses a report/voucher's state.
 export function WorkspaceTabs({ children }: { children: ReactNode }) {
+  const router = useRouter();
   const { tabs, activeId } = useWorkspace();
+
+  // goHome() alone only unhides the base surface — which is the route the top
+  // window happens to be on, i.e. the last thing opened there. Home has to take
+  // the window to the dashboard as well.
+  function home() {
+    goHome();
+    const top = isEmbeddedWindow() ? window.top : null;
+    if (top) top.location.assign("/dashboard");
+    else router.push("/dashboard");
+  }
   const hasTabs = tabs.length > 0;
   const showHome = activeId === null;
 
@@ -21,7 +34,7 @@ export function WorkspaceTabs({ children }: { children: ReactNode }) {
         <div className="flex shrink-0 items-stretch gap-1 overflow-x-auto border-b bg-muted/40 px-2 py-1">
           <button
             type="button"
-            onClick={goHome}
+            onClick={home}
             title="Home"
             className={cn(
               "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",

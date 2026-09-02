@@ -126,17 +126,18 @@ export function PermissionMatrix({
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border bg-card shadow-xs">
+      <div className="max-h-[70vh] overflow-auto rounded-lg border bg-card shadow-xs">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-20">
             <TableRow className="hover:bg-transparent">
-              <TableHead className="sticky left-0 z-10 bg-header">Module</TableHead>
+              {/* z-30: frozen both ways, so above the rest of the header row. */}
+              <TableHead className="sticky left-0 z-30 bg-header">Module</TableHead>
               {actions.map((action) => (
-                <TableHead key={action} className="text-center">
+                <TableHead key={action} className="bg-header text-center">
                   {capitalize(action)}
                 </TableHead>
               ))}
-              <TableHead className="text-center">Row</TableHead>
+              <TableHead className="bg-header text-center">Row</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

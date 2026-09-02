@@ -42,7 +42,7 @@ export default async function ChartOfAccountsPage() {
       supabase
         .schema("reporting")
         .from("v_ledger_entries")
-        .select("account_id, debit_amount, credit_amount")
+        .select("account_id, debit_amount, credit_amount, doc_debit_amount, doc_credit_amount, currency_code")
         .eq("company_id", companyId),
       supabase
         .schema("assets")
@@ -95,13 +95,26 @@ export default async function ChartOfAccountsPage() {
     if (a.account_id) assetFieldsByAccountId[a.account_id] = fields;
   }
 
-  // Current balance per posting account, net in the base currency. Group rows
-  // roll these up on the client from their descendants.
-  const balanceById = new Map<string, number>();
+  type RawCompanyCurrencyCode = { is_base_currency: boolean; currencies: { id: string; code: string } | null };
+  const baseCurrencyCode =
+    ((companyCurrencies as unknown as RawCompanyCurrencyCode[]) ?? []).find((c) => c.is_base_currency)?.currencies
+      ?.code ?? "";
+
+  // Current balance per posting account, both in base currency and in the
+  // currency the account was actually posted in. The row already labels itself
+  // with the account's currency, so an AED property that took AED 300,000 must
+  // read 300,000 — not the 306,000 its base translation comes to. Where an
+  // account mixes currencies there is no single own-currency figure, and base is
+  // the only honest total. Group rows roll these up on the client.
+  const netById = new Map<string, { base: number; doc: number; codes: Set<string> }>();
   for (const l of ledger ?? []) {
     const k = l.account_id as string;
     if (!k) continue;
-    balanceById.set(k, (balanceById.get(k) ?? 0) + Number(l.debit_amount) - Number(l.credit_amount));
+    const n = netById.get(k) ?? { base: 0, doc: 0, codes: new Set<string>() };
+    n.base += Number(l.debit_amount) - Number(l.credit_amount);
+    n.doc += Number(l.doc_debit_amount ?? 0) - Number(l.doc_credit_amount ?? 0);
+    if (l.currency_code) n.codes.add(l.currency_code as string);
+    netById.set(k, n);
   }
 
   type RawAccount = {
@@ -152,7 +165,19 @@ export default async function ChartOfAccountsPage() {
     is_tenant_group: a.is_tenant_group,
     linked_asset_id: a.linked_asset_id,
     sort_order: a.sort_order,
-    balance: balanceById.get(a.id) ?? 0,
+    balance: (() => {
+      const n = netById.get(a.id);
+      if (!n) return 0;
+      return n.codes.size === 1 ? n.doc : n.base;
+    })(),
+    base_balance: netById.get(a.id)?.base ?? 0,
+    // The currency the balance above is stated in — the account's own when every
+    // posting shares one, else the base currency.
+    balance_currency: (() => {
+      const n = netById.get(a.id);
+      if (n && n.codes.size === 1) return [...n.codes][0];
+      return baseCurrencyCode;
+    })(),
     id_number: a.id_number,
     contact_person: a.contact_person,
     phone: a.phone,
@@ -189,6 +214,7 @@ export default async function ChartOfAccountsPage() {
       currencies={currencyOptions}
       countries={countries}
       costCentres={costCentres}
+      baseCurrencyCode={baseCurrencyCode}
       canCreate={canCreate}
       canEdit={canEdit}
       canDelete={canDelete}

@@ -63,12 +63,19 @@ export interface CostCentreOption {
   name: string;
 }
 
+export interface ContraAccountOption {
+  id: string;
+  account_code: string;
+  account_name: string;
+}
+
 export function AccountForm({
   defaultValues,
   parentOptions,
   currencies,
   countries,
   costCentres,
+  contraAccounts,
   onSubmit,
   submitLabel,
   accountId,
@@ -80,6 +87,8 @@ export function AccountForm({
   currencies: CurrencyOption[];
   countries: CountryOption[];
   costCentres: CostCentreOption[];
+  /** Equity / liability accounts the opening balance's other side may go to. */
+  contraAccounts: ContraAccountOption[];
   onSubmit: (values: AccountInput) => Promise<{ error?: string } | undefined>;
   submitLabel: string;
   /** Present when editing an existing account — enables the document uploads. */
@@ -795,25 +804,63 @@ export function AccountForm({
         )}
 
         <FormSection title="Balances &amp; reporting">
-          <FormField
-            control={form.control}
-            name="openingBalance"
-            render={({ field }) => (
-              <FormItem className="sm:max-w-xs">
-                <FormLabel>Opening balance</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    step="0.01"
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="openingBalance"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Opening balance</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      disabled={isGroup}
+                      {...field}
+                      value={amountValue(field.value)}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {/* Where the other side goes. Opening Balance Equity is the account
+                it belongs in while the balances are being entered; once they are
+                all in, one journal moves that total to capital. */}
+            <FormField
+              control={form.control}
+              name="openingBalanceContraId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Counter account</FormLabel>
+                  <Select
+                    onValueChange={(v) => field.onChange(v === "default" ? "" : v)}
+                    value={field.value || "default"}
                     disabled={isGroup}
-                    {...field}
-                    value={amountValue(field.value)}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                  >
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="default">Opening Balance Equity (default)</SelectItem>
+                      {contraAccounts.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.account_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    The other side of the opening balance. Leave it on Opening Balance Equity while
+                    you enter the balances, then move that total to capital with one journal.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <FormField
               control={form.control}

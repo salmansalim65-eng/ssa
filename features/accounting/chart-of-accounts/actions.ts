@@ -64,6 +64,9 @@ async function syncAccountOpeningBalance(params: {
   accountType: AccountInput["accountType"];
   openingBalance: number;
   currencyId: string | null;
+  /** Equity/liability account to post the other side to. Defaults to the
+   *  company's Opening Balance Equity account when the form leaves it unset. */
+  contraAccountId?: string | null;
 }): Promise<{ error?: string }> {
   const supabase = await createClient();
   const isDebitNormal = DEBIT_NORMAL_TYPES.has(params.accountType);
@@ -82,30 +85,62 @@ async function syncAccountOpeningBalance(params: {
     .eq("status", "posted");
   const obJeIds = (obJes ?? []).map((j) => j.id as string);
   let currentNet = 0;
+  // What each counter account currently holds for this account's opening
+  // balance, so a change of counter account clears the old one instead of
+  // leaving a stray balance behind.
+  const currentContraNets = new Map<string, number>();
   // Rate the account's existing opening balance was booked at. An adjustment or
   // reversal reuses it, so clearing/changing an opening balance never depends on
   // a *current* exchange rate being configured (which for e.g. a PKR property
   // may not exist as of 1 Jan).
   let existingRate: number | null = null;
   if (obJeIds.length) {
-    const { data: lines } = await supabase
+    // The opening-balance entries this account appears in — its own and, with
+    // them, whichever counter accounts they used.
+    const { data: ownLines } = await supabase
       .schema("accounting")
       .from("journal_entry_lines")
-      .select("debit_amount, credit_amount, exchange_rate")
+      .select("journal_entry_id, debit_amount, credit_amount, exchange_rate")
       .eq("account_id", params.accountId)
       .in("journal_entry_id", obJeIds);
     currentNet = round2(
-      (lines ?? []).reduce((s, l) => s + Number(l.debit_amount) - Number(l.credit_amount), 0),
+      (ownLines ?? []).reduce((s, l) => s + Number(l.debit_amount) - Number(l.credit_amount), 0),
     );
-    const rated = (lines ?? []).find((l) => Number(l.exchange_rate) > 0);
+    const rated = (ownLines ?? []).find((l) => Number(l.exchange_rate) > 0);
     if (rated) existingRate = Number(rated.exchange_rate);
+
+    const ownJeIds = [...new Set((ownLines ?? []).map((l) => l.journal_entry_id as string))];
+    if (ownJeIds.length) {
+      const { data: allLines } = await supabase
+        .schema("accounting")
+        .from("journal_entry_lines")
+        .select("account_id, debit_amount, credit_amount")
+        .in("journal_entry_id", ownJeIds);
+      for (const l of allLines ?? []) {
+        const id = l.account_id as string;
+        if (id === params.accountId) continue;
+        const net = Number(l.debit_amount) - Number(l.credit_amount);
+        currentContraNets.set(id, round2((currentContraNets.get(id) ?? 0) + net));
+      }
+    }
   }
 
-  const delta = round2(target - currentNet);
-  if (delta === 0) return {};
-
-  const contraId = await resolveOpeningBalanceEquityId(params.companyId, params.userId);
+  const contraId =
+    params.contraAccountId ||
+    (await resolveOpeningBalanceEquityId(params.companyId, params.userId));
   if (!contraId) return { error: "Could not resolve the Opening Balance Equity account" };
+
+  // Where every account needs to end up: this account at `target`, the chosen
+  // counter account holding the other side of it, and any counter account used
+  // before brought back to nil. Netting them gives the entry to post — and when
+  // nothing has changed every figure is zero and there is nothing to post.
+  const moves = new Map<string, number>();
+  const move = (id: string, net: number) => moves.set(id, round2((moves.get(id) ?? 0) + net));
+  move(params.accountId, target - currentNet);
+  for (const [id, net] of currentContraNets) move(id, -net);
+  move(contraId, -target);
+  const postings = [...moves.entries()].filter(([, net]) => Math.abs(net) >= 0.005);
+  if (postings.length === 0) return {};
   const currencyId = await resolveOpeningBalanceCurrencyId(params.companyId, params.currencyId);
   if (!currencyId) return { error: "No currency configured for the opening balance" };
 
@@ -121,25 +156,14 @@ async function syncAccountOpeningBalance(params: {
     .maybeSingle();
   const costCenterId = (accountRow?.default_cost_center_id as string | null) ?? null;
 
-  const amt = Math.abs(delta);
-  const accountDebit = delta > 0 ? amt : 0;
-  const accountCredit = delta > 0 ? 0 : amt;
-  const lines: EntryLineInput[] = [
-    {
-      accountId: params.accountId,
-      costCenterId,
-      debit: accountDebit,
-      credit: accountCredit,
-      description: "Opening balance",
-    },
-    {
-      accountId: contraId,
-      costCenterId,
-      debit: accountCredit,
-      credit: accountDebit,
-      description: "Opening balance",
-    },
-  ];
+  const lines: EntryLineInput[] = postings.map(([accountId, net]) => ({
+    accountId,
+    costCenterId,
+    debit: net > 0 ? net : 0,
+    credit: net < 0 ? -net : 0,
+    description: "Opening balance",
+  }));
+  const amt = postings.reduce((s, [, net]) => s + (net > 0 ? net : 0), 0);
   const asOfDate = `${new Date().getFullYear()}-01-01`;
   const voucherId = crypto.randomUUID();
 
@@ -180,12 +204,15 @@ async function syncAccountOpeningBalance(params: {
     total_amount: amt,
     created_by: params.userId,
   });
+  // The voucher's own line grid mirrors the entry, minus the counter accounts —
+  // those are the contra side, which the voucher header names.
+  const accountMove = moves.get(params.accountId) ?? 0;
   await supabase.schema("accounting").from("opening_balance_voucher_lines").insert({
     voucher_id: voucherId,
     line_no: 1,
     account_id: params.accountId,
-    debit: accountDebit,
-    credit: accountCredit,
+    debit: accountMove > 0 ? accountMove : 0,
+    credit: accountMove < 0 ? -accountMove : 0,
   });
 
   const posted = await postVoucher({
@@ -510,6 +537,7 @@ export async function createAccount(input: AccountInput) {
       accountType: parsed.data.accountType,
       openingBalance: parsed.data.openingBalance,
       currencyId,
+      contraAccountId: parsed.data.openingBalanceContraId || null,
     });
     if (ob.error) {
       revalidatePath("/accounting/chart-of-accounts");
@@ -808,6 +836,7 @@ export async function updateAccount(accountId: string, input: AccountInput) {
     accountType: parsed.data.accountType,
     openingBalance: parsed.data.isGroup ? 0 : parsed.data.openingBalance,
     currencyId,
+    contraAccountId: parsed.data.openingBalanceContraId || null,
   });
   if (ob.error) {
     revalidatePath("/accounting/chart-of-accounts");

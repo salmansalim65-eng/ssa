@@ -11,6 +11,10 @@ export const accountBaseSchema = z.object({
   currencyId: z.string().uuid().optional().or(z.literal("")),
   isGroup: z.boolean(),
   openingBalance: z.coerce.number(),
+  // Where the other side of the opening balance goes. Blank means the company's
+  // Opening Balance Equity account, which is the account this belongs in until
+  // every opening balance is entered and the total is moved to capital.
+  openingBalanceContraId: z.string().uuid().optional().or(z.literal("")),
   isCash: z.boolean(),
   isBank: z.boolean(),
   // Marks a group account as THE tenant group leases pick tenants from.

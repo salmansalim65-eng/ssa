@@ -61,7 +61,13 @@ import {
   updateAccount,
 } from "@/features/accounting/chart-of-accounts/actions";
 import type { AccountInput } from "@/features/accounting/chart-of-accounts/schemas";
-import { AccountForm, type CostCentreOption, type CurrencyOption, type ParentOption } from "./account-form";
+import {
+  AccountForm,
+  type ContraAccountOption,
+  type CostCentreOption,
+  type CurrencyOption,
+  type ParentOption,
+} from "./account-form";
 
 export interface AccountRow {
   id: string;
@@ -85,6 +91,8 @@ export interface AccountRow {
   /** The same net, always in base currency — what a mixed-currency group rolls up. */
   base_balance: number;
   balance_currency: string;
+  /** Counter account its existing opening balance was posted to, if any. */
+  opening_balance_contra_id: string | null;
   id_number: string | null;
   contact_person: string | null;
   phone: string | null;
@@ -142,6 +150,7 @@ const emptyValues: AccountInput = {
   currencyId: "",
   isGroup: false,
   openingBalance: blankAmount,
+  openingBalanceContraId: "",
   isCash: false,
   isBank: false,
   isTenantGroup: false,
@@ -217,6 +226,7 @@ export function AccountTree({
   currencies,
   countries,
   costCentres,
+  contraAccounts,
   baseCurrencyCode,
   canCreate,
   canEdit,
@@ -231,6 +241,7 @@ export function AccountTree({
   currencies: CurrencyOption[];
   countries: { code: string; name: string }[];
   costCentres: CostCentreOption[];
+  contraAccounts: ContraAccountOption[];
   /** Code of the company's base currency — what a mixed-currency total is in. */
   baseCurrencyCode: string;
   canCreate: boolean;
@@ -808,6 +819,7 @@ export function AccountTree({
               currencies={currencies}
               countries={countries}
               costCentres={costCentres}
+              contraAccounts={contraAccounts}
               parentOptions={
                 dialog.mode === "edit"
                   ? groupOptions.filter(
@@ -833,6 +845,7 @@ export function AccountTree({
                         currencyId: dialog.account.currency_id ?? "",
                         isGroup: dialog.account.is_group,
                         openingBalance: dialog.account.opening_balance,
+                        openingBalanceContraId: dialog.account.opening_balance_contra_id ?? "",
                         isCash: dialog.account.is_cash,
                         isBank: dialog.account.is_bank,
                         isTenantGroup: dialog.account.is_tenant_group,

@@ -149,6 +149,42 @@ export default async function ChartOfAccountsPage() {
     rows.map((r) => r.currency_id),
   );
 
+  // Where an opening balance's other side may go: the company's posting equity
+  // and liability accounts. Alongside them, the counter account each account's
+  // existing opening balance already used, so editing shows what is in force.
+  const [{ data: contraRows }, { data: obVouchers }] = await Promise.all([
+    supabase
+      .schema("accounting")
+      .from("chart_of_accounts")
+      .select("id, account_code, account_name")
+      .eq("company_id", companyId)
+      .in("account_type", ["equity", "liability"])
+      .eq("is_group", false)
+      .is("deleted_at", null)
+      .order("account_code"),
+    supabase
+      .schema("accounting")
+      .from("opening_balance_vouchers")
+      .select("contra_account_id, opening_balance_voucher_lines(account_id)")
+      .eq("company_id", companyId),
+  ]);
+  const contraAccounts = (contraRows ?? []).map((a) => ({
+    id: a.id as string,
+    account_code: a.account_code as string,
+    account_name: a.account_name as string,
+  }));
+  type RawObVoucher = {
+    contra_account_id: string | null;
+    opening_balance_voucher_lines: { account_id: string }[] | null;
+  };
+  const contraByAccount = new Map<string, string>();
+  for (const v of (obVouchers as unknown as RawObVoucher[]) ?? []) {
+    if (!v.contra_account_id) continue;
+    for (const l of v.opening_balance_voucher_lines ?? []) {
+      contraByAccount.set(l.account_id, v.contra_account_id);
+    }
+  }
+
   const accountRows: AccountRow[] = rows.map((a) => ({
     id: a.id,
     account_code: a.account_code,
@@ -184,6 +220,7 @@ export default async function ChartOfAccountsPage() {
     email: a.email,
     country: a.country,
     default_cost_center_id: a.default_cost_center_id,
+    opening_balance_contra_id: contraByAccount.get(a.id) ?? null,
   }));
 
   type RawCompanyCurrency = { is_base_currency: boolean; currencies: { id: string; code: string } | null };
@@ -214,6 +251,7 @@ export default async function ChartOfAccountsPage() {
       currencies={currencyOptions}
       countries={countries}
       costCentres={costCentres}
+      contraAccounts={contraAccounts}
       baseCurrencyCode={baseCurrencyCode}
       canCreate={canCreate}
       canEdit={canEdit}

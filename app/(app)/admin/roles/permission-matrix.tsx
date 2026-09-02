@@ -86,8 +86,10 @@ export function PermissionMatrix({
   }
 
   return (
-    <div className="max-h-[70vh] overflow-auto rounded-md border">
-      <Table>
+    <div className="rounded-md border">
+      {/* The height and the scrolling belong to the table's own container, so
+          the sticky header row has something to stick to. */}
+      <Table containerClassName="max-h-[70vh] overflow-auto">
         <TableHeader className="sticky top-0 z-20">
           <TableRow>
             {/* z-30: the corner cell is frozen both ways, so it has to sit above

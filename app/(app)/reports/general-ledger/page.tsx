@@ -13,7 +13,6 @@ import {
 import { PageHeader } from "@/components/ui/page-header";
 import { CsvExportButton } from "@/components/reports/csv-export-button";
 import { GeneralLedgerFilters } from "@/components/reports/general-ledger-filters";
-import { ReportNav } from "@/components/reports/report-nav";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { computeRunningBalances } from "@/lib/reports/ledger-balance";
 import { loadAccountingPeriodStart } from "@/lib/reports/period";
@@ -307,7 +306,6 @@ export default async function GeneralLedgerPage({
 
   return (
     <div className="space-y-5">
-      <ReportNav className="print:hidden" />
       <PageHeader
         eyebrow="Reports"
         title="General Ledger"

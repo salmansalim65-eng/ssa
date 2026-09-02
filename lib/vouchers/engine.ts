@@ -7,7 +7,7 @@ import { isCurrentUserAdmin } from "@/lib/auth/permissions";
 import { formatMoney } from "@/lib/format";
 import { approverUserIds, sendPushToUsers } from "@/lib/notifications/push";
 import { createClient } from "@/lib/supabase/server";
-import type { ApprovalStatus, VoucherType } from "@/types/database.types";
+import type { VoucherType } from "@/types/database.types";
 
 export interface EntryLineInput {
   accountId: string;
@@ -151,17 +151,6 @@ export async function createJournalEntry(params: {
   return { journalEntryId: je.id as string, exchangeRate };
 }
 
-async function syncJournalEntryStatus(journalEntryId: string, status: ApprovalStatus) {
-  const supabase = await createClient();
-  const { error } = await supabase
-    .schema("accounting")
-    .from("journal_entries")
-    .update({ status })
-    .eq("id", journalEntryId);
-
-  return error ? { error: error.message } : { error: null };
-}
-
 export async function submitForApproval(params: {
   companyId: string;
   voucherType: VoucherType;
@@ -179,9 +168,11 @@ export async function submitForApproval(params: {
 
   if (error || !approval) return { error: error?.message ?? "Failed to submit for approval" };
 
-  const sync = await syncJournalEntryStatus(params.journalEntryId, approval.status);
-  if (sync.error) return { error: sync.error };
-
+  // fn_start_approval moves the journal entry to the same status in the same
+  // transaction (0119). It used to be a second update from here, which ran as
+  // the user: a clerk holding only view + create could not update
+  // journal_entries, the update matched no rows — which is not an error — and
+  // the voucher was left showing as a draft while the approval said pending.
   if (approval.status === "pending") await notifyApprovers(params);
 
   return { approval };
@@ -252,13 +243,17 @@ export async function routeNewVoucher(params: {
       await params.post();
       return;
     }
-    await submitForApproval({
+    const result = await submitForApproval({
       companyId: params.companyId,
       voucherType: params.voucherType,
       voucherId: params.voucherId,
       journalEntryId: params.journalEntryId,
       amount: await journalEntryAmount(params.journalEntryId),
     });
+    // A voucher type with no active approval workflow comes straight back as
+    // "approved" (fn_start_approval says so itself). Approved means posted, so
+    // finish the job rather than leaving it parked with nobody to approve it.
+    if (!("error" in result) && result.approval?.status === "approved") await params.post();
   } catch {
     // The voucher is saved either way; the draft can be routed by hand.
   }
@@ -279,9 +274,7 @@ export async function actOnApproval(params: {
 
   if (error || !approval) return { error: error?.message ?? "Failed to record decision" };
 
-  const sync = await syncJournalEntryStatus(params.journalEntryId, approval.status);
-  if (sync.error) return { error: sync.error };
-
+  // fn_approval_action moves the journal entry with the decision (see above).
   return { approval };
 }
 

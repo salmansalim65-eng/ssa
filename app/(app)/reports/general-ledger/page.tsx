@@ -18,7 +18,7 @@ import { computeRunningBalances } from "@/lib/reports/ledger-balance";
 import { loadAccountingPeriodStart } from "@/lib/reports/period";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
-import { accountIdsForCostCentre } from "@/lib/reports/cost-centres";
+import { resolveCostCentreScope } from "@/lib/reports/cost-centres";
 import { formatAccountCode, formatDate, formatMoney, formatVoucherNo } from "@/lib/format";
 import { voucherHref } from "@/lib/vouchers/meta";
 import type { AccountType, VoucherType } from "@/types/database.types";
@@ -164,19 +164,19 @@ export default async function GeneralLedgerPage({
   };
   const sections: Section[] = [];
 
-  // Accounts that name the chosen cost centre as their default. Their lines
-  // belong to it even when the voucher was raised without one, so for those
-  // accounts an untagged line counts too.
-  const ccAccountIds = new Set(await accountIdsForCostCentre(companyId, costCenterId));
+  // A group cost centre covers everything beneath it, and an account that names
+  // one of those as its default carries its untagged lines in with it.
+  const ccScope = await resolveCostCentreScope(companyId, costCenterId);
+  const costCentreIds = ccScope.costCentreIds;
+  const ccAccountIds = new Set(ccScope.accountIds);
 
   for (const acc of selectedAccounts) {
     // Whichever filter this account needs, applied the same way to both queries.
     const untaggedCounts = ccAccountIds.has(acc.id as string);
-    const byCostCentre = <T extends { eq: (c: string, v: string) => T; or: (f: string) => T }>(q: T): T => {
+    const byCostCentre = <T extends { in: (c: string, v: string[]) => T; or: (f: string) => T }>(q: T): T => {
       if (!costCenterId) return q;
-      return untaggedCounts
-        ? q.or(`cost_center_id.eq.${costCenterId},cost_center_id.is.null`)
-        : q.eq("cost_center_id", costCenterId);
+      const tagged = `cost_center_id.in.(${costCentreIds.join(",")})`;
+      return untaggedCounts ? q.or(`${tagged},cost_center_id.is.null`) : q.in("cost_center_id", costCentreIds);
     };
     const isDebitNormal = DEBIT_NORMAL.includes(acc.account_type);
     // Show each account in its true currency: the report-wide reporting currency

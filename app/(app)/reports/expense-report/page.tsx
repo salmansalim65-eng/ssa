@@ -59,7 +59,7 @@ export default async function ExpenseReportPage({
     supabase
       .schema("accounting")
       .from("cost_centers")
-      .select("id, name, country")
+      .select("id, name, country, parent_id")
       .eq("company_id", companyId)
       .is("deleted_at", null)
       .order("name"),
@@ -116,6 +116,28 @@ export default async function ExpenseReportPage({
   const ccById = new Map(
     (costCenters ?? []).map((c) => [c.id as string, { name: c.name as string, country: (c.country as string) ?? "" }]),
   );
+  // Picking a GROUP cost centre means the group and everything under it —
+  // postings land on the leaves, so matching the group's own id alone would
+  // return nothing.
+  const ccScope = new Set<string>();
+  if (cc) {
+    const childrenOf = new Map<string, string[]>();
+    for (const c of costCenters ?? []) {
+      const parent = (c.parent_id as string | null) ?? "";
+      if (!parent) continue;
+      if (!childrenOf.has(parent)) childrenOf.set(parent, []);
+      childrenOf.get(parent)!.push(c.id as string);
+    }
+    const stack = [cc];
+    ccScope.add(cc);
+    while (stack.length) {
+      for (const child of childrenOf.get(stack.pop()!) ?? []) {
+        if (ccScope.has(child)) continue;
+        ccScope.add(child);
+        stack.push(child);
+      }
+    }
+  }
   const costCenterOptions = (costCenters ?? []).map((c) => ({ value: c.id as string, label: c.name as string }));
   const countryName = country ? countries.find((c) => c.code === country)?.name ?? country : "";
 
@@ -134,7 +156,7 @@ export default async function ExpenseReportPage({
       (l.cost_center_id as string | null) ?? defaultCcByAccount.get(l.account_id as string) ?? null;
     const meta = ccId ? ccById.get(ccId) : undefined;
     if (country && (meta?.country ?? "") !== country) continue;
-    if (cc && ccId !== cc) continue;
+    if (cc && !(ccId && ccScope.has(ccId))) continue;
 
     const net = (Number(l.debit_amount) - Number(l.credit_amount)) * factor;
     const m = monthIndex(l.entry_date as string);

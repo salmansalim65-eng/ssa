@@ -18,7 +18,7 @@ import { aggregateByAccount } from "@/lib/reports/account-aggregation";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
 import { loadReportCountries, equivalentCountryCodes } from "@/lib/reports/countries";
-import { accountIdsForCostCentre, costCentreOrFilter } from "@/lib/reports/cost-centres";
+import { costCentreOrFilter, resolveCostCentreScope } from "@/lib/reports/cost-centres";
 import { formatAccountCode, formatDate, formatMoney } from "@/lib/format";
 
 function today() {
@@ -67,12 +67,13 @@ export default async function TrialBalancePage({
         )
       : linesQuery.in("cost_center_country", countryCodes);
   }
-  // A line with no cost centre still belongs to one when its account names it
-  // as its default, so those lines come along too.
+  // Picking a GROUP cost centre means the group and everything under it, and a
+  // line with no cost centre still belongs to one when its account names it as
+  // its default — so both come along.
   if (cc) {
-    const ccAccountIds = await accountIdsForCostCentre(companyId, cc);
-    const ccFilter = costCentreOrFilter(cc, ccAccountIds);
-    linesQuery = ccFilter ? linesQuery.or(ccFilter) : linesQuery.eq("cost_center_id", cc);
+    const { costCentreIds, accountIds } = await resolveCostCentreScope(companyId, cc);
+    const ccFilter = costCentreOrFilter(costCentreIds, accountIds);
+    if (ccFilter) linesQuery = linesQuery.or(ccFilter);
   }
   const [{ data: lines }, countries, { data: companyCurrencies }, { data: costCenters }] = await Promise.all([
     linesQuery,

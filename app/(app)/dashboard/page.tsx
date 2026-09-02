@@ -712,7 +712,7 @@ export default async function DashboardPage({
           subtext="Awaiting a decision"
           icon={AlertCircleIcon}
           tone={(pendingApprovals ?? 0) > 0 ? "warning" : undefined}
-          href="/accounting/voucher-register"
+          href="/accounting/voucher-register?status=pending"
         />
         )}
 

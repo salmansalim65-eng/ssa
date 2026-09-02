@@ -18,8 +18,12 @@ export function PageNav({
 }) {
   return (
     <div className={cn("flex items-center gap-1 text-sm print:hidden", className)}>
+      {/* A page opened as a workspace tab renders inside an iframe, so Home
+          targets the top window; otherwise the whole shell would nest inside
+          itself. In the top window `_top` is simply the window itself. */}
       <Link
         href="/dashboard"
+        target="_top"
         className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
       >
         <HomeIcon className="size-4" /> Home

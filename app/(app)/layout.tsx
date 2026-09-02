@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { AppShell } from "@/components/layout/app-shell";
+import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth/session";
 
@@ -43,11 +44,21 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   // Modules this user may view — the sidebar shows only those sections. Admins
   // get every module (null = no restriction).
-  const [{ data: company }, { data: isAdmin }, { data: permittedModules }] = await Promise.all([
-    supabase.schema("core").from("companies").select("name").eq("id", companyId).single(),
-    supabase.schema("core").rpc("is_admin"),
-    supabase.schema("core").rpc("user_permitted_view_modules"),
-  ]);
+  const [{ data: company }, { data: isAdmin }, { data: permittedModules }, canSeeApprovals, { count: pendingCount }] =
+    await Promise.all([
+      supabase.schema("core").from("companies").select("name").eq("id", companyId).single(),
+      supabase.schema("core").rpc("is_admin"),
+      supabase.schema("core").rpc("user_permitted_view_modules"),
+      hasPermission("approval_workflows", "view"),
+      // Counted for everyone and shown only to those allowed the approvals
+      // module — the same gate the dashboard's Pending approvals card uses.
+      supabase
+        .schema("accounting")
+        .from("voucher_approvals")
+        .select("id", { count: "exact", head: true })
+        .eq("company_id", companyId)
+        .eq("status", "pending"),
+    ]);
   // null = no restriction (admin, or the RPC isn't available yet — before its
   // migration runs — so we don't lock a non-admin out with an empty menu). Only
   // a real array from the function restricts the nav.
@@ -63,6 +74,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           companyName={company?.name ?? ""}
           allowedModules={allowedModules}
           isAdmin={isAdmin === true}
+          pendingApprovals={canSeeApprovals ? pendingCount ?? 0 : null}
         />
       }
     >

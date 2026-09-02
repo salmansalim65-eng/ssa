@@ -63,6 +63,8 @@ export default async function VoucherListPage({
         eyebrow="Vouchers"
         title={label}
         description={`Create, review, approve and post ${label.toLowerCase()}.`}
+        backHref="/accounting/vouchers"
+        backLabel="Vouchers"
         actions={
           canCreate && (
             <Button asChild>

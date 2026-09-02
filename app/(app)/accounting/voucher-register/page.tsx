@@ -24,10 +24,8 @@ import type { JournalEntryStatus, VoucherType } from "@/types/database.types";
 // decision rather than on every voucher ever raised.
 const STATUS_FILTERS = [
   { key: "", label: "All" },
-  { key: "draft", label: "Draft" },
   { key: "pending", label: "Pending approval" },
   { key: "approved", label: "Approved" },
-  { key: "posted", label: "Posted" },
 ] as const;
 
 type RegisterRow = {
@@ -133,7 +131,7 @@ export default async function VoucherRegisterPage({
                         href={voucherHref(row.voucher_type as VoucherType, row.voucher_id)}
                         className="font-mono font-medium text-primary hover:underline"
                       >
-                        {row.voucher_no ?? "Draft"}
+                        {row.voucher_no ?? "—"}
                       </Link>
                     </TableCell>
                     <TableCell>{VOUCHER_TYPE_LABELS[row.voucher_type as VoucherType]}</TableCell>

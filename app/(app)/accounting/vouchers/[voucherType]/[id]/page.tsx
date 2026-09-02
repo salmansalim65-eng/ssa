@@ -25,7 +25,7 @@ import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { getModulePermissions, isCurrentUserAdmin } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { formatAccountCode, formatDate, formatMoney } from "@/lib/format";
-import { EDITABLE_STATUSES, getCurrentCompanyId, getVoucherApproval } from "@/lib/vouchers/engine";
+import { canEditVoucher, EDITABLE_STATUSES, getCurrentCompanyId, getVoucherApproval } from "@/lib/vouchers/engine";
 import { isPhase5VoucherType, VOUCHER_TYPE_LABELS } from "@/lib/vouchers/meta";
 import { getVoucherDetail } from "@/lib/vouchers/queries";
 import { postChequeReturnVoucher } from "@/features/accounting/vouchers/cheque-return/actions";
@@ -79,7 +79,7 @@ export default async function VoucherDetailPage({
   // Everything below is independent, so fetch it concurrently instead of in a
   // waterfall: the voucher detail, its approval row, the caller's permissions
   // (one batched lookup), and — for journal vouchers — the attachment rows.
-  const [detail, approval, perms, attachments, isAdmin] = await Promise.all([
+  const [detail, approval, perms, attachments, isAdmin, createdBy] = await Promise.all([
     getVoucherDetail(companyId, voucherType, id),
     getVoucherApproval(voucherType, id),
     getModulePermissions(voucherType),
@@ -94,11 +94,25 @@ export default async function VoucherDetailPage({
           .then((r) => r.data ?? [])
       : Promise.resolve([] as { id: string; file_name: string; path: string; bucket: string }[]),
     isCurrentUserAdmin(),
+    // Who raised it — the creator may edit their own voucher while it is
+    // unposted even without the Edit permission.
+    supabase
+      .schema("accounting")
+      .from("journal_entries")
+      .select("created_by")
+      .eq("company_id", companyId)
+      .eq("voucher_type", voucherType)
+      .eq("voucher_id", id)
+      .maybeSingle()
+      .then((r) => (r.data?.created_by as string | null) ?? null),
   ]);
 
   if (!detail) notFound();
 
   const canSubmit = perms.has("edit");
+  // The Edit button follows the same rule as the edit page and the update
+  // action: the Edit permission, or your own voucher while it is unposted.
+  const canEdit = await canEditVoucher(voucherType, { status: detail.status, created_by: createdBy });
   // The fallback "Submit for approval" button follows the same rule as the
   // database: raising the voucher includes sending it on.
   const canSubmitForApproval = perms.has("edit") || perms.has("create");
@@ -150,7 +164,7 @@ export default async function VoucherDetailPage({
             {(EDITABLE_STATUSES.includes(detail.status) ||
               voucherType === "opening_balance_voucher" ||
               (voucherType === "receipt_voucher" && detail.status === "posted")) &&
-              canSubmit &&
+              canEdit &&
               (EDITABLE_VOUCHER_TYPES as readonly string[]).includes(voucherType) && (
                 <Button asChild variant="outline" size="sm">
                   <Link href={`/accounting/vouchers/${voucherType}/${detail.id}/edit`}>

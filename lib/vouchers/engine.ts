@@ -3,7 +3,7 @@ import "server-only";
 import { cache } from "react";
 import { revalidatePath } from "next/cache";
 
-import { isCurrentUserAdmin } from "@/lib/auth/permissions";
+import { hasPermission, isCurrentUserAdmin } from "@/lib/auth/permissions";
 import { formatMoney } from "@/lib/format";
 import { approverUserIds, sendPushToUsers } from "@/lib/notifications/push";
 import { createClient } from "@/lib/supabase/server";
@@ -265,6 +265,35 @@ export async function routeNewVoucher(params: {
  * SENT BACK one is with its creator precisely so it can be corrected.
  */
 export const EDITABLE_STATUSES: readonly string[] = ["draft", "pending", "sent_back"];
+
+/**
+ * Whether the current user may edit this voucher, as an error message or null.
+ *
+ * The Edit permission allows it for any voucher. Without it, someone may still
+ * edit their OWN voucher while it is unposted — which is what makes "send back"
+ * mean anything for a data-entry clerk, who holds view + create and would
+ * otherwise have no way to act on a voucher returned to them.
+ */
+export async function canEditVoucher(
+  voucherType: VoucherType,
+  entry: { status: string; created_by?: string | null },
+) {
+  if (await hasPermission(voucherType, "edit")) return true;
+
+  const supabase = await createClient();
+  const { data: user } = await supabase.auth.getUser();
+  const isOwnVoucher = Boolean(entry.created_by) && user.user?.id === entry.created_by;
+  return isOwnVoucher && EDITABLE_STATUSES.includes(entry.status);
+}
+
+/** The same rule as canEditVoucher, as an error message for a server action. */
+export async function ensureCanEditVoucher(
+  voucherType: VoucherType,
+  entry: { status: string; created_by?: string | null },
+) {
+  if (await canEditVoucher(voucherType, entry)) return null;
+  return `Not permitted: ${voucherType}.edit`;
+}
 
 /**
  * An edited voucher goes back through approval. The workflow step is picked by

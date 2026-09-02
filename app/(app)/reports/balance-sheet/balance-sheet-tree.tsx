@@ -41,11 +41,15 @@ const totalRowClass = "bg-header text-header-foreground hover:bg-header [&>td]:b
 export function BalanceSheetTree({
   rows,
   profit,
+  exchange,
   totals,
   inactiveRows,
 }: {
   rows: BsRow[];
   profit: { seq: number; debit: string; credit: string; balance: string } | null;
+  /** Translation difference on foreign-currency accounts that are settled in
+   *  their own currency — shown beside the profit line so the sheet balances. */
+  exchange?: { seq: number; debit: string; credit: string; balance: string } | null;
   totals: BsTotal[];
   inactiveRows: BsRow[];
 }) {
@@ -142,6 +146,18 @@ export function BalanceSheetTree({
               <TableCell className="text-right font-mono tabular-nums">{profit.debit}</TableCell>
               <TableCell className="text-right font-mono tabular-nums">{profit.credit}</TableCell>
               <TableCell className="text-right font-mono tabular-nums">{profit.balance}</TableCell>
+            </TableRow>
+          )}
+
+          {exchange && (
+            <TableRow>
+              <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">
+                {exchange.seq}
+              </TableCell>
+              <TableCell className="pl-2">Exchange difference</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">{exchange.debit}</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">{exchange.credit}</TableCell>
+              <TableCell className="text-right font-mono tabular-nums">{exchange.balance}</TableCell>
             </TableRow>
           )}
 

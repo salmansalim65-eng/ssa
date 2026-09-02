@@ -104,7 +104,10 @@ export function AccountForm({
   const scRate = useWatch({ control: form.control, name: "serviceChargesRate" });
   const scArea = useWatch({ control: form.control, name: "areaSqft" });
   const propertyCountry = useWatch({ control: form.control, name: "country" });
-  const serviceChargesAmount = (Number(scRate) || 0) * (Number(scArea) || 0);
+  // Rounded to the paisa: 10.53 × 485 lands on 5107.049999999999 in binary
+  // floating point, and a money field should not read like that.
+  const serviceChargesAmount =
+    Math.round((Number(scRate) || 0) * (Number(scArea) || 0) * 100) / 100;
   const selectedParent = parentOptions.find((p) => p.id === selectedParentId);
   const lockAccountType = Boolean(selectedParent);
 

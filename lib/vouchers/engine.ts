@@ -3,6 +3,7 @@ import "server-only";
 import { cache } from "react";
 import { revalidatePath } from "next/cache";
 
+import { isCurrentUserAdmin } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import type { ApprovalStatus, VoucherType } from "@/types/database.types";
 
@@ -180,6 +181,51 @@ export async function submitForApproval(params: {
   if (sync.error) return { error: sync.error };
 
   return { approval };
+}
+
+/** The document-currency debit total of an entry — the figure the approval
+ *  workflow's rules are matched against. */
+async function journalEntryAmount(journalEntryId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .schema("accounting")
+    .from("journal_entry_lines")
+    .select("debit_amount")
+    .eq("journal_entry_id", journalEntryId);
+  return (data ?? []).reduce((sum, l) => sum + Number(l.debit_amount ?? 0), 0);
+}
+
+/**
+ * What happens the moment a voucher is created. An administrator's voucher
+ * posts straight away; everyone else's goes to the approver by itself, so no
+ * one has to remember to press "Submit for approval".
+ *
+ * Best-effort on purpose: a voucher that could not be routed is still saved as
+ * a draft, and its detail screen still offers the manual button — which is why
+ * that button now only appears when this did not get there first.
+ */
+export async function routeNewVoucher(params: {
+  companyId: string;
+  voucherType: VoucherType;
+  voucherId: string;
+  journalEntryId: string;
+  post: () => Promise<unknown>;
+}) {
+  try {
+    if (await isCurrentUserAdmin()) {
+      await params.post();
+      return;
+    }
+    await submitForApproval({
+      companyId: params.companyId,
+      voucherType: params.voucherType,
+      voucherId: params.voucherId,
+      journalEntryId: params.journalEntryId,
+      amount: await journalEntryAmount(params.journalEntryId),
+    });
+  } catch {
+    // The voucher is saved either way; the draft can be routed by hand.
+  }
 }
 
 export async function actOnApproval(params: {

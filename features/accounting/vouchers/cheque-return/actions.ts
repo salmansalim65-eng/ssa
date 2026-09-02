@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 
-import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
-import { createJournalEntry, getCurrentCompanyId, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
+import { createJournalEntry, getCurrentCompanyId, postVoucher, routeNewVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { chequeReturnVoucherSchema, type ChequeReturnVoucherInput } from "./schemas";
 
 /**
@@ -88,12 +88,16 @@ export async function createChequeReturnVoucher(input: ChequeReturnVoucherInput,
   if (error) return { error: error.message };
 
   revalidatePath("/accounting/vouchers/cheque_return_voucher");
-  if (options?.autoPostIfAdmin !== false && (await isCurrentUserAdmin())) {
-    try {
-      await postChequeReturnVoucher(voucherId, je.journalEntryId);
-    } catch {
-      // Auto-post is best-effort; the created draft remains for manual posting.
-    }
+  // An admin's voucher posts on the spot; anyone else's goes straight to the
+  // approver — no "Submit for approval" click in between.
+  if (options?.autoPostIfAdmin !== false) {
+    await routeNewVoucher({
+      companyId,
+      voucherType: "cheque_return_voucher",
+      voucherId,
+      journalEntryId: je.journalEntryId,
+      post: () => postChequeReturnVoucher(voucherId, je.journalEntryId),
+    });
   }
   return { success: true, id: voucherId };
 }

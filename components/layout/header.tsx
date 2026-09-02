@@ -7,6 +7,7 @@ import { Building2Icon, CalendarDaysIcon, MenuIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { formatDate } from "@/lib/format";
+import { ApprovalsBell } from "./approvals-bell";
 import { Breadcrumbs } from "./breadcrumbs";
 import { SidebarNav } from "./sidebar-nav";
 import { ThemeToggle } from "./theme-toggle";
@@ -21,12 +22,15 @@ export function Header({
   companyName,
   allowedModules = null,
   isAdmin = false,
+  pendingApprovals = null,
 }: {
   fullName: string;
   email: string;
   companyName: string;
   allowedModules?: string[] | null;
   isAdmin?: boolean;
+  /** Vouchers waiting for a decision; null hides the bell (no approvals access). */
+  pendingApprovals?: number | null;
 }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   // Same calendar-day string on server and client; the span carries
@@ -63,6 +67,7 @@ export function Header({
       </div>
 
       <div className="ml-auto flex items-center gap-1.5">
+        {pendingApprovals !== null && <ApprovalsBell count={pendingApprovals} />}
         {/* Vista Group branding links out to the parent ERP — shown to
             administrators only. */}
         {isAdmin && (

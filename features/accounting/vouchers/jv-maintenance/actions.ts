@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 
-import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
-import { createJournalEntry, getCurrentCompanyId, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
+import { createJournalEntry, getCurrentCompanyId, postVoucher, routeNewVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { jvMaintenanceVoucherSchema, type JvMaintenanceVoucherInput } from "./schemas";
 
 function round2(n: number) {
@@ -85,12 +85,16 @@ export async function createJvMaintenanceVoucher(input: JvMaintenanceVoucherInpu
   if (linesErr) return { error: linesErr.message };
 
   revalidatePath("/accounting/vouchers/jv_maintenance_voucher");
-  if (options?.autoPostIfAdmin !== false && (await isCurrentUserAdmin())) {
-    try {
-      await postJvMaintenanceVoucher(voucherId, je.journalEntryId);
-    } catch {
-      // Auto-post is best-effort; the created draft remains for manual posting.
-    }
+  // An admin's voucher posts on the spot; anyone else's goes straight to the
+  // approver — no "Submit for approval" click in between.
+  if (options?.autoPostIfAdmin !== false) {
+    await routeNewVoucher({
+      companyId,
+      voucherType: "jv_maintenance_voucher",
+      voucherId,
+      journalEntryId: je.journalEntryId,
+      post: () => postJvMaintenanceVoucher(voucherId, je.journalEntryId),
+    });
   }
   return { success: true, id: voucherId };
 }

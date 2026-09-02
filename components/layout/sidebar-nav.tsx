@@ -2,13 +2,13 @@
 
 import { type MouseEvent, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ChevronDownIcon, ChevronsDownUpIcon, ChevronsUpDownIcon } from "lucide-react";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { navSections, filterNavSections } from "./nav-items";
-import { openTab, goHome, useWorkspace } from "./workspace-store";
+import { isEmbeddedWindow, openTab, goHome, useWorkspace } from "./workspace-store";
 
 // Which section headings the user has EXPANDED, persisted in localStorage and
 // read through useSyncExternalStore so the server snapshot (nothing expanded)
@@ -63,6 +63,7 @@ export function SidebarNav({
   allowedModules?: string[] | null;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   // Only the sections/items this user may view.
   const sections = filterNavSections(navSections, allowedModules);
   const collapsibleSectionLabels = sections.filter((s) => s.label).map((s) => s.label!);
@@ -88,8 +89,18 @@ export function SidebarNav({
     onNavigate?.();
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
     e.preventDefault();
-    if (href === "/dashboard") goHome();
-    else openTab(href, label);
+    if (href === "/dashboard") {
+      // goHome() only reveals the base surface, which is whatever route the top
+      // window happens to sit on — so on any other route the Dashboard link
+      // appeared to do nothing. Take the window there as well, breaking out of
+      // the iframe when this nav is itself rendered inside a workspace tab.
+      goHome();
+      const top = isEmbeddedWindow() ? window.top : null;
+      if (top) top.location.assign("/dashboard");
+      else router.push("/dashboard");
+      return;
+    }
+    openTab(href, label);
   }
 
   function renderItems(items: typeof navSections[number]["items"]) {

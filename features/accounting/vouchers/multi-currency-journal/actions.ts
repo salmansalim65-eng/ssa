@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 
-import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentCompanyId, postVoucher } from "@/lib/vouchers/engine";
+import { getCurrentCompanyId, postVoucher, routeNewVoucher } from "@/lib/vouchers/engine";
 import { multiCurrencyJournalSchema, type MultiCurrencyJournalInput } from "./schemas";
 
 function round2(n: number) {
@@ -109,12 +109,16 @@ export async function createMultiCurrencyJournal(
 
   revalidatePath(LIST_PATH);
   revalidatePath("/dashboard");
-  if (options?.autoPostIfAdmin !== false && (await isCurrentUserAdmin())) {
-    try {
-      await postMultiCurrencyJournal(voucherId, jeId);
-    } catch {
-      // Auto-post is best-effort; the created draft remains for manual posting.
-    }
+  // An admin's voucher posts on the spot; anyone else's goes straight to the
+  // approver — no "Submit for approval" click in between.
+  if (options?.autoPostIfAdmin !== false) {
+    await routeNewVoucher({
+      companyId,
+      voucherType: "multi_currency_journal",
+      voucherId,
+      journalEntryId: jeId,
+      post: () => postMultiCurrencyJournal(voucherId, jeId),
+    });
   }
   return { success: true, id: voucherId };
 }

@@ -63,6 +63,9 @@ export function VoucherActions({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {/* A new voucher submits itself and an approved one posts itself, so these
+          two buttons only surface when that automatic step could not run — an
+          approver without the post permission, or a draft left behind. */}
       {status === "draft" && canSubmit && (
         <Button
           size="sm"
@@ -79,7 +82,7 @@ export function VoucherActions({
             <Button
               size="sm"
               disabled={isPending}
-              onClick={() => run(() => actOnVoucher(voucherType, approvalId, journalEntryId, "approve"), "Approved")}
+              onClick={() => run(() => actOnVoucher(voucherType, approvalId, voucherId, journalEntryId, "approve"), "Approved")}
             >
               Approve
             </Button>
@@ -133,7 +136,7 @@ export function VoucherActions({
                 if (!approvalId || !commentDialog) return;
                 run(
                   async () => {
-                    const result = await actOnVoucher(voucherType, approvalId, journalEntryId, commentDialog, comment);
+                    const result = await actOnVoucher(voucherType, approvalId, voucherId, journalEntryId, commentDialog, comment);
                     if (!("error" in result)) setCommentDialog(null);
                     return result;
                   },

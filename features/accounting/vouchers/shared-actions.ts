@@ -6,13 +6,15 @@ import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { actOnApproval, getCurrentCompanyId, submitForApproval } from "@/lib/vouchers/engine";
 import type { VoucherType } from "@/types/database.types";
-import { createReceiptVoucher } from "./receipt/actions";
-import { createPaymentVoucher } from "./payment/actions";
-import { createPdcPaymentVoucher } from "./pdc-payment/actions";
-import { createPdcReceiptVoucher } from "./pdc-receipt/actions";
-import { createJournalVoucher } from "./journal/actions";
-import { createJvMaintenanceVoucher } from "./jv-maintenance/actions";
-import { createOpeningBalanceVoucher } from "./opening-balance/actions";
+import { createReceiptVoucher, postReceiptVoucher } from "./receipt/actions";
+import { createPaymentVoucher, postPaymentVoucher } from "./payment/actions";
+import { createPdcPaymentVoucher, postPdcPaymentVoucher } from "./pdc-payment/actions";
+import { createPdcReceiptVoucher, postPdcReceiptVoucher } from "./pdc-receipt/actions";
+import { postChequeReturnVoucher } from "./cheque-return/actions";
+import { createJournalVoucher, postJournalVoucher } from "./journal/actions";
+import { createJvMaintenanceVoucher, postJvMaintenanceVoucher } from "./jv-maintenance/actions";
+import { createOpeningBalanceVoucher, postOpeningBalanceVoucher } from "./opening-balance/actions";
+import { postMultiCurrencyJournal } from "./multi-currency-journal/actions";
 
 export async function submitVoucher(
   voucherType: VoucherType,
@@ -296,9 +298,26 @@ export async function copyAccountingVoucher(voucherType: VoucherType, id: string
   }
 }
 
+// Posting an approved voucher, per type — the approval itself posts it, so the
+// approver never has to come back and press "Post".
+const POST_ACTIONS: Partial<
+  Record<VoucherType, (id: string, journalEntryId: string) => Promise<unknown>>
+> = {
+  receipt_voucher: postReceiptVoucher,
+  payment_voucher: postPaymentVoucher,
+  pdc_payment_voucher: postPdcPaymentVoucher,
+  pdc_receipt_voucher: postPdcReceiptVoucher,
+  cheque_return_voucher: postChequeReturnVoucher,
+  journal_voucher: postJournalVoucher,
+  jv_maintenance_voucher: postJvMaintenanceVoucher,
+  opening_balance_voucher: postOpeningBalanceVoucher,
+  multi_currency_journal: postMultiCurrencyJournal,
+};
+
 export async function actOnVoucher(
   voucherType: VoucherType,
   voucherApprovalId: string,
+  voucherId: string,
   journalEntryId: string,
   action: "approve" | "reject" | "send_back",
   comment?: string,
@@ -307,6 +326,19 @@ export async function actOnVoucher(
 
   const result = await actOnApproval({ voucherApprovalId, journalEntryId, action, comment });
   if ("error" in result) return { error: result.error };
+
+  // Only the FINAL approval posts: a multi-level workflow comes back as
+  // "pending" until the last approver signs it off. Best-effort, so an approver
+  // without the post permission (or a voucher the posting trigger rejects) still
+  // ends up approved with the manual Post button as the fallback.
+  const status = (result.approval as { status?: string } | null)?.status;
+  if (action === "approve" && status === "approved") {
+    try {
+      await POST_ACTIONS[voucherType]?.(voucherId, journalEntryId);
+    } catch {
+      // Left approved; the detail screen still offers Post.
+    }
+  }
 
   return { success: true };
 }

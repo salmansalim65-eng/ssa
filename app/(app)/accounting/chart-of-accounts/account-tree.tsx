@@ -61,7 +61,7 @@ import {
   updateAccount,
 } from "@/features/accounting/chart-of-accounts/actions";
 import type { AccountInput } from "@/features/accounting/chart-of-accounts/schemas";
-import { AccountForm, type CurrencyOption, type ParentOption } from "./account-form";
+import { AccountForm, type CostCentreOption, type CurrencyOption, type ParentOption } from "./account-form";
 
 export interface AccountRow {
   id: string;
@@ -85,6 +85,7 @@ export interface AccountRow {
   phone: string | null;
   email: string | null;
   country: string | null;
+  default_cost_center_id: string | null;
 }
 
 type SortMode = "manual" | "name_asc" | "name_desc" | "code" | "balance_desc" | "balance_asc";
@@ -145,6 +146,7 @@ const emptyValues: AccountInput = {
   phone: "",
   email: "",
   country: "",
+  defaultCostCenterId: "",
   propertyType: "",
   propertyStatus: "active",
   city: "",
@@ -209,6 +211,7 @@ export function AccountTree({
   accounts,
   currencies,
   countries,
+  costCentres,
   canCreate,
   canEdit,
   canDelete,
@@ -221,6 +224,7 @@ export function AccountTree({
   accounts: AccountRow[];
   currencies: CurrencyOption[];
   countries: { code: string; name: string }[];
+  costCentres: CostCentreOption[];
   canCreate: boolean;
   canEdit: boolean;
   canDelete: boolean;
@@ -772,6 +776,7 @@ export function AccountTree({
             <AccountForm
               currencies={currencies}
               countries={countries}
+              costCentres={costCentres}
               parentOptions={
                 dialog.mode === "edit"
                   ? groupOptions.filter(
@@ -806,6 +811,7 @@ export function AccountTree({
                         phone: dialog.account.phone ?? "",
                         email: dialog.account.email ?? "",
                         country: dialog.account.country ?? "",
+                        defaultCostCenterId: dialog.account.default_cost_center_id ?? "",
                         // Property details prefilled from the linked asset so an
                         // edit shows current values (and never overwrites with blanks).
                         propertyType: linked?.property_type ?? "",

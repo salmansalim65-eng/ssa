@@ -25,6 +25,9 @@ export const accountBaseSchema = z.object({
   phone: z.string().max(50).optional().or(z.literal("")),
   email: z.string().max(200).optional().or(z.literal("")),
   country: z.string().max(10).optional().or(z.literal("")),
+  // The cost centre this account's postings belong to. Optional: an account
+  // that has no cost centre of its own simply leaves it unset.
+  defaultCostCenterId: z.string().uuid().optional().or(z.literal("")),
   // Property (asset) details — surfaced in the form when the account sits under
   // the PROPERTIES group (or is already a linked property), so a property can be
   // fully described and managed from Chart of Accounts. These are written

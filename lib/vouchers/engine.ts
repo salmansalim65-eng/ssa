@@ -360,6 +360,16 @@ export async function postVoucher(params: {
     return { error: numberError?.message ?? "Failed to generate document number" };
   }
 
+  // A foreign-currency account settled at a rate other than the one it was
+  // raised at leaves a residue in base currency. That is a realised exchange
+  // gain or loss, so it is written off to the Exchange Gain/Loss account as part
+  // of THIS entry — while its lines can still be written, i.e. before the status
+  // flips. Best-effort: with no such account configured the function does
+  // nothing, and a failure here must not block a voucher from posting.
+  await supabase
+    .schema("accounting")
+    .rpc("fn_realise_exchange_difference", { p_journal_entry_id: params.journalEntryId });
+
   const { error: postError } = await supabase
     .schema("accounting")
     .from("journal_entries")

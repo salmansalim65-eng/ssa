@@ -12,7 +12,7 @@ import { ReceiptVoucherForm } from "@/components/vouchers/forms/receipt-voucher-
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { toAccountOptions, type RawAccountRow } from "@/lib/vouchers/account-currency";
-import { getCurrentCompanyId } from "@/lib/vouchers/engine";
+import { EDITABLE_STATUSES, getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { isPhase5VoucherType, VOUCHER_TYPE_LABELS } from "@/lib/vouchers/meta";
 import type { JournalEntryStatus } from "@/types/database.types";
 
@@ -86,13 +86,15 @@ export default async function EditVoucherPage({
     journal_entries: { status: JournalEntryStatus; currency_id: string; exchange_rate: number } | null;
   }).journal_entries;
   const status = jeEmbed?.status ?? "draft";
-  // A posted (or in-approval) voucher is part of the ledger — send the user back.
-  // Exceptions stay editable after posting: opening balances (corrections) and
-  // receipt vouchers (the update action reverses & re-posts on save). For those,
-  // only draft and posted are editable — never a pending/rejected voucher.
+  // Nothing has reached the ledger while a voucher is draft, pending or sent
+  // back, so all three stay editable — a sent-back voucher exists precisely to
+  // be corrected, and saving it sends it to the approver again. Two types stay
+  // editable even once POSTED: opening balances (they are corrections to the
+  // opening figures) and receipts (the update action reverses and re-posts).
+  // A rejected voucher is finished and is not reopened.
   const editableWhenPosted =
     voucherType === "opening_balance_voucher" || voucherType === "receipt_voucher";
-  const editable = status === "draft" || (status === "posted" && editableWhenPosted);
+  const editable = EDITABLE_STATUSES.includes(status) || (status === "posted" && editableWhenPosted);
   if (!editable) redirect(detailHref);
 
   const v = voucher as unknown as Record<string, unknown>;

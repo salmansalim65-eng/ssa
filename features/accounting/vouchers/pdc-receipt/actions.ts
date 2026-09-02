@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/auth/permissions";
 import { formatMonth } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
-import { createJournalEntry, getCurrentCompanyId, postVoucher, routeNewVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
+import { createJournalEntry, EDITABLE_STATUSES, getCurrentCompanyId, postVoucher, resubmitEditedVoucher, routeNewVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { pdcReceiptVoucherSchema, type PdcReceiptVoucherInput } from "./schemas";
 
 function round2(n: number) {
@@ -186,7 +186,9 @@ export async function updatePdcReceiptVoucher(id: string, input: PdcReceiptVouch
     .eq("id", jeId)
     .single();
   if (!je) return { error: "Voucher not found" };
-  if (je.status !== "draft") return { error: "Only draft vouchers can be edited" };
+  if (!EDITABLE_STATUSES.includes(je.status)) {
+    return { error: "A posted voucher can no longer be edited" };
+  }
 
   const lines = parsed.data.lines;
   const total = lines.reduce((sum, l) => sum + l.amount, 0);
@@ -294,6 +296,16 @@ export async function updatePdcReceiptVoucher(id: string, input: PdcReceiptVouch
     })
     .eq("id", id);
   if (vErr) return { error: vErr.message };
+
+  // An edited voucher goes back to the approver: the workflow step is chosen by
+  // amount, and a sent-back voucher is corrected precisely so it can return.
+  await resubmitEditedVoucher({
+    companyId,
+    voucherType: "pdc_receipt_voucher",
+    voucherId: id,
+    journalEntryId: jeId,
+    previousStatus: je.status,
+  });
 
   revalidatePath("/accounting/vouchers/pdc_receipt_voucher");
   revalidatePath(`/accounting/vouchers/pdc_receipt_voucher/${id}`);

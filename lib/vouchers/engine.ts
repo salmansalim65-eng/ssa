@@ -259,6 +259,43 @@ export async function routeNewVoucher(params: {
   }
 }
 
+/**
+ * The statuses a voucher can still be edited in. Nothing has reached the ledger
+ * yet: a draft was never sent, a pending one is with the approver, and a
+ * SENT BACK one is with its creator precisely so it can be corrected.
+ */
+export const EDITABLE_STATUSES: readonly string[] = ["draft", "pending", "sent_back"];
+
+/**
+ * An edited voucher goes back through approval. The workflow step is picked by
+ * amount, so a changed amount has to re-pick it, and a sent-back voucher is
+ * edited exactly so it can return to the approver. A draft is left alone — it
+ * was never submitted.
+ *
+ * Best-effort, like the routing on creation: the edit itself has already been
+ * saved, and the voucher keeps the status it had.
+ */
+export async function resubmitEditedVoucher(params: {
+  companyId: string;
+  voucherType: VoucherType;
+  voucherId: string;
+  journalEntryId: string;
+  previousStatus: string;
+}) {
+  if (params.previousStatus !== "pending" && params.previousStatus !== "sent_back") return;
+  try {
+    await submitForApproval({
+      companyId: params.companyId,
+      voucherType: params.voucherType,
+      voucherId: params.voucherId,
+      journalEntryId: params.journalEntryId,
+      amount: await journalEntryAmount(params.journalEntryId),
+    });
+  } catch {
+    // The voucher keeps its current status; it can be resubmitted by hand.
+  }
+}
+
 export async function actOnApproval(params: {
   voucherApprovalId: string;
   journalEntryId: string;

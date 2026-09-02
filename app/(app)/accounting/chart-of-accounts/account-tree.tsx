@@ -79,7 +79,12 @@ export interface AccountRow {
   is_tenant_group: boolean;
   linked_asset_id: string | null;
   sort_order: number;
+  /** Net balance in `balance_currency` — the account's own when every posting
+   *  shares one currency, else base. */
   balance: number;
+  /** The same net, always in base currency — what a mixed-currency group rolls up. */
+  base_balance: number;
+  balance_currency: string;
   id_number: string | null;
   contact_person: string | null;
   phone: string | null;
@@ -212,6 +217,7 @@ export function AccountTree({
   currencies,
   countries,
   costCentres,
+  baseCurrencyCode,
   canCreate,
   canEdit,
   canDelete,
@@ -225,6 +231,8 @@ export function AccountTree({
   currencies: CurrencyOption[];
   countries: { code: string; name: string }[];
   costCentres: CostCentreOption[];
+  /** Code of the company's base currency — what a mixed-currency total is in. */
+  baseCurrencyCode: string;
   canCreate: boolean;
   canEdit: boolean;
   canDelete: boolean;
@@ -276,16 +284,36 @@ export function AccountTree({
       childrenByParent.get(key)!.push(a);
       parentById.set(a.id, a.parent_id);
     }
-    const rolledBalance = new Map<string, number>();
-    const roll = (id: string, own: number): number => {
-      const kids = childrenByParent.get(id) ?? [];
-      const total = kids.reduce((s, k) => s + roll(k.id, k.balance), own);
-      rolledBalance.set(id, total);
-      return total;
+    // A subtree is shown in ONE currency when everything under it shares one —
+    // DUBAI PROPERTIES is all AED, so its total is AED. Mix currencies anywhere
+    // beneath and the only honest total is the base-currency one.
+    const rolledBalance = new Map<string, { amount: number; base: number; code: string }>();
+    const roll = (a: AccountRow): { amount: number; base: number; codes: Set<string> } => {
+      const kids = childrenByParent.get(a.id) ?? [];
+      const acc = {
+        amount: a.balance,
+        base: a.base_balance,
+        codes: new Set<string>(a.balance ? [a.balance_currency] : []),
+      };
+      for (const k of kids) {
+        const kid = roll(k);
+        acc.amount += kid.amount;
+        acc.base += kid.base;
+        for (const c of kid.codes) acc.codes.add(c);
+      }
+      const single = acc.codes.size === 1 ? [...acc.codes][0] : null;
+      rolledBalance.set(a.id, {
+        amount: single ? acc.amount : acc.base,
+        base: acc.base,
+        // Nothing posted anywhere beneath it: the account's declared currency is
+        // all there is to go on.
+        code: single ?? (acc.codes.size === 0 ? a.currency_code ?? baseCurrencyCode : baseCurrencyCode),
+      });
+      return acc;
     };
-    for (const a of accounts) if (!rolledBalance.has(a.id)) roll(a.id, a.balance);
+    for (const a of accounts) if (!rolledBalance.has(a.id)) roll(a);
     return { childrenByParent, parentById, rolledBalance };
-  }, [accounts]);
+  }, [accounts, baseCurrencyCode]);
 
   // Sibling ordering for the chosen sort mode. "Manual" honors sort_order (with
   // account_code as a stable tiebreaker); the others are view-only.
@@ -299,9 +327,9 @@ export function AccountTree({
         case "code":
           return a.account_code.localeCompare(b.account_code);
         case "balance_desc":
-          return Math.abs(rolledBalance.get(b.id) ?? 0) - Math.abs(rolledBalance.get(a.id) ?? 0);
+          return Math.abs(rolledBalance.get(b.id)?.base ?? 0) - Math.abs(rolledBalance.get(a.id)?.base ?? 0);
         case "balance_asc":
-          return Math.abs(rolledBalance.get(a.id) ?? 0) - Math.abs(rolledBalance.get(b.id) ?? 0);
+          return Math.abs(rolledBalance.get(a.id)?.base ?? 0) - Math.abs(rolledBalance.get(b.id)?.base ?? 0);
         default:
           return a.sort_order - b.sort_order || a.account_code.localeCompare(b.account_code);
       }
@@ -518,7 +546,10 @@ export function AccountTree({
 
           {/* Currency */}
           <td className="p-3 align-middle text-sm text-muted-foreground">
-            {account.currency_code ?? <span className="text-muted-foreground/60">Base</span>}
+            {/* The currency the balance beside it is stated in, so the two always agree. */}
+            {rolledBalance.get(account.id)?.code || (
+              <span className="text-muted-foreground/60">Base</span>
+            )}
           </td>
 
           {/* Status */}
@@ -529,7 +560,7 @@ export function AccountTree({
           {/* Current balance (rolled up from descendants for group rows) */}
           <td className="p-3 text-right align-middle font-mono text-sm tabular-nums">
             <span className={cn(isGroup && "font-semibold text-group")}>
-              {formatMoney(rolledBalance.get(account.id) ?? 0)}
+              {formatMoney(rolledBalance.get(account.id)?.amount ?? 0)}
             </span>
           </td>
 

@@ -12,6 +12,6 @@ export const config = {
   // outside the page's own request, so passing it through here served the login
   // page as the script and registration failed with a bad MIME type.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|api/push/status|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { removePushSubscription, savePushSubscription } from "@/features/notifications/actions";
 
-type State = "loading" | "unsupported" | "off" | "on" | "blocked";
+type State = "loading" | "unsupported" | "unconfigured" | "off" | "on" | "blocked";
 
 /** The VAPID public key travels as base64url; PushManager wants raw bytes. */
 function urlBase64ToUint8Array(base64: string) {
@@ -41,10 +41,16 @@ export function PushAlertsItem() {
         typeof window !== "undefined" &&
         "serviceWorker" in navigator &&
         "PushManager" in window &&
-        "Notification" in window &&
-        Boolean(publicKey);
+        "Notification" in window;
       if (!supported) {
         if (!cancelled) setState("unsupported");
+        return;
+      }
+      // The browser can do it but this deployment has no VAPID key — worth
+      // saying, since otherwise the entry just isn't there and nobody can tell
+      // the two apart.
+      if (!publicKey) {
+        if (!cancelled) setState("unconfigured");
         return;
       }
       if (Notification.permission === "denied") {
@@ -113,6 +119,14 @@ export function PushAlertsItem() {
   }
 
   if (state === "loading" || state === "unsupported") return null;
+
+  if (state === "unconfigured") {
+    return (
+      <DropdownMenuItem disabled>
+        <BellOffIcon /> Alerts not set up on the server
+      </DropdownMenuItem>
+    );
+  }
 
   if (state === "blocked") {
     return (

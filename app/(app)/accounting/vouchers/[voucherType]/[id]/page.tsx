@@ -166,7 +166,10 @@ export default async function VoucherDetailPage({
                 label="Voucher"
               />
             )}
-            {detail.status === "draft" && canDelete && (
+            {/* Deletable until it is posted — draft, pending, approved, rejected
+                or sent back have touched no balances. A posted voucher is in
+                the ledger and only an administrator may remove it, below. */}
+            {detail.status !== "posted" && canDelete && (
               <VoucherDeleteButton
                 id={detail.id}
                 onDelete={deleteAccountingVoucher.bind(null, voucherType)}

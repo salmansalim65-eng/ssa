@@ -3,7 +3,6 @@ import {
   AlertCircleIcon,
   Building2Icon,
   CalendarRangeIcon,
-  WalletIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -248,7 +247,7 @@ export default async function DashboardPage({
     supabase
       .schema("reporting")
       .from("v_ledger_entries")
-      .select("debit_amount, credit_amount")
+      .select("account_id, debit_amount, credit_amount, doc_debit_amount, doc_credit_amount, currency_code")
       .eq("company_id", companyId)
       .eq("account_type", "expense")
       .gte("entry_date", `${new Date().getFullYear()}-01-01`)
@@ -267,6 +266,30 @@ export default async function DashboardPage({
     (s, r) => s + Number(r.debit_amount) - Number(r.credit_amount),
     0,
   );
+
+  // The same year split by GROUP HEAD, each in the currency it was spent in. A
+  // base-currency total alone hides that (say) SR 10,014 is really PKR 286,400
+  // plus AED 6,171 — two different heads in two different currencies. A head
+  // that spent in more than one currency gets a line per currency; the base
+  // total is only used to order the lines, and stays on the card's footer.
+  const coaHeadById = new Map(
+    (coaCountries ?? []).map((a) => [a.id as string, a as { parent_id: string | null; account_name: string | null }]),
+  );
+  const expenseByHead = new Map<string, { head: string; code: string; doc: number; base: number }>();
+  for (const r of expenseLedger ?? []) {
+    const account = coaHeadById.get(r.account_id as string);
+    const parent = account?.parent_id ? coaHeadById.get(account.parent_id) : undefined;
+    const head = (parent?.account_name ?? account?.account_name ?? "Expenses") as string;
+    const code = (r.currency_code as string | null) ?? "";
+    const key = `${head}|${code}`;
+    const row = expenseByHead.get(key) ?? { head, code, doc: 0, base: 0 };
+    row.doc += Number(r.doc_debit_amount) - Number(r.doc_credit_amount);
+    row.base += Number(r.debit_amount) - Number(r.credit_amount);
+    expenseByHead.set(key, row);
+  }
+  const expenseHeads = [...expenseByHead.values()]
+    .filter((r) => Math.abs(r.doc) >= 0.005)
+    .sort((a, b) => b.base - a.base);
   const baseCurrency = (baseCurrencyRow as unknown as { currencies: { symbol: string; code: string } | null } | null)
     ?.currencies;
   const baseSymbol = baseCurrency?.symbol ?? baseCurrency?.code ?? "";
@@ -713,13 +736,33 @@ export default async function DashboardPage({
         )}
 
         {canReports && (
-        <KpiCard
-          label={`Expenses (${new Date().getFullYear()})`}
-          value={`${baseSymbol ? baseSymbol + " " : ""}${formatMoney(expenseTotal)}`}
-          subtext="Cost centre · account · month"
-          icon={WalletIcon}
+        <SummaryCard
+          title={`Expenses (${new Date().getFullYear()})`}
           href="/reports/expense-report"
-        />
+          footer={
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-xs font-medium text-muted-foreground">Cost centre · account · month</span>
+              <span className="shrink-0 text-sm font-bold tabular-nums">
+                {`${baseSymbol ? baseSymbol + " " : ""}${formatMoney(expenseTotal)}`}
+              </span>
+            </div>
+          }
+        >
+          {expenseHeads.length > 0 ? (
+            <div className="space-y-1 text-sm">
+              {expenseHeads.map((r) => (
+                <div key={`${r.head}-${r.code}`} className="flex items-baseline justify-between gap-3">
+                  <span className="truncate text-muted-foreground">{r.head}</span>
+                  <span className="shrink-0 font-mono font-medium tabular-nums">
+                    {`${symbolByCode.get(r.code) ?? r.code}${symbolByCode.get(r.code) || r.code ? " " : ""}${formatMoney(r.doc)}`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-1 text-sm text-muted-foreground">No expenses this year.</div>
+          )}
+        </SummaryCard>
         )}
 
         {canApprovals && (

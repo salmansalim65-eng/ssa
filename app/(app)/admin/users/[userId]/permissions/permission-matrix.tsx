@@ -126,8 +126,10 @@ export function PermissionMatrix({
         </div>
       </div>
 
-      <div className="max-h-[70vh] overflow-auto rounded-lg border bg-card shadow-xs">
-        <Table>
+      <div className="rounded-lg border bg-card shadow-xs">
+        {/* The height and the scrolling belong to the table's own container, so
+            the sticky header row has something to stick to. */}
+        <Table containerClassName="max-h-[70vh] overflow-auto">
           <TableHeader className="sticky top-0 z-20">
             <TableRow className="hover:bg-transparent">
               {/* z-30: frozen both ways, so above the rest of the header row. */}

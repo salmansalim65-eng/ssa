@@ -160,11 +160,15 @@ function computeFixedAssetAccountIds(
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ panel?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ panel?: string; from?: string; to?: string; tenant?: string; property?: string }>;
 }) {
-  const { panel = "", from = "", to = "" } = await searchParams;
+  const { panel = "", from = "", to = "", tenant = "", property = "" } = await searchParams;
   const dateFrom = from || null;
   const dateTo = to || null;
+  // Rent Balance can be narrowed to one tenant and/or one property, so opening
+  // a card can answer "what does THIS tenant still owe on THIS property".
+  const tenantFilter = tenant || null;
+  const propertyFilter = property || null;
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
 
@@ -496,13 +500,26 @@ export default async function DashboardPage({
   const rangeFrom = dateFrom;
   const rangeTo = isRentPanel ? dateTo ?? monthEnd : dateTo;
   const detail = selected
-    ? await loadDetail(companyId, selected, sym(BALANCE_PANELS[selected].currency), rangeFrom, rangeTo)
+    ? await loadDetail(
+        companyId,
+        selected,
+        sym(BALANCE_PANELS[selected].currency),
+        rangeFrom,
+        rangeTo,
+        tenantFilter,
+        propertyFilter,
+      )
     : isBank
       ? bankDetail(bankOnly, "Bank Balances")
       : isCash
         ? bankDetail(cashOnly, "Cash Balances")
         : null;
-  // The rent-balance detail panels support a date range.
+  // The rent-balance detail panels support a date range, and the rent ones also
+  // hand back the tenants and properties they cover.
+  const rentPanelDetail = detail as { tenantOptions?: string[]; propertyOptions?: string[] } | null;
+  const rentFilters = rentPanelDetail?.tenantOptions
+    ? { tenants: rentPanelDetail.tenantOptions, properties: rentPanelDetail.propertyOptions ?? [] }
+    : null;
   const detailPanelKey = selected;
   const showDateRange = detail !== null && detailPanelKey !== "";
 
@@ -769,10 +786,44 @@ export default async function DashboardPage({
                       className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
                     />
                   </label>
+                  {rentFilters && (
+                    <>
+                      <label className="flex flex-col text-[0.7rem] font-medium text-muted-foreground">
+                        Tenant
+                        <select
+                          name="tenant"
+                          defaultValue={tenant}
+                          className="h-8 max-w-[12rem] rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                        >
+                          <option value="">All tenants</option>
+                          {rentFilters.tenants.map((t) => (
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="flex flex-col text-[0.7rem] font-medium text-muted-foreground">
+                        Property
+                        <select
+                          name="property"
+                          defaultValue={property}
+                          className="h-8 max-w-[12rem] rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                        >
+                          <option value="">All properties</option>
+                          {rentFilters.properties.map((p) => (
+                            <option key={p} value={p}>
+                              {p}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </>
+                  )}
                   <Button type="submit" variant="outline" size="sm">
                     Apply
                   </Button>
-                  {(dateFrom || dateTo) && (
+                  {(dateFrom || dateTo || tenantFilter || propertyFilter) && (
                     <Button asChild variant="ghost" size="sm">
                       <Link href={`/dashboard?panel=${detailPanelKey}`}>Clear</Link>
                     </Button>
@@ -845,6 +896,8 @@ async function loadDetail(
   symbol: string,
   dateFrom: string | null,
   dateTo: string | null,
+  tenant: string | null,
+  property: string | null,
 ) {
   const supabase = await createClient();
   const cfg = BALANCE_PANELS[key];
@@ -1134,6 +1187,13 @@ async function loadDetail(
     rows.sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)));
   }
 
+  // The pickers list what this range holds, taken BEFORE filtering so choosing a
+  // tenant never empties the property list (or the other way round).
+  const tenantOptions = [...new Set(rows.map((r) => String(r.tenant_name ?? "")).filter(Boolean))].sort();
+  const propertyOptions = [...new Set(rows.map((r) => String(r.asset_name ?? "")).filter(Boolean))].sort();
+  if (tenant) rows = rows.filter((r) => String(r.tenant_name ?? "") === tenant);
+  if (property) rows = rows.filter((r) => String(r.asset_name ?? "") === property);
+
   const nowDate = today();
   // PK Rent Balance omits the Management (agent share) and Other Expenses columns
   // — those only apply to UAE/HH leases.
@@ -1179,6 +1239,8 @@ async function loadDetail(
 
   return {
     title: `Rent Balance — ${cfg.label}`,
+    tenantOptions,
+    propertyOptions,
     body: (
       <Table
         className="min-w-[900px] [&_td]:first:pl-5 [&_td]:last:pr-5 [&_th]:first:pl-5 [&_th]:last:pr-5"

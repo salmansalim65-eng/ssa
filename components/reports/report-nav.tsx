@@ -12,8 +12,11 @@ export function ReportNav({ className }: { className?: string }) {
   const router = useRouter();
   return (
     <div className={cn("flex items-center gap-1 text-sm print:hidden", className)}>
+      {/* target="_top": a report opened as a workspace tab renders in an iframe,
+          so Home has to navigate the top window, exactly as PageNav does. */}
       <Link
         href="/dashboard"
+        target="_top"
         className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
       >
         <HomeIcon className="size-4" /> Home

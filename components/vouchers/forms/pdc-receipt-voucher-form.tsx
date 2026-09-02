@@ -35,7 +35,11 @@ import { AccountCombobox, type AccountOption } from "@/components/vouchers/accou
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
 import { DateInput } from "@/components/vouchers/date-input";
 import { MonthInput } from "@/components/vouchers/month-input";
-import { accountsForCurrency, buildAccountCurrency } from "@/lib/vouchers/account-currency";
+import {
+  accountsForCurrency,
+  buildAccountCostCentre,
+  buildAccountCurrency,
+} from "@/lib/vouchers/account-currency";
 import { blankAmount, amountValue } from "@/lib/forms/amount";
 import { createPdcReceiptVoucher, updatePdcReceiptVoucher } from "@/features/accounting/vouchers/pdc-receipt/actions";
 import {
@@ -107,11 +111,23 @@ export function PdcReceiptVoucherForm({
   // accounts (plus the currency-less ones, e.g. CAPITAL), so a voucher can't mix
   // a PKR bank with an AED party.
   const currencyOf = useMemo(() => buildAccountCurrency(accounts, currencies), [accounts, currencies]);
+  const costCentreOf = useMemo(() => buildAccountCostCentre(accounts), [accounts]);
   function applyAccountCurrency(accountId: string) {
     const cur = currencyOf(accountId);
     if (!cur || !rateById.has(cur)) return;
     form.setValue("currencyId", cur, { shouldValidate: true });
     form.setValue("exchangeRate", rateById.get(cur) ?? 1, { shouldValidate: true });
+  }
+  /**
+   * The cost centre follows the LINE account — the party or expense the voucher
+   * is actually about. The cash/bank (contra) side never drives it: the same
+   * bank serves every cost centre, so it says nothing about which one this entry
+   * belongs to. A cost centre already chosen is left alone.
+   */
+  function applyLineCostCentre(accountId: string) {
+    const cc = costCentreOf(accountId);
+    if (!cc || form.getValues("costCenterId")) return;
+    form.setValue("costCenterId", cc, { shouldValidate: true });
   }
   const anchored =
     !!currencyOf(headerAccountId) || (watchedLines ?? []).some((l) => !!currencyOf(l?.accountId));
@@ -316,6 +332,7 @@ export function PdcReceiptVoucherForm({
                               onValueChange={(v) => {
                                 field.onChange(v);
                                 applyAccountCurrency(v);
+                                applyLineCostCentre(v);
                               }}
                             />
                             <FormMessage />

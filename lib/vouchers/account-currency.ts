@@ -78,6 +78,7 @@ export type RawAccountRow = {
   account_name: string;
   currency_id?: string | null;
   country?: string | null;
+  default_cost_center_id?: string | null;
 };
 
 /**
@@ -93,5 +94,18 @@ export function toAccountOptions(
     account_name: a.account_name,
     currencyId: a.currency_id ?? null,
     country: a.country ?? null,
+    defaultCostCenterId: a.default_cost_center_id ?? null,
   }));
+}
+
+/**
+ * Resolves an account to the cost centre it names as its default, so a voucher
+ * can fill the cost centre in from the account being posted to. Only the LINE
+ * accounts drive it — the cash/bank side of a receipt or payment is the same
+ * account whatever the voucher is about, so it says nothing about which cost
+ * centre the entry belongs to.
+ */
+export function buildAccountCostCentre(accounts: AccountOption[]) {
+  const byId = new Map(accounts.map((a) => [a.id, a.defaultCostCenterId ?? null]));
+  return (accountId: string | undefined | null) => (accountId ? byId.get(accountId) ?? null : null);
 }

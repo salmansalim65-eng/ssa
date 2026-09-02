@@ -51,7 +51,7 @@ export default async function EditVoucherPage({
     supabase
       .schema("accounting")
       .from("chart_of_accounts")
-      .select("id, account_code, account_name, currency_id, country")
+      .select("id, account_code, account_name, currency_id, country, default_cost_center_id")
       .eq("company_id", companyId)
       .eq("is_group", false)
       .eq("is_active", true)

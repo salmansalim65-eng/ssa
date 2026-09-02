@@ -14,6 +14,8 @@ export interface AccountOption {
   currencyId?: string | null;
   /** The account's country (AE / PK / SA), used when it carries no currency of its own. */
   country?: string | null;
+  /** The cost centre this account's postings belong to, when it names one. */
+  defaultCostCenterId?: string | null;
 }
 
 interface Position {

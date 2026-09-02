@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
-import { createJournalEntry, getCurrentCompanyId, postVoucher, routeNewVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
+import { createJournalEntry, EDITABLE_STATUSES, getCurrentCompanyId, postVoucher, resubmitEditedVoucher, routeNewVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { journalVoucherSchema, type JournalVoucherInput } from "./schemas";
 
 function round2(n: number) {
@@ -111,7 +111,9 @@ export async function updateJournalVoucher(id: string, input: JournalVoucherInpu
     .eq("id", jeId)
     .single();
   if (!je) return { error: "Voucher not found" };
-  if (je.status !== "draft") return { error: "Only draft vouchers can be edited" };
+  if (!EDITABLE_STATUSES.includes(je.status)) {
+    return { error: "A posted voucher can no longer be edited" };
+  }
 
   const rate = parsed.data.exchangeRate;
 
@@ -172,6 +174,16 @@ export async function updateJournalVoucher(id: string, input: JournalVoucherInpu
     .from("journal_voucher_lines")
     .insert(toVoucherLines(id, parsed.data.lines));
   if (insLinesErr) return { error: insLinesErr.message };
+
+  // An edited voucher goes back to the approver: the workflow step is chosen by
+  // amount, and a sent-back voucher is corrected precisely so it can return.
+  await resubmitEditedVoucher({
+    companyId,
+    voucherType: "journal_voucher",
+    voucherId: id,
+    journalEntryId: jeId,
+    previousStatus: je.status,
+  });
 
   revalidatePath("/accounting/vouchers/journal_voucher");
   revalidatePath(`/accounting/vouchers/journal_voucher/${id}`);

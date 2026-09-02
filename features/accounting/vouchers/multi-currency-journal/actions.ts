@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentCompanyId, postVoucher, routeNewVoucher } from "@/lib/vouchers/engine";
+import { EDITABLE_STATUSES, getCurrentCompanyId, postVoucher, resubmitEditedVoucher, routeNewVoucher } from "@/lib/vouchers/engine";
 import { multiCurrencyJournalSchema, type MultiCurrencyJournalInput } from "./schemas";
 
 function round2(n: number) {
@@ -148,7 +148,9 @@ export async function updateMultiCurrencyJournal(id: string, input: MultiCurrenc
     .eq("id", jeId)
     .single();
   if (!je) return { error: "Voucher not found" };
-  if (je.status !== "draft") return { error: "Only draft vouchers can be edited" };
+  if (!EDITABLE_STATUSES.includes(je.status)) {
+    return { error: "A posted voucher can no longer be edited" };
+  }
 
   const { error: jeErr } = await supabase
     .schema("accounting")
@@ -176,6 +178,16 @@ export async function updateMultiCurrencyJournal(id: string, input: MultiCurrenc
     .update({ entry_date: parsed.data.entryDate, narration: parsed.data.narration || null })
     .eq("id", id);
   if (vErr) return { error: vErr.message };
+
+  // An edited voucher goes back to the approver: the workflow step is chosen by
+  // amount, and a sent-back voucher is corrected precisely so it can return.
+  await resubmitEditedVoucher({
+    companyId,
+    voucherType: "multi_currency_journal",
+    voucherId: id,
+    journalEntryId: jeId,
+    previousStatus: je.status,
+  });
 
   revalidatePath(LIST_PATH);
   revalidatePath(`${LIST_PATH}/${id}`);

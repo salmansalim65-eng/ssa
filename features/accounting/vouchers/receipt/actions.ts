@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
 import { formatMonth } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
-import { createJournalEntry, getCurrentCompanyId, postVoucher, routeNewVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
+import { createJournalEntry, EDITABLE_STATUSES, getCurrentCompanyId, postVoucher, resubmitEditedVoucher, routeNewVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { receiptVoucherSchema, type ReceiptVoucherInput } from "./schemas";
 
 function round2(n: number) {
@@ -219,7 +219,9 @@ export async function updateReceiptVoucher(id: string, input: ReceiptVoucherInpu
     revalidatePath("/dashboard");
     return { success: true, id: created.id };
   }
-  if (je.status !== "draft") return { error: "Only draft or posted receipts can be edited" };
+  if (!EDITABLE_STATUSES.includes(je.status)) {
+    return { error: "This receipt can no longer be edited" };
+  }
 
   const lines = parsed.data.lines;
   const total = lines.reduce((sum, l) => sum + l.amount, 0);
@@ -322,6 +324,16 @@ export async function updateReceiptVoucher(id: string, input: ReceiptVoucherInpu
     })
     .eq("id", id);
   if (vErr) return { error: vErr.message };
+
+  // An edited voucher goes back to the approver: the workflow step is chosen by
+  // amount, and a sent-back voucher is corrected precisely so it can return.
+  await resubmitEditedVoucher({
+    companyId,
+    voucherType: "receipt_voucher",
+    voucherId: id,
+    journalEntryId: jeId,
+    previousStatus: je.status,
+  });
 
   revalidatePath("/accounting/vouchers/receipt_voucher");
   revalidatePath("/dashboard");

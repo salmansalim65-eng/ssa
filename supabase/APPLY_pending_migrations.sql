@@ -154,4 +154,10 @@ begin
 end;
 $function$;
 
+-- 0119 — the approval functions move the journal entry's status themselves; the
+-- app's separate update ran as the user and silently matched no rows for a
+-- clerk holding only view + create. See the migration file for the full story.
+-- (Run supabase/migrations/0119_approval_syncs_journal_status.sql — it is long
+-- and reproduced there in full.)
+
 notify pgrst, 'reload schema';

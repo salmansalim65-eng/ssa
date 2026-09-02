@@ -58,39 +58,6 @@ function rentDueChunks(months: string[], terms: string | null | undefined): { du
   return chunks;
 }
 
-// Rent KPI tile that lists one amount per currency (AED and PKR kept separate),
-// styled like KpiCard (green header over a light body).
-function RentCurrencyCard({
-  label,
-  subtext,
-  rows,
-}: {
-  label: string;
-  subtext: string;
-  rows: { code: string; amount: string }[];
-}) {
-  return (
-    <div className="flex h-full flex-col overflow-hidden rounded-md border-2 border-ledger-dark bg-card shadow-sm">
-      <div className="truncate border-b-2 border-ledger-dark bg-ledger-dark px-3 py-1.5 text-center text-[0.7rem] font-bold uppercase tracking-wide text-white">
-        {label}
-      </div>
-      <div className="flex flex-1 flex-col justify-center gap-1.5 p-4">
-        {rows.length ? (
-          rows.map((r) => (
-            <div key={r.code} className="flex items-baseline justify-between gap-2">
-              <span className="text-xs font-medium text-muted-foreground">{r.code}</span>
-              <span className="font-mono text-lg font-semibold tabular-nums text-foreground">{r.amount}</span>
-            </div>
-          ))
-        ) : (
-          <span className="text-lg font-semibold text-muted-foreground">—</span>
-        )}
-        <p className="mt-0.5 text-xs text-muted-foreground">{subtext}</p>
-      </div>
-    </div>
-  );
-}
-
 // Each country card shows figures in that country's own currency.
 const BALANCE_PANELS = {
   "balances-uae": { kind: "balances", ccCountry: "AE", rentCountry: "UAE", currency: "AED", label: "UAE" },
@@ -489,25 +456,6 @@ export default async function DashboardPage({
   }
   const rentReceipts = (c: string) => rentByCountry[c].billed - rentByCountry[c].outstanding;
 
-  // ---- Analytics KPIs — rent kept in its own document currency, one line per
-  // currency (AED and PKR shown separately, never converted to base). ----
-  const rentByCode = new Map<string, { billed: number; outstanding: number }>();
-  for (const r of rentRows ?? []) {
-    const code = (r.currency_code as string) || baseCurrency?.code || "—";
-    const e = rentByCode.get(code) ?? { billed: 0, outstanding: 0 };
-    e.billed += Number(r.net_amount);
-    e.outstanding += Number(r.net_outstanding);
-    rentByCode.set(code, e);
-  }
-  const rentCurrencyRows = [...rentByCode.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([code, v]) => ({
-      symbol: symbolByCode.get(code) ?? code,
-      billed: v.billed,
-      collected: v.billed - v.outstanding,
-      outstanding: v.outstanding,
-    }));
-
   const isBank = panel === "bank";
   const isCash = panel === "cash";
   const selected = (panel in BALANCE_PANELS ? panel : "") as PanelKey | "";
@@ -777,30 +725,6 @@ export default async function DashboardPage({
         )}
 
       </div>
-
-      {/* Analytics — KPIs and charts below the report cards. */}
-      {canReports && (
-      <div className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Analytics</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <RentCurrencyCard
-            label="Rent billed"
-            subtext="Owner's net rent"
-            rows={rentCurrencyRows.map((r) => ({ code: r.symbol, amount: formatMoney(r.billed) }))}
-          />
-          <RentCurrencyCard
-            label="Collected"
-            subtext="Received to date"
-            rows={rentCurrencyRows.map((r) => ({ code: r.symbol, amount: formatMoney(r.collected) }))}
-          />
-          <RentCurrencyCard
-            label="Outstanding"
-            subtext="Still uncollected"
-            rows={rentCurrencyRows.map((r) => ({ code: r.symbol, amount: formatMoney(r.outstanding) }))}
-          />
-        </div>
-      </div>
-      )}
 
       {/* The selected tab's detail/report renders here — below ALL the cards. */}
       {detail && (

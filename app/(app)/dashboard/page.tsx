@@ -566,7 +566,11 @@ export default async function DashboardPage({
           }
         >
           <div className="grid grid-cols-3 gap-2">
-            <StatCol value={money("", rentByCountry.UAE.overdue)} label="Overdue" />
+            <StatCol
+              value={money("", rentByCountry.UAE.overdue)}
+              label="Overdue"
+              tone={rentByCountry.UAE.overdue > 0 ? "destructive" : undefined}
+            />
             <StatCol value={money("", rentByCountry.UAE.due)} label="Due" align="center" />
             <StatCol value={money("", rentByCountry.UAE.overdue + rentByCountry.UAE.due)} label="Total" align="right" />
           </div>
@@ -588,7 +592,11 @@ export default async function DashboardPage({
           }
         >
           <div className="grid grid-cols-3 gap-2">
-            <StatCol value={money("", rentByCountry.PK.overdue)} label="Overdue" />
+            <StatCol
+              value={money("", rentByCountry.PK.overdue)}
+              label="Overdue"
+              tone={rentByCountry.PK.overdue > 0 ? "destructive" : undefined}
+            />
             <StatCol value={money("", rentByCountry.PK.due)} label="Due" align="center" />
             <StatCol value={money("", rentByCountry.PK.overdue + rentByCountry.PK.due)} label="Total" align="right" />
           </div>

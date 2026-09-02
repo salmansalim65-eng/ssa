@@ -55,19 +55,31 @@ export function SummaryCard({
   return inner;
 }
 
-/** A value with a small label beneath it — the column unit used inside the cards. */
+/**
+ * A value with a small label beneath it — the column unit used inside the cards.
+ * `tone` paints the figure: overdue money reads red wherever it appears.
+ */
 export function StatCol({
   value,
   label,
   align = "left",
+  tone,
 }: {
   value: string;
   label: string;
   align?: "left" | "center" | "right";
+  tone?: "destructive";
 }) {
   return (
     <div className={cn("min-w-0", align === "center" && "text-center", align === "right" && "text-right")}>
-      <div className="truncate text-base font-semibold tabular-nums text-foreground">{value}</div>
+      <div
+        className={cn(
+          "truncate text-base font-semibold tabular-nums",
+          tone === "destructive" ? "text-destructive" : "text-foreground",
+        )}
+      >
+        {value}
+      </div>
       <div className="truncate text-[0.68rem] uppercase tracking-wide text-muted-foreground">{label}</div>
     </div>
   );

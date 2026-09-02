@@ -160,4 +160,8 @@ $function$;
 -- (Run supabase/migrations/0119_approval_syncs_journal_status.sql — it is long
 -- and reproduced there in full.)
 
+-- 0120 — a voucher is deletable until it is POSTED, not only while it is a
+-- draft (vouchers now go straight to pending, which had no delete at all).
+-- Run supabase/migrations/0120_delete_unposted_voucher.sql.
+
 notify pgrst, 'reload schema';

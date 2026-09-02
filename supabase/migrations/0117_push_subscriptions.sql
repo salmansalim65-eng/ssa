@@ -1,13 +1,16 @@
--- Already applied to the live project — kept here so any other environment can
--- catch up. Safe to re-run: every step is guarded or idempotent.
+-- Web push: the devices to notify, and who to notify about an approval.
 --
--- 0117 — Web push: the devices to notify (core.push_subscriptions) and who to
--- notify about an approval (core.fn_approver_user_ids).
+-- A voucher arriving for approval only showed up once the approver happened to
+-- open the app. With a subscription per device, the server can push a phone
+-- notification the moment the voucher is submitted — the app does not have to
+-- be open.
 
 create table if not exists core.push_subscriptions (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null references auth.users(id) on delete cascade,
   company_id  uuid not null references core.companies(id) on delete cascade,
+  -- The browser's push endpoint identifies the device+browser, so it is the
+  -- natural key: re-subscribing the same device updates its keys in place.
   endpoint    text not null unique,
   p256dh      text not null,
   auth        text not null,
@@ -20,6 +23,8 @@ create index if not exists push_subscriptions_user_company_idx
 
 alter table core.push_subscriptions enable row level security;
 
+-- A device belongs to one person: only they may see or manage it. The sender
+-- runs with the service role, which bypasses these policies.
 drop policy if exists push_subscriptions_select on core.push_subscriptions;
 create policy push_subscriptions_select on core.push_subscriptions
   for select using (user_id = auth.uid());
@@ -36,6 +41,10 @@ drop policy if exists push_subscriptions_delete on core.push_subscriptions;
 create policy push_subscriptions_delete on core.push_subscriptions
   for delete using (user_id = auth.uid());
 
+-- Everyone in the company who may APPROVE a given module, resolved exactly the
+-- way core.user_permitted_actions resolves the current user's own actions:
+-- an administrator holds every action; a user carrying any per-user grant is
+-- governed by those alone; everyone else inherits their roles' grants.
 create or replace function core.fn_approver_user_ids(p_company_id uuid, p_module_key text)
 returns table (user_id uuid)
 language sql
@@ -89,5 +98,3 @@ as $$
 $$;
 
 grant execute on function core.fn_approver_user_ids(uuid, text) to authenticated;
-
-notify pgrst, 'reload schema';

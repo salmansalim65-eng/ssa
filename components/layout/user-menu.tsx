@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { signOut } from "@/features/auth/actions";
+import { PushAlertsItem } from "./push-alerts-item";
 
 function initials(name: string) {
   return name
@@ -48,6 +49,7 @@ export function UserMenu({ fullName, email }: { fullName: string; email: string 
           <p className="text-xs text-muted-foreground">{email}</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <PushAlertsItem />
         <DropdownMenuItem
           disabled={isPending}
           onSelect={() => startTransition(() => signOut())}

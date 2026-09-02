@@ -109,12 +109,36 @@ async function syncAccountOpeningBalance(params: {
   const currencyId = await resolveOpeningBalanceCurrencyId(params.companyId, params.currencyId);
   if (!currencyId) return { error: "No currency configured for the opening balance" };
 
+  // Both legs carry the account's cost centre — including the Opening Balance
+  // Equity side, which has no cost centre of its own to fall back on because it
+  // is shared by every account. Without it a cost-centre-filtered Balance Sheet
+  // shows the asset and not its counter-entry, and so refuses to balance.
+  const { data: accountRow } = await supabase
+    .schema("accounting")
+    .from("chart_of_accounts")
+    .select("default_cost_center_id")
+    .eq("id", params.accountId)
+    .maybeSingle();
+  const costCenterId = (accountRow?.default_cost_center_id as string | null) ?? null;
+
   const amt = Math.abs(delta);
   const accountDebit = delta > 0 ? amt : 0;
   const accountCredit = delta > 0 ? 0 : amt;
   const lines: EntryLineInput[] = [
-    { accountId: params.accountId, debit: accountDebit, credit: accountCredit, description: "Opening balance" },
-    { accountId: contraId, debit: accountCredit, credit: accountDebit, description: "Opening balance" },
+    {
+      accountId: params.accountId,
+      costCenterId,
+      debit: accountDebit,
+      credit: accountCredit,
+      description: "Opening balance",
+    },
+    {
+      accountId: contraId,
+      costCenterId,
+      debit: accountCredit,
+      credit: accountDebit,
+      description: "Opening balance",
+    },
   ];
   const asOfDate = `${new Date().getFullYear()}-01-01`;
   const voucherId = crypto.randomUUID();
@@ -149,7 +173,7 @@ async function syncAccountOpeningBalance(params: {
     journal_entry_id: je.journalEntryId,
     as_of_date: asOfDate,
     contra_account_id: contraId,
-    cost_center_id: null,
+    cost_center_id: costCenterId,
     currency_id: currencyId,
     exchange_rate: je.exchangeRate,
     narration: "Opening balance",

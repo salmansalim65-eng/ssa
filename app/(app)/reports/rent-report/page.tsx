@@ -30,6 +30,12 @@ const SEGMENT: Record<string, { label: string; code: string }> = {
   SA: { label: "Saudi Arabia", code: "SAR" },
 };
 
+// HH is not a country — it is a kind of invoice raised inside the UAE. The
+// Country filter therefore works in countries, and picking the UAE keeps BOTH
+// the HH Invoice and UAE Invoice sections; only the headings stay split.
+const SEGMENT_COUNTRY: Record<string, string> = { HH: "AE", UAE: "AE" };
+const segmentCountry = (segment: string) => SEGMENT_COUNTRY[segment] ?? segment;
+
 // Whole RENTAL months a lease period spans (3 Aug → 2 Sep = 1). Used to spread a
 // period-total expense across the months so it is deducted once, not per month.
 function leaseMonthCount(start: string | null, end: string | null): number {
@@ -54,7 +60,10 @@ export default async function RentReportPage({
   searchParams: Promise<{ year?: string; asset?: string; country?: string }>;
 }) {
   const currentYear = new Date().getFullYear();
-  const { year: yearParam = "", asset: assetParam = "", country: countryParam = "" } = await searchParams;
+  const { year: yearParam = "", asset: assetParam = "", country: countryRaw = "" } = await searchParams;
+  // A link saved back when the filter listed segments ("HH", "UAE") still means
+  // the country those sit in.
+  const countryParam = countryRaw ? segmentCountry(countryRaw) : "";
   const year = Number(yearParam) || currentYear;
 
   const supabase = await createClient();
@@ -255,11 +264,14 @@ export default async function RentReportPage({
   }
   // Sections: HH, UAE, PK first (as requested), then any other segment present.
   const order = ["HH", "UAE", "PK", ...[...byCountry.keys()].filter((c) => !["HH", "UAE", "PK"].includes(c))];
-  const countryOptions = order
-    .filter((c) => byCountry.has(c))
-    .map((c) => ({ value: c, label: SEGMENT[c]?.label ?? c }));
+  // One option per COUNTRY present, in the same section order.
+  const countryOptions = [
+    ...new Map(
+      order.filter((c) => byCountry.has(c)).map((c) => [segmentCountry(c), null]),
+    ).keys(),
+  ].map((c) => ({ value: c, label: COUNTRY[c]?.label ?? c }));
   const sections = order
-    .filter((c) => byCountry.has(c) && (!countryParam || c === countryParam))
+    .filter((c) => byCountry.has(c) && (!countryParam || segmentCountry(c) === countryParam))
     .map((c) => ({ country: c, rows: byCountry.get(c)! }));
 
   // Group the sections by currency so segments that share a currency (HH + UAE,
@@ -276,7 +288,7 @@ export default async function RentReportPage({
 
   // Property selector + selected property's lease term (start / end / renew).
   const assetOptions = [...rows.values()]
-    .filter((r) => !countryParam || r.segment === countryParam)
+    .filter((r) => !countryParam || segmentCountry(r.segment) === countryParam)
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((r) => ({ value: r.id, label: r.name }));
   let selectedDetail:

@@ -4,6 +4,8 @@ import { cache } from "react";
 import { revalidatePath } from "next/cache";
 
 import { isCurrentUserAdmin } from "@/lib/auth/permissions";
+import { formatMoney } from "@/lib/format";
+import { approverUserIds, sendPushToUsers } from "@/lib/notifications/push";
 import { createClient } from "@/lib/supabase/server";
 import type { ApprovalStatus, VoucherType } from "@/types/database.types";
 
@@ -180,7 +182,41 @@ export async function submitForApproval(params: {
   const sync = await syncJournalEntryStatus(params.journalEntryId, approval.status);
   if (sync.error) return { error: sync.error };
 
+  if (approval.status === "pending") await notifyApprovers(params);
+
   return { approval };
+}
+
+/**
+ * Tells everyone who may approve this voucher that it is waiting — as a phone
+ * notification, so it lands whether or not the app is open. Never allowed to
+ * fail the submission: a voucher that reached the approver's queue is submitted
+ * whether or not the alert got out.
+ */
+async function notifyApprovers(params: {
+  companyId: string;
+  voucherType: VoucherType;
+  voucherId: string;
+  amount: number;
+}) {
+  try {
+    const supabase = await createClient();
+    const { data: user } = await supabase.auth.getUser();
+    // Whoever submitted it does not need telling.
+    const recipients = await approverUserIds(params.companyId, params.voucherType, user.user?.id);
+    if (!recipients.length) return;
+
+    const { VOUCHER_TYPE_LABELS, voucherHref } = await import("./meta");
+    await sendPushToUsers(recipients, {
+      title: "Approval needed",
+      body: `${VOUCHER_TYPE_LABELS[params.voucherType]} — ${formatMoney(params.amount)}`,
+      url: voucherHref(params.voucherType, params.voucherId),
+      // One notification per voucher, replaced rather than stacked.
+      tag: `approval-${params.voucherId}`,
+    });
+  } catch {
+    // Best-effort: the bell and the pending list still show it.
+  }
 }
 
 /** The document-currency debit total of an entry — the figure the approval

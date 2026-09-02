@@ -176,6 +176,9 @@ export default async function ChartOfAccountsPage() {
     .select("id, name")
     .eq("company_id", companyId)
     .eq("is_active", true)
+    // Postings land on a leaf, not on a group heading; a report filtered to the
+    // group rolls its children up anyway.
+    .eq("is_group", false)
     .is("deleted_at", null)
     .order("name");
   const costCentres = (costCentreRows ?? []).map((c) => ({ id: c.id as string, name: c.name as string }));

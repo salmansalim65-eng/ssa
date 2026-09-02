@@ -22,7 +22,11 @@ import {
 import { AccountCombobox, type AccountOption } from "@/components/vouchers/account-combobox";
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
 import { DateInput } from "@/components/vouchers/date-input";
-import { accountsForCurrency, buildAccountCurrency } from "@/lib/vouchers/account-currency";
+import {
+  accountsForCurrency,
+  buildAccountCostCentre,
+  buildAccountCurrency,
+} from "@/lib/vouchers/account-currency";
 import { blankAmount, amountValue } from "@/lib/forms/amount";
 import { createJournalVoucher, updateJournalVoucher } from "@/features/accounting/vouchers/journal/actions";
 import {
@@ -87,11 +91,23 @@ export function JournalVoucherForm({
   // accounts (plus the currency-less ones, e.g. CAPITAL), so a voucher can't mix
   // a PKR account with an AED one.
   const currencyOf = useMemo(() => buildAccountCurrency(accounts, currencies), [accounts, currencies]);
+  const costCentreOf = useMemo(() => buildAccountCostCentre(accounts), [accounts]);
   function applyAccountCurrency(accountId: string) {
     const cur = currencyOf(accountId);
     if (!cur || !rateById.has(cur)) return;
     form.setValue("currencyId", cur, { shouldValidate: true });
     form.setValue("exchangeRate", rateById.get(cur) ?? 1, { shouldValidate: true });
+  }
+  /**
+   * A journal line names both sides, so its cost centre follows whichever of the
+   * two accounts declares one — the debit side first, since that is the account
+   * the entry is usually raised against. A cost centre already chosen on the
+   * line is left alone.
+   */
+  function applyLineCostCentre(index: number, debitId?: string, creditId?: string) {
+    const cc = costCentreOf(debitId) ?? costCentreOf(creditId);
+    if (!cc || form.getValues(`lines.${index}.costCenterId`)) return;
+    form.setValue(`lines.${index}.costCenterId`, cc, { shouldValidate: true });
   }
   const anchored = (watchedLines ?? []).some(
     (l) => !!currencyOf(l?.debitAccountId) || !!currencyOf(l?.creditAccountId),
@@ -252,6 +268,7 @@ export function JournalVoucherForm({
                               onValueChange={(v) => {
                                 field.onChange(v);
                                 applyAccountCurrency(v);
+                                applyLineCostCentre(index, v, watchedLines?.[index]?.creditAccountId);
                               }}
                             />
                             <FormMessage />
@@ -271,6 +288,7 @@ export function JournalVoucherForm({
                               onValueChange={(v) => {
                                 field.onChange(v);
                                 applyAccountCurrency(v);
+                                applyLineCostCentre(index, watchedLines?.[index]?.debitAccountId, v);
                               }}
                             />
                             <FormMessage />

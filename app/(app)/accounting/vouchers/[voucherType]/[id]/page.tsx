@@ -99,6 +99,9 @@ export default async function VoucherDetailPage({
   if (!detail) notFound();
 
   const canSubmit = perms.has("edit");
+  // The fallback "Submit for approval" button follows the same rule as the
+  // database: raising the voucher includes sending it on.
+  const canSubmitForApproval = perms.has("edit") || perms.has("create");
   const canApprove = perms.has("approve");
   const canReject = perms.has("reject");
   const canPost = perms.has("post");
@@ -265,7 +268,7 @@ export default async function VoucherDetailPage({
           journalEntryId={detail.journalEntryId}
           amount={totalDebit}
           approvalId={approval?.id ?? null}
-          canSubmit={canSubmit}
+          canSubmit={canSubmitForApproval}
           canApprove={canApprove}
           canReject={canReject}
           canPost={canPost}

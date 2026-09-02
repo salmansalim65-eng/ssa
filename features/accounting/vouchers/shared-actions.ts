@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
+import { hasPermission, isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { actOnApproval, getCurrentCompanyId, submitForApproval } from "@/lib/vouchers/engine";
 import type { VoucherType } from "@/types/database.types";
@@ -22,7 +22,11 @@ export async function submitVoucher(
   journalEntryId: string,
   amount: number,
 ) {
-  await requirePermission(voucherType, "edit");
+  // Submitting is part of raising the voucher, so whoever may create the type
+  // may submit it — the same rule accounting.fn_start_approval enforces.
+  if (!(await hasPermission(voucherType, "create")) && !(await hasPermission(voucherType, "edit"))) {
+    return { error: `Not permitted: ${voucherType}.create` };
+  }
   const companyId = await getCurrentCompanyId();
 
   const result = await submitForApproval({ companyId, voucherType, voucherId, journalEntryId, amount });

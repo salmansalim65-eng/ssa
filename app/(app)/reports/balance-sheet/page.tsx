@@ -156,6 +156,43 @@ export default async function BalanceSheetPage({
     return `${code} ${formatMoney(Math.abs(net))} ${net >= 0 ? "Dr" : "Cr"}`;
   };
 
+  // ---- Settled foreign-currency accounts ----
+  // An account posted only in ONE foreign currency is settled when its balance
+  // in THAT currency is nil, however its base figures happen to land. A loan of
+  // PKR 4,000,000 repaid in full is closed even if the two legs were translated
+  // at different rates — the leftover base amount is an exchange difference, not
+  // money still owed, and the account has no business showing a balance.
+  //
+  // The residue cannot simply be dropped or the sheet stops balancing, so it is
+  // collected into a single Exchange difference line beside the profit row.
+  const settledIds = new Set<string>();
+  let exchangeDiffBase = 0; // net debit, in base currency
+  for (const [id, a] of byAccount) {
+    const d = docByAccount.get(id);
+    if (!d || d.codes.size !== 1) continue;
+    const code = [...d.codes][0];
+    if (!code || code === baseCode) continue;
+    if (Math.abs(d.debit - d.credit) >= 0.005) continue; // still has a balance
+    const baseNet = a.debit - a.credit;
+    if (Math.abs(baseNet) < 0.005) continue; // already nil in base too
+    settledIds.add(id);
+    exchangeDiffBase += baseNet;
+    a.debit = 0;
+    a.credit = 0;
+  }
+  const exchangeDiff = exchangeDiffBase * factor;
+  // Give the difference back on the opposite side, so assets still equal
+  // liabilities + equity. A credit here is an exchange gain, a debit a loss.
+  const exchangeRow: AccountBalance | null =
+    Math.abs(exchangeDiff) >= 0.005
+      ? {
+          account_code: "",
+          account_name: "Exchange difference",
+          debit: exchangeDiff > 0 ? exchangeDiff : 0,
+          credit: exchangeDiff < 0 ? -exchangeDiff : 0,
+        }
+      : null;
+
   // ---- Chart-of-Accounts tree (for hierarchical grouping) ----
   // The balance sheet mirrors the CoA group hierarchy: each group nests its
   // sub-groups and accounts with a rolled-up subtotal, like Chart of Accounts
@@ -219,6 +256,7 @@ export default async function BalanceSheetPage({
     });
   }
   for (const list of Object.values(buckets)) list.sort((a, b) => a.account_code.localeCompare(b.account_code));
+  if (exchangeRow) buckets.equity.push(exchangeRow);
 
   // Converted balance per account id (base ledger amounts × currency factor).
   // Each account is NETTED first and placed on ONE side by its balance, so a
@@ -309,6 +347,7 @@ export default async function BalanceSheetPage({
   // The profit/(loss) line continues the active-statement numbering; the
   // inactive block restarts at 1.
   const profitSeq = leafSeq + 1;
+  const exchangeSeq = profitSeq + 1;
   leafSeq = 0;
 
   // Inactive accounts, shown in their own section: the top of each inactive
@@ -369,6 +408,14 @@ export default async function BalanceSheetPage({
     credit: moneyOrBlank(profitRow.credit),
     balance: balanceLabel(netOf(profitRow)),
   };
+  const exchangeForTree = exchangeRow
+    ? {
+        seq: exchangeSeq,
+        debit: moneyOrBlank(exchangeRow.debit),
+        credit: moneyOrBlank(exchangeRow.credit),
+        balance: balanceLabel(netOf(exchangeRow)),
+      }
+    : null;
 
   return (
     <div className="space-y-5">
@@ -440,6 +487,7 @@ export default async function BalanceSheetPage({
       <BalanceSheetTree
         rows={treeRows}
         profit={profitForTree}
+        exchange={exchangeForTree}
         totals={totalsForTree}
         inactiveRows={inactiveRows}
       />

@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import Link from "next/link";
 import {
   AlertCircleIcon,
@@ -168,8 +170,11 @@ export default async function DashboardPage({
     supabase
       .schema("reporting")
       .from("v_ledger_entries")
+      // account_code / account_name are only needed by the balances drill-down,
+      // but carrying them here means the panel reuses THIS fetch instead of
+      // scanning the whole ledger a second time when a card is clicked.
       .select(
-        "account_id, cost_center_country, account_type, doc_debit_amount, doc_credit_amount, is_cash, is_bank, is_tenant_account, is_fixed_asset_account",
+        "account_id, account_code, account_name, cost_center_country, account_type, doc_debit_amount, doc_credit_amount, is_cash, is_bank, is_tenant_account, is_fixed_asset_account",
       )
       .eq("company_id", companyId)
       .or(
@@ -470,29 +475,6 @@ export default async function DashboardPage({
   const monthEnd = `${now.slice(0, 7)}-${String(monthLastDay).padStart(2, "0")}`;
   const rangeFrom = dateFrom;
   const rangeTo = isRentPanel ? dateTo ?? monthEnd : dateTo;
-  const detail = selected
-    ? await loadDetail(
-        companyId,
-        selected,
-        sym(BALANCE_PANELS[selected].currency),
-        rangeFrom,
-        rangeTo,
-        tenantFilter,
-        propertyFilter,
-      )
-    : isBank
-      ? bankDetail(bankOnly, "Bank Balances")
-      : isCash
-        ? bankDetail(cashOnly, "Cash Balances")
-        : null;
-  // The rent-balance detail panels support a date range, and the rent ones also
-  // hand back the tenants and properties they cover.
-  const rentPanelDetail = detail as { tenantOptions?: string[]; propertyOptions?: string[] } | null;
-  const rentFilters = rentPanelDetail?.tenantOptions
-    ? { tenants: rentPanelDetail.tenantOptions, properties: rentPanelDetail.propertyOptions ?? [] }
-    : null;
-  const detailPanelKey = selected;
-  const showDateRange = detail !== null && detailPanelKey !== "";
 
   function cardHref(key: PanelKey | "bank" | "cash") {
     return panel === key ? "/dashboard" : `/dashboard?panel=${key}`;
@@ -734,86 +716,208 @@ export default async function DashboardPage({
 
       </div>
 
-      {/* The selected tab's detail/report renders here — below ALL the cards. */}
-      {detail && (
-        <Card className="border-ledger-dark/40">
-          <CardHeader className="border-b pb-4">
-            <CardTitle>{detail.title}</CardTitle>
-            <CardAction className="flex flex-wrap items-end gap-2">
-              {showDateRange && (
-                <form method="get" action="/dashboard" className="flex flex-wrap items-end gap-2">
-                  <input type="hidden" name="panel" value={detailPanelKey} />
-                  <label className="flex flex-col text-[0.7rem] font-medium text-muted-foreground">
-                    From
-                    <input
-                      type="date"
-                      name="from"
-                      defaultValue={rangeFrom ?? ""}
-                      className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
-                    />
-                  </label>
-                  <label className="flex flex-col text-[0.7rem] font-medium text-muted-foreground">
-                    To
-                    <input
-                      type="date"
-                      name="to"
-                      defaultValue={rangeTo ?? ""}
-                      className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
-                    />
-                  </label>
-                  {rentFilters && (
-                    <>
-                      <label className="flex flex-col text-[0.7rem] font-medium text-muted-foreground">
-                        Tenant
-                        <select
-                          name="tenant"
-                          defaultValue={tenant}
-                          className="h-8 max-w-[12rem] rounded-md border border-input bg-background px-2 text-sm text-foreground"
-                        >
-                          <option value="">All tenants</option>
-                          {rentFilters.tenants.map((t) => (
-                            <option key={t} value={t}>
-                              {t}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="flex flex-col text-[0.7rem] font-medium text-muted-foreground">
-                        Property
-                        <select
-                          name="property"
-                          defaultValue={property}
-                          className="h-8 max-w-[12rem] rounded-md border border-input bg-background px-2 text-sm text-foreground"
-                        >
-                          <option value="">All properties</option>
-                          {rentFilters.properties.map((p) => (
-                            <option key={p} value={p}>
-                              {p}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </>
-                  )}
-                  <Button type="submit" variant="outline" size="sm">
-                    Apply
-                  </Button>
-                  {(dateFrom || dateTo || tenantFilter || propertyFilter) && (
-                    <Button asChild variant="ghost" size="sm">
-                      <Link href={`/dashboard?panel=${detailPanelKey}`}>Clear</Link>
-                    </Button>
-                  )}
-                </form>
-              )}
-              <Button asChild variant="outline" size="sm">
-                <Link href="/dashboard">Close</Link>
-              </Button>
-            </CardAction>
-          </CardHeader>
-          <CardContent className="px-0">{detail.body}</CardContent>
-        </Card>
+      {/* The selected tab's detail/report renders here — below ALL the cards.
+          It streams: the cards paint as soon as the page's own data is in, and
+          the panel drops in when its report is ready, rather than the whole
+          screen waiting on it. The key restarts the fallback whenever the
+          filters change, so a re-filter shows the skeleton too. */}
+      {(selected || isBank || isCash) && (
+        <Suspense
+          key={`${selected}-${isBank}-${isCash}-${rangeFrom}-${rangeTo}-${tenantFilter}-${propertyFilter}`}
+          fallback={<DetailSkeleton />}
+        >
+          <DetailPanel
+            companyId={companyId}
+            selected={selected}
+            isBank={isBank}
+            isCash={isCash}
+            symbol={selected ? sym(BALANCE_PANELS[selected].currency) : ""}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            rangeFrom={rangeFrom}
+            rangeTo={rangeTo}
+            tenant={tenant}
+            property={property}
+            tenantFilter={tenantFilter}
+            propertyFilter={propertyFilter}
+            bankAccounts={bankOnly}
+            cashAccounts={cashOnly}
+            ledger={(ledgerRows ?? []) as unknown as BalanceLedgerRow[]}
+            coaCountryById={coaCountryById}
+            fixedAssetAccountIds={fixedAssetAccountIds}
+          />
+        </Suspense>
       )}
     </div>
+  );
+}
+
+/** Placeholder while the drill-down loads, so a click lands on something. */
+function DetailSkeleton() {
+  return (
+    <Card className="border-ledger-dark/40">
+      <CardHeader className="border-b pb-4">
+        <CardTitle className="text-muted-foreground">Loading report…</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2 px-5 py-6">
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="h-6 animate-pulse rounded bg-muted" />
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * The selected card's drill-down. It is its own async component so the dashboard
+ * can stream it: the cards render first and this arrives when its report is
+ * ready, instead of the whole page waiting on the slowest query.
+ */
+async function DetailPanel({
+  companyId,
+  selected,
+  isBank,
+  isCash,
+  symbol,
+  dateFrom,
+  dateTo,
+  rangeFrom,
+  rangeTo,
+  tenant,
+  property,
+  tenantFilter,
+  propertyFilter,
+  bankAccounts,
+  cashAccounts,
+  ledger,
+  coaCountryById,
+  fixedAssetAccountIds,
+}: {
+  companyId: string;
+  selected: PanelKey | "";
+  isBank: boolean;
+  isCash: boolean;
+  symbol: string;
+  dateFrom: string | null;
+  dateTo: string | null;
+  rangeFrom: string | null;
+  rangeTo: string | null;
+  tenant: string;
+  property: string;
+  tenantFilter: string | null;
+  propertyFilter: string | null;
+  bankAccounts: { id: string; code: string; name: string; symbol: string; balance: number }[];
+  cashAccounts: { id: string; code: string; name: string; symbol: string; balance: number }[];
+  ledger: BalanceLedgerRow[];
+  coaCountryById: Map<string, string | null>;
+  fixedAssetAccountIds: Set<string>;
+}) {
+  const detail = selected
+    ? await loadDetail(
+        companyId,
+        selected,
+        symbol,
+        rangeFrom,
+        rangeTo,
+        tenantFilter,
+        propertyFilter,
+        ledger,
+        coaCountryById,
+        fixedAssetAccountIds,
+      )
+    : isBank
+      ? bankDetail(bankAccounts, "Bank Balances")
+      : isCash
+        ? bankDetail(cashAccounts, "Cash Balances")
+        : null;
+  if (!detail) return null;
+
+  // The rent-balance detail panels support a date range, and the rent ones also
+  // hand back the tenants and properties they cover.
+  const rentPanelDetail = detail as { tenantOptions?: string[]; propertyOptions?: string[] };
+  const rentFilters = rentPanelDetail.tenantOptions
+    ? { tenants: rentPanelDetail.tenantOptions, properties: rentPanelDetail.propertyOptions ?? [] }
+    : null;
+  const detailPanelKey = selected;
+  const showDateRange = detailPanelKey !== "";
+
+  return (
+    <Card className="border-ledger-dark/40">
+      <CardHeader className="border-b pb-4">
+        <CardTitle>{detail.title}</CardTitle>
+        <CardAction className="flex flex-wrap items-end gap-2">
+          {showDateRange && (
+            <form method="get" action="/dashboard" className="flex flex-wrap items-end gap-2">
+              <input type="hidden" name="panel" value={detailPanelKey} />
+              <label className="flex flex-col text-[0.7rem] font-medium text-muted-foreground">
+                From
+                <input
+                  type="date"
+                  name="from"
+                  defaultValue={rangeFrom ?? ""}
+                  className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                />
+              </label>
+              <label className="flex flex-col text-[0.7rem] font-medium text-muted-foreground">
+                To
+                <input
+                  type="date"
+                  name="to"
+                  defaultValue={rangeTo ?? ""}
+                  className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                />
+              </label>
+              {rentFilters && (
+                <>
+                  <label className="flex flex-col text-[0.7rem] font-medium text-muted-foreground">
+                    Tenant
+                    <select
+                      name="tenant"
+                      defaultValue={tenant}
+                      className="h-8 max-w-[12rem] rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                    >
+                      <option value="">All tenants</option>
+                      {rentFilters.tenants.map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex flex-col text-[0.7rem] font-medium text-muted-foreground">
+                    Property
+                    <select
+                      name="property"
+                      defaultValue={property}
+                      className="h-8 max-w-[12rem] rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                    >
+                      <option value="">All properties</option>
+                      {rentFilters.properties.map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              )}
+              <Button type="submit" variant="outline" size="sm">
+                Apply
+              </Button>
+              {(dateFrom || dateTo || tenantFilter || propertyFilter) && (
+                <Button asChild variant="ghost" size="sm">
+                  <Link href={`/dashboard?panel=${detailPanelKey}`}>Clear</Link>
+                </Button>
+              )}
+            </form>
+          )}
+          <Button asChild variant="outline" size="sm">
+            <Link href="/dashboard">Close</Link>
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="px-0">{detail.body}</CardContent>
+    </Card>
   );
 }
 
@@ -864,7 +968,23 @@ function bankDetail(
   };
 }
 
+/** The ledger columns the balances drill-down reads, as fetched by the page. */
+type BalanceLedgerRow = {
+  account_id: string;
+  account_code: string;
+  account_name: string;
+  cost_center_country: string | null;
+  doc_debit_amount: number;
+  doc_credit_amount: number;
+  is_cash: boolean;
+  is_bank: boolean;
+  is_tenant_account: boolean;
+  is_fixed_asset_account: boolean;
+};
+
 // Detail report for a selected card — figures in the country's own currency.
+// The balances panels are computed from the ledger the page already loaded; only
+// the rent panels go back to the database.
 async function loadDetail(
   companyId: string,
   key: PanelKey,
@@ -873,6 +993,9 @@ async function loadDetail(
   dateTo: string | null,
   tenant: string | null,
   property: string | null,
+  ledger: BalanceLedgerRow[],
+  coaCountryById: Map<string, string | null>,
+  fixedAssetAccountIds: Set<string>,
 ) {
   const supabase = await createClient();
   const cfg = BALANCE_PANELS[key];
@@ -882,35 +1005,12 @@ async function loadDetail(
   const fmtOrBlank = (n: number) => (Math.abs(n) < 0.005 ? "" : fmt(n));
 
   if (cfg.kind === "balances") {
-    // Party account → own country, read from the base table (no view-column dep).
-    const { data: coaCountries } = await supabase
-      .schema("accounting")
-      .from("chart_of_accounts")
-      .select("id, country, parent_id, account_name, linked_asset_id")
-      .eq("company_id", companyId);
-    const coaCountryById = new Map<string, string | null>(
-      (coaCountries ?? []).map((a) => [a.id as string, (a.country as string | null) ?? null]),
-    );
-    const fixedAssetAccountIds = computeFixedAssetAccountIds(coaCountries ?? []);
-    const countryAccountIds = (coaCountries ?? [])
-      .filter((a) => normCountry(a.country as string | null))
-      .map((a) => a.id as string);
-
-    const { data } = await supabase
-      .schema("reporting")
-      .from("v_ledger_entries")
-      .select(
-        "account_id, account_code, account_name, account_type, cost_center_country, doc_debit_amount, doc_credit_amount, is_cash, is_bank, is_tenant_account, is_fixed_asset_account",
-      )
-      .eq("company_id", companyId)
-      .or(
-        `cost_center_country.in.(AE,UAE,PK)${
-          countryAccountIds.length ? `,account_id.in.(${countryAccountIds.join(",")})` : ""
-        }`,
-      );
-
+    // Nothing is fetched here: the page's own ledger query already covers these
+    // rows (same company, same country filter), and the account's own country
+    // and the fixed-asset set were resolved alongside it. Clicking a balances
+    // card used to repeat both, which is what made the panel slow to open.
     const byAccount = new Map<string, { id: string; name: string; debit: number; credit: number }>();
-    for (const r of data ?? []) {
+    for (const r of ledger) {
       // Same attribution as the card total: cost centre first, else the
       // account's own country (codes normalised). Skip lines from another country.
       const country = normCountry(

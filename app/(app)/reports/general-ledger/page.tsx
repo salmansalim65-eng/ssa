@@ -294,7 +294,65 @@ export default async function GeneralLedgerPage({
     for (const r of (pkInv.data ?? []) as { id: string; due_date: string | null }[])
       rentMonthByVoucher.set(r.id, rentMonthLabel(r.due_date));
   }
+
+  // A receipt, payment or PDC voucher keeps its rent month — and a PDC its
+  // cheque maturity dates — on the VOUCHER's own lines. Its journal entry is a
+  // single Dr/Cr pair however many lines the voucher carries, so neither ever
+  // reached the ledger view and both columns read "—". Read them back per
+  // voucher: a PDC with ten cheques shows the earliest maturity, and a voucher
+  // covering several months shows the earliest with a "+n".
+  const dueDateByVoucher = new Map<string, string>();
+  {
+    const LINE_TABLE = {
+      receipt_voucher: "receipt_voucher_lines",
+      payment_voucher: "payment_voucher_lines",
+      pdc_receipt_voucher: "pdc_receipt_voucher_lines",
+      pdc_payment_voucher: "pdc_payment_voucher_lines",
+    } as const;
+    type LineVoucherType = keyof typeof LINE_TABLE;
+    const idsByType = new Map<LineVoucherType, Set<string>>();
+    for (const s of sections)
+      for (const r of s.rows) {
+        const t = r.voucher_type as LineVoucherType;
+        if (!r.voucher_id || !(t in LINE_TABLE)) continue;
+        if (!idsByType.has(t)) idsByType.set(t, new Set());
+        idsByType.get(t)!.add(r.voucher_id);
+      }
+
+    type VoucherLine = { voucher_id: string; rent_month: string | null; due_date?: string | null };
+    const fetched = await Promise.all(
+      [...idsByType].map(async ([type, ids]) => {
+        const { data } = await supabase
+          .schema("accounting")
+          .from(LINE_TABLE[type])
+          .select("*")
+          .in("voucher_id", [...ids]);
+        return (data ?? []) as unknown as VoucherLine[];
+      }),
+    );
+
+    const monthsByVoucher = new Map<string, Set<string>>();
+    for (const line of fetched.flat()) {
+      if (line.rent_month) {
+        if (!monthsByVoucher.has(line.voucher_id)) monthsByVoucher.set(line.voucher_id, new Set());
+        monthsByVoucher.get(line.voucher_id)!.add(line.rent_month);
+      }
+      // Earliest maturity: the date the first of the voucher's cheques falls due.
+      const due = line.due_date;
+      if (due) {
+        const held = dueDateByVoucher.get(line.voucher_id);
+        if (!held || due < held) dueDateByVoucher.set(line.voucher_id, due);
+      }
+    }
+    for (const [voucherId, months] of monthsByVoucher) {
+      const sorted = [...months].sort();
+      const label = rentMonthLabel(sorted[0]);
+      if (label) rentMonthByVoucher.set(voucherId, sorted.length > 1 ? `${label} +${sorted.length - 1}` : label);
+    }
+  }
   const rentMonthFor = (r: { voucher_id: string }) => rentMonthByVoucher.get(r.voucher_id) ?? "";
+  const dueDateFor = (r: { voucher_id: string; due_date: string | null }) =>
+    r.due_date ?? dueDateByVoucher.get(r.voucher_id) ?? null;
 
   // Balance as a magnitude + Dr/Cr, matching the on-screen column.
   const balanceLabel = (n: number, isDebitNormal: boolean) => {
@@ -306,7 +364,7 @@ export default async function GeneralLedgerPage({
     s.rows.map((r, i) => [
       i + 1,
       formatDate(r.entry_date),
-      r.due_date ? formatDate(r.due_date) : "",
+      dueDateFor(r) ? formatDate(dueDateFor(r)!) : "",
       rentMonthFor(r),
       r.voucher_no ? formatVoucherNo(r.voucher_no) : "",
       (r.cost_center_id && ccNameById.get(r.cost_center_id)) || "",
@@ -410,7 +468,7 @@ export default async function GeneralLedgerPage({
                 let dueGrp = -1;
                 let prevDueKey: string | null = null;
                 const shaded = s.rows.map((r) => {
-                  const key = (r.due_date ?? "").slice(0, 7);
+                  const key = (dueDateFor(r) ?? "").slice(0, 7);
                   if (key !== prevDueKey) {
                     dueGrp += 1;
                     prevDueKey = key;
@@ -439,7 +497,7 @@ export default async function GeneralLedgerPage({
                     >
                       <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">{i + 1}</TableCell>
                       <TableCell>{formatDate(r.entry_date)}</TableCell>
-                      <TableCell>{r.due_date ? formatDate(r.due_date) : "—"}</TableCell>
+                      <TableCell>{dueDateFor(r) ? formatDate(dueDateFor(r)!) : "—"}</TableCell>
                       <TableCell className="text-muted-foreground">{rentMonthFor(r) || "—"}</TableCell>
                       <TableCell>
                         {r.voucher_no ? (

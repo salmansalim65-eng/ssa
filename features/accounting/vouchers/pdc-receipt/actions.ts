@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { requirePermission } from "@/lib/auth/permissions";
+import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
 import { formatMonth } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { createJournalEntry, EDITABLE_STATUSES, ensureCanEditVoucher, type EntryLineInput, getCurrentCompanyId, postVoucher, resubmitEditedVoucher, routeNewVoucher } from "@/lib/vouchers/engine";
@@ -171,7 +171,7 @@ export async function updatePdcReceiptVoucher(id: string, input: PdcReceiptVouch
   const { data: v } = await supabase
     .schema("accounting")
     .from("pdc_receipt_vouchers")
-    .select("journal_entry_id")
+    .select("journal_entry_id, pdc_status")
     .eq("company_id", companyId)
     .eq("id", id)
     .maybeSingle();
@@ -188,6 +188,34 @@ export async function updatePdcReceiptVoucher(id: string, input: PdcReceiptVouch
   // The Edit permission, or your own voucher while it is unposted.
   const notAllowed = await ensureCanEditVoucher("pdc_receipt_voucher", je);
   if (notAllowed) return { error: notAllowed };
+
+  // A posted journal entry is immutable at the database level, so editing a
+  // POSTED voucher reverses it — removing it, which restores anything its
+  // allocations had reduced — and re-creates it from the edited values.
+  //
+  // Only while the cheque is still outstanding, though. Once it has cleared or
+  // been returned there are vouchers downstream that point back at this one
+  // (a cheque return names it in original_pdc_id, with no foreign key to keep
+  // that honest), and removing it would strand them.
+  if (je.status === "posted") {
+    if (!(await isCurrentUserAdmin())) {
+      return { error: "Only administrators can edit a posted PDC receipt voucher." };
+    }
+    if (v.pdc_status !== "pending") {
+      return { error: `This cheque is already ${v.pdc_status} and can no longer be edited` };
+    }
+    const { error: delErr } = await supabase
+      .schema("accounting")
+      .rpc("fn_admin_delete_posted_voucher", { p_voucher_type: "pdc_receipt_voucher", p_id: id });
+    if (delErr) return { error: delErr.message };
+
+    const created = await createPdcReceiptVoucher(parsed.data);
+    if ("error" in created) return { error: created.error };
+
+    revalidatePath("/accounting/vouchers/pdc_receipt_voucher");
+    revalidatePath("/dashboard");
+    return { success: true, id: created.id };
+  }
   if (!EDITABLE_STATUSES.includes(je.status)) {
     return { error: "A posted voucher can no longer be edited" };
   }

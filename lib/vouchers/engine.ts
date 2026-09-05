@@ -273,12 +273,16 @@ export const EDITABLE_STATUSES: readonly string[] = ["draft", "pending", "sent_b
  *
  * Opening balances are corrections to the opening figures; receipts and
  * payments are the two sides of the same settlement and are corrected the same
- * way. Every other type is final once posted.
+ * way, as are their PDC counterparts — those only while the cheque is still
+ * outstanding, since a cleared or returned cheque has vouchers behind it. Every
+ * other type is final once posted.
  */
 export const EDITABLE_WHEN_POSTED: readonly string[] = [
   "opening_balance_voucher",
   "receipt_voucher",
   "payment_voucher",
+  "pdc_receipt_voucher",
+  "pdc_payment_voucher",
 ];
 
 /**

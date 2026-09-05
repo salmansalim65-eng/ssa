@@ -11,7 +11,12 @@ import { PdcReceiptVoucherForm } from "@/components/vouchers/forms/pdc-receipt-v
 import { ReceiptVoucherForm } from "@/components/vouchers/forms/receipt-voucher-form";
 import { createClient } from "@/lib/supabase/server";
 import { toAccountOptions, type RawAccountRow } from "@/lib/vouchers/account-currency";
-import { canEditVoucher, EDITABLE_STATUSES, getCurrentCompanyId } from "@/lib/vouchers/engine";
+import {
+  canEditVoucher,
+  EDITABLE_STATUSES,
+  EDITABLE_WHEN_POSTED,
+  getCurrentCompanyId,
+} from "@/lib/vouchers/engine";
 import { isPhase5VoucherType, VOUCHER_TYPE_LABELS } from "@/lib/vouchers/meta";
 import type { JournalEntryStatus } from "@/types/database.types";
 
@@ -102,8 +107,7 @@ export default async function EditVoucherPage({
   // editable even once POSTED: opening balances (they are corrections to the
   // opening figures) and receipts (the update action reverses and re-posts).
   // A rejected voucher is finished and is not reopened.
-  const editableWhenPosted =
-    voucherType === "opening_balance_voucher" || voucherType === "receipt_voucher";
+  const editableWhenPosted = EDITABLE_WHEN_POSTED.includes(voucherType);
   const editable = EDITABLE_STATUSES.includes(status) || (status === "posted" && editableWhenPosted);
   if (!editable) redirect(detailHref);
 

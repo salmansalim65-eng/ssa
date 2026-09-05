@@ -25,7 +25,13 @@ import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { getModulePermissions, isCurrentUserAdmin } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { formatAccountCode, formatDate, formatMoney } from "@/lib/format";
-import { canEditVoucher, EDITABLE_STATUSES, getCurrentCompanyId, getVoucherApproval } from "@/lib/vouchers/engine";
+import {
+  canEditVoucher,
+  EDITABLE_STATUSES,
+  EDITABLE_WHEN_POSTED,
+  getCurrentCompanyId,
+  getVoucherApproval,
+} from "@/lib/vouchers/engine";
 import { isPhase5VoucherType, VOUCHER_TYPE_LABELS } from "@/lib/vouchers/meta";
 import { getVoucherDetail } from "@/lib/vouchers/queries";
 import { postChequeReturnVoucher } from "@/features/accounting/vouchers/cheque-return/actions";
@@ -162,8 +168,7 @@ export default async function VoucherDetailPage({
                 re-posted on save) stay editable even when posted; everything
                 else is draft-only. */}
             {(EDITABLE_STATUSES.includes(detail.status) ||
-              voucherType === "opening_balance_voucher" ||
-              (voucherType === "receipt_voucher" && detail.status === "posted")) &&
+              (detail.status === "posted" && EDITABLE_WHEN_POSTED.includes(voucherType))) &&
               canEdit &&
               (EDITABLE_VOUCHER_TYPES as readonly string[]).includes(voucherType) && (
                 <Button asChild variant="outline" size="sm">

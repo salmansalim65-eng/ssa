@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { requirePermission } from "@/lib/auth/permissions";
+import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { createJournalEntry, EDITABLE_STATUSES, ensureCanEditVoucher, getCurrentCompanyId, postVoucher, resubmitEditedVoucher, routeNewVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { paymentVoucherSchema, type PaymentVoucherInput } from "./schemas";
@@ -194,8 +194,31 @@ export async function updatePaymentVoucher(id: string, input: PaymentVoucherInpu
   // The Edit permission, or your own voucher while it is unposted.
   const notAllowed = await ensureCanEditVoucher("payment_voucher", je);
   if (notAllowed) return { error: notAllowed };
+
+  // A posted journal entry is immutable at the database level (posted entries
+  // and their lines cannot be changed). Editing a POSTED payment therefore
+  // reverses it — physically removing the posted voucher, which restores any
+  // bill outstanding its allocations had reduced — and re-creates a replacement
+  // payment from the edited values, re-posted with a new number. Same as the
+  // receipt voucher, which is the mirror of this one.
+  if (je.status === "posted") {
+    if (!(await isCurrentUserAdmin())) {
+      return { error: "Only administrators can edit a posted payment voucher." };
+    }
+    const { error: delErr } = await supabase
+      .schema("accounting")
+      .rpc("fn_admin_delete_posted_voucher", { p_voucher_type: "payment_voucher", p_id: id });
+    if (delErr) return { error: delErr.message };
+
+    const created = await createPaymentVoucher(parsed.data);
+    if ("error" in created) return { error: created.error };
+
+    revalidatePath("/accounting/vouchers/payment_voucher");
+    revalidatePath("/dashboard");
+    return { success: true, id: created.id };
+  }
   if (!EDITABLE_STATUSES.includes(je.status)) {
-    return { error: "A posted voucher can no longer be edited" };
+    return { error: "This payment can no longer be edited" };
   }
 
   const lines = parsed.data.lines;

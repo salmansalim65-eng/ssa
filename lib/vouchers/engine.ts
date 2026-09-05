@@ -267,6 +267,21 @@ export async function routeNewVoucher(params: {
 export const EDITABLE_STATUSES: readonly string[] = ["draft", "pending", "sent_back"];
 
 /**
+ * Voucher types that stay editable once POSTED. A posted journal entry cannot be
+ * changed, so each of these reverses the posted voucher and re-creates it from
+ * the edited values — which their update actions do, and only for an admin.
+ *
+ * Opening balances are corrections to the opening figures; receipts and
+ * payments are the two sides of the same settlement and are corrected the same
+ * way. Every other type is final once posted.
+ */
+export const EDITABLE_WHEN_POSTED: readonly string[] = [
+  "opening_balance_voucher",
+  "receipt_voucher",
+  "payment_voucher",
+];
+
+/**
  * Whether the current user may edit this voucher, as an error message or null.
  *
  * The Edit permission allows it for any voucher. Without it, someone may still

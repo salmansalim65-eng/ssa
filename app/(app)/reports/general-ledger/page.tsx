@@ -42,6 +42,7 @@ interface LedgerRow {
   journal_entry_id: string;
   entry_date: string;
   due_date: string | null;
+  line_no: number;
   voucher_type: string;
   voucher_id: string;
   voucher_no: string | null;
@@ -227,7 +228,7 @@ export default async function GeneralLedgerPage({
       .schema("reporting")
       .from("v_ledger_entries")
       .select(
-        "journal_entry_id, entry_date, due_date, voucher_type, voucher_id, voucher_no, cost_center_id, debit_amount, credit_amount, doc_debit_amount, doc_credit_amount, currency_code, description, narration",
+        "journal_entry_id, line_no, entry_date, due_date, voucher_type, voucher_id, voucher_no, cost_center_id, debit_amount, credit_amount, doc_debit_amount, doc_credit_amount, currency_code, description, narration",
       )
       .eq("company_id", companyId)
       .eq("account_id", acc.id)
@@ -302,6 +303,8 @@ export default async function GeneralLedgerPage({
   // voucher: a PDC with ten cheques shows the earliest maturity, and a voucher
   // covering several months shows the earliest with a "+n".
   const dueDateByVoucher = new Map<string, string>();
+  // Keyed `${voucher_id}:${voucher line_no}`.
+  const lineByKey = new Map<string, { rent_month: string | null; due_date?: string | null }>();
   {
     const LINE_TABLE = {
       receipt_voucher: "receipt_voucher_lines",
@@ -319,7 +322,12 @@ export default async function GeneralLedgerPage({
         idsByType.get(t)!.add(r.voucher_id);
       }
 
-    type VoucherLine = { voucher_id: string; rent_month: string | null; due_date?: string | null };
+    type VoucherLine = {
+      voucher_id: string;
+      line_no: number;
+      rent_month: string | null;
+      due_date?: string | null;
+    };
     const fetched = await Promise.all(
       [...idsByType].map(async ([type, ids]) => {
         const { data } = await supabase
@@ -343,6 +351,9 @@ export default async function GeneralLedgerPage({
         const held = dueDateByVoucher.get(line.voucher_id);
         if (!held || due < held) dueDateByVoucher.set(line.voucher_id, due);
       }
+      // And the line's own figures, so each cheque shows ITS month and maturity
+      // rather than the voucher's summary.
+      lineByKey.set(`${line.voucher_id}:${line.line_no}`, line);
     }
     for (const [voucherId, months] of monthsByVoucher) {
       const sorted = [...months].sort();
@@ -350,9 +361,28 @@ export default async function GeneralLedgerPage({
       if (label) rentMonthByVoucher.set(voucherId, sorted.length > 1 ? `${label} +${sorted.length - 1}` : label);
     }
   }
-  const rentMonthFor = (r: { voucher_id: string }) => rentMonthByVoucher.get(r.voucher_id) ?? "";
-  const dueDateFor = (r: { voucher_id: string; due_date: string | null }) =>
-    r.due_date ?? dueDateByVoucher.get(r.voucher_id) ?? null;
+  // A voucher's journal entry carries one line per voucher line PLUS the single
+  // Cash/Bank leg for the total. Receipts and PDC receipts put that leg first,
+  // payments and PDC payments put it last — so a journal line maps to a voucher
+  // line by its number, shifted by one where the leg leads. The Cash/Bank leg
+  // itself matches nothing and falls back to the voucher's summary, which is
+  // what that row is: every cheque at once.
+  const HEADER_LEG_FIRST = new Set(["receipt_voucher", "pdc_receipt_voucher"]);
+  const voucherLineFor = (r: { voucher_id: string; voucher_type: string; line_no: number }) => {
+    const lineNo = HEADER_LEG_FIRST.has(r.voucher_type) ? r.line_no - 1 : r.line_no;
+    return lineNo >= 1 ? lineByKey.get(`${r.voucher_id}:${lineNo}`) : undefined;
+  };
+  const rentMonthFor = (r: { voucher_id: string; voucher_type: string; line_no: number }) => {
+    const own = voucherLineFor(r)?.rent_month;
+    if (own) return rentMonthLabel(own);
+    return rentMonthByVoucher.get(r.voucher_id) ?? "";
+  };
+  const dueDateFor = (r: {
+    voucher_id: string;
+    voucher_type: string;
+    line_no: number;
+    due_date: string | null;
+  }) => r.due_date ?? voucherLineFor(r)?.due_date ?? dueDateByVoucher.get(r.voucher_id) ?? null;
 
   // Balance as a magnitude + Dr/Cr, matching the on-screen column.
   const balanceLabel = (n: number, isDebitNormal: boolean) => {

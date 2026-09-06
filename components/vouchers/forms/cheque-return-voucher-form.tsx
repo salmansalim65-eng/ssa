@@ -29,7 +29,10 @@ import {
 } from "@/components/ui/select";
 import { AccountSelect, type AccountOption } from "@/components/vouchers/account-select";
 import { blankAmount, amountValue } from "@/lib/forms/amount";
-import { createChequeReturnVoucher } from "@/features/accounting/vouchers/cheque-return/actions";
+import {
+  createChequeReturnVoucher,
+  updateChequeReturnVoucher,
+} from "@/features/accounting/vouchers/cheque-return/actions";
 import {
   chequeReturnVoucherSchema,
   type ChequeReturnVoucherFormValues,
@@ -49,17 +52,23 @@ function today() {
 export function ChequeReturnVoucherForm({
   pdcOptions,
   accounts,
+  voucherId,
+  initialValues,
 }: {
   pdcOptions: ReturnablePdcOption[];
   accounts: AccountOption[];
+  /** Present when editing an existing voucher. */
+  voucherId?: string;
+  initialValues?: ChequeReturnVoucherFormValues;
 }) {
+  const isEdit = !!voucherId;
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
 
   const form = useForm<ChequeReturnVoucherFormValues, unknown, ChequeReturnVoucherInput>({
     resolver: zodResolver(chequeReturnVoucherSchema),
-    defaultValues: {
+    defaultValues: initialValues ?? {
       originalPdcType: "pdc_payment_voucher",
       originalPdcId: "",
       returnDate: today(),
@@ -75,13 +84,15 @@ export function ChequeReturnVoucherForm({
   function onSubmit(values: ChequeReturnVoucherInput) {
     setFormError(null);
     startTransition(async () => {
-      const result = await createChequeReturnVoucher(values);
+      const result = isEdit
+        ? await updateChequeReturnVoucher(voucherId!, values)
+        : await createChequeReturnVoucher(values);
       if (result?.error) {
         setFormError(result.error);
         return;
       }
-      toast.success("Cheque return voucher created");
-      router.push(`/accounting/vouchers/cheque_return_voucher/${result.id}`);
+      toast.success(isEdit ? "Cheque return voucher updated" : "Cheque return voucher created");
+      router.push(`/accounting/vouchers/cheque_return_voucher/${result.id ?? voucherId}`);
     });
   }
 
@@ -195,7 +206,13 @@ export function ChequeReturnVoucherForm({
             <Link href="/accounting/vouchers/cheque_return_voucher">Cancel</Link>
           </Button>
           <Button type="submit" disabled={isPending}>
-            {isPending ? "Creating…" : "Create cheque return voucher"}
+            {isPending
+              ? isEdit
+                ? "Saving…"
+                : "Creating…"
+              : isEdit
+                ? "Save changes"
+                : "Create cheque return voucher"}
           </Button>
         </div>
       </form>

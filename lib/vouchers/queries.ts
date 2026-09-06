@@ -76,13 +76,17 @@ export interface VoucherDetail {
   }[];
 }
 
-// Resolves the "party" for a header+lines voucher (Receipt / Payment) from its
-// LINE accounts — the counter-party the money moved to/from — rather than the
-// Cash/Bank account on the header. Returns a map of voucher_id → party label
-// ("Split (n)" when a voucher has several distinct line accounts).
+// Resolves the "party" for a header+lines voucher (Receipt / Payment / PDC)
+// from its LINE accounts — the counter-party the money moved to/from — rather
+// than the Cash/Bank account on the header. Returns a map of voucher_id → party
+// label ("Split (n)" when a voucher has several distinct line accounts).
 async function resolvePartyFromLines(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  lineTable: "receipt_voucher_lines" | "payment_voucher_lines",
+  lineTable:
+    | "receipt_voucher_lines"
+    | "payment_voucher_lines"
+    | "pdc_receipt_voucher_lines"
+    | "pdc_payment_voucher_lines",
   voucherIds: string[],
 ): Promise<Map<string, string>> {
   const result = new Map<string, string>();
@@ -213,14 +217,22 @@ export async function getVoucherListRows(
       const { data } = await supabase
         .schema("accounting")
         .from("pdc_receipt_vouchers")
-        .select("id, voucher_no, voucher_date, payer, total_amount, exchange_rate, currency_id, journal_entry_id, journal_entries:journal_entry_id(status)")
+        .select("id, voucher_no, voucher_date, total_amount, exchange_rate, currency_id, journal_entry_id, journal_entries:journal_entry_id(status)")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false });
-      return (data ?? []).map((r) => ({
+      const pdcReceipts = data ?? [];
+      // The account whose cheques these are, held on the voucher LINES — not the
+      // free-text payer name, and not the Cash/Bank account on the header.
+      const accountByPdcReceipt = await resolvePartyFromLines(
+        supabase,
+        "pdc_receipt_voucher_lines",
+        pdcReceipts.map((r) => r.id),
+      );
+      return pdcReceipts.map((r) => ({
         id: r.id,
         voucherNo: r.voucher_no,
         date: r.voucher_date,
-        party: r.payer,
+        party: accountByPdcReceipt.get(r.id) ?? "—",
         amount: r.total_amount,
         currencySymbol: symbolFor(r.currency_id),
         baseAmount: Number(r.total_amount) * Number(r.exchange_rate ?? 1),

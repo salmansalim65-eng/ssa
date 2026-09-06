@@ -9,6 +9,10 @@ import { PaymentVoucherForm } from "@/components/vouchers/forms/payment-voucher-
 import { PdcPaymentVoucherForm } from "@/components/vouchers/forms/pdc-payment-voucher-form";
 import { PdcReceiptVoucherForm } from "@/components/vouchers/forms/pdc-receipt-voucher-form";
 import { ReceiptVoucherForm } from "@/components/vouchers/forms/receipt-voucher-form";
+import {
+  ChequeReturnVoucherForm,
+  type ReturnablePdcOption,
+} from "@/components/vouchers/forms/cheque-return-voucher-form";
 import { createClient } from "@/lib/supabase/server";
 import { toAccountOptions, type RawAccountRow } from "@/lib/vouchers/account-currency";
 import {
@@ -32,6 +36,7 @@ const EDITABLE_TABLE = {
   journal_voucher: "journal_vouchers",
   jv_maintenance_voucher: "jv_maintenance_vouchers",
   multi_currency_journal: "multi_currency_journal_vouchers",
+  cheque_return_voucher: "cheque_return_vouchers",
 } as const;
 type EditableVoucherType = keyof typeof EDITABLE_TABLE;
 
@@ -72,6 +77,51 @@ export default async function EditVoucherPage({
 
   const accountOptions = toAccountOptions(accounts as RawAccountRow[] | null);
   type RawCurrency = { currencies: { id: string; code: string } | null };
+
+  // The cheque picker offers the cheques still outstanding, plus the one THIS
+  // return already names — once posted that cheque reads 'returned', so it would
+  // otherwise be missing from its own form.
+  let pdcOptions: ReturnablePdcOption[] = [];
+  if (voucherType === "cheque_return_voucher") {
+    const { data: current } = await supabase
+      .schema("accounting")
+      .from("cheque_return_vouchers")
+      .select("original_pdc_type, original_pdc_id")
+      .eq("company_id", companyId)
+      .eq("id", id)
+      .maybeSingle();
+    const keepPayment =
+      current?.original_pdc_type === "pdc_payment_voucher" ? (current.original_pdc_id as string) : null;
+    const keepReceipt =
+      current?.original_pdc_type === "pdc_receipt_voucher" ? (current.original_pdc_id as string) : null;
+
+    const [{ data: pdcPayments }, { data: pdcReceipts }] = await Promise.all([
+      supabase
+        .schema("accounting")
+        .from("pdc_payment_vouchers")
+        .select("id, cheque_no, payee")
+        .eq("company_id", companyId)
+        .or(`pdc_status.eq.pending${keepPayment ? `,id.eq.${keepPayment}` : ""}`),
+      supabase
+        .schema("accounting")
+        .from("pdc_receipt_vouchers")
+        .select("id, cheque_no, payer")
+        .eq("company_id", companyId)
+        .or(`pdc_status.eq.pending${keepReceipt ? `,id.eq.${keepReceipt}` : ""}`),
+    ]);
+    pdcOptions = [
+      ...(pdcPayments ?? []).map((p) => ({
+        id: p.id as string,
+        type: "pdc_payment_voucher" as const,
+        label: `Payment — ${p.cheque_no} (${p.payee})`,
+      })),
+      ...(pdcReceipts ?? []).map((p) => ({
+        id: p.id as string,
+        type: "pdc_receipt_voucher" as const,
+        label: `Receipt — ${p.cheque_no} (${p.payer})`,
+      })),
+    ];
+  }
 
   const table = EDITABLE_TABLE[editableType];
   const { data: voucher } = await supabase
@@ -436,8 +486,8 @@ export default async function EditVoucherPage({
         title={`Edit ${VOUCHER_TYPE_LABELS[voucherType]}`}
         description={
           editableWhenPosted
-            ? "Update this opening balance voucher. Changes re-post to the ledger."
-            : "Update this draft voucher. Posted vouchers can't be edited."
+            ? "Changes re-post to the ledger: the posted voucher is reversed and raised again."
+            : "Update this voucher while it is unposted. A posted voucher of this type can't be edited."
         }
         backHref={`/accounting/vouchers/${voucherType}`}
       />
@@ -614,6 +664,21 @@ export default async function EditVoucherPage({
                     remarks: "",
                   },
                 ],
+          }}
+        />
+      )}
+      {voucherType === "cheque_return_voucher" && (
+        <ChequeReturnVoucherForm
+          pdcOptions={pdcOptions}
+          accounts={accountOptions}
+          voucherId={id}
+          initialValues={{
+            originalPdcType: v.original_pdc_type as "pdc_payment_voucher" | "pdc_receipt_voucher",
+            originalPdcId: v.original_pdc_id as string,
+            returnDate: v.return_date as string,
+            returnReason: (v.return_reason as string | null) ?? "",
+            penaltyAmount: (v.penalty_amount as number | null) ?? 0,
+            penaltyAccountId: (v.penalty_account_id as string | null) ?? "",
           }}
         />
       )}

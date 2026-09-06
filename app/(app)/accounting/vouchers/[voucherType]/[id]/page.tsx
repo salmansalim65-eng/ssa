@@ -57,6 +57,7 @@ const EDITABLE_VOUCHER_TYPES = [
   "journal_voucher",
   "jv_maintenance_voucher",
   "multi_currency_journal",
+  "cheque_return_voucher",
 ] as const;
 
 const POST_ACTIONS = {

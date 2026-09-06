@@ -18,7 +18,7 @@ const PARTY_LABELS: Record<string, string> = {
   receipt_voucher: "Received from",
   payment_voucher: "Paid to",
   pdc_payment_voucher: "Payee",
-  pdc_receipt_voucher: "Payer",
+  pdc_receipt_voucher: "Account",
   cheque_return_voucher: "Return reason",
   journal_voucher: "Narration",
   jv_maintenance_voucher: "Remarks",

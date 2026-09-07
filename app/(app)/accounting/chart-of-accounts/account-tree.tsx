@@ -99,6 +99,7 @@ export interface AccountRow {
   email: string | null;
   country: string | null;
   default_cost_center_id: string | null;
+  is_long_term: boolean;
 }
 
 type SortMode = "manual" | "name_asc" | "name_desc" | "code" | "balance_desc" | "balance_asc";
@@ -153,6 +154,7 @@ const emptyValues: AccountInput = {
   openingBalanceContraId: "",
   isCash: false,
   isBank: false,
+  isLongTerm: false,
   isTenantGroup: false,
   isRentalProperty: false,
   idNumber: "",
@@ -848,6 +850,7 @@ export function AccountTree({
                         openingBalanceContraId: dialog.account.opening_balance_contra_id ?? "",
                         isCash: dialog.account.is_cash,
                         isBank: dialog.account.is_bank,
+                        isLongTerm: dialog.account.is_long_term,
                         isTenantGroup: dialog.account.is_tenant_group,
                         isRentalProperty: linked?.is_rental ?? false,
                         idNumber: dialog.account.id_number ?? "",

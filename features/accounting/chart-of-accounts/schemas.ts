@@ -17,6 +17,9 @@ export const accountBaseSchema = z.object({
   openingBalanceContraId: z.string().uuid().optional().or(z.literal("")),
   isCash: z.boolean(),
   isBank: z.boolean(),
+  // A liability the company will not settle soon — a long-term loan, a deposit
+  // held for years. The Cash Flow Forecast leaves it out of what it reserves.
+  isLongTerm: z.boolean().default(false),
   // Marks a group account as THE tenant group leases pick tenants from.
   isTenantGroup: z.boolean().default(false),
   // Marks a posting asset account as a rental property. When set, the app

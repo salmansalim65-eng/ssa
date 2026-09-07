@@ -893,6 +893,27 @@ export function AccountForm({
               )}
             />
           </div>
+          {/* Only a liability can be long-term, and only a posting one carries a
+              balance the forecast would otherwise reserve against. */}
+          {!isGroup && accountType === "liability" && (
+            <FormField
+              control={form.control}
+              name="isLongTerm"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start gap-2.5 rounded-lg border p-3">
+                  <FormControl>
+                    <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>Long-term liability</FormLabel>
+                    <FormDescription>
+                      Not due back any time soon. The Cash Flow Forecast stops holding cash against it.
+                    </FormDescription>
+                  </div>
+                </FormItem>
+              )}
+            />
+          )}
         </FormSection>
 
         {formError && (

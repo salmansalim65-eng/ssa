@@ -98,6 +98,7 @@ export const navSections: NavSection[] = [
     items: [
       { label: "Chart of Accounts", href: "/accounting/chart-of-accounts", icon: ListTreeIcon, module: "chart_of_accounts" },
       { label: "Cost Centers", href: "/accounting/cost-centers", icon: LandmarkIcon, module: "cost_centers" },
+      { label: "Recurring Expenses", href: "/accounting/recurring-expenses", icon: RotateCcwIcon, module: "recurring_expenses" },
       { label: "Document Sequences", href: "/admin/document-sequences", icon: HashIcon, module: "document_sequences" },
       { label: "Approval Workflows", href: "/admin/approval-workflows", icon: GitBranchIcon, module: "approval_workflows" },
       { label: "Posting Templates", href: "/admin/posting-templates", icon: SlidersHorizontalIcon, module: "posting_templates" },

@@ -1,4 +1,5 @@
 import { CsvExportButton } from "@/components/reports/csv-export-button";
+import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
 
@@ -26,23 +27,39 @@ interface OccupancyRow {
 }
 
 /**
- * How many days of the year each HH property was let, and how many it stood
- * empty.
+ * How many days each HH property was let, and how many it stood empty.
  *
  * HH lettings are short stays — a few weeks at a time, several to a property in
- * a year — so what matters is days, not months. Every stay that touches the year
- * is clipped to it and its days marked off on a calendar per property, which
- * counts overlapping or back-to-back stays once rather than adding them up.
- * Both ends of a stay are counted: 1–31 Aug is 31 days.
+ * a year — so what matters is days, not months. Every stay that touches the
+ * window is clipped to it and its days marked off on a calendar per property,
+ * which counts overlapping or back-to-back stays once rather than adding them
+ * up. Both ends of a stay are counted: 1–31 Aug is 31 days.
+ *
+ * The window is NOT the whole calendar year. It runs from the day the company's
+ * books open to today — months before the books existed hold no lettings, and
+ * months still to come have not happened, so counting either as vacant would
+ * bury a well-let property under empty days it was never offered for. A past
+ * year runs to its own year end.
  *
  * Only HH leases are read, so a property let on a standard UAE lease does not
  * appear here at all.
  */
 export async function OccupancyView({ companyId, year }: { companyId: string; year: number }) {
   const supabase = await createClient();
-  const yearStart = `${year}-01-01`;
+  const { data: company } = await supabase
+    .schema("core")
+    .from("companies")
+    .select("accounting_period_start")
+    .eq("id", companyId)
+    .maybeSingle();
+
+  const today = new Date().toISOString().slice(0, 10);
+  const booksOpen = (company?.accounting_period_start as string | null) ?? `${year}-01-01`;
+  const windowStart = booksOpen > `${year}-01-01` ? booksOpen : `${year}-01-01`;
   const yearEnd = `${year}-12-31`;
-  const totalDays = Math.round((utcDay(yearEnd) - utcDay(yearStart)) / DAY_MS) + 1;
+  const windowEnd = today < yearEnd ? today : yearEnd;
+  const totalDays =
+    windowEnd < windowStart ? 0 : Math.round((utcDay(windowEnd) - utcDay(windowStart)) / DAY_MS) + 1;
 
   const [{ data: leases }, { data: costCenters }] = await Promise.all([
     supabase
@@ -65,7 +82,10 @@ export async function OccupancyView({ companyId, year }: { companyId: string; ye
   // Every property that has ever taken an HH letting belongs in the report — one
   // that took none this year is simply vacant all year, which is the point.
   const hhAssetIds = new Set((leases ?? []).map((l) => l.asset_id as string).filter(Boolean));
-  const properties = (costCenters ?? []).filter((c) => c.asset_id && hhAssetIds.has(c.asset_id as string));
+  const properties =
+    totalDays === 0
+      ? []
+      : (costCenters ?? []).filter((c) => c.asset_id && hhAssetIds.has(c.asset_id as string));
 
   const calendarByAsset = new Map<string, boolean[]>();
   for (const l of leases ?? []) {
@@ -73,9 +93,9 @@ export async function OccupancyView({ companyId, year }: { companyId: string; ye
     const start = (l.lease_start as string | null) ?? null;
     const end = (l.lease_end as string | null) ?? null;
     if (!assetId || !start || !end) continue;
-    // Clip the stay to the year; a stay entirely outside it contributes nothing.
-    const from = Math.max(utcDay(start), utcDay(yearStart));
-    const to = Math.min(utcDay(end), utcDay(yearEnd));
+    // Clip the stay to the window; one entirely outside it contributes nothing.
+    const from = Math.max(utcDay(start), utcDay(windowStart));
+    const to = Math.min(utcDay(end), utcDay(windowEnd));
     if (to < from) continue;
 
     let calendar = calendarByAsset.get(assetId);
@@ -84,13 +104,18 @@ export async function OccupancyView({ companyId, year }: { companyId: string; ye
       calendarByAsset.set(assetId, calendar);
     }
     for (let t = from; t <= to; t += DAY_MS) {
-      calendar[Math.round((t - utcDay(yearStart)) / DAY_MS)] = true;
+      calendar[Math.round((t - utcDay(windowStart)) / DAY_MS)] = true;
     }
   }
 
+  // Which month each day of the window belongs to, and how many days of each
+  // month the window actually covers — September counts only up to today.
   const monthOfDayIndex: number[] = [];
+  const daysInWindowByMonth = Array(12).fill(0) as number[];
   for (let i = 0; i < totalDays; i += 1) {
-    monthOfDayIndex.push(new Date(utcDay(yearStart) + i * DAY_MS).getUTCMonth());
+    const month = new Date(utcDay(windowStart) + i * DAY_MS).getUTCMonth();
+    monthOfDayIndex.push(month);
+    daysInWindowByMonth[month] += 1;
   }
 
   const rows: OccupancyRow[] = properties.map((c) => {
@@ -130,13 +155,25 @@ export async function OccupancyView({ companyId, year }: { companyId: string; ye
     <>
       <div className="flex shrink-0 items-center justify-between gap-3 print:hidden">
         <p className="text-sm text-muted-foreground">
-          {rows.length} HH {rows.length === 1 ? "property" : "properties"} · {totalDays} days in {year} ·{" "}
+          {rows.length} HH {rows.length === 1 ? "property" : "properties"} ·{" "}
+          <span className="font-medium text-foreground">
+            {formatDate(windowStart)} – {formatDate(windowEnd)}
+          </span>{" "}
+          ({totalDays} {totalDays === 1 ? "day" : "days"}) ·{" "}
           <span className="font-medium text-foreground">{occupiedTotal.toLocaleString()} occupied</span> ·{" "}
           {(capacity - occupiedTotal).toLocaleString()} vacant · {pct(occupiedTotal, capacity)} occupancy
         </p>
         <CsvExportButton
           filename={`hh-occupancy-${year}.csv`}
-          headers={["S.No", "Code", "Property", ...MONTHS, "Occupied days", "Vacant days", "Occupancy %"]}
+          headers={[
+            "S.No",
+            "Code",
+            "Property",
+            ...MONTHS,
+            `Occupied days (of ${totalDays})`,
+            "Vacant days",
+            "Occupancy %",
+          ]}
           rows={rows.map((r, i) => [
             i + 1,
             r.code,
@@ -232,7 +269,9 @@ export async function OccupancyView({ companyId, year }: { companyId: string; ye
             {rows.length === 0 && (
               <tr>
                 <td colSpan={17} className="py-12 text-center text-muted-foreground">
-                  No HH properties yet.
+                  {totalDays === 0
+                    ? `The books open on ${formatDate(booksOpen)}, so ${year} has nothing to report.`
+                    : "No HH properties yet."}
                 </td>
               </tr>
             )}
@@ -252,9 +291,24 @@ export async function OccupancyView({ companyId, year }: { companyId: string; ye
                   {r.months.map((d, m) => (
                     <td
                       key={m}
-                      className={cn("text-right font-mono tabular-nums", m === thisMonth && "bg-primary/[0.04]")}
+                      className={cn(
+                        "text-right font-mono tabular-nums",
+                        m === thisMonth && "bg-primary/[0.04]",
+                        // A month the window does not reach is greyed out, so a
+                        // blank there never reads as "let to nobody".
+                        daysInWindowByMonth[m] === 0 && "bg-muted/40",
+                      )}
+                      title={
+                        daysInWindowByMonth[m] === 0
+                          ? "Outside the reporting window"
+                          : `${d} of ${daysInWindowByMonth[m]} days`
+                      }
                     >
-                      {d || <span className="text-muted-foreground">{dash}</span>}
+                      {daysInWindowByMonth[m] === 0 ? (
+                        <span className="text-muted-foreground/50">{dash}</span>
+                      ) : (
+                        d || <span className="text-muted-foreground">{dash}</span>
+                      )}
                     </td>
                   ))}
                   <td className="text-right font-mono font-semibold tabular-nums">{r.occupied}</td>
@@ -269,8 +323,15 @@ export async function OccupancyView({ companyId, year }: { companyId: string; ye
                   Total — {rows.length} {rows.length === 1 ? "property" : "properties"} × {totalDays} days
                 </td>
                 {monthTotals.map((d, m) => (
-                  <td key={m} className={cn("text-right font-mono tabular-nums", m === thisMonth && "bg-white/15")}>
-                    {d || dash}
+                  <td
+                    key={m}
+                    className={cn(
+                      "text-right font-mono tabular-nums",
+                      m === thisMonth && "bg-white/15",
+                      daysInWindowByMonth[m] === 0 && "text-primary-foreground/40",
+                    )}
+                  >
+                    {daysInWindowByMonth[m] === 0 ? dash : d || dash}
                   </td>
                 ))}
                 <td className="text-right font-mono tabular-nums">{occupiedTotal}</td>

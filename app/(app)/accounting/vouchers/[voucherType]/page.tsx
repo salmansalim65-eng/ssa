@@ -17,7 +17,7 @@ const NO_AMOUNT_TYPES = new Set(["journal_voucher", "jv_maintenance_voucher", "m
 const PARTY_LABELS: Record<string, string> = {
   receipt_voucher: "Received from",
   payment_voucher: "Paid to",
-  pdc_payment_voucher: "Payee",
+  pdc_payment_voucher: "Account",
   pdc_receipt_voucher: "Account",
   cheque_return_voucher: "Return reason",
   journal_voucher: "Narration",

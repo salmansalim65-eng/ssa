@@ -198,14 +198,22 @@ export async function getVoucherListRows(
       const { data } = await supabase
         .schema("accounting")
         .from("pdc_payment_vouchers")
-        .select("id, voucher_no, voucher_date, payee, total_amount, exchange_rate, currency_id, journal_entry_id, journal_entries:journal_entry_id(status)")
+        .select("id, voucher_no, voucher_date, total_amount, exchange_rate, currency_id, journal_entry_id, journal_entries:journal_entry_id(status)")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false });
-      return (data ?? []).map((r) => ({
+      const pdcPayments = data ?? [];
+      // The account whose cheques these are, held on the voucher LINES — not the
+      // free-text payee name, and not the Cash/Bank account on the header.
+      const accountByPdcPayment = await resolvePartyFromLines(
+        supabase,
+        "pdc_payment_voucher_lines",
+        pdcPayments.map((r) => r.id),
+      );
+      return pdcPayments.map((r) => ({
         id: r.id,
         voucherNo: r.voucher_no,
         date: r.voucher_date,
-        party: r.payee,
+        party: accountByPdcPayment.get(r.id) ?? "—",
         amount: r.total_amount,
         currencySymbol: symbolFor(r.currency_id),
         baseAmount: Number(r.total_amount) * Number(r.exchange_rate ?? 1),

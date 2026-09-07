@@ -38,7 +38,7 @@ interface CurrencyBlock {
   opening: number;
   /** Money in hand that belongs to somebody else (deposits held, tax provisions). */
   reserved: { name: string; amount: number }[];
-  rows: { label: string; kind: "in" | "out"; overdue: number; byMonth: Map<string, number> }[];
+  rows: { label: string; kind: "in" | "out"; owed: number; byMonth: Map<string, number> }[];
 }
 
 export default async function CashFlowPage({
@@ -67,6 +67,7 @@ export default async function CashFlowPage({
     { data: pkLeases },
     { data: uaeInvoiced },
     { data: pkInvoiced },
+    { data: rentalAssets },
   ] = await Promise.all([
       supabase
         .schema("reporting")
@@ -119,6 +120,15 @@ export default async function CashFlowPage({
         .from("pk_rent_invoices")
         .select("lease_id, due_date")
         .eq("company_id", companyId),
+      // A rental property with no lease running is still expected to earn — its
+      // own estimated rent is the best figure there is.
+      supabase
+        .schema("assets")
+        .from("assets")
+        .select("id, estimated_rent, country")
+        .eq("company_id", companyId)
+        .eq("is_rental", true)
+        .is("deleted_at", null),
     ]);
 
   const currencyById = new Map(
@@ -126,26 +136,60 @@ export default async function CashFlowPage({
   );
   const symbolByCode = new Map((currencies ?? []).map((c) => [c.code as string, c.symbol as string]));
 
-  const { data: liabilityAccounts } = await supabase
+  const { data: coa } = await supabase
     .schema("accounting")
     .from("chart_of_accounts")
-    .select("id, account_name, is_long_term")
+    .select("id, account_name, account_type, parent_id, is_long_term")
     .eq("company_id", companyId)
-    .eq("account_type", "liability");
-  const longTermIds = new Set(
-    (liabilityAccounts ?? []).filter((a) => a.is_long_term).map((a) => a.id as string),
+    .is("deleted_at", null);
+  const coaById = new Map(
+    (coa ?? []).map((a) => [
+      a.id as string,
+      {
+        name: a.account_name as string,
+        type: a.account_type as string,
+        parentId: (a.parent_id as string | null) ?? null,
+        longTerm: Boolean(a.is_long_term),
+      },
+    ]),
   );
+  const liabilityAccounts = (coa ?? []).filter((a) => a.account_type === "liability");
+  const longTermIds = new Set(
+    liabilityAccounts.filter((a) => a.is_long_term).map((a) => a.id as string),
+  );
+
+  // A party account — somebody who owes us. The chart marks its tenant group,
+  // but customers sit under their own group with no flag, so the parent's name
+  // decides, the same keywords the Chart of Accounts screen already uses to
+  // decide an account is a party.
+  const RECEIVABLE_PARENTS = ["TENANT", "CUSTOMER", "DEBTOR", "RECEIVABLE"];
+  const isReceivableAccount = (accountId: string) => {
+    const account = coaById.get(accountId);
+    if (!account || account.type !== "asset") return false;
+    const parent = account.parentId ? coaById.get(account.parentId) : undefined;
+    const parentName = (parent?.name ?? "").toUpperCase();
+    return RECEIVABLE_PARENTS.some((k) => parentName.includes(k));
+  };
 
   // ---- What is in the bank today, and what of it is already spoken for ----
   const openingByCode = new Map<string, number>();
   const reservedByCode = new Map<string, Map<string, number>>();
   const liabilityNames = new Map<string, string>();
+  // Money owed TO the company on a party account — A.SAMAD, a tenant carrying a
+  // balance. It has no due date, so it is reported as owed rather than dropped
+  // into a month it may not arrive in.
+  const receivableByCode = new Map<string, Map<string, number>>();
   for (const l of ledger ?? []) {
     const code = (l.currency_code as string | null) ?? "";
     if (!code) continue;
     const net = Number(l.doc_debit_amount) - Number(l.doc_credit_amount);
     if (l.is_cash || l.is_bank) {
       openingByCode.set(code, (openingByCode.get(code) ?? 0) + net);
+    } else if (isReceivableAccount(l.account_id as string)) {
+      if (!receivableByCode.has(code)) receivableByCode.set(code, new Map());
+      const per = receivableByCode.get(code)!;
+      const id = l.account_id as string;
+      per.set(id, (per.get(id) ?? 0) + net);
     } else if (l.account_type === "liability" && !longTermIds.has(l.account_id as string)) {
       // A credit balance on a liability is money owed out — a deposit held for a
       // tenant, tax collected and not yet paid. It is in the bank but not yours.
@@ -157,7 +201,8 @@ export default async function CashFlowPage({
       per.set(id, (per.get(id) ?? 0) - net);
     }
   }
-  for (const a of liabilityAccounts ?? []) liabilityNames.set(a.id as string, a.account_name as string);
+  for (const a of liabilityAccounts) liabilityNames.set(a.id as string, a.account_name as string);
+
 
   // ---- Dated movements ----
   const blocks = new Map<string, CurrencyBlock>();
@@ -182,7 +227,7 @@ export default async function CashFlowPage({
     const block = blockFor(code);
     let row = block.rows.find((r) => r.label === label);
     if (!row) {
-      row = { label, kind, overdue: 0, byMonth: new Map() };
+      row = { label, kind, owed: 0, byMonth: new Map() };
       block.rows.push(row);
     }
     return row;
@@ -190,7 +235,7 @@ export default async function CashFlowPage({
   const add = (code: string, label: string, kind: "in" | "out", due: string, amount: number) => {
     if (!code || !due || !amount) return;
     const row = rowFor(code, label, kind);
-    if (due < today) row.overdue += amount;
+    if (due < today) row.owed += amount;
     else {
       const key = monthKey(due);
       if (!months.includes(key)) return;
@@ -226,6 +271,14 @@ export default async function CashFlowPage({
       Number(l.amount),
     );
   }
+  // One row per party who owes something, in the "owed" column.
+  for (const [code, perAccount] of receivableByCode) {
+    for (const [accountId, amount] of perAccount) {
+      if (amount < 0.005) continue; // a credit balance is not a receivable
+      rowFor(code, `Receivable — ${coaById.get(accountId)?.name ?? "party"}`, "in").owed += amount;
+    }
+  }
+
   // ---- Rent the leases will produce but nobody has invoiced yet ----
   // The rows above only know invoices that EXIST. A lease running to next April
   // will earn rent every month between now and then, and none of it is in the
@@ -237,6 +290,22 @@ export default async function CashFlowPage({
   // The figure is the OWNER's net: the agent's share (5% on a UAE lease, 10% on
   // an HH one) comes off the top, exactly as invoicing does it. PK leases carry
   // no agent share.
+  type UaeLease = {
+    id: string;
+    asset_id: string | null;
+    rental_amount: number;
+    lease_type: string | null;
+    lease_start: string | null;
+    lease_end: string | null;
+  };
+  type PkLease = {
+    id: string;
+    asset_id: string | null;
+    monthly_rent: number;
+    lease_start: string | null;
+    lease_end: string | null;
+  };
+
   const invoicedMonths = new Set<string>();
   for (const i of (uaeInvoiced ?? []) as unknown as {
     lease_id: string;
@@ -284,23 +353,12 @@ export default async function CashFlowPage({
   };
 
   const codeOf = (wanted: string) => ([...currencyById].find(([, c]) => c.code === wanted) ? wanted : "");
-  for (const l of (uaeLeases ?? []) as unknown as {
-    id: string;
-    rental_amount: number;
-    lease_type: string | null;
-    lease_start: string | null;
-    lease_end: string | null;
-  }[]) {
+  for (const l of (uaeLeases ?? []) as unknown as UaeLease[]) {
     const pct = l.lease_type === "hh" ? HH_AGENT_PCT : UAE_AGENT_PCT;
     const net = Math.round(Number(l.rental_amount) * (1 - pct) * 100) / 100;
     projectRent(l.id, codeOf("AED"), net, l.lease_start, l.lease_end, "Rent expected, not yet invoiced");
   }
-  for (const l of (pkLeases ?? []) as unknown as {
-    id: string;
-    monthly_rent: number;
-    lease_start: string | null;
-    lease_end: string | null;
-  }[]) {
+  for (const l of (pkLeases ?? []) as unknown as PkLease[]) {
     projectRent(
       l.id,
       codeOf("PKR"),
@@ -309,6 +367,51 @@ export default async function CashFlowPage({
       l.lease_end,
       "Rent expected, not yet invoiced",
     );
+  }
+
+  // ---- Months a property has no lease at all ----
+  // A lease ending in September leaves the property earning nothing from October
+  // in the rows above, which is only true if it is never let again. The
+  // property's own estimated rent stands in for those months — at the same
+  // owner's net, using the agent share of the last lease it carried. It is the
+  // softest of the three rent rows and says so in its name.
+  const leasedMonthsByAsset = new Map<string, Set<string>>();
+  const agentPctByAsset = new Map<string, number>();
+  const markLeased = (assetId: string | null, start: string | null, end: string | null) => {
+    if (!assetId || !start) return;
+    if (!leasedMonthsByAsset.has(assetId)) leasedMonthsByAsset.set(assetId, new Set());
+    const set = leasedMonthsByAsset.get(assetId)!;
+    for (const m of months) {
+      const lastDay = new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0)).getUTCDate();
+      if (start > `${m}-${lastDay}`) continue;
+      if (end && end < `${m}-01`) continue;
+      set.add(m);
+    }
+  };
+  for (const l of (uaeLeases ?? []) as unknown as UaeLease[]) {
+    markLeased(l.asset_id, l.lease_start, l.lease_end);
+    if (l.asset_id) agentPctByAsset.set(l.asset_id, l.lease_type === "hh" ? HH_AGENT_PCT : UAE_AGENT_PCT);
+  }
+  for (const l of (pkLeases ?? []) as unknown as PkLease[]) markLeased(l.asset_id, l.lease_start, l.lease_end);
+
+  for (const a of (rentalAssets ?? []) as unknown as {
+    id: string;
+    estimated_rent: number | null;
+    country: string | null;
+  }[]) {
+    const estimated = Number(a.estimated_rent ?? 0);
+    if (estimated <= 0) continue;
+    const country = (a.country ?? "").toUpperCase();
+    const code = codeOf(country === "PK" ? "PKR" : country === "SA" ? "SAR" : "AED");
+    // PK rent carries no agent share; the UAE share follows the last lease.
+    const pct = country === "PK" ? 0 : agentPctByAsset.get(a.id) ?? UAE_AGENT_PCT;
+    const net = Math.round(estimated * (1 - pct) * 100) / 100;
+    const leased = leasedMonthsByAsset.get(a.id);
+    for (const m of months) {
+      if (leased?.has(m)) continue;
+      const due = `${m}-01` < today ? today : `${m}-01`;
+      add(code, "Rent expected if re-let, no lease running", "in", due, net);
+    }
   }
 
   // A currency with cash but no dated movement still belongs in the report.
@@ -331,9 +434,20 @@ export default async function CashFlowPage({
       return running;
     });
     const lowest = closings.length ? Math.min(...closings) : block.opening;
-    const overdueIn = block.rows.reduce((s, r) => s + (r.kind === "in" ? r.overdue : 0), 0);
-    const overdueOut = block.rows.reduce((s, r) => s + (r.kind === "out" ? r.overdue : 0), 0);
-    return { block, closings, lowest, reservedTotal, available: lowest - reservedTotal, overdueIn, overdueOut };
+    const owedIn = block.rows.reduce((s, r) => s + (r.kind === "in" ? r.owed : 0), 0);
+    const owedOut = block.rows.reduce((s, r) => s + (r.kind === "out" ? r.owed : 0), 0);
+    return {
+      block,
+      closings,
+      lowest,
+      reservedTotal,
+      available: lowest - reservedTotal,
+      owedIn,
+      owedOut,
+      // The optimistic reading: every receivable collected and every overdue
+      // invoice honoured. Shown beside the cautious figure, never instead of it.
+      availableIfCollected: lowest - reservedTotal + owedIn - owedOut,
+    };
   });
 
   const money = (symbol: string, n: number) => `${symbol ? `${symbol} ` : ""}${formatMoney(n)}`;
@@ -397,7 +511,7 @@ export default async function CashFlowPage({
     ...block.rows.map((r) => [
       block.code,
       r.label,
-      r.overdue || "",
+      r.owed || "",
       "",
       ...months.map((m) => (r.kind === "in" ? 1 : -1) * (r.byMonth.get(m) ?? 0)),
     ]),
@@ -505,7 +619,7 @@ export default async function CashFlowPage({
       {/* The headline, one card per currency — money is never converted here: a
           PKR balance cannot settle an AED cheque. */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {summary.map(({ block, available, lowest, reservedTotal }) => (
+        {summary.map(({ block, available, availableIfCollected, lowest, reservedTotal }) => (
           <div
             key={block.code}
             className="overflow-hidden rounded-xl border-2 border-ledger-dark bg-card shadow-sm"
@@ -537,13 +651,21 @@ export default async function CashFlowPage({
                     {reservedTotal ? `− ${money(block.symbol, reservedTotal)}` : money(block.symbol, 0)}
                   </dd>
                 </div>
+                {availableIfCollected !== available && (
+                  <div className="flex justify-between gap-3 border-t pt-1">
+                    <dt>If everything owed is collected</dt>
+                    <dd className="font-mono font-medium tabular-nums text-foreground">
+                      {money(block.symbol, availableIfCollected)}
+                    </dd>
+                  </div>
+                )}
               </dl>
             </div>
           </div>
         ))}
       </div>
 
-      {summary.map(({ block, closings, reservedTotal, available, overdueIn, overdueOut }) => (
+      {summary.map(({ block, closings, reservedTotal, available, availableIfCollected, owedIn, owedOut }) => (
         <div key={block.code} className="overflow-hidden rounded-lg border bg-card shadow-xs">
           <div className="border-b bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {block.code}
@@ -553,7 +675,7 @@ export default async function CashFlowPage({
               <thead>
                 <tr className="border-b bg-header text-header-foreground [&>th]:px-3 [&>th]:py-2 [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide">
                   <th className="text-left">Line</th>
-                  <th className="text-right">Already due</th>
+                  <th className="text-right">Owed / already due</th>
                   {months.map((m) => (
                     <th key={m} className="whitespace-nowrap text-right">
                       {monthLabel(m)}
@@ -585,7 +707,7 @@ export default async function CashFlowPage({
                       {r.label}
                     </td>
                     <td className="text-right font-mono tabular-nums text-muted-foreground">
-                      {r.overdue ? money(block.symbol, r.overdue) : "—"}
+                      {r.owed ? money(block.symbol, r.owed) : "—"}
                     </td>
                     {months.map((m) => {
                       const amount = r.byMonth.get(m) ?? 0;
@@ -630,21 +752,32 @@ export default async function CashFlowPage({
                     {money(block.symbol, available)}
                   </td>
                 </tr>
+                {availableIfCollected !== available && (
+                  <tr className="border-t [&>td]:px-3 [&>td]:py-2">
+                    <td className="text-muted-foreground">…and if everything owed is collected</td>
+                    <td className="text-right font-mono tabular-nums text-muted-foreground">
+                      {money(block.symbol, owedIn - owedOut)}
+                    </td>
+                    <td className="text-right font-mono font-semibold tabular-nums" colSpan={months.length}>
+                      {money(block.symbol, availableIfCollected)}
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
-          {(overdueIn > 0 || overdueOut > 0) && (
+          {(owedIn > 0 || owedOut > 0) && (
             <p className="border-t bg-muted/20 px-4 py-2 text-xs text-muted-foreground">
-              {overdueIn > 0 && (
+              {owedIn > 0 && (
                 <>
-                  <span className="font-medium text-foreground">{money(block.symbol, overdueIn)}</span> was already due
+                  <span className="font-medium text-foreground">{money(block.symbol, owedIn)}</span> was already due
                   in and has not arrived
-                  {overdueOut > 0 ? ", " : ". "}
+                  {owedOut > 0 ? ", " : ". "}
                 </>
               )}
-              {overdueOut > 0 && (
+              {owedOut > 0 && (
                 <>
-                  <span className="font-medium text-foreground">{money(block.symbol, overdueOut)}</span> was already due
+                  <span className="font-medium text-foreground">{money(block.symbol, owedOut)}</span> was already due
                   out.{" "}
                 </>
               )}
@@ -658,9 +791,14 @@ export default async function CashFlowPage({
         <p className="mb-1 font-medium text-foreground">What this figure does and does not know</p>
         <ul className="list-inside list-disc space-y-0.5">
           <li>
-            Money in is rent <strong>already invoiced</strong> and unpaid, cheques in hand maturing, and rent the
-            running leases will earn but nobody has invoiced yet — the last of those at the owner&apos;s net, after
-            the agent&apos;s share. A month already invoiced is never counted twice.
+            Money in comes in four kinds: rent <strong>already invoiced</strong> and unpaid; cheques in hand
+            maturing; rent the running leases will earn but nobody has invoiced yet; and, for a month with no lease
+            at all, the property&apos;s own estimated rent if it is re-let. The last two are at the owner&apos;s
+            net, after the agent&apos;s share. A month is never counted by two of them.
+          </li>
+          <li>
+            What parties owe — A.SAMAD, a tenant carrying a balance — has no due date, so it sits in the{" "}
+            <strong>Owed</strong> column and in the second figure, never in a month.
           </li>
           <li>
             A lease is assumed to run to its end date and to be paid on time. It is a forecast, not a promise.

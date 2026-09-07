@@ -497,6 +497,7 @@ export async function createAccount(input: AccountInput) {
       email: parsed.data.email || null,
       country: parsed.data.country || null,
       default_cost_center_id: parsed.data.defaultCostCenterId || null,
+      is_long_term: parsed.data.accountType === "liability" ? parsed.data.isLongTerm : false,
       created_by: user.user!.id,
     })
     .select("id")
@@ -797,6 +798,7 @@ export async function updateAccount(accountId: string, input: AccountInput) {
       email: parsed.data.email || null,
       country: parsed.data.country || null,
       default_cost_center_id: parsed.data.defaultCostCenterId || null,
+      is_long_term: parsed.data.accountType === "liability" ? parsed.data.isLongTerm : false,
     })
     .eq("id", accountId);
 

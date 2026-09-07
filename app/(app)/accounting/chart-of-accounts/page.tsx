@@ -30,7 +30,7 @@ export default async function ChartOfAccountsPage() {
       supabase
         .schema("accounting")
         .from("chart_of_accounts")
-        .select("id, account_code, account_name, parent_id, account_type, currency_id, opening_balance, is_group, is_active, is_cash, is_bank, is_tenant_group, linked_asset_id, sort_order, id_number, contact_person, phone, email, country, default_cost_center_id")
+        .select("id, account_code, account_name, parent_id, account_type, currency_id, opening_balance, is_group, is_active, is_cash, is_bank, is_tenant_group, linked_asset_id, sort_order, id_number, contact_person, phone, email, country, default_cost_center_id, is_long_term")
         .eq("company_id", companyId)
         .is("deleted_at", null),
       supabase
@@ -138,6 +138,7 @@ export default async function ChartOfAccountsPage() {
     email: string | null;
     country: string | null;
     default_cost_center_id: string | null;
+    is_long_term: boolean;
   };
 
   const rows = (accounts as unknown as RawAccount[]) ?? [];
@@ -220,6 +221,7 @@ export default async function ChartOfAccountsPage() {
     email: a.email,
     country: a.country,
     default_cost_center_id: a.default_cost_center_id,
+    is_long_term: a.is_long_term,
     opening_balance_contra_id: contraByAccount.get(a.id) ?? null,
   }));
 

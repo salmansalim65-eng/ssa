@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, formatMoney } from "@/lib/format";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
+import { FREQUENCY_MONTHS } from "@/features/accounting/recurring-expenses/schemas";
 
 const HORIZONS = [
   { value: "1", label: "1 month" },
@@ -43,9 +44,9 @@ interface CurrencyBlock {
 export default async function CashFlowPage({
   searchParams,
 }: {
-  searchParams: Promise<{ months?: string }>;
+  searchParams: Promise<{ months?: string; cur?: string }>;
 }) {
-  const { months: monthsParam = "" } = await searchParams;
+  const { months: monthsParam = "", cur: curParam = "" } = await searchParams;
   const horizon = HORIZONS.some((h) => h.value === monthsParam) ? Number(monthsParam) : 2;
 
   const supabase = await createClient();
@@ -56,8 +57,14 @@ export default async function CashFlowPage({
   // Everything falling due up to the end of the last month in view.
   const horizonEnd = `${lastMonth}-31`;
 
-  const [{ data: ledger }, { data: invoices }, { data: pdcIn }, { data: pdcOut }, { data: currencies }] =
-    await Promise.all([
+  const [
+    { data: ledger },
+    { data: invoices },
+    { data: pdcIn },
+    { data: pdcOut },
+    { data: currencies },
+    { data: recurring },
+  ] = await Promise.all([
       supabase
         .schema("reporting")
         .from("v_ledger_entries")
@@ -84,12 +91,29 @@ export default async function CashFlowPage({
         .eq("pdc_payment_vouchers.pdc_status", "pending")
         .lte("due_date", horizonEnd),
       supabase.schema("core").from("currencies").select("id, code, symbol"),
+      supabase
+        .schema("accounting")
+        .from("recurring_expenses")
+        .select("name, currency_id, amount, frequency, day_of_month, start_date, end_date")
+        .eq("company_id", companyId)
+        .eq("is_active", true)
+        .lte("start_date", horizonEnd),
     ]);
 
   const currencyById = new Map(
     (currencies ?? []).map((c) => [c.id as string, { code: c.code as string, symbol: c.symbol as string }]),
   );
   const symbolByCode = new Map((currencies ?? []).map((c) => [c.code as string, c.symbol as string]));
+
+  const { data: liabilityAccounts } = await supabase
+    .schema("accounting")
+    .from("chart_of_accounts")
+    .select("id, account_name, is_long_term")
+    .eq("company_id", companyId)
+    .eq("account_type", "liability");
+  const longTermIds = new Set(
+    (liabilityAccounts ?? []).filter((a) => a.is_long_term).map((a) => a.id as string),
+  );
 
   // ---- What is in the bank today, and what of it is already spoken for ----
   const openingByCode = new Map<string, number>();
@@ -101,21 +125,17 @@ export default async function CashFlowPage({
     const net = Number(l.doc_debit_amount) - Number(l.doc_credit_amount);
     if (l.is_cash || l.is_bank) {
       openingByCode.set(code, (openingByCode.get(code) ?? 0) + net);
-    } else if (l.account_type === "liability") {
+    } else if (l.account_type === "liability" && !longTermIds.has(l.account_id as string)) {
       // A credit balance on a liability is money owed out — a deposit held for a
       // tenant, tax collected and not yet paid. It is in the bank but not yours.
+      // A LONG-TERM liability is skipped: it is not going anywhere soon, so
+      // holding cash against it would understate the headroom.
       if (!reservedByCode.has(code)) reservedByCode.set(code, new Map());
       const per = reservedByCode.get(code)!;
       const id = l.account_id as string;
       per.set(id, (per.get(id) ?? 0) - net);
     }
   }
-  const { data: liabilityAccounts } = await supabase
-    .schema("accounting")
-    .from("chart_of_accounts")
-    .select("id, account_name")
-    .eq("company_id", companyId)
-    .eq("account_type", "liability");
   for (const a of liabilityAccounts ?? []) liabilityNames.set(a.id as string, a.account_name as string);
 
   // ---- Dated movements ----
@@ -185,6 +205,41 @@ export default async function CashFlowPage({
       Number(l.amount),
     );
   }
+  // Recurring costs, spread over the months they fall due in. They are a
+  // planning schedule rather than vouchers, so nothing here is in the ledger —
+  // but they are as real a claim on the cash as a cheque already written.
+  type RecurringRow = {
+    name: string;
+    currency_id: string;
+    amount: number;
+    frequency: keyof typeof FREQUENCY_MONTHS;
+    day_of_month: number;
+    start_date: string;
+    end_date: string | null;
+  };
+  for (const e of (recurring ?? []) as unknown as RecurringRow[]) {
+    const code = currencyById.get(e.currency_id)?.code ?? "";
+    if (!code) continue;
+    const step = FREQUENCY_MONTHS[e.frequency] ?? 1;
+    const startYear = Number(e.start_date.slice(0, 4));
+    const startMonth = Number(e.start_date.slice(5, 7)) - 1;
+    for (const m of months) {
+      const year = Number(m.slice(0, 4));
+      const month = Number(m.slice(5, 7)) - 1;
+      const elapsed = (year - startYear) * 12 + (month - startMonth);
+      // Not started yet, or not one of its months.
+      if (elapsed < 0 || elapsed % step !== 0) continue;
+      // A month shorter than the chosen day falls due on its last day.
+      const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+      const due = `${m}-${String(Math.min(e.day_of_month, lastDay)).padStart(2, "0")}`;
+      if (due < e.start_date) continue;
+      if (e.end_date && due > e.end_date) continue;
+      // An occurrence already past is treated as paid, not as a future claim.
+      if (due < today) continue;
+      add(code, `Recurring — ${e.name}`, "out", due, Number(e.amount));
+    }
+  }
+
   // A currency with cash but no dated movement still belongs in the report.
   for (const code of openingByCode.keys()) blockFor(code);
 
@@ -211,6 +266,60 @@ export default async function CashFlowPage({
   });
 
   const money = (symbol: string, n: number) => `${symbol ? `${symbol} ` : ""}${formatMoney(n)}`;
+
+  // ---- Everything at once, in one currency ----
+  // Operationally the blocks above are the truth — a PKR balance cannot settle
+  // an AED cheque. But an owner asking "what is the group worth to me" wants one
+  // number, so the currencies are translated at today's rates into whichever one
+  // is chosen. It is a view, not a claim that the money is interchangeable.
+  const companyCurrencyCodes = [...new Set(ordered.map((b) => b.code))];
+  const rateToBase = new Map<string, number>();
+  await Promise.all(
+    [...new Set([...companyCurrencyCodes, curParam].filter(Boolean))].map(async (code) => {
+      const id = [...currencyById].find(([, c]) => c.code === code)?.[0];
+      if (!id) return;
+      const { data, error } = await supabase.schema("core").rpc("fn_exchange_rate_to_base", {
+        p_company_id: companyId,
+        p_currency_id: id,
+        p_as_of_date: today,
+      });
+      if (!error && data) rateToBase.set(code, Number(data));
+    }),
+  );
+  const targetCode = rateToBase.has(curParam) ? curParam : companyCurrencyCodes.includes("PKR") ? "PKR" : "";
+  const targetRate = targetCode ? rateToBase.get(targetCode) ?? 0 : 0;
+  const targetSymbol = targetCode ? symbolByCode.get(targetCode) ?? targetCode : "";
+  // amount × (its rate to base) ÷ (the target's rate to base).
+  const toTarget = (code: string, amount: number) => {
+    const from = rateToBase.get(code);
+    if (!from || !targetRate) return null;
+    return (amount * from) / targetRate;
+  };
+  const combined =
+    targetCode && summary.length > 1
+      ? summary.reduce(
+          (acc, r) => {
+            const opening = toTarget(r.block.code, r.block.opening);
+            const lowest = toTarget(r.block.code, r.lowest);
+            const reserved = toTarget(r.block.code, r.reservedTotal);
+            const available = toTarget(r.block.code, r.available);
+            if (opening === null || lowest === null || reserved === null || available === null) {
+              acc.partial = true;
+              return acc;
+            }
+            acc.opening += opening;
+            acc.lowest += lowest;
+            acc.reserved += reserved;
+            acc.available += available;
+            return acc;
+          },
+          { opening: 0, lowest: 0, reserved: 0, available: 0, partial: false },
+        )
+      : null;
+  const currencyOptions = companyCurrencyCodes
+    .filter((c) => rateToBase.has(c))
+    .map((c) => ({ value: c, label: c }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 
   const csvRows = summary.flatMap(({ block, closings, reservedTotal, available }) => [
     [block.code, "Cash & bank today", "", block.opening, ...months.map(() => "")],
@@ -257,7 +366,70 @@ export default async function CashFlowPage({
             width="w-40"
           />
         </Suspense>
+        {currencyOptions.length > 1 && (
+          <Suspense>
+            <ReportSelectFilter
+              label="Show the total in"
+              param="cur"
+              allLabel={currencyOptions.some((c) => c.value === "PKR") ? "PKR" : currencyOptions[0].label}
+              options={currencyOptions}
+              selected={curParam}
+              width="w-36"
+            />
+          </Suspense>
+        )}
       </div>
+
+      {/* Every country in one figure. */}
+      {combined && (
+        <div className="overflow-hidden rounded-xl border-2 border-primary bg-card shadow-sm">
+          <div className="bg-primary px-3 py-1.5 text-center text-xs font-bold uppercase tracking-wide text-primary-foreground">
+            All countries together — safe to withdraw, in {targetCode}
+          </div>
+          <div className="grid gap-4 px-4 py-3 sm:grid-cols-4">
+            <div>
+              <p
+                className={cn(
+                  "font-mono text-2xl font-bold tabular-nums",
+                  combined.available > 0 ? "text-foreground" : "text-destructive",
+                )}
+              >
+                {money(targetSymbol, combined.available)}
+              </p>
+              <p className="text-xs text-muted-foreground">Safe to withdraw</p>
+            </div>
+            <div>
+              <p className="font-mono text-lg tabular-nums text-foreground">
+                {money(targetSymbol, combined.opening)}
+              </p>
+              <p className="text-xs text-muted-foreground">In the bank today</p>
+            </div>
+            <div>
+              <p className="font-mono text-lg tabular-nums text-foreground">
+                {money(targetSymbol, combined.lowest)}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Lowest point in {horizon} month{horizon === 1 ? "" : "s"}
+              </p>
+            </div>
+            <div>
+              <p className="font-mono text-lg tabular-nums text-destructive">
+                {combined.reserved ? `− ${money(targetSymbol, combined.reserved)}` : money(targetSymbol, 0)}
+              </p>
+              <p className="text-xs text-muted-foreground">Held for others</p>
+            </div>
+          </div>
+          <p className="border-t bg-muted/20 px-4 py-2 text-xs text-muted-foreground">
+            {combined.partial && (
+              <span className="font-medium text-destructive">
+                A currency with no exchange rate is missing from this total.{" "}
+              </span>
+            )}
+            Translated at today&apos;s rates. The money is not interchangeable — settle each currency from its own
+            balance below.
+          </p>
+        </div>
+      )}
 
       {/* The headline, one card per currency — money is never converted here: a
           PKR balance cannot settle an AED cheque. */}

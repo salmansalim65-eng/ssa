@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, formatMoney } from "@/lib/format";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
-import { FREQUENCY_MONTHS } from "@/features/accounting/recurring-expenses/schemas";
+import { HH_AGENT_PCT, UAE_AGENT_PCT } from "@/lib/rental/lease-accounting";
 
 const HORIZONS = [
   { value: "1", label: "1 month" },
@@ -63,7 +63,10 @@ export default async function CashFlowPage({
     { data: pdcIn },
     { data: pdcOut },
     { data: currencies },
-    { data: recurring },
+    { data: uaeLeases },
+    { data: pkLeases },
+    { data: uaeInvoiced },
+    { data: pkInvoiced },
   ] = await Promise.all([
       supabase
         .schema("reporting")
@@ -91,13 +94,31 @@ export default async function CashFlowPage({
         .eq("pdc_payment_vouchers.pdc_status", "pending")
         .lte("due_date", horizonEnd),
       supabase.schema("core").from("currencies").select("id, code, symbol"),
+      // Leases still running, so rent NOT yet invoiced can be forecast from them.
       supabase
-        .schema("accounting")
-        .from("recurring_expenses")
-        .select("name, currency_id, amount, frequency, day_of_month, start_date, end_date")
+        .schema("rental")
+        .from("uae_leases")
+        .select("id, asset_id, rental_amount, lease_type, lease_start, lease_end")
         .eq("company_id", companyId)
-        .eq("is_active", true)
-        .lte("start_date", horizonEnd),
+        .eq("status", "active")
+        .is("deleted_at", null),
+      supabase
+        .schema("rental")
+        .from("pk_leases")
+        .select("id, asset_id, monthly_rent, lease_start, lease_end")
+        .eq("company_id", companyId)
+        .eq("status", "active")
+        .is("deleted_at", null),
+      supabase
+        .schema("rental")
+        .from("uae_rent_invoices")
+        .select("lease_id, period_start, period_end")
+        .eq("company_id", companyId),
+      supabase
+        .schema("rental")
+        .from("pk_rent_invoices")
+        .select("lease_id, due_date")
+        .eq("company_id", companyId),
     ]);
 
   const currencyById = new Map(
@@ -205,39 +226,89 @@ export default async function CashFlowPage({
       Number(l.amount),
     );
   }
-  // Recurring costs, spread over the months they fall due in. They are a
-  // planning schedule rather than vouchers, so nothing here is in the ledger —
-  // but they are as real a claim on the cash as a cheque already written.
-  type RecurringRow = {
-    name: string;
-    currency_id: string;
-    amount: number;
-    frequency: keyof typeof FREQUENCY_MONTHS;
-    day_of_month: number;
-    start_date: string;
-    end_date: string | null;
-  };
-  for (const e of (recurring ?? []) as unknown as RecurringRow[]) {
-    const code = currencyById.get(e.currency_id)?.code ?? "";
-    if (!code) continue;
-    const step = FREQUENCY_MONTHS[e.frequency] ?? 1;
-    const startYear = Number(e.start_date.slice(0, 4));
-    const startMonth = Number(e.start_date.slice(5, 7)) - 1;
-    for (const m of months) {
-      const year = Number(m.slice(0, 4));
-      const month = Number(m.slice(5, 7)) - 1;
-      const elapsed = (year - startYear) * 12 + (month - startMonth);
-      // Not started yet, or not one of its months.
-      if (elapsed < 0 || elapsed % step !== 0) continue;
-      // A month shorter than the chosen day falls due on its last day.
-      const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-      const due = `${m}-${String(Math.min(e.day_of_month, lastDay)).padStart(2, "0")}`;
-      if (due < e.start_date) continue;
-      if (e.end_date && due > e.end_date) continue;
-      // An occurrence already past is treated as paid, not as a future claim.
-      if (due < today) continue;
-      add(code, `Recurring — ${e.name}`, "out", due, Number(e.amount));
+  // ---- Rent the leases will produce but nobody has invoiced yet ----
+  // The rows above only know invoices that EXIST. A lease running to next April
+  // will earn rent every month between now and then, and none of it is in the
+  // forecast until somebody raises the invoice — which is precisely the money
+  // this report is asked about. So each running lease is projected forward, and
+  // any month it has already been invoiced for is skipped so the two rows never
+  // count the same rent twice.
+  //
+  // The figure is the OWNER's net: the agent's share (5% on a UAE lease, 10% on
+  // an HH one) comes off the top, exactly as invoicing does it. PK leases carry
+  // no agent share.
+  const invoicedMonths = new Set<string>();
+  for (const i of (uaeInvoiced ?? []) as unknown as {
+    lease_id: string;
+    period_start: string | null;
+    period_end: string | null;
+  }[]) {
+    const from = i.period_start;
+    const to = i.period_end ?? i.period_start;
+    if (!from || !to) continue;
+    // An invoice covering several months blocks every one of them.
+    for (
+      let d = new Date(`${from.slice(0, 7)}-01T00:00:00Z`);
+      d <= new Date(`${to.slice(0, 7)}-01T00:00:00Z`);
+      d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))
+    ) {
+      invoicedMonths.add(`${i.lease_id}:${d.toISOString().slice(0, 7)}`);
     }
+  }
+  for (const i of (pkInvoiced ?? []) as unknown as { lease_id: string; due_date: string | null }[]) {
+    if (i.due_date) invoicedMonths.add(`${i.lease_id}:${monthKey(i.due_date)}`);
+  }
+
+  const projectRent = (
+    leaseId: string,
+    code: string,
+    monthlyNet: number,
+    start: string | null,
+    end: string | null,
+    label: string,
+  ) => {
+    if (!code || monthlyNet <= 0 || !start) return;
+    for (const m of months) {
+      if (invoicedMonths.has(`${leaseId}:${m}`)) continue;
+      const monthStart = `${m}-01`;
+      const lastDay = new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0)).getUTCDate();
+      const monthEnd = `${m}-${lastDay}`;
+      // The lease has to actually be running in that month.
+      if (start > monthEnd) continue;
+      if (end && end < monthStart) continue;
+      // Rent lands on the first of the month it covers; a month already begun
+      // is taken as due today rather than in the past.
+      const due = monthStart < today ? today : monthStart;
+      add(code, label, "in", due, monthlyNet);
+    }
+  };
+
+  const codeOf = (wanted: string) => ([...currencyById].find(([, c]) => c.code === wanted) ? wanted : "");
+  for (const l of (uaeLeases ?? []) as unknown as {
+    id: string;
+    rental_amount: number;
+    lease_type: string | null;
+    lease_start: string | null;
+    lease_end: string | null;
+  }[]) {
+    const pct = l.lease_type === "hh" ? HH_AGENT_PCT : UAE_AGENT_PCT;
+    const net = Math.round(Number(l.rental_amount) * (1 - pct) * 100) / 100;
+    projectRent(l.id, codeOf("AED"), net, l.lease_start, l.lease_end, "Rent expected, not yet invoiced");
+  }
+  for (const l of (pkLeases ?? []) as unknown as {
+    id: string;
+    monthly_rent: number;
+    lease_start: string | null;
+    lease_end: string | null;
+  }[]) {
+    projectRent(
+      l.id,
+      codeOf("PKR"),
+      Number(l.monthly_rent),
+      l.lease_start,
+      l.lease_end,
+      "Rent expected, not yet invoiced",
+    );
   }
 
   // A currency with cash but no dated movement still belongs in the report.
@@ -587,12 +658,16 @@ export default async function CashFlowPage({
         <p className="mb-1 font-medium text-foreground">What this figure does and does not know</p>
         <ul className="list-inside list-disc space-y-0.5">
           <li>
-            Only <strong>committed, dated</strong> money is counted: rent already invoiced and unpaid, and cheques
-            already written. Rent that has not been invoiced yet is not a forecast — it is a guess.
+            Money in is rent <strong>already invoiced</strong> and unpaid, cheques in hand maturing, and rent the
+            running leases will earn but nobody has invoiced yet — the last of those at the owner&apos;s net, after
+            the agent&apos;s share. A month already invoiced is never counted twice.
           </li>
           <li>
-            Running costs — salaries, utilities, service charges, tax falling due — are <strong>not</strong> in the
-            app as dated commitments, so nothing deducts them. Subtract your own estimate before acting on this.
+            A lease is assumed to run to its end date and to be paid on time. It is a forecast, not a promise.
+          </li>
+          <li>
+            Running costs — salaries, utilities, service charges, tax falling due — are <strong>not</strong>
+            deducted. Subtract your own estimate before acting on this.
           </li>
           <li>Each currency stands alone. A PKR balance cannot settle an AED cheque.</li>
           <li>Balances are as of {formatDate(today)}, from posted entries only.</li>

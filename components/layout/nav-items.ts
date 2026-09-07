@@ -125,6 +125,7 @@ export const navSections: NavSection[] = [
       { label: "Balance Sheet", href: "/reports/balance-sheet", icon: LandmarkIcon, module: "reports" },
       { label: "Profit & Loss", href: "/reports/profit-and-loss", icon: LineChartIcon, module: "reports" },
       { label: "Expense Report", href: "/reports/expense-report", icon: WalletIcon, module: "reports" },
+      { label: "Cash Flow Forecast", href: "/reports/cash-flow", icon: TrendingUpIcon, module: "reports" },
       { label: "Cash Book", href: "/reports/cash-book", icon: CoinsIcon, module: "reports" },
       { label: "Bank Book", href: "/reports/bank-book", icon: Building2Icon, module: "reports" },
       { label: "Rental Property Report", href: "/reports/property-report", icon: BuildingIcon, module: "reports" },

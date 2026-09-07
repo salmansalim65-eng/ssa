@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatAccountCode, formatDate, formatMoney } from "@/lib/format";
 import { HH_AGENT_PCT, UAE_AGENT_PCT } from "@/lib/rental/lease-accounting";
 import { billingMonthStarts, billingMonthCount } from "@/lib/rental/billing-months";
+import { OccupancyView } from "./occupancy-view";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -57,10 +58,18 @@ interface CcRow {
 export default async function RentReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ year?: string; asset?: string; country?: string }>;
+  searchParams: Promise<{ year?: string; asset?: string; country?: string; view?: string }>;
 }) {
   const currentYear = new Date().getFullYear();
-  const { year: yearParam = "", asset: assetParam = "", country: countryRaw = "" } = await searchParams;
+  const {
+    year: yearParam = "",
+    asset: assetParam = "",
+    country: countryRaw = "",
+    view: viewParam = "",
+  } = await searchParams;
+  // "Rent" is the money view; "Occupancy" counts the days each HH property was
+  // let, which only makes sense for the short HH lettings.
+  const isOccupancy = viewParam === "occupancy";
   // A link saved back when the filter listed segments ("HH", "UAE") still means
   // the country those sit in.
   const countryParam = countryRaw ? segmentCountry(countryRaw) : "";
@@ -379,217 +388,263 @@ export default async function RentReportPage({
               width="w-40"
             />
           </Suspense>
-          <Suspense>
-            <ReportSelectFilter
-              label="Country"
-              param="country"
-              allLabel="All countries"
-              options={countryOptions}
-              selected={countryParam}
-              width="w-48"
-            />
-          </Suspense>
-          <Suspense>
-            <ReportSelectFilter
-              label="Property"
-              param="asset"
-              allLabel="Select a property"
-              options={assetOptions}
-              selected={assetParam}
-              width="w-56"
-            />
-          </Suspense>
+          {/* Country and Property narrow the RENT view; occupancy is every HH
+              property, so they would say nothing there. */}
+          {!isOccupancy && (
+            <>
+              <Suspense>
+                <ReportSelectFilter
+                  label="Country"
+                  param="country"
+                  allLabel="All countries"
+                  options={countryOptions}
+                  selected={countryParam}
+                  width="w-48"
+                />
+              </Suspense>
+              <Suspense>
+                <ReportSelectFilter
+                  label="Property"
+                  param="asset"
+                  allLabel="Select a property"
+                  options={assetOptions}
+                  selected={assetParam}
+                  width="w-56"
+                />
+              </Suspense>
+            </>
+          )}
         </div>
         <div className="flex items-center gap-2">
-          <CsvExportButton
-            filename={`rent-report-${year}.csv`}
-            headers={["S.No", "Country", "Code", "Cost centre", "Net Rent", ...MONTHS, "Total"]}
-            rows={exportRows}
-          />
+          {!isOccupancy && (
+            <CsvExportButton
+              filename={`rent-report-${year}.csv`}
+              headers={["S.No", "Country", "Code", "Cost centre", "Net Rent", ...MONTHS, "Total"]}
+              rows={exportRows}
+            />
+          )}
           <PrintButton />
         </div>
       </div>
 
-      {/* Selected property's lease term + per-country annual-rent summary,
-          frozen together at the top so they stay visible while scrolling the
-          matrix. */}
-      <div className="shrink-0 space-y-3">
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-foreground">
-            Lease term —{" "}
-            <span className="text-muted-foreground">{selectedDetail ? selectedDetail.name : "select a property"}</span>
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <TermCard label="Tenant" value={selectedDetail?.tenant ?? "—"} />
-            <TermCard label="Monthly Rent" value={selectedDetail?.rent ?? "—"} />
-            <TermCard label="Start Date" value={selectedDetail?.start ? formatDate(selectedDetail.start) : "—"} />
-            <TermCard label="End Date" value={selectedDetail?.end ? formatDate(selectedDetail.end) : "—"} />
-            <TermCard label="Renew Month" value={selectedDetail?.renew ?? "—"} />
+      {/* The two views of the same year. */}
+      <div className="flex shrink-0 flex-wrap items-center gap-1.5 print:hidden">
+        {[
+          { key: "", label: "Rent" },
+          { key: "occupancy", label: "Occupancy (days) — HH" },
+        ].map((tab) => {
+          const active = tab.key === (isOccupancy ? "occupancy" : "");
+          const qp = new URLSearchParams();
+          if (yearParam) qp.set("year", yearParam);
+          if (tab.key) qp.set("view", tab.key);
+          else {
+            if (countryParam) qp.set("country", countryParam);
+            if (assetParam) qp.set("asset", assetParam);
+          }
+          const query = qp.toString();
+          return (
+            <Link
+              key={tab.key || "rent"}
+              href={query ? `?${query}` : "?"}
+              className={cn(
+                "rounded-md border px-3 py-1.5 text-xs font-medium transition-colors",
+                active
+                  ? "border-ledger-dark bg-ledger/15 text-ledger-dark"
+                  : "border-input text-muted-foreground hover:bg-accent hover:text-foreground",
+              )}
+            >
+              {tab.label}
+            </Link>
+          );
+        })}
+      </div>
+
+      {isOccupancy && <OccupancyView companyId={companyId} year={year} />}
+
+      {!isOccupancy && (
+        <>
+        {/* Selected property's lease term + per-country annual-rent summary,
+            frozen together at the top so they stay visible while scrolling the
+            matrix. */}
+        <div className="shrink-0 space-y-3">
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-foreground">
+              Lease term —{" "}
+              <span className="text-muted-foreground">{selectedDetail ? selectedDetail.name : "select a property"}</span>
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <TermCard label="Tenant" value={selectedDetail?.tenant ?? "—"} />
+              <TermCard label="Monthly Rent" value={selectedDetail?.rent ?? "—"} />
+              <TermCard label="Start Date" value={selectedDetail?.start ? formatDate(selectedDetail.start) : "—"} />
+              <TermCard label="End Date" value={selectedDetail?.end ? formatDate(selectedDetail.end) : "—"} />
+              <TermCard label="Renew Month" value={selectedDetail?.renew ?? "—"} />
+            </div>
           </div>
+
+          {/* Per-country annual-rent summary */}
+          {sections.length > 0 && (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {sections.map((s) => {
+                const cur = SEGMENT[s.country]?.code ?? "";
+                const symbol = symbolByCode.get(cur) ?? cur;
+                const total = s.rows.reduce((a, r) => a + r.total, 0);
+                return (
+                  <Kpi
+                    key={s.country}
+                    label={`${SEGMENT[s.country]?.label ?? s.country} — Annual Net Rent`}
+                    value={`${symbol ? symbol + " " : ""}${formatMoney(total)}`}
+                    sub={`${s.rows.length} propert${s.rows.length === 1 ? "y" : "ies"} · ${cur}`}
+                  />
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {/* Per-country annual-rent summary */}
-        {sections.length > 0 && (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {sections.map((s) => {
-              const cur = SEGMENT[s.country]?.code ?? "";
-              const symbol = symbolByCode.get(cur) ?? cur;
-              const total = s.rows.reduce((a, r) => a + r.total, 0);
-              return (
-                <Kpi
-                  key={s.country}
-                  label={`${SEGMENT[s.country]?.label ?? s.country} — Annual Net Rent`}
-                  value={`${symbol ? symbol + " " : ""}${formatMoney(total)}`}
-                  sub={`${s.rows.length} propert${s.rows.length === 1 ? "y" : "ies"} · ${cur}`}
-                />
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Month-wise rent matrix */}
-      <div className="min-h-0 flex-1 overflow-auto rounded-xl border bg-card shadow-xs print:h-auto print:overflow-visible">
-        <table className="w-full min-w-[1080px] border-collapse text-sm">
-          <thead className="sticky top-0 z-20">
-            <tr className="bg-primary text-primary-foreground [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:border-r [&>th]:border-primary/40 [&>th]:bg-primary [&>th]:px-3 [&>th]:py-2.5 [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide">
-              <th className="sticky left-0 top-0 z-30 w-12 bg-primary text-right">S.No</th>
-              <th className="sticky left-12 top-0 z-30 min-w-[240px] bg-primary text-left">Cost centre</th>
-              <th className="whitespace-nowrap text-right bg-white/20">Net Rent</th>
-              {MONTHS.map((m, i) => (
-                <th key={m} className={cn("whitespace-nowrap text-right", i === thisMonth && "bg-white/15")}>
-                  {m}
-                </th>
-              ))}
-              <th className="whitespace-nowrap text-right bg-white/20">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sections.length === 0 && (
-              <tr>
-                <td colSpan={totalCols} className="py-12 text-center text-muted-foreground">
-                  No active leases for {year}.
-                </td>
+        {/* Month-wise rent matrix */}
+        <div className="min-h-0 flex-1 overflow-auto rounded-xl border bg-card shadow-xs print:h-auto print:overflow-visible">
+          <table className="w-full min-w-[1080px] border-collapse text-sm">
+            <thead className="sticky top-0 z-20">
+              <tr className="bg-primary text-primary-foreground [&>th]:sticky [&>th]:top-0 [&>th]:z-20 [&>th]:border-r [&>th]:border-primary/40 [&>th]:bg-primary [&>th]:px-3 [&>th]:py-2.5 [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide">
+                <th className="sticky left-0 top-0 z-30 w-12 bg-primary text-right">S.No</th>
+                <th className="sticky left-12 top-0 z-30 min-w-[240px] bg-primary text-left">Cost centre</th>
+                <th className="whitespace-nowrap text-right bg-white/20">Net Rent</th>
+                {MONTHS.map((m, i) => (
+                  <th key={m} className={cn("whitespace-nowrap text-right", i === thisMonth && "bg-white/15")}>
+                    {m}
+                  </th>
+                ))}
+                <th className="whitespace-nowrap text-right bg-white/20">Total</th>
               </tr>
-            )}
-            {currencyGroups.map((group) => {
-              const symbol = symbolByCode.get(group.code) ?? group.code;
-              const money = (n: number) => (n ? `${symbol ? symbol + " " : ""}${formatMoney(n)}` : "");
-              const gEst = group.sections.reduce((a, s) => a + s.rows.reduce((x, r) => x + r.est, 0), 0);
-              const gMonths = MONTHS.map((_, i) =>
-                group.sections.reduce((a, s) => a + s.rows.reduce((x, r) => x + r.months[i], 0), 0),
-              );
-              const gTotal = group.sections.reduce((a, s) => a + s.rows.reduce((x, r) => x + r.total, 0), 0);
-              return (
-                <Fragment key={group.code}>
-                  {group.sections.map((section) => {
-              const cur = group.code;
-              const label = SEGMENT[section.country]?.label ?? section.country;
-              const secEst = section.rows.reduce((s, r) => s + r.est, 0);
-              const secMonths = MONTHS.map((_, i) => section.rows.reduce((s, r) => s + r.months[i], 0));
-              const secTotal = section.rows.reduce((s, r) => s + r.total, 0);
-              return (
-                <Fragment key={section.country}>
-                  {/* Section band (green) — carries the segment's own totals */}
-                  <tr className="bg-ledger-dark font-semibold text-white [&>td]:px-3 [&>td]:py-2">
-                    <td colSpan={2} className="sticky left-0 z-10 bg-ledger-dark text-xs font-bold uppercase tracking-wide">
-                      {label}
-                      {symbol ? ` · ${cur}` : ""}
-                    </td>
-                    <td className="text-right font-mono tabular-nums bg-white/15">{secEst ? money(secEst) : dash}</td>
-                    {secMonths.map((v, i) => (
-                      <td key={i} className={cn("text-right font-mono tabular-nums", i === thisMonth && "bg-white/15")}>
-                        {v ? money(v) : dash}
+            </thead>
+            <tbody>
+              {sections.length === 0 && (
+                <tr>
+                  <td colSpan={totalCols} className="py-12 text-center text-muted-foreground">
+                    No active leases for {year}.
+                  </td>
+                </tr>
+              )}
+              {currencyGroups.map((group) => {
+                const symbol = symbolByCode.get(group.code) ?? group.code;
+                const money = (n: number) => (n ? `${symbol ? symbol + " " : ""}${formatMoney(n)}` : "");
+                const gEst = group.sections.reduce((a, s) => a + s.rows.reduce((x, r) => x + r.est, 0), 0);
+                const gMonths = MONTHS.map((_, i) =>
+                  group.sections.reduce((a, s) => a + s.rows.reduce((x, r) => x + r.months[i], 0), 0),
+                );
+                const gTotal = group.sections.reduce((a, s) => a + s.rows.reduce((x, r) => x + r.total, 0), 0);
+                return (
+                  <Fragment key={group.code}>
+                    {group.sections.map((section) => {
+                const cur = group.code;
+                const label = SEGMENT[section.country]?.label ?? section.country;
+                const secEst = section.rows.reduce((s, r) => s + r.est, 0);
+                const secMonths = MONTHS.map((_, i) => section.rows.reduce((s, r) => s + r.months[i], 0));
+                const secTotal = section.rows.reduce((s, r) => s + r.total, 0);
+                return (
+                  <Fragment key={section.country}>
+                    {/* Section band (green) — carries the segment's own totals */}
+                    <tr className="bg-ledger-dark font-semibold text-white [&>td]:px-3 [&>td]:py-2">
+                      <td colSpan={2} className="sticky left-0 z-10 bg-ledger-dark text-xs font-bold uppercase tracking-wide">
+                        {label}
+                        {symbol ? ` · ${cur}` : ""}
                       </td>
-                    ))}
-                    <td className="text-right font-mono tabular-nums bg-white/15">{secTotal ? money(secTotal) : dash}</td>
-                  </tr>
-                  {/* Property rows */}
-                  {section.rows.map((r, ri) => {
-                    const rowBg = ri % 2 ? "bg-muted/30" : "bg-card";
-                    return (
-                      <tr key={r.id} className={cn("group/row border-b border-border/50 [&>td]:px-3 [&>td]:py-2", rowBg, "hover:bg-primary/[0.05]")}>
-                        <td className={cn("sticky left-0 z-10 w-12 border-r border-border/50 text-right font-mono text-xs tabular-nums text-muted-foreground", rowBg, "group-hover/row:bg-primary/[0.05]")}>
-                          {ri + 1}
+                      <td className="text-right font-mono tabular-nums bg-white/15">{secEst ? money(secEst) : dash}</td>
+                      {secMonths.map((v, i) => (
+                        <td key={i} className={cn("text-right font-mono tabular-nums", i === thisMonth && "bg-white/15")}>
+                          {v ? money(v) : dash}
                         </td>
-                        <td className={cn("sticky left-12 z-10 min-w-[240px] border-r border-border/50", rowBg, "group-hover/row:bg-primary/[0.05]")}>
-                          <Link
-                            href={propHref(r.id)}
-                            scroll={false}
-                            className={cn(
-                              "font-medium text-foreground hover:text-primary hover:underline",
-                              assetParam === r.id && "text-primary underline",
-                            )}
-                          >
-                            {r.name}
-                          </Link>
-                          {r.total === 0 && (
-                            <span className="ml-2 rounded border border-amber-400/60 px-1.5 text-[0.6rem] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
-                              Vacant
-                            </span>
-                          )}
-                        </td>
-                        <td className="text-right font-mono font-semibold tabular-nums text-foreground bg-primary/[0.07]">
-                          {r.est ? money(r.est) : dash}
-                        </td>
-                        {r.months.map((v, i) => {
-                          // A month entirely before the accounting period started,
-                          // or in the future, is blank — never flagged "Vacant".
-                          const beforePeriod = periodStart != null && monthEnd(i) < periodStart;
-                          const blankMonth = beforePeriod || isFutureMonth(i);
-                          return (
-                            <td
-                              key={i}
+                      ))}
+                      <td className="text-right font-mono tabular-nums bg-white/15">{secTotal ? money(secTotal) : dash}</td>
+                    </tr>
+                    {/* Property rows */}
+                    {section.rows.map((r, ri) => {
+                      const rowBg = ri % 2 ? "bg-muted/30" : "bg-card";
+                      return (
+                        <tr key={r.id} className={cn("group/row border-b border-border/50 [&>td]:px-3 [&>td]:py-2", rowBg, "hover:bg-primary/[0.05]")}>
+                          <td className={cn("sticky left-0 z-10 w-12 border-r border-border/50 text-right font-mono text-xs tabular-nums text-muted-foreground", rowBg, "group-hover/row:bg-primary/[0.05]")}>
+                            {ri + 1}
+                          </td>
+                          <td className={cn("sticky left-12 z-10 min-w-[240px] border-r border-border/50", rowBg, "group-hover/row:bg-primary/[0.05]")}>
+                            <Link
+                              href={propHref(r.id)}
+                              scroll={false}
                               className={cn(
-                                "text-right font-mono tabular-nums",
-                                // Current month stands out in bold dark green.
-                                i === thisMonth && "bg-primary/[0.08] font-semibold text-green-700 dark:text-green-400",
-                                // Only empty (dash) cells are muted — real amounts in
-                                // any month show in the normal colour, not faded.
-                                blankMonth && !v && "text-muted-foreground/40",
+                                "font-medium text-foreground hover:text-primary hover:underline",
+                                assetParam === r.id && "text-primary underline",
                               )}
                             >
-                              {v ? (
-                                money(v)
-                              ) : blankMonth ? (
-                                dash
-                              ) : (
-                                <span className="text-[0.6rem] font-medium uppercase tracking-wide text-amber-600/80 dark:text-amber-400/80">
-                                  Vacant
-                                </span>
-                              )}
-                            </td>
-                          );
-                        })}
-                        <td className="text-right font-mono font-semibold tabular-nums text-foreground bg-primary/[0.07]">
-                          {money(r.total)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </Fragment>
-              );
-            })}
-                  {/* Combined total for the currency group (blue) — e.g. HH + UAE
-                      shown together in AED. */}
-                  <tr className="bg-primary font-semibold text-primary-foreground [&>td]:px-3 [&>td]:py-2">
-                    <td colSpan={2} className="sticky left-0 z-10 bg-primary text-xs uppercase tracking-wide">
-                      Total — {group.code}
-                    </td>
-                    <td className="text-right font-mono tabular-nums bg-white/20">{gEst ? money(gEst) : dash}</td>
-                    {gMonths.map((v, i) => (
-                      <td key={i} className={cn("text-right font-mono tabular-nums", i === thisMonth && "bg-white/20")}>
-                        {v ? money(v) : dash}
+                              {r.name}
+                            </Link>
+                            {r.total === 0 && (
+                              <span className="ml-2 rounded border border-amber-400/60 px-1.5 text-[0.6rem] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                                Vacant
+                              </span>
+                            )}
+                          </td>
+                          <td className="text-right font-mono font-semibold tabular-nums text-foreground bg-primary/[0.07]">
+                            {r.est ? money(r.est) : dash}
+                          </td>
+                          {r.months.map((v, i) => {
+                            // A month entirely before the accounting period started,
+                            // or in the future, is blank — never flagged "Vacant".
+                            const beforePeriod = periodStart != null && monthEnd(i) < periodStart;
+                            const blankMonth = beforePeriod || isFutureMonth(i);
+                            return (
+                              <td
+                                key={i}
+                                className={cn(
+                                  "text-right font-mono tabular-nums",
+                                  // Current month stands out in bold dark green.
+                                  i === thisMonth && "bg-primary/[0.08] font-semibold text-green-700 dark:text-green-400",
+                                  // Only empty (dash) cells are muted — real amounts in
+                                  // any month show in the normal colour, not faded.
+                                  blankMonth && !v && "text-muted-foreground/40",
+                                )}
+                              >
+                                {v ? (
+                                  money(v)
+                                ) : blankMonth ? (
+                                  dash
+                                ) : (
+                                  <span className="text-[0.6rem] font-medium uppercase tracking-wide text-amber-600/80 dark:text-amber-400/80">
+                                    Vacant
+                                  </span>
+                                )}
+                              </td>
+                            );
+                          })}
+                          <td className="text-right font-mono font-semibold tabular-nums text-foreground bg-primary/[0.07]">
+                            {money(r.total)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </Fragment>
+                );
+              })}
+                    {/* Combined total for the currency group (blue) — e.g. HH + UAE
+                        shown together in AED. */}
+                    <tr className="bg-primary font-semibold text-primary-foreground [&>td]:px-3 [&>td]:py-2">
+                      <td colSpan={2} className="sticky left-0 z-10 bg-primary text-xs uppercase tracking-wide">
+                        Total — {group.code}
                       </td>
-                    ))}
-                    <td className="text-right font-mono tabular-nums bg-white/20">{money(gTotal)}</td>
-                  </tr>
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                      <td className="text-right font-mono tabular-nums bg-white/20">{gEst ? money(gEst) : dash}</td>
+                      {gMonths.map((v, i) => (
+                        <td key={i} className={cn("text-right font-mono tabular-nums", i === thisMonth && "bg-white/20")}>
+                          {v ? money(v) : dash}
+                        </td>
+                      ))}
+                      <td className="text-right font-mono tabular-nums bg-white/20">{money(gTotal)}</td>
+                    </tr>
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        </>
+      )}
     </div>
   );
 }

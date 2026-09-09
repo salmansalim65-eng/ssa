@@ -717,9 +717,11 @@ export default async function DashboardPage({
 
       </div>
 
-      {/* Which contracts are running out, right after the cards. It streams on
-          its own so the cards are never held back by the lease queries. */}
-      {(canRentalUae || canRentalPk) && (
+      {/* Which contracts are running out — the dashboard's default report, right
+          after the cards. Clicking a card replaces it with that card's own
+          drill-down, so only one report is ever on screen. It streams on its own
+          so the cards are never held back by the lease queries. */}
+      {!selected && !isBank && !isCash && (canRentalUae || canRentalPk) && (
         <Suspense fallback={<RenewalsSkeleton />}>
           <LeaseRenewals companyId={companyId} />
         </Suspense>

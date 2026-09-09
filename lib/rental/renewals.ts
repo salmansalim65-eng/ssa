@@ -47,10 +47,17 @@ export type RenewalStatus = "overdue" | "due" | "later";
 /** A renewal is "due" once it is this close, and the alert counts it from here. */
 export const DUE_SOON_DAYS = 30;
 
+/** The two countries the business lets in. HH is a UAE letting, not a country. */
+export type RenewalCountry = "AE" | "PK";
+
+export const COUNTRY_LABEL: Record<RenewalCountry, string> = { AE: "UAE", PK: "Pakistan" };
+
 export interface LeaseRenewal {
   key: string;
   source: "uae" | "pk";
-  /** "HH" for a holiday-homes letting, else the country. */
+  /** Where the property is. HH lettings sit under the UAE, not on their own. */
+  country: RenewalCountry;
+  /** "HH" for a holiday-homes letting, else the plain country lease. */
   segment: "HH" | "UAE" | "PK";
   property: string;
   tenant: string;
@@ -118,6 +125,7 @@ export async function loadLeaseRenewals(
   const rows: LeaseRenewal[] = [];
   const push = (
     source: "uae" | "pk",
+    country: RenewalCountry,
     segment: LeaseRenewal["segment"],
     lease: { id: unknown; asset_id: unknown; tenant_id: unknown; lease_start: unknown; lease_end: unknown; rent_month: unknown },
   ) => {
@@ -127,6 +135,7 @@ export async function loadLeaseRenewals(
     rows.push({
       key: `${source}:${lease.id as string}`,
       source,
+      country,
       segment,
       property: assetName.get(lease.asset_id as string) ?? "—",
       tenant: tenantName.get(lease.tenant_id as string) ?? "—",
@@ -138,8 +147,8 @@ export async function loadLeaseRenewals(
     });
   };
 
-  for (const l of uaeLeases ?? []) push("uae", l.lease_type === "hh" ? "HH" : "UAE", l);
-  for (const l of pkLeases ?? []) push("pk", "PK", l);
+  for (const l of uaeLeases ?? []) push("uae", "AE", l.lease_type === "hh" ? "HH" : "UAE", l);
+  for (const l of pkLeases ?? []) push("pk", "PK", "PK", l);
 
   rows.sort((a, b) => a.daysLeft - b.daysLeft || a.property.localeCompare(b.property));
   return rows;

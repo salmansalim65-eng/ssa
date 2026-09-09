@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/lease-renewals",
+      "schedule": "0 4 * * *"
+    }
+  ]
+}

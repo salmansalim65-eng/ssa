@@ -10,6 +10,7 @@ import { formatDate } from "@/lib/format";
 import { ApprovalsBell } from "./approvals-bell";
 import { Breadcrumbs } from "./breadcrumbs";
 import { HeaderNav } from "./header-nav";
+import { RenewalsBell } from "./renewals-bell";
 import { SidebarNav } from "./sidebar-nav";
 import { ThemeToggle } from "./theme-toggle";
 import { UserMenu } from "./user-menu";
@@ -24,6 +25,7 @@ export function Header({
   allowedModules = null,
   isAdmin = false,
   pendingApprovals = null,
+  renewalsDue = null,
 }: {
   fullName: string;
   email: string;
@@ -32,6 +34,8 @@ export function Header({
   isAdmin?: boolean;
   /** Vouchers waiting for a decision; null hides the bell (no approvals access). */
   pendingApprovals?: number | null;
+  /** Lease contracts at or past renewal; null hides the bell (no rental access). */
+  renewalsDue?: { count: number; overdue: number } | null;
 }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   // Same calendar-day string on server and client; the span carries
@@ -72,6 +76,7 @@ export function Header({
 
       <div className="ml-auto flex items-center gap-1.5">
         {pendingApprovals !== null && <ApprovalsBell count={pendingApprovals} />}
+        {renewalsDue !== null && <RenewalsBell count={renewalsDue.count} overdue={renewalsDue.overdue} />}
         {/* Vista Group branding links out to the parent ERP — shown to
             administrators only. */}
         {isAdmin && (

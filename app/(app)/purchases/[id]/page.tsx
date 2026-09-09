@@ -5,6 +5,8 @@ import { PencilIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
+import { VoucherPager } from "@/components/vouchers/voucher-pager";
+import { getRecordNeighbours } from "@/lib/vouchers/pager";
 import { EscToBack } from "@/components/vouchers/esc-to-back";
 import {
   Table,
@@ -56,10 +58,13 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
 
   if (!voucher) notFound();
 
-  const [canDelete, canCreate, isAdmin] = await Promise.all([
+  const [canDelete, canCreate, isAdmin, neighbours] = await Promise.all([
     hasPermission("purchase_voucher", "delete"),
     hasPermission("purchase_voucher", "create"),
     isCurrentUserAdmin(),
+    // The documents either side of this one, so a run of them can be
+    // read straight through instead of going back to the list between each.
+    getRecordNeighbours("accounting", "purchase_vouchers", companyId, id),
   ]);
 
   const { data: lines } = await supabase
@@ -137,6 +142,7 @@ export default async function PurchaseVoucherDetailPage({ params }: { params: Pr
         backHref="/purchases"
         actions={
           <>
+            <VoucherPager basePath="/purchases" prev={neighbours.prev} next={neighbours.next} />
             <VoucherStatusBadge status={status} />
             <PrintButton />
             {status === "draft" && canSubmit && (

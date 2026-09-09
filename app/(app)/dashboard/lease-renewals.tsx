@@ -2,6 +2,7 @@ import {
   AlertTriangleIcon,
   CalendarCheckIcon,
   CalendarClockIcon,
+  DoorOpenIcon,
   FileTextIcon,
 } from "lucide-react";
 
@@ -14,6 +15,7 @@ import {
   DUE_SOON_DAYS,
   daysBetween,
   loadLeaseRenewals,
+  vacantToday,
   type LeaseRenewal,
   type RenewalCountry,
 } from "@/lib/rental/renewals";
@@ -26,6 +28,9 @@ const COLOUR: Record<LeaseRenewal["status"], string> = {
   overdue: "#d03b3b",
   due: "#eab308",
   later: "#0ca30c",
+  // Nothing running, so nothing to draw — the track stays empty and the row
+  // says so in words instead.
+  vacant: "transparent",
 };
 
 /** A darker rim for the yellow bar, which is otherwise too light to read. */
@@ -63,9 +68,12 @@ const SEGMENT_LABEL: Record<LeaseRenewal["segment"], string> = {
 const SEGMENT_SHORT: Record<LeaseRenewal["segment"], string> = { HH: "HH", UAE: "UAE", PK: "PK" };
 
 function statusText(r: LeaseRenewal): string {
+  if (r.daysLeft === null) return "Vacant — no contract";
   if (r.status === "overdue") {
     const late = -r.daysLeft;
-    return `Overdue ${late} ${late === 1 ? "day" : "days"}`;
+    // A contract that has run out means the property is standing empty, so the
+    // row says both rather than leaving the vacancy to be inferred.
+    return `Overdue ${late} ${late === 1 ? "day" : "days"} · vacant`;
   }
   if (r.daysLeft === 0) return "Renewal due today";
   return `Due in ${r.daysLeft} ${r.daysLeft === 1 ? "day" : "days"}`;
@@ -114,8 +122,10 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
 
   const overdue = rows.filter((r) => r.status === "overdue");
   const due = rows.filter((r) => r.status === "due");
+  // Standing empty today: the contract ran out, or there never was one.
+  const empty = vacantToday(rows);
   // The soonest contract still ahead of us — what to line up next.
-  const next = rows.find((r) => r.status !== "overdue");
+  const next = rows.find((r) => r.status === "due" || r.status === "later");
 
   // Month boundaries across the visible window, for the axis above the bars.
   // The same window serves every country section, so the two charts compare.
@@ -161,11 +171,15 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
             <span className="size-2.5 rounded-sm" style={{ backgroundColor: COLOUR.later }} aria-hidden />
             Later
           </span>
+          <span className="flex items-center gap-1.5">
+            <span className="size-2.5 rounded-sm border border-dashed border-muted-foreground/60" aria-hidden />
+            Vacant (no bar)
+          </span>
         </div>
       </div>
 
       {/* The headline numbers, before any chart is read. */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <KpiCard
           label="Properties on lease"
           value={rows.length.toLocaleString()}
@@ -177,7 +191,7 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
           value={overdue.length.toLocaleString()}
           subtext={
             overdue.length > 0
-              ? `Longest ${-overdue[0].daysLeft} days — ${overdue[0].property}`
+              ? `Longest ${-(overdue[0].daysLeft ?? 0)} days — ${overdue[0].property}`
               : "Every contract is inside its term"
           }
           icon={AlertTriangleIcon}
@@ -189,6 +203,17 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
           subtext={due.length > 0 ? due.map((r) => r.property).slice(0, 2).join(" · ") : "Nothing falling due this month"}
           icon={CalendarClockIcon}
           tone={due.length > 0 ? "warning" : undefined}
+        />
+        <KpiCard
+          label="Empty today"
+          value={empty.length.toLocaleString()}
+          subtext={
+            empty.length > 0
+              ? empty.map((r) => r.property).slice(0, 2).join(" · ")
+              : "Every property is let"
+          }
+          icon={DoorOpenIcon}
+          tone={empty.length > 0 ? "destructive" : "success"}
         />
         <KpiCard
           label="Next renewal"
@@ -232,10 +257,16 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
         if (countryRows.length === 0) return null;
         const countryOverdue = countryRows.filter((r) => r.status === "overdue").length;
         const countryDue = countryRows.filter((r) => r.status === "due").length;
+        const countryEmpty = vacantToday(countryRows).length;
         // Within a country, each kind of letting is listed on its own: an HH
         // stay and a standard lease renew on completely different rhythms, so
         // reading them in one list tells you nothing about either.
-        const segments = SEGMENT_ORDER.filter((seg) => countryRows.some((r) => r.segment === seg));
+        // A vacant property has no kind of letting to file it under, so it is
+        // listed on its own at the foot of the country rather than sitting in a
+        // lease group with an empty row.
+        const letRows = countryRows.filter((r) => r.status !== "vacant");
+        const vacantRows = countryRows.filter((r) => r.status === "vacant");
+        const segments = SEGMENT_ORDER.filter((seg) => letRows.some((r) => r.segment === seg));
 
         return (
           <div key={country} className="rounded-xl border bg-card p-4 shadow-xs">
@@ -246,6 +277,8 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
                 <span className={cn(countryOverdue > 0 && "font-semibold text-destructive")}>
                   {countryOverdue} overdue
                 </span>{" "}
+                ·{" "}
+                <span className={cn(countryEmpty > 0 && "font-semibold text-destructive")}>{countryEmpty} empty</span>{" "}
                 ·{" "}
                 <span className={cn(countryDue > 0 && "font-semibold text-yellow-700 dark:text-yellow-400")}>
                   {countryDue} due soon
@@ -261,10 +294,13 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
                   // Only worth naming the kind of letting when the country has
                   // more than one; Pakistan has only the standard lease.
                   showTitle={segments.length > 1}
-                  rows={countryRows.filter((r) => r.segment === segment)}
+                  rows={letRows.filter((r) => r.segment === segment)}
                   ticks={ticks}
                 />
               ))}
+              {vacantRows.length > 0 && (
+                <RenewalGroup title="Vacant — no contract" showTitle rows={vacantRows} ticks={ticks} />
+              )}
             </div>
           </div>
         );
@@ -337,7 +373,9 @@ function RenewalGroup({
 
           <div className="space-y-1.5">
             {rows.map((r) => {
-              const endPct = positionPct(r.daysLeft);
+              // A vacant property has no contract to draw, so its track is left
+              // empty; everything else runs from today to its end date.
+              const endPct = positionPct(r.daysLeft ?? 0);
               const left = Math.min(TODAY_PCT, endPct);
               // A bar that would round away to nothing (a contract ending today)
               // still gets a sliver, so every row has a visible mark.
@@ -356,15 +394,19 @@ function RenewalGroup({
                     {r.property}
                   </span>
                   <span className="w-56 shrink-0 text-xs">
-                    <span
-                      className={cn(
-                        "font-mono tabular-nums",
-                        r.status === "overdue" ? "text-destructive" : "text-muted-foreground",
-                      )}
-                    >
-                      {formatDate(r.end)}
+                    {r.end !== null && (
+                      <span
+                        className={cn(
+                          "font-mono tabular-nums",
+                          r.status === "overdue" ? "text-destructive" : "text-muted-foreground",
+                        )}
+                      >
+                        {formatDate(r.end)}
+                      </span>
+                    )}
+                    <span className={cn(r.end !== null && "ml-2", "font-medium", statusClass(r.status))}>
+                      {statusText(r)}
                     </span>
-                    <span className={cn("ml-2 font-medium", statusClass(r.status))}>{statusText(r)}</span>
                   </span>
                   <div className="relative h-5 flex-1 rounded-sm bg-muted/60">
                     {/* Today */}
@@ -373,18 +415,20 @@ function RenewalGroup({
                       style={{ left: `${TODAY_PCT}%` }}
                       aria-hidden
                     />
-                    <span
-                      className="absolute top-0.5 h-4 rounded-sm"
-                      style={{
-                        left: `${left}%`,
-                        width: `${width}%`,
-                        backgroundColor: COLOUR[r.status],
-                        // Yellow is too light to hold its own against the track,
-                        // so the due bar keeps a darker edge.
-                        boxShadow: r.status === "due" ? `inset 0 0 0 1px ${COLOUR_EDGE_DUE}` : undefined,
-                      }}
-                      title={`${r.property} — contract ends ${formatDate(r.end)} (${statusText(r)})`}
-                    />
+                    {r.end !== null && (
+                      <span
+                        className="absolute top-0.5 h-4 rounded-sm"
+                        style={{
+                          left: `${left}%`,
+                          width: `${width}%`,
+                          backgroundColor: COLOUR[r.status],
+                          // Yellow is too light to hold its own against the
+                          // track, so the due bar keeps a darker edge.
+                          boxShadow: r.status === "due" ? `inset 0 0 0 1px ${COLOUR_EDGE_DUE}` : undefined,
+                        }}
+                        title={`${r.property} — contract ends ${formatDate(r.end)} (${statusText(r)})`}
+                      />
+                    )}
                   </div>
                 </div>
               );
@@ -411,16 +455,16 @@ function RenewalGroup({
                 <td className={cn("font-medium", r.status === "overdue" && "text-destructive")}>{r.property}</td>
                 <td className="text-muted-foreground">{r.tenant}</td>
                 <td className="text-muted-foreground">
-                  {SEGMENT_SHORT[r.segment]}
+                  {r.status === "vacant" ? "—" : SEGMENT_SHORT[r.segment]}
                   {/* A property let on several running contracts is one row,
                       ending with the last of them — say so rather than quietly
                       dropping the others. */}
                   {r.contracts > 1 && <span className="ml-1 text-xs">· {r.contracts} contracts</span>}
                 </td>
                 <td className={cn("text-right font-mono tabular-nums", r.status === "overdue" && "text-destructive")}>
-                  {formatDate(r.end)}
+                  {r.end !== null ? formatDate(r.end) : "—"}
                 </td>
-                <td className="text-right text-muted-foreground">{r.renewLabel}</td>
+                <td className="text-right text-muted-foreground">{r.renewLabel || "—"}</td>
                 <td className={cn("text-right font-medium", statusClass(r.status))}>{statusText(r)}</td>
               </tr>
             ))}

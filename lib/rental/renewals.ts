@@ -39,10 +39,11 @@ function monthLabel(date: string | null | undefined): string {
 
 /**
  * How urgent a renewal is. The bands are what the colours mean:
- * `overdue` the contract has already ended, `due` it ends within a month,
- * `later` there is still time.
+ * `overdue` the contract has already ended — which also means the property is
+ * standing empty today — `due` it ends within a month, `later` there is still
+ * time, and `vacant` the property carries no contract at all.
  */
-export type RenewalStatus = "overdue" | "due" | "later";
+export type RenewalStatus = "overdue" | "due" | "later" | "vacant";
 
 /** A renewal is "due" once it is this close, and the alert counts it from here. */
 export const DUE_SOON_DAYS = 30;
@@ -64,33 +65,39 @@ export interface LeaseRenewal {
   property: string;
   tenant: string;
   start: string | null;
-  /** Contract end — also the day it must be renewed. */
-  end: string;
+  /** Contract end — also the day it must be renewed. Null when there is none. */
+  end: string | null;
   /** The lease's own renewal month when set, else the month the contract ends. */
   renewLabel: string;
-  /** Days from today to the end date; negative once the contract has ended. */
-  daysLeft: number;
+  /** Days to the end date; negative once ended, null with no contract at all. */
+  daysLeft: number | null;
   status: RenewalStatus;
   /** How many active contracts the property carries, this one included. */
   contracts: number;
 }
 
-export function renewalStatus(daysLeft: number): RenewalStatus {
+export function renewalStatus(daysLeft: number | null): RenewalStatus {
+  if (daysLeft === null) return "vacant";
   if (daysLeft < 0) return "overdue";
   if (daysLeft <= DUE_SOON_DAYS) return "due";
   return "later";
 }
 
 /**
- * Every active lease with an end date, soonest first. Leases with no end date
- * are left out — there is nothing to renew on a date that was never recorded.
+ * Every rental property, soonest renewal first.
+ *
+ * A property with a running contract carries its end date; one with no contract
+ * at all is listed as vacant at the bottom, because a property earning nothing
+ * belongs in a renewal report as much as one about to expire. Leases with no end
+ * date are left out — there is nothing to renew on a date that was never
+ * recorded — so a property whose only lease is open-ended reads as vacant.
  */
 export async function loadLeaseRenewals(
   supabase: SupabaseClient<Database>,
   companyId: string,
   asOf: string = new Date().toISOString().slice(0, 10),
 ): Promise<LeaseRenewal[]> {
-  const [{ data: uaeLeases }, { data: pkLeases }] = await Promise.all([
+  const [{ data: uaeLeases }, { data: pkLeases }, { data: rentalAssets }] = await Promise.all([
     supabase
       .schema("rental")
       .from("uae_leases")
@@ -104,6 +111,13 @@ export async function loadLeaseRenewals(
       .select("id, asset_id, tenant_id, lease_start, lease_end, rent_month")
       .eq("company_id", companyId)
       .eq("status", "active")
+      .is("deleted_at", null),
+    supabase
+      .schema("assets")
+      .from("assets")
+      .select("id, asset_code, asset_name, country")
+      .eq("company_id", companyId)
+      .eq("is_rental", true)
       .is("deleted_at", null),
   ]);
 
@@ -170,16 +184,65 @@ export async function loadLeaseRenewals(
       byProperty.set(key, row);
       continue;
     }
-    const winner = row.end > kept.end ? row : kept;
+    const winner = (row.end ?? "") > (kept.end ?? "") ? row : kept;
     byProperty.set(key, { ...winner, contracts: kept.contracts + 1 });
   }
 
+  // A rental property with no running contract is vacant. It has no date to sort
+  // by, so it sits after everything that does.
+  for (const a of rentalAssets ?? []) {
+    const id = a.id as string;
+    if (byProperty.has(id)) continue;
+    const country: RenewalCountry = normCountry(a.country as string | null);
+    byProperty.set(id, {
+      key: `asset:${id}`,
+      source: country === "PK" ? "pk" : "uae",
+      assetId: id,
+      country,
+      segment: country === "PK" ? "PK" : "UAE",
+      property: (a.asset_name as string) || (a.asset_code as string),
+      tenant: "—",
+      start: null,
+      end: null,
+      renewLabel: "",
+      daysLeft: null,
+      status: "vacant",
+      contracts: 0,
+    });
+  }
+
   const collapsed = [...byProperty.values()];
-  collapsed.sort((a, b) => a.daysLeft - b.daysLeft || a.property.localeCompare(b.property));
+  collapsed.sort((a, b) => {
+    if (a.daysLeft === null || b.daysLeft === null) {
+      if (a.daysLeft !== b.daysLeft) return a.daysLeft === null ? 1 : -1;
+      return a.property.localeCompare(b.property);
+    }
+    return a.daysLeft - b.daysLeft || a.property.localeCompare(b.property);
+  });
   return collapsed;
 }
 
-/** Leases needing attention now: already ended, or ending within the month. */
+/**
+ * The two country codes are written both ways across the app ("AE"/"UAE",
+ * "PK"/"PAK"), so fold every spelling before a property is filed under one.
+ * Anything else — a Saudi holding, say — is filed under the UAE books it is
+ * managed from rather than dropped from the list.
+ */
+function normCountry(country: string | null): RenewalCountry {
+  const u = (country ?? "").trim().toUpperCase();
+  return u === "PK" || u === "PAK" || u === "PAKISTAN" ? "PK" : "AE";
+}
+
+/** Contracts needing attention now: already ended, or ending within the month. */
 export function renewalsNeedingAttention(rows: LeaseRenewal[]): LeaseRenewal[] {
-  return rows.filter((r) => r.status !== "later");
+  return rows.filter((r) => r.status === "overdue" || r.status === "due");
+}
+
+/**
+ * Properties earning nothing today: the ones whose contract has run out, plus
+ * the ones that never had one. Both are empty; they differ only in whether
+ * there is a contract to renew.
+ */
+export function vacantToday(rows: LeaseRenewal[]): LeaseRenewal[] {
+  return rows.filter((r) => r.status === "overdue" || r.status === "vacant");
 }

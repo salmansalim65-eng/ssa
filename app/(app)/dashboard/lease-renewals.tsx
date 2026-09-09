@@ -28,9 +28,8 @@ const COLOUR: Record<LeaseRenewal["status"], string> = {
   overdue: "#d03b3b",
   due: "#eab308",
   later: "#0ca30c",
-  // Nothing running, so nothing to draw — the track stays empty and the row
-  // says so in words instead.
-  vacant: "transparent",
+  // An empty stretch between tenancies: drawn, but plainly not a let.
+  vacant: "#8a8f98",
 };
 
 /** A darker rim for the yellow bar, which is otherwise too light to read. */
@@ -42,6 +41,24 @@ const PAST_DAYS = 90;
 const FUTURE_DAYS = 365;
 const SPAN_DAYS = PAST_DAYS + FUTURE_DAYS;
 const TODAY_PCT = (PAST_DAYS / SPAN_DAYS) * 100;
+
+/**
+ * The stretch a row's bar covers, in days either side of today: the vacancy
+ * itself when the property is empty — so "vacant from this date to that" is
+ * drawn, not only written — and today-to-expiry when it is let. A property
+ * never let has nothing to draw.
+ */
+function barSpan(r: LeaseRenewal, today: string): { from: number; to: number } | null {
+  if (r.isVacant) {
+    if (!r.vacantFrom && !r.vacantTo) return null;
+    return {
+      from: r.vacantFrom ? daysBetween(today, r.vacantFrom) : 0,
+      to: daysBetween(today, r.vacantTo ?? today),
+    };
+  }
+  if (r.daysLeft === null) return null;
+  return { from: 0, to: r.daysLeft };
+}
 
 /** Where a day sits on the track, clipped to its ends. */
 function positionPct(daysFromToday: number): number {
@@ -68,15 +85,37 @@ const SEGMENT_LABEL: Record<LeaseRenewal["segment"], string> = {
 const SEGMENT_SHORT: Record<LeaseRenewal["segment"], string> = { HH: "HH", UAE: "UAE", PK: "PK" };
 
 function statusText(r: LeaseRenewal): string {
-  if (r.daysLeft === null) return "Vacant — no contract";
   if (r.status === "overdue") {
-    const late = -r.daysLeft;
+    const late = -(r.daysLeft ?? 0);
     // A contract that has run out means the property is standing empty, so the
-    // row says both rather than leaving the vacancy to be inferred.
-    return `Overdue ${late} ${late === 1 ? "day" : "days"} · vacant`;
+    // row says both rather than leaving the vacancy to be inferred. The dates
+    // of the vacancy are spelled out in the table's own column.
+    return `Overdue ${late} ${late === 1 ? "day" : "days"} · empty`;
+  }
+  if (r.isVacant) {
+    if (r.vacantTo) return `Empty until ${formatDate(r.vacantTo)}`;
+    if (r.vacantFrom) return `Empty since ${formatDate(r.vacantFrom)}`;
+    return "Never let";
   }
   if (r.daysLeft === 0) return "Renewal due today";
   return `Due in ${r.daysLeft} ${r.daysLeft === 1 ? "day" : "days"}`;
+}
+
+/**
+ * The vacancy as a period — from the first empty day to the last, or to today
+ * while it is still running. This is where "vacant" is actually stated: a
+ * property is only known to be empty once the dates say so.
+ */
+function vacancyText(r: LeaseRenewal): string {
+  if (!r.isVacant) return "—";
+  if (!r.vacantFrom && !r.vacantTo) return "Never let";
+  const days = r.vacantDays ?? 0;
+  const count = `${days} ${days === 1 ? "day" : "days"}`;
+  // With nothing let before, the books cannot say when the property fell empty,
+  // only that it is empty now and until when.
+  const from = r.vacantFrom ? formatDate(r.vacantFrom) : "not let yet";
+  const to = r.vacantTo ? formatDate(r.vacantTo) : "today";
+  return `${from} → ${to} · ${count}`;
 }
 
 /** Colour for a status wherever it is written rather than drawn. */
@@ -172,8 +211,8 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
             Later
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="size-2.5 rounded-sm border border-dashed border-muted-foreground/60" aria-hidden />
-            Vacant (no bar)
+            <span className="size-2.5 rounded-sm" style={{ backgroundColor: COLOUR.vacant }} aria-hidden />
+            Vacant stretch
           </span>
         </div>
       </div>
@@ -265,13 +304,16 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
         // chart of their own: they are the same book and belong on the same
         // axis. A vacant property is let on no terms at all, so it closes the
         // list.
-        const letRows = countryRows.filter((r) => r.status !== "vacant");
-        const vacantRows = countryRows.filter((r) => r.status === "vacant");
+        // Only a property that has NEVER been let has no terms to file it
+        // under; one that is merely empty between tenancies stays with its own
+        // kind of letting, where its gap is visible against the rest.
+        const letRows = countryRows.filter((r) => r.contracts > 0);
+        const vacantRows = countryRows.filter((r) => r.contracts === 0);
         const blocks: { title: string; rows: LeaseRenewal[] }[] = SEGMENT_ORDER.map((seg) => ({
           title: SEGMENT_LABEL[seg],
           rows: letRows.filter((r) => r.segment === seg),
         })).filter((b) => b.rows.length > 0);
-        if (vacantRows.length > 0) blocks.push({ title: "Vacant — no contract", rows: vacantRows });
+        if (vacantRows.length > 0) blocks.push({ title: "Never let — no contract on record", rows: vacantRows });
         // One running number down the whole country, so a row can be pointed at.
         let serial = 0;
         const numbered = blocks.map((b) => ({
@@ -299,7 +341,7 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
               </p>
             </div>
 
-            <RenewalChart blocks={numbered} ticks={ticks} />
+            <RenewalChart blocks={numbered} ticks={ticks} today={today} />
             <RenewalTable blocks={numbered} />
           </div>
         );
@@ -325,7 +367,15 @@ interface RenewalBlock {
  * read together on the left; the chart is the last column, there for the shape
  * rather than the figure.
  */
-function RenewalChart({ blocks, ticks }: { blocks: RenewalBlock[]; ticks: { pct: number; label: string }[] }) {
+function RenewalChart({
+  blocks,
+  ticks,
+  today,
+}: {
+  blocks: RenewalBlock[];
+  ticks: { pct: number; label: string }[];
+  today: string;
+}) {
   return (
     <div className="overflow-x-auto">
       <div className="min-w-[760px]">
@@ -357,13 +407,11 @@ function RenewalChart({ blocks, ticks }: { blocks: RenewalBlock[]; ticks: { pct:
                 </p>
               )}
               {block.rows.map(({ row: r, no }) => {
-                // A vacant property has no contract to draw, so its track is
-                // left empty; everything else runs from today to its end date.
-                const endPct = positionPct(r.daysLeft ?? 0);
-                const left = Math.min(TODAY_PCT, endPct);
+                const span = barSpan(r, today);
+                const left = span ? positionPct(span.from) : 0;
                 // A bar that would round away to nothing (a contract ending
                 // today) still gets a sliver, so every row has a visible mark.
-                const width = Math.max(Math.abs(endPct - TODAY_PCT), 0.6);
+                const width = span ? Math.max(positionPct(span.to) - positionPct(span.from), 0.6) : 0;
                 return (
                   <div key={r.key} className="flex items-center gap-3">
                     <span className="w-8 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
@@ -376,7 +424,9 @@ function RenewalChart({ blocks, ticks }: { blocks: RenewalBlock[]; ticks: { pct:
                         // without tracing its bar.
                         r.status === "overdue" ? "font-semibold text-destructive" : "text-muted-foreground",
                       )}
-                      title={`${r.property} — ${r.tenant}${r.contracts > 1 ? ` (${r.contracts} contracts)` : ""}`}
+                      title={`${r.property} — ${r.tenant}${r.contracts > 1 ? ` (${r.contracts} contracts)` : ""}${
+                        r.isVacant ? ` — vacant ${vacancyText(r)}` : ""
+                      }`}
                     >
                       {r.property}
                     </span>
@@ -402,7 +452,7 @@ function RenewalChart({ blocks, ticks }: { blocks: RenewalBlock[]; ticks: { pct:
                         style={{ left: `${TODAY_PCT}%` }}
                         aria-hidden
                       />
-                      {r.end !== null && (
+                      {span && (
                         <span
                           className="absolute top-0.5 h-4 rounded-sm"
                           style={{
@@ -413,7 +463,11 @@ function RenewalChart({ blocks, ticks }: { blocks: RenewalBlock[]; ticks: { pct:
                             // track, so the due bar keeps a darker edge.
                             boxShadow: r.status === "due" ? `inset 0 0 0 1px ${COLOUR_EDGE_DUE}` : undefined,
                           }}
-                          title={`${r.property} — contract ends ${formatDate(r.end)} (${statusText(r)})`}
+                          title={
+                            r.isVacant
+                              ? `${r.property} — vacant ${vacancyText(r)}`
+                              : `${r.property} — contract ends ${r.end ? formatDate(r.end) : "—"} (${statusText(r)})`
+                          }
                         />
                       )}
                     </div>
@@ -441,6 +495,7 @@ function RenewalTable({ blocks }: { blocks: RenewalBlock[] }) {
             <th className="text-left">Type</th>
             <th className="text-right">Contract ends</th>
             <th className="text-right">Renewal</th>
+            <th className="text-right">Vacant period</th>
             <th className="text-right">Status</th>
           </tr>
         </thead>
@@ -449,7 +504,7 @@ function RenewalTable({ blocks }: { blocks: RenewalBlock[] }) {
             {block.showTitle && (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="border-b bg-muted/50 px-2 py-1.5 text-xs font-bold uppercase tracking-wide text-foreground"
                 >
                   {block.title}
@@ -462,7 +517,7 @@ function RenewalTable({ blocks }: { blocks: RenewalBlock[] }) {
                 <td className={cn("font-medium", r.status === "overdue" && "text-destructive")}>{r.property}</td>
                 <td className="text-muted-foreground">{r.tenant}</td>
                 <td className="text-muted-foreground">
-                  {r.status === "vacant" ? "—" : SEGMENT_SHORT[r.segment]}
+                  {r.contracts === 0 ? "—" : SEGMENT_SHORT[r.segment]}
                   {/* A property let on several running contracts is one row,
                       ending with the last of them — say so rather than quietly
                       dropping the others. */}
@@ -472,6 +527,14 @@ function RenewalTable({ blocks }: { blocks: RenewalBlock[] }) {
                   {r.end !== null ? formatDate(r.end) : "—"}
                 </td>
                 <td className="text-right text-muted-foreground">{r.renewLabel || "—"}</td>
+                <td
+                  className={cn(
+                    "whitespace-nowrap text-right font-mono text-xs tabular-nums",
+                    r.isVacant ? "text-destructive" : "text-muted-foreground",
+                  )}
+                >
+                  {vacancyText(r)}
+                </td>
                 <td className={cn("text-right font-medium", statusClass(r.status))}>{statusText(r)}</td>
               </tr>
             ))}

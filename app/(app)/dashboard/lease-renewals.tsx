@@ -54,15 +54,15 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 /** The countries a section is drawn for, in the order they are shown. */
 const COUNTRIES: RenewalCountry[] = ["AE", "PK"];
 
-// Within a country, holiday homes are listed apart from ordinary leases: an HH
-// stay renews every few weeks and a standard lease every year, so mixing them
-// in one list says nothing useful about either. They remain UAE lettings — this
-// is a kind of contract, not a country.
+// Inside a country the list is marked off by the TERMS a property is let on,
+// not by where it is: an HH stay renews every few weeks and a standard lease
+// every year. HH is a UAE letting like any other — the heading separates the
+// terms, the country section still holds them all.
 const SEGMENT_ORDER: LeaseRenewal["segment"][] = ["HH", "UAE", "PK"];
 const SEGMENT_LABEL: Record<LeaseRenewal["segment"], string> = {
-  HH: "HH — holiday homes",
-  UAE: "UAE — standard lease",
-  PK: "Standard lease",
+  HH: "HH terms — holiday homes",
+  UAE: "Standard lease terms",
+  PK: "Standard lease terms",
 };
 /** The same distinction inside a table cell, where the heading already said it. */
 const SEGMENT_SHORT: Record<LeaseRenewal["segment"], string> = { HH: "HH", UAE: "UAE", PK: "PK" };
@@ -258,15 +258,28 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
         const countryOverdue = countryRows.filter((r) => r.status === "overdue").length;
         const countryDue = countryRows.filter((r) => r.status === "due").length;
         const countryEmpty = vacantToday(countryRows).length;
-        // Within a country, each kind of letting is listed on its own: an HH
-        // stay and a standard lease renew on completely different rhythms, so
-        // reading them in one list tells you nothing about either.
-        // A vacant property has no kind of letting to file it under, so it is
-        // listed on its own at the foot of the country rather than sitting in a
-        // lease group with an empty row.
+
+        // A country is ONE list, read top to bottom and numbered straight
+        // through. What separates HH from a standard lease is the TERMS, not the
+        // country, so the terms get a heading inside the list rather than a
+        // chart of their own: they are the same book and belong on the same
+        // axis. A vacant property is let on no terms at all, so it closes the
+        // list.
         const letRows = countryRows.filter((r) => r.status !== "vacant");
         const vacantRows = countryRows.filter((r) => r.status === "vacant");
-        const segments = SEGMENT_ORDER.filter((seg) => letRows.some((r) => r.segment === seg));
+        const blocks: { title: string; rows: LeaseRenewal[] }[] = SEGMENT_ORDER.map((seg) => ({
+          title: SEGMENT_LABEL[seg],
+          rows: letRows.filter((r) => r.segment === seg),
+        })).filter((b) => b.rows.length > 0);
+        if (vacantRows.length > 0) blocks.push({ title: "Vacant — no contract", rows: vacantRows });
+        // One running number down the whole country, so a row can be pointed at.
+        let serial = 0;
+        const numbered = blocks.map((b) => ({
+          title: b.title,
+          // Only worth naming the kind of letting when there is more than one.
+          showTitle: blocks.length > 1,
+          rows: b.rows.map((r) => ({ row: r, no: ++serial })),
+        }));
 
         return (
           <div key={country} className="rounded-xl border bg-card p-4 shadow-xs">
@@ -286,22 +299,8 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
               </p>
             </div>
 
-            <div className="space-y-5">
-              {segments.map((segment) => (
-                <RenewalGroup
-                  key={segment}
-                  title={SEGMENT_LABEL[segment]}
-                  // Only worth naming the kind of letting when the country has
-                  // more than one; Pakistan has only the standard lease.
-                  showTitle={segments.length > 1}
-                  rows={letRows.filter((r) => r.segment === segment)}
-                  ticks={ticks}
-                />
-              ))}
-              {vacantRows.length > 0 && (
-                <RenewalGroup title="Vacant — no contract" showTitle rows={vacantRows} ticks={ticks} />
-              )}
-            </div>
+            <RenewalChart blocks={numbered} ticks={ticks} />
+            <RenewalTable blocks={numbered} />
           </div>
         );
       })}
@@ -309,149 +308,157 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
   );
 }
 
-/**
- * One kind of letting within a country: its bars and its table. Property, end
- * date and time left read together on the left; the timeline is the last column,
- * there for the shape rather than the figure.
- */
-function RenewalGroup({
-  title,
-  showTitle,
-  rows,
-  ticks,
-}: {
+/** A property's place in its country's list, with the number it is shown under. */
+interface NumberedRow {
+  row: LeaseRenewal;
+  no: number;
+}
+interface RenewalBlock {
   title: string;
   showTitle: boolean;
-  rows: LeaseRenewal[];
-  ticks: { pct: number; label: string }[];
-}) {
-  const overdue = rows.filter((r) => r.status === "overdue").length;
-  const due = rows.filter((r) => r.status === "due").length;
+  rows: NumberedRow[];
+}
 
+/**
+ * The country's timeline: one axis, one bar per property, with a bold heading
+ * marking off each kind of letting. Number, property, end date and time left
+ * read together on the left; the chart is the last column, there for the shape
+ * rather than the figure.
+ */
+function RenewalChart({ blocks, ticks }: { blocks: RenewalBlock[]; ticks: { pct: number; label: string }[] }) {
   return (
-    <div>
-      {showTitle && (
-        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2 border-b pb-1">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-foreground">{title}</h4>
-          <p className="text-xs text-muted-foreground">
-            {rows.length} {rows.length === 1 ? "property" : "properties"}
-            {overdue > 0 && (
-              <>
-                {" · "}
-                <span className="font-semibold text-destructive">{overdue} overdue</span>
-              </>
-            )}
-            {due > 0 && (
-              <>
-                {" · "}
-                <span className="font-semibold text-yellow-700 dark:text-yellow-400">{due} due soon</span>
-              </>
-            )}
-          </p>
+    <div className="overflow-x-auto">
+      <div className="min-w-[760px]">
+        {/* Month axis over the chart column. The today line is repeated on every
+            bar row below, so a bar is always read against it. */}
+        <div className="flex items-end gap-3 pb-1">
+          <span className="w-8 shrink-0" />
+          <span className="w-44 shrink-0" />
+          <span className="w-56 shrink-0" />
+          <div className="relative h-4 flex-1">
+            {ticks.map((t) => (
+              <span
+                key={t.label + t.pct}
+                className="absolute -translate-x-1/2 text-[0.65rem] text-muted-foreground"
+                style={{ left: `${t.pct}%` }}
+              >
+                {t.label}
+              </span>
+            ))}
+          </div>
         </div>
-      )}
 
-      <div className="overflow-x-auto">
-        <div className="min-w-[720px]">
-          {/* Month axis over the chart column. The today line is repeated on
-              every bar row below, so a bar is always read against it. */}
-          <div className="flex items-end gap-3 pb-1">
-            <span className="w-44 shrink-0" />
-            <span className="w-56 shrink-0" />
-            <div className="relative h-4 flex-1">
-              {ticks.map((t) => (
-                <span
-                  key={t.label + t.pct}
-                  className="absolute -translate-x-1/2 text-[0.65rem] text-muted-foreground"
-                  style={{ left: `${t.pct}%` }}
-                >
-                  {t.label}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            {rows.map((r) => {
-              // A vacant property has no contract to draw, so its track is left
-              // empty; everything else runs from today to its end date.
-              const endPct = positionPct(r.daysLeft ?? 0);
-              const left = Math.min(TODAY_PCT, endPct);
-              // A bar that would round away to nothing (a contract ending today)
-              // still gets a sliver, so every row has a visible mark.
-              const width = Math.max(Math.abs(endPct - TODAY_PCT), 0.6);
-              return (
-                <div key={r.key} className="flex items-center gap-3">
-                  <span
-                    className={cn(
-                      "w-44 shrink-0 truncate text-xs",
-                      // An overdue property is named in red, so it is found
-                      // without tracing its bar.
-                      r.status === "overdue" ? "font-semibold text-destructive" : "text-muted-foreground",
-                    )}
-                    title={`${r.property} — ${r.tenant}${r.contracts > 1 ? ` (${r.contracts} contracts)` : ""}`}
-                  >
-                    {r.property}
-                  </span>
-                  <span className="w-56 shrink-0 text-xs">
-                    {r.end !== null && (
-                      <span
-                        className={cn(
-                          "font-mono tabular-nums",
-                          r.status === "overdue" ? "text-destructive" : "text-muted-foreground",
-                        )}
-                      >
-                        {formatDate(r.end)}
-                      </span>
-                    )}
-                    <span className={cn(r.end !== null && "ml-2", "font-medium", statusClass(r.status))}>
-                      {statusText(r)}
+        <div className="space-y-1.5">
+          {blocks.map((block) => (
+            <div key={block.title} className="space-y-1.5">
+              {block.showTitle && (
+                <p className="border-b pb-0.5 pt-2 text-xs font-bold uppercase tracking-wide text-foreground">
+                  {block.title}
+                </p>
+              )}
+              {block.rows.map(({ row: r, no }) => {
+                // A vacant property has no contract to draw, so its track is
+                // left empty; everything else runs from today to its end date.
+                const endPct = positionPct(r.daysLeft ?? 0);
+                const left = Math.min(TODAY_PCT, endPct);
+                // A bar that would round away to nothing (a contract ending
+                // today) still gets a sliver, so every row has a visible mark.
+                const width = Math.max(Math.abs(endPct - TODAY_PCT), 0.6);
+                return (
+                  <div key={r.key} className="flex items-center gap-3">
+                    <span className="w-8 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
+                      {no}
                     </span>
-                  </span>
-                  <div className="relative h-5 flex-1 rounded-sm bg-muted/60">
-                    {/* Today */}
                     <span
-                      className="absolute top-0 h-full w-px bg-foreground/40"
-                      style={{ left: `${TODAY_PCT}%` }}
-                      aria-hidden
-                    />
-                    {r.end !== null && (
+                      className={cn(
+                        "w-44 shrink-0 truncate text-xs",
+                        // An overdue property is named in red, so it is found
+                        // without tracing its bar.
+                        r.status === "overdue" ? "font-semibold text-destructive" : "text-muted-foreground",
+                      )}
+                      title={`${r.property} — ${r.tenant}${r.contracts > 1 ? ` (${r.contracts} contracts)` : ""}`}
+                    >
+                      {r.property}
+                    </span>
+                    <span className="w-56 shrink-0 text-xs">
+                      {r.end !== null && (
+                        <span
+                          className={cn(
+                            "font-mono tabular-nums",
+                            r.status === "overdue" ? "text-destructive" : "text-muted-foreground",
+                          )}
+                        >
+                          {formatDate(r.end)}
+                        </span>
+                      )}
+                      <span className={cn(r.end !== null && "ml-2", "font-medium", statusClass(r.status))}>
+                        {statusText(r)}
+                      </span>
+                    </span>
+                    <div className="relative h-5 flex-1 rounded-sm bg-muted/60">
+                      {/* Today */}
                       <span
-                        className="absolute top-0.5 h-4 rounded-sm"
-                        style={{
-                          left: `${left}%`,
-                          width: `${width}%`,
-                          backgroundColor: COLOUR[r.status],
-                          // Yellow is too light to hold its own against the
-                          // track, so the due bar keeps a darker edge.
-                          boxShadow: r.status === "due" ? `inset 0 0 0 1px ${COLOUR_EDGE_DUE}` : undefined,
-                        }}
-                        title={`${r.property} — contract ends ${formatDate(r.end)} (${statusText(r)})`}
+                        className="absolute top-0 h-full w-px bg-foreground/40"
+                        style={{ left: `${TODAY_PCT}%` }}
+                        aria-hidden
                       />
-                    )}
+                      {r.end !== null && (
+                        <span
+                          className="absolute top-0.5 h-4 rounded-sm"
+                          style={{
+                            left: `${left}%`,
+                            width: `${width}%`,
+                            backgroundColor: COLOUR[r.status],
+                            // Yellow is too light to hold its own against the
+                            // track, so the due bar keeps a darker edge.
+                            boxShadow: r.status === "due" ? `inset 0 0 0 1px ${COLOUR_EDGE_DUE}` : undefined,
+                          }}
+                          title={`${r.property} — contract ends ${formatDate(r.end)} (${statusText(r)})`}
+                        />
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          ))}
         </div>
       </div>
+    </div>
+  );
+}
 
-      <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-[640px] border-collapse text-sm">
-          <thead>
-            <tr className="border-b [&>th]:px-2 [&>th]:py-1.5 [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide [&>th]:text-muted-foreground">
-              <th className="text-left">Property</th>
-              <th className="text-left">Tenant</th>
-              <th className="text-left">Type</th>
-              <th className="text-right">Contract ends</th>
-              <th className="text-right">Renewal</th>
-              <th className="text-right">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.key} className="border-b last:border-0 [&>td]:px-2 [&>td]:py-1.5">
+/** The same list as figures, numbered to match the chart row for row. */
+function RenewalTable({ blocks }: { blocks: RenewalBlock[] }) {
+  return (
+    <div className="mt-4 overflow-x-auto">
+      <table className="w-full min-w-[680px] border-collapse text-sm">
+        <thead>
+          <tr className="border-b [&>th]:px-2 [&>th]:py-1.5 [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide [&>th]:text-muted-foreground">
+            <th className="w-10 text-right">S.No</th>
+            <th className="text-left">Property</th>
+            <th className="text-left">Tenant</th>
+            <th className="text-left">Type</th>
+            <th className="text-right">Contract ends</th>
+            <th className="text-right">Renewal</th>
+            <th className="text-right">Status</th>
+          </tr>
+        </thead>
+        {blocks.map((block) => (
+          <tbody key={block.title}>
+            {block.showTitle && (
+              <tr>
+                <td
+                  colSpan={7}
+                  className="border-b bg-muted/50 px-2 py-1.5 text-xs font-bold uppercase tracking-wide text-foreground"
+                >
+                  {block.title}
+                </td>
+              </tr>
+            )}
+            {block.rows.map(({ row: r, no }) => (
+              <tr key={r.key} className="border-b [&>td]:px-2 [&>td]:py-1.5">
+                <td className="text-right font-mono tabular-nums text-muted-foreground">{no}</td>
                 <td className={cn("font-medium", r.status === "overdue" && "text-destructive")}>{r.property}</td>
                 <td className="text-muted-foreground">{r.tenant}</td>
                 <td className="text-muted-foreground">
@@ -469,8 +476,8 @@ function RenewalGroup({
               </tr>
             ))}
           </tbody>
-        </table>
-      </div>
+        ))}
+      </table>
     </div>
   );
 }

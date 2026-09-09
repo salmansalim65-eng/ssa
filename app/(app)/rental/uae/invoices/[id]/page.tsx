@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/ui/page-header";
+import { VoucherPager } from "@/components/vouchers/voucher-pager";
+import { getRecordNeighbours } from "@/lib/vouchers/pager";
 import { EscToBack } from "@/components/vouchers/esc-to-back";
 import { RecordRentPaymentForm } from "@/components/rental/record-rent-payment-form";
 import { PrintButton } from "@/components/vouchers/print-button";
@@ -56,9 +58,12 @@ export default async function UaeRentInvoiceDetailPage({ params }: { params: Pro
 
   if (!invoice) notFound();
 
-  const [canDelete, isAdmin] = await Promise.all([
+  const [canDelete, isAdmin, neighbours] = await Promise.all([
     hasPermission("uae_rent_invoice", "delete"),
     isCurrentUserAdmin(),
+    // The documents either side of this one, so a run of them can be
+    // read straight through instead of going back to the list between each.
+    getRecordNeighbours("rental", "uae_rent_invoices", companyId, id),
   ]);
 
   // For a combined (grid) invoice, load every property of the voucher so the
@@ -172,6 +177,7 @@ export default async function UaeRentInvoiceDetailPage({ params }: { params: Pro
         backHref="/rental/invoices"
         actions={
           <>
+            <VoucherPager basePath="/rental/uae/invoices" prev={neighbours.prev} next={neighbours.next} />
             <Badge variant="outline">{invoice.invoice_type === "HH" ? "HH Invoice" : "UAE Invoice"}</Badge>
             <VoucherStatusBadge status={status} />
             <PrintButton />

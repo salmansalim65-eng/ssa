@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/ui/page-header";
+import { VoucherPager } from "@/components/vouchers/voucher-pager";
+import { getRecordNeighbours } from "@/lib/vouchers/pager";
 import { EscToBack } from "@/components/vouchers/esc-to-back";
 import { RecordPkRentPaymentForm } from "@/components/rental/record-pk-rent-payment-form";
 import { PrintButton } from "@/components/vouchers/print-button";
@@ -54,9 +56,12 @@ export default async function PkRentInvoiceDetailPage({ params }: { params: Prom
 
   if (!invoice) notFound();
 
-  const [canDelete, isAdmin] = await Promise.all([
+  const [canDelete, isAdmin, neighbours] = await Promise.all([
     hasPermission("pk_rent_invoice", "delete"),
     isCurrentUserAdmin(),
+    // The documents either side of this one, so a run of them can be
+    // read straight through instead of going back to the list between each.
+    getRecordNeighbours("rental", "pk_rent_invoices", companyId, id),
   ]);
 
   type Refs = {
@@ -130,6 +135,7 @@ export default async function PkRentInvoiceDetailPage({ params }: { params: Prom
         backHref="/rental/invoices"
         actions={
           <>
+            <VoucherPager basePath="/rental/pk/invoices" prev={neighbours.prev} next={neighbours.next} />
             <Badge variant="outline">PK Invoice</Badge>
             <VoucherStatusBadge status={status} />
             <PrintButton />

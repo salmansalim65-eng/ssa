@@ -4,6 +4,8 @@ import { PencilIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
+import { VoucherPager } from "@/components/vouchers/voucher-pager";
+import { getRecordNeighbours } from "@/lib/vouchers/pager";
 import { EscToBack } from "@/components/vouchers/esc-to-back";
 import {
   Table,
@@ -49,10 +51,13 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
 
   if (!sale) notFound();
 
-  const [canDelete, canCreate, isAdmin] = await Promise.all([
+  const [canDelete, canCreate, isAdmin, neighbours] = await Promise.all([
     hasPermission("asset_sales", "delete"),
     hasPermission("asset_sales", "create"),
     isCurrentUserAdmin(),
+    // The documents either side of this one, so a run of them can be
+    // read straight through instead of going back to the list between each.
+    getRecordNeighbours("assets", "asset_sales", companyId, id),
   ]);
 
   const { data: lines } = await supabase
@@ -116,6 +121,7 @@ export default async function AssetSaleDetailPage({ params }: { params: Promise<
         backHref="/sales"
         actions={
           <>
+            <VoucherPager basePath="/sales" prev={neighbours.prev} next={neighbours.next} />
             <VoucherStatusBadge status={status} />
             <PrintButton />
             {status === "draft" && canSubmit && (

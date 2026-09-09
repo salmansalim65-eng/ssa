@@ -24,9 +24,12 @@ import {
 // colour alone — every row states its status in words and days as well.
 const COLOUR: Record<LeaseRenewal["status"], string> = {
   overdue: "#d03b3b",
-  due: "#a05c00",
+  due: "#eab308",
   later: "#0ca30c",
 };
+
+/** A darker rim for the yellow bar, which is otherwise too light to read. */
+const COLOUR_EDGE_DUE = "#8a6a00";
 
 // How much time the track shows: three months behind so an expired contract has
 // somewhere to be drawn, a year ahead so the next renewal season is visible.
@@ -46,6 +49,19 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 /** The countries a section is drawn for, in the order they are shown. */
 const COUNTRIES: RenewalCountry[] = ["AE", "PK"];
 
+// Within a country, holiday homes are listed apart from ordinary leases: an HH
+// stay renews every few weeks and a standard lease every year, so mixing them
+// in one list says nothing useful about either. They remain UAE lettings — this
+// is a kind of contract, not a country.
+const SEGMENT_ORDER: LeaseRenewal["segment"][] = ["HH", "UAE", "PK"];
+const SEGMENT_LABEL: Record<LeaseRenewal["segment"], string> = {
+  HH: "HH — holiday homes",
+  UAE: "UAE — standard lease",
+  PK: "Standard lease",
+};
+/** The same distinction inside a table cell, where the heading already said it. */
+const SEGMENT_SHORT: Record<LeaseRenewal["segment"], string> = { HH: "HH", UAE: "UAE", PK: "PK" };
+
 function statusText(r: LeaseRenewal): string {
   if (r.status === "overdue") {
     const late = -r.daysLeft;
@@ -59,7 +75,7 @@ function statusText(r: LeaseRenewal): string {
 function statusClass(status: LeaseRenewal["status"], overdueOnly = false): string {
   if (status === "overdue") return "text-destructive";
   if (overdueOnly) return "";
-  return status === "due" ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground";
+  return status === "due" ? "text-yellow-700 dark:text-yellow-400" : "text-muted-foreground";
 }
 
 /**
@@ -134,7 +150,11 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
             Overdue
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="size-2.5 rounded-sm" style={{ backgroundColor: COLOUR.due }} aria-hidden />
+            <span
+              className="size-2.5 rounded-sm"
+              style={{ backgroundColor: COLOUR.due, boxShadow: `inset 0 0 0 1px ${COLOUR_EDGE_DUE}` }}
+              aria-hidden
+            />
             Due within {DUE_SOON_DAYS} days
           </span>
           <span className="flex items-center gap-1.5">
@@ -186,7 +206,7 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
             "flex items-start gap-2.5 rounded-lg border p-3 text-sm",
             overdue.length > 0
               ? "border-destructive/40 bg-destructive/10 text-destructive"
-              : "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+              : "border-yellow-500/50 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400",
           )}
         >
           <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
@@ -212,133 +232,201 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
         if (countryRows.length === 0) return null;
         const countryOverdue = countryRows.filter((r) => r.status === "overdue").length;
         const countryDue = countryRows.filter((r) => r.status === "due").length;
+        // Within a country, each kind of letting is listed on its own: an HH
+        // stay and a standard lease renew on completely different rhythms, so
+        // reading them in one list tells you nothing about either.
+        const segments = SEGMENT_ORDER.filter((seg) => countryRows.some((r) => r.segment === seg));
 
         return (
           <div key={country} className="rounded-xl border bg-card p-4 shadow-xs">
             <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
               <h3 className="text-sm font-semibold text-foreground">{COUNTRY_LABEL[country]}</h3>
               <p className="text-xs text-muted-foreground">
-                {countryRows.length} {countryRows.length === 1 ? "property" : "properties"} · <span className={cn(countryOverdue > 0 && "font-semibold text-destructive")}>
+                {countryRows.length} {countryRows.length === 1 ? "property" : "properties"} ·{" "}
+                <span className={cn(countryOverdue > 0 && "font-semibold text-destructive")}>
                   {countryOverdue} overdue
                 </span>{" "}
-                · <span className={cn(countryDue > 0 && "font-semibold text-amber-700 dark:text-amber-400")}>
+                ·{" "}
+                <span className={cn(countryDue > 0 && "font-semibold text-yellow-700 dark:text-yellow-400")}>
                   {countryDue} due soon
                 </span>
               </p>
             </div>
 
-            <div className="overflow-x-auto">
-              <div className="min-w-[720px]">
-                {/* Month axis. The today line is repeated on every bar row below
-                    so a bar is always read against it. */}
-                <div className="flex items-end gap-3 pb-1">
-                  <span className="w-44 shrink-0" />
-                  <div className="relative h-4 flex-1">
-                    {ticks.map((t) => (
-                      <span
-                        key={t.label + t.pct}
-                        className="absolute -translate-x-1/2 text-[0.65rem] text-muted-foreground"
-                        style={{ left: `${t.pct}%` }}
-                      >
-                        {t.label}
-                      </span>
-                    ))}
-                  </div>
-                  <span className="w-56 shrink-0" />
-                </div>
-
-                <div className="space-y-1.5">
-                  {countryRows.map((r) => {
-                    const endPct = positionPct(r.daysLeft);
-                    const left = Math.min(TODAY_PCT, endPct);
-                    // A bar that would round away to nothing (a contract ending
-                    // today) still gets a sliver, so every row has a visible mark.
-                    const width = Math.max(Math.abs(endPct - TODAY_PCT), 0.6);
-                    return (
-                      <div key={r.key} className="flex items-center gap-3">
-                        <span
-                          className={cn(
-                            "w-44 shrink-0 truncate text-xs",
-                            // An overdue property is named in red, so it is found
-                            // without tracing its bar.
-                            r.status === "overdue" ? "font-semibold text-destructive" : "text-muted-foreground",
-                          )}
-                          title={`${r.property} — ${r.tenant}${r.contracts > 1 ? ` (${r.contracts} contracts)` : ""}`}
-                        >
-                          {r.property}
-                        </span>
-                        <div className="relative h-5 flex-1 rounded-sm bg-muted/60">
-                          {/* Today */}
-                          <span
-                            className="absolute top-0 h-full w-px bg-foreground/40"
-                            style={{ left: `${TODAY_PCT}%` }}
-                            aria-hidden
-                          />
-                          <span
-                            className="absolute top-0.5 h-4 rounded-sm"
-                            style={{ left: `${left}%`, width: `${width}%`, backgroundColor: COLOUR[r.status] }}
-                            title={`${r.property} — contract ends ${formatDate(r.end)} (${statusText(r)})`}
-                          />
-                        </div>
-                        <span className="w-56 shrink-0 text-right text-xs">
-                          <span
-                            className={cn(
-                              "font-mono tabular-nums",
-                              r.status === "overdue" ? "text-destructive" : "text-muted-foreground",
-                            )}
-                          >
-                            {formatDate(r.end)}
-                          </span>
-                          <span className={cn("ml-2 font-medium", statusClass(r.status))}>{statusText(r)}</span>
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[640px] border-collapse text-sm">
-                <thead>
-                  <tr className="border-b [&>th]:px-2 [&>th]:py-1.5 [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide [&>th]:text-muted-foreground">
-                    <th className="text-left">Property</th>
-                    <th className="text-left">Tenant</th>
-                    <th className="text-left">Type</th>
-                    <th className="text-right">Contract ends</th>
-                    <th className="text-right">Renewal</th>
-                    <th className="text-right">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {countryRows.map((r) => (
-                    <tr key={r.key} className="border-b last:border-0 [&>td]:px-2 [&>td]:py-1.5">
-                      <td className={cn("font-medium", r.status === "overdue" && "text-destructive")}>{r.property}</td>
-                      <td className="text-muted-foreground">{r.tenant}</td>
-                      <td className="text-muted-foreground">
-                        {r.segment}
-                        {/* A property let on several running contracts is one
-                            row, ending with the last of them — say so rather
-                            than quietly dropping the others. */}
-                        {r.contracts > 1 && (
-                          <span className="ml-1 text-xs">· {r.contracts} contracts</span>
-                        )}
-                      </td>
-                      <td
-                        className={cn("text-right font-mono tabular-nums", r.status === "overdue" && "text-destructive")}
-                      >
-                        {formatDate(r.end)}
-                      </td>
-                      <td className="text-right text-muted-foreground">{r.renewLabel}</td>
-                      <td className={cn("text-right font-medium", statusClass(r.status))}>{statusText(r)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="space-y-5">
+              {segments.map((segment) => (
+                <RenewalGroup
+                  key={segment}
+                  title={SEGMENT_LABEL[segment]}
+                  // Only worth naming the kind of letting when the country has
+                  // more than one; Pakistan has only the standard lease.
+                  showTitle={segments.length > 1}
+                  rows={countryRows.filter((r) => r.segment === segment)}
+                  ticks={ticks}
+                />
+              ))}
             </div>
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * One kind of letting within a country: its bars and its table. Property, end
+ * date and time left read together on the left; the timeline is the last column,
+ * there for the shape rather than the figure.
+ */
+function RenewalGroup({
+  title,
+  showTitle,
+  rows,
+  ticks,
+}: {
+  title: string;
+  showTitle: boolean;
+  rows: LeaseRenewal[];
+  ticks: { pct: number; label: string }[];
+}) {
+  const overdue = rows.filter((r) => r.status === "overdue").length;
+  const due = rows.filter((r) => r.status === "due").length;
+
+  return (
+    <div>
+      {showTitle && (
+        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2 border-b pb-1">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-foreground">{title}</h4>
+          <p className="text-xs text-muted-foreground">
+            {rows.length} {rows.length === 1 ? "property" : "properties"}
+            {overdue > 0 && (
+              <>
+                {" · "}
+                <span className="font-semibold text-destructive">{overdue} overdue</span>
+              </>
+            )}
+            {due > 0 && (
+              <>
+                {" · "}
+                <span className="font-semibold text-yellow-700 dark:text-yellow-400">{due} due soon</span>
+              </>
+            )}
+          </p>
+        </div>
+      )}
+
+      <div className="overflow-x-auto">
+        <div className="min-w-[720px]">
+          {/* Month axis over the chart column. The today line is repeated on
+              every bar row below, so a bar is always read against it. */}
+          <div className="flex items-end gap-3 pb-1">
+            <span className="w-44 shrink-0" />
+            <span className="w-56 shrink-0" />
+            <div className="relative h-4 flex-1">
+              {ticks.map((t) => (
+                <span
+                  key={t.label + t.pct}
+                  className="absolute -translate-x-1/2 text-[0.65rem] text-muted-foreground"
+                  style={{ left: `${t.pct}%` }}
+                >
+                  {t.label}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            {rows.map((r) => {
+              const endPct = positionPct(r.daysLeft);
+              const left = Math.min(TODAY_PCT, endPct);
+              // A bar that would round away to nothing (a contract ending today)
+              // still gets a sliver, so every row has a visible mark.
+              const width = Math.max(Math.abs(endPct - TODAY_PCT), 0.6);
+              return (
+                <div key={r.key} className="flex items-center gap-3">
+                  <span
+                    className={cn(
+                      "w-44 shrink-0 truncate text-xs",
+                      // An overdue property is named in red, so it is found
+                      // without tracing its bar.
+                      r.status === "overdue" ? "font-semibold text-destructive" : "text-muted-foreground",
+                    )}
+                    title={`${r.property} — ${r.tenant}${r.contracts > 1 ? ` (${r.contracts} contracts)` : ""}`}
+                  >
+                    {r.property}
+                  </span>
+                  <span className="w-56 shrink-0 text-xs">
+                    <span
+                      className={cn(
+                        "font-mono tabular-nums",
+                        r.status === "overdue" ? "text-destructive" : "text-muted-foreground",
+                      )}
+                    >
+                      {formatDate(r.end)}
+                    </span>
+                    <span className={cn("ml-2 font-medium", statusClass(r.status))}>{statusText(r)}</span>
+                  </span>
+                  <div className="relative h-5 flex-1 rounded-sm bg-muted/60">
+                    {/* Today */}
+                    <span
+                      className="absolute top-0 h-full w-px bg-foreground/40"
+                      style={{ left: `${TODAY_PCT}%` }}
+                      aria-hidden
+                    />
+                    <span
+                      className="absolute top-0.5 h-4 rounded-sm"
+                      style={{
+                        left: `${left}%`,
+                        width: `${width}%`,
+                        backgroundColor: COLOUR[r.status],
+                        // Yellow is too light to hold its own against the track,
+                        // so the due bar keeps a darker edge.
+                        boxShadow: r.status === "due" ? `inset 0 0 0 1px ${COLOUR_EDGE_DUE}` : undefined,
+                      }}
+                      title={`${r.property} — contract ends ${formatDate(r.end)} (${statusText(r)})`}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full min-w-[640px] border-collapse text-sm">
+          <thead>
+            <tr className="border-b [&>th]:px-2 [&>th]:py-1.5 [&>th]:text-xs [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-wide [&>th]:text-muted-foreground">
+              <th className="text-left">Property</th>
+              <th className="text-left">Tenant</th>
+              <th className="text-left">Type</th>
+              <th className="text-right">Contract ends</th>
+              <th className="text-right">Renewal</th>
+              <th className="text-right">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.key} className="border-b last:border-0 [&>td]:px-2 [&>td]:py-1.5">
+                <td className={cn("font-medium", r.status === "overdue" && "text-destructive")}>{r.property}</td>
+                <td className="text-muted-foreground">{r.tenant}</td>
+                <td className="text-muted-foreground">
+                  {SEGMENT_SHORT[r.segment]}
+                  {/* A property let on several running contracts is one row,
+                      ending with the last of them — say so rather than quietly
+                      dropping the others. */}
+                  {r.contracts > 1 && <span className="ml-1 text-xs">· {r.contracts} contracts</span>}
+                </td>
+                <td className={cn("text-right font-mono tabular-nums", r.status === "overdue" && "text-destructive")}>
+                  {formatDate(r.end)}
+                </td>
+                <td className="text-right text-muted-foreground">{r.renewLabel}</td>
+                <td className={cn("text-right font-medium", statusClass(r.status))}>{statusText(r)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

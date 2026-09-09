@@ -6,6 +6,7 @@ import { PanelLeftCloseIcon, PanelLeftOpenIcon } from "lucide-react";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { HEADER_NAV_SECTIONS } from "./header-nav";
 import { SidebarNav } from "./sidebar-nav";
 
 const STORAGE_KEY = "ssa-sidebar-collapsed";
@@ -85,7 +86,11 @@ export function Sidebar({ allowedModules }: { allowedModules: string[] | null })
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain">
-          <SidebarNav collapsed={collapsed} allowedModules={allowedModules} />
+          <SidebarNav
+            collapsed={collapsed}
+            allowedModules={allowedModules}
+            omitSections={HEADER_NAV_SECTIONS}
+          />
         </div>
       </aside>
     </TooltipProvider>

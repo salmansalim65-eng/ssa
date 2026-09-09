@@ -9,6 +9,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { formatDate } from "@/lib/format";
 import { ApprovalsBell } from "./approvals-bell";
 import { Breadcrumbs } from "./breadcrumbs";
+import { HeaderNav } from "./header-nav";
 import { SidebarNav } from "./sidebar-nav";
 import { ThemeToggle } from "./theme-toggle";
 import { UserMenu } from "./user-menu";
@@ -62,7 +63,10 @@ export function Header({
         </SheetContent>
       </Sheet>
 
-      <div className="min-w-0 [&_a]:text-white/75 [&_a:hover]:text-white [&_span]:text-white [&_svg]:text-white/60">
+      {/* The three sections the day is spent in, as drop-downs right here. */}
+      <HeaderNav allowedModules={allowedModules} />
+
+      <div className="hidden min-w-0 lg:block [&_a]:text-white/75 [&_a:hover]:text-white [&_span]:text-white [&_svg]:text-white/60">
         <Breadcrumbs />
       </div>
 

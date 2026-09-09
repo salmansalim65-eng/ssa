@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { useFieldArray, useForm, useWatch, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CopyIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { CopyIcon, PlusIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,25 @@ export interface AssetOption {
 export interface TenantOption {
   id: string;
   name: string;
+}
+
+/**
+ * What a property was last let on, as the grid needs it. Structural on purpose:
+ * the loader that builds it (lib/rental/last-contracts) is server-only, and this
+ * is a client component.
+ */
+export interface RenewSource {
+  documentNo: string | null;
+  tenantAccountId: string | null;
+  tenantName: string | null;
+  start: string;
+  end: string;
+  rentalAmount: number;
+  rentCycle: "monthly" | "yearly";
+  paymentTerms: "advance" | "monthly" | "quarterly" | "half_yearly" | "yearly";
+  expenses: { accountId: string; amount: number }[];
+  nextStart: string;
+  nextEnd: string;
 }
 
 export interface ExpenseAccountOption {
@@ -196,6 +215,7 @@ export function HhLeaseForm({
   monthly = false,
   lastInvoice,
   invoicedMonths = [],
+  renewFrom,
 }: {
   assets: AssetOption[];
   tenants: TenantOption[];
@@ -226,6 +246,12 @@ export function HhLeaseForm({
   lastInvoice?: { documentNo: string; rentMonth: string | null; lines: HhLeaseFormValues["lines"] };
   /** Months already invoiced (ISO first-of-month), so a repeat is caught early. */
   invoicedMonths?: string[];
+  /**
+   * What each property was last let on, keyed by asset id. A renewal is the same
+   * contract one period later, so picking a property offers its terms back
+   * rather than making them be re-keyed off the old paper.
+   */
+  renewFrom?: Record<string, RenewSource>;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -287,6 +313,39 @@ export function HhLeaseForm({
         vacant: false,
       })),
     );
+  }
+
+  /**
+   * Put a property's last contract into its line: the same rent, terms and
+   * expenses, dated for the period that follows the old one.
+   *
+   * `onlyBlanks` is the difference between picking a property and asking for a
+   * renewal. Picking a property fills what is still empty and leaves anything
+   * already typed alone; pressing Renew is an explicit instruction, so it
+   * replaces the line's terms outright.
+   */
+  function applyRenewal(index: number, assetId: string, onlyBlanks: boolean) {
+    const source = renewFrom?.[assetId];
+    if (!source) return;
+    const line = form.getValues(`lines.${index}`);
+    const setLine = (name: "rentalAmount" | "leaseStart" | "leaseEnd" | "paymentTerms" | "expenses", value: unknown) =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      form.setValue(`lines.${index}.${name}` as any, value as any, { shouldDirty: true });
+
+    if (!onlyBlanks || !(Number(line?.rentalAmount) > 0)) setLine("rentalAmount", source.rentalAmount);
+    if (!onlyBlanks || (line?.expenses ?? []).length === 0) setLine("expenses", source.expenses);
+    if (!onlyBlanks || (line?.paymentTerms ?? "monthly") === "monthly") setLine("paymentTerms", source.paymentTerms);
+    // The renewal period is the whole point of the offer, so it is always set.
+    setLine("leaseStart", source.nextStart);
+    setLine("leaseEnd", source.nextEnd);
+
+    // The header follows the contract too, but only while it is untouched — one
+    // voucher carries a single tenant, and the first property picked should not
+    // overrule a tenant the user has already chosen.
+    if (source.tenantAccountId && !form.getValues("tenantId")) {
+      form.setValue("tenantId", source.tenantAccountId, { shouldDirty: true });
+    }
+    if (!onlyBlanks) form.setValue("rentCycle", source.rentCycle, { shouldDirty: true });
   }
 
   // Live column totals for the grid footer. Blank amount fields are "" so
@@ -478,9 +537,17 @@ export function HhLeaseForm({
                       <FormField
                         control={form.control}
                         name={`lines.${index}.assetId`}
-                        render={({ field }) => (
+                        render={({ field }) => {
+                          const source = renewFrom?.[field.value as string];
+                          return (
                           <FormItem>
-                            <Select onValueChange={field.onChange} value={field.value}>
+                            <Select
+                              onValueChange={(assetId) => {
+                                field.onChange(assetId);
+                                applyRenewal(index, assetId, true);
+                              }}
+                              value={field.value}
+                            >
                               <FormControl>
                                 <SelectTrigger className="w-full">
                                   <SelectValue placeholder="Select asset" />
@@ -494,9 +561,23 @@ export function HhLeaseForm({
                                 ))}
                               </SelectContent>
                             </Select>
+                            {/* Where the terms on this line can come from, and
+                                what pressing Renew would set them to. */}
+                            {source && (
+                              <button
+                                type="button"
+                                onClick={() => applyRenewal(index, field.value as string, false)}
+                                className="text-left text-xs text-primary hover:underline"
+                              >
+                                <RefreshCwIcon className="mr-1 inline size-3" />
+                                Renew{source.documentNo ? ` ${source.documentNo}` : ""} — last term to{" "}
+                                {source.end}, renews to {source.nextEnd}
+                              </button>
+                            )}
                             <FormMessage />
                           </FormItem>
-                        )}
+                          );
+                        }}
                       />
                     </td>
                     {monthly && (

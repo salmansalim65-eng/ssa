@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { RefreshCwIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,23 @@ export interface TenantOption {
   name: string;
 }
 
+/**
+ * What a property was last let on, as this form needs it. Structural on purpose:
+ * the loader that builds it (lib/rental/last-contracts) is server-only, and this
+ * is a client component.
+ */
+export interface RenewSource {
+  tenantAccountId: string | null;
+  start: string;
+  end: string;
+  rentalAmount: number;
+  officialRent: number | null;
+  securityDeposit: number;
+  rentCycle: "monthly" | "yearly";
+  nextStart: string;
+  nextEnd: string;
+}
+
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -54,6 +72,7 @@ export function PkLeaseForm({
   defaultCurrencyId,
   leaseId,
   initialValues,
+  renewFrom,
 }: {
   assets: AssetOption[];
   tenants: TenantOption[];
@@ -61,6 +80,12 @@ export function PkLeaseForm({
   defaultCurrencyId?: string;
   leaseId?: string;
   initialValues?: PkLeaseFormValues;
+  /**
+   * What each property was last let on, keyed by asset id. A renewal is the same
+   * contract one period later, so picking a property offers its terms back
+   * rather than making them be re-keyed off the old paper.
+   */
+  renewFrom?: Record<string, RenewSource>;
 }) {
   const router = useRouter();
   const isEdit = !!leaseId;
@@ -85,6 +110,36 @@ export function PkLeaseForm({
       remarks: "",
     },
   });
+
+  /**
+   * Put a property's last contract into the form: the same tenant, rent and
+   * terms, dated for the period that follows the old one.
+   *
+   * `onlyBlanks` is the difference between picking a property and asking for a
+   * renewal. Picking fills what is still empty and leaves anything already typed
+   * alone; pressing Renew is an explicit instruction, so it replaces the terms.
+   * Editing an existing lease never renews — its terms are the ones on record.
+   */
+  function applyRenewal(assetId: string, onlyBlanks: boolean) {
+    const source = renewFrom?.[assetId];
+    if (!source || isEdit) return;
+    if (source.tenantAccountId && (!onlyBlanks || !form.getValues("tenantId"))) {
+      form.setValue("tenantId", source.tenantAccountId, { shouldDirty: true });
+    }
+    if (!onlyBlanks || !(Number(form.getValues("monthlyRent")) > 0)) {
+      form.setValue("monthlyRent", source.rentalAmount, { shouldDirty: true });
+    }
+    if (source.officialRent !== null && (!onlyBlanks || !(Number(form.getValues("officialRent")) > 0))) {
+      form.setValue("officialRent", source.officialRent, { shouldDirty: true });
+    }
+    if (!onlyBlanks || !(Number(form.getValues("securityDeposit")) > 0)) {
+      form.setValue("securityDeposit", source.securityDeposit, { shouldDirty: true });
+    }
+    if (!onlyBlanks) form.setValue("rentCycle", source.rentCycle, { shouldDirty: true });
+    // The renewal period is the whole point of the offer, so it is always set.
+    form.setValue("leaseStart", source.nextStart, { shouldDirty: true });
+    form.setValue("leaseEnd", source.nextEnd, { shouldDirty: true });
+  }
 
   function onSubmit(values: PkLeaseInput) {
     setFormError(null);
@@ -113,10 +168,18 @@ export function PkLeaseForm({
         <FormField
           control={form.control}
           name="assetId"
-          render={({ field }) => (
+          render={({ field }) => {
+            const source = renewFrom?.[field.value];
+            return (
             <FormItem className="sm:col-span-2">
               <FormLabel>Asset</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value}>
+              <Select
+                onValueChange={(assetId) => {
+                  field.onChange(assetId);
+                  applyRenewal(assetId, true);
+                }}
+                value={field.value}
+              >
                 <FormControl>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select the property being leased" />
@@ -130,9 +193,22 @@ export function PkLeaseForm({
                   ))}
                 </SelectContent>
               </Select>
+              {/* Where this property's terms can come from, and what pressing
+                  Renew would set the period to. */}
+              {source && !isEdit && (
+                <button
+                  type="button"
+                  onClick={() => applyRenewal(field.value, false)}
+                  className="text-left text-xs text-primary hover:underline"
+                >
+                  <RefreshCwIcon className="mr-1 inline size-3" />
+                  Renew last contract — ran to {source.end}, renews to {source.nextEnd}
+                </button>
+              )}
               <FormMessage />
             </FormItem>
-          )}
+            );
+          }}
         />
         <FormField
           control={form.control}

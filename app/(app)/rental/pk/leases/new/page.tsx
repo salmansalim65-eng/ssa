@@ -5,6 +5,7 @@ import { PkLeaseForm } from "@/components/rental/pk-lease-form";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { loadTenantAccounts } from "@/lib/rental/tenant-accounts";
+import { loadLastContracts } from "@/lib/rental/last-contracts";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 
 export default async function NewPkLeasePage() {
@@ -14,7 +15,7 @@ export default async function NewPkLeasePage() {
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
 
-  const [{ data: assets }, tenants, { data: companyCurrencies }] = await Promise.all([
+  const [{ data: assets }, tenants, { data: companyCurrencies }, renewFrom] = await Promise.all([
     supabase
       .schema("assets")
       .from("assets")
@@ -32,6 +33,9 @@ export default async function NewPkLeasePage() {
       .select("is_base_currency, currencies:currency_id(id, code)")
       .eq("company_id", companyId)
       .eq("is_active", true),
+    // A renewal is the same contract a period later, so each property offers the
+    // terms it is currently let on rather than making them be re-keyed.
+    loadLastContracts(companyId, "PK"),
   ]);
 
   type RawCurrency = { is_base_currency: boolean; currencies: { id: string; code: string } | null };
@@ -47,7 +51,7 @@ export default async function NewPkLeasePage() {
       <PageHeader
         eyebrow="Rentals"
         title="New Pakistan lease"
-        description="Set up a monthly rent cycle for a Pakistan property."
+        description="Set up a monthly rent cycle for a Pakistan property. Picking one brings back what it is let on now, dated for the period that follows."
         backHref="/rental/pk/leases"
       />
       <PkLeaseForm
@@ -55,6 +59,7 @@ export default async function NewPkLeasePage() {
         tenants={tenants ?? []}
         currencies={currencyOptions}
         defaultCurrencyId={defaultCurrencyId}
+        renewFrom={renewFrom}
       />
     </div>
   );

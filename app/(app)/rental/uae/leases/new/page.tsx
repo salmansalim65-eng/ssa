@@ -7,6 +7,7 @@ import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { loadTenantAccounts } from "@/lib/rental/tenant-accounts";
 import { loadRentalExpenseAccounts } from "@/lib/rental/rental-expense-accounts";
+import { loadLastContracts } from "@/lib/rental/last-contracts";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 
 export default async function NewUaeRentInvoicePage() {
@@ -16,7 +17,7 @@ export default async function NewUaeRentInvoicePage() {
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
 
-  const [{ data: assets }, tenants, { data: companyCurrencies }, expenseAccounts] = await Promise.all([
+  const [{ data: assets }, tenants, { data: companyCurrencies }, expenseAccounts, renewFrom] = await Promise.all([
     supabase
       .schema("assets")
       .from("assets")
@@ -34,6 +35,9 @@ export default async function NewUaeRentInvoicePage() {
       .eq("company_id", companyId)
       .eq("is_active", true),
     loadRentalExpenseAccounts(companyId),
+    // A renewal is the same contract a period later, so each property offers the
+    // terms it is currently let on rather than making them be re-keyed.
+    loadLastContracts(companyId, "AE"),
   ]);
 
   type RawCurrency = { is_base_currency: boolean; currencies: { id: string; code: string } | null };
@@ -48,7 +52,7 @@ export default async function NewUaeRentInvoicePage() {
       <PageHeader
         eyebrow="Rentals"
         title="New UAE Rent Invoice"
-        description="Enter one tenant and one or many properties at once. It posts as a single rent invoice with one accounting entry for the whole voucher."
+        description="One tenant, one or many properties. Picking a property brings back what it is let on now, dated for the period that follows — correct what changed and save. It posts as a single rent invoice with one accounting entry."
         backHref="/rental/uae/leases"
       />
       <HhLeaseForm
@@ -61,6 +65,7 @@ export default async function NewUaeRentInvoicePage() {
         docLabel="UAE Rent Invoice"
         redirectHref="/rental/uae/leases"
         managementPct={0.05}
+        renewFrom={renewFrom}
       />
     </div>
   );

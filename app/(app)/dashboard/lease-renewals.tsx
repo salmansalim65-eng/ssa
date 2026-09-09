@@ -54,15 +54,15 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 /** The countries a section is drawn for, in the order they are shown. */
 const COUNTRIES: RenewalCountry[] = ["AE", "PK"];
 
-// Within a country, holiday homes are listed apart from ordinary leases: an HH
-// stay renews every few weeks and a standard lease every year, so mixing them
-// in one list says nothing useful about either. They remain UAE lettings — this
-// is a kind of contract, not a country.
+// Inside a country the list is marked off by the TERMS a property is let on,
+// not by where it is: an HH stay renews every few weeks and a standard lease
+// every year. HH is a UAE letting like any other — the heading separates the
+// terms, the country section still holds them all.
 const SEGMENT_ORDER: LeaseRenewal["segment"][] = ["HH", "UAE", "PK"];
 const SEGMENT_LABEL: Record<LeaseRenewal["segment"], string> = {
-  HH: "HH — holiday homes",
-  UAE: "UAE — standard lease",
-  PK: "Standard lease",
+  HH: "HH terms — holiday homes",
+  UAE: "Standard lease terms",
+  PK: "Standard lease terms",
 };
 /** The same distinction inside a table cell, where the heading already said it. */
 const SEGMENT_SHORT: Record<LeaseRenewal["segment"], string> = { HH: "HH", UAE: "UAE", PK: "PK" };
@@ -260,11 +260,11 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
         const countryEmpty = vacantToday(countryRows).length;
 
         // A country is ONE list, read top to bottom and numbered straight
-        // through. The kinds of letting are marked off inside it by a heading
-        // rather than split into separate charts: an HH stay and a standard
-        // lease renew on completely different rhythms, but they are the same
-        // book and belong on the same axis. A vacant property has no kind of
-        // letting to file it under, so it closes the list.
+        // through. What separates HH from a standard lease is the TERMS, not the
+        // country, so the terms get a heading inside the list rather than a
+        // chart of their own: they are the same book and belong on the same
+        // axis. A vacant property is let on no terms at all, so it closes the
+        // list.
         const letRows = countryRows.filter((r) => r.status !== "vacant");
         const vacantRows = countryRows.filter((r) => r.status === "vacant");
         const blocks: { title: string; rows: LeaseRenewal[] }[] = SEGMENT_ORDER.map((seg) => ({

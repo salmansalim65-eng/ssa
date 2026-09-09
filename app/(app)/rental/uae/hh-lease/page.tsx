@@ -42,7 +42,7 @@ export default async function HhLeasesPage() {
       .schema("rental")
       .from("uae_leases")
       .select(
-        "id, asset_id, lease_start, lease_end, rental_amount, rent_cycle, status, document_no, document_date, tenants:tenant_id(name)",
+        "id, asset_id, lease_start, lease_end, rental_amount, rent_cycle, status, document_no, document_date, rent_month, is_vacant, tenants:tenant_id(name)",
       )
       .eq("company_id", companyId)
       .eq("lease_type", "hh")
@@ -69,6 +69,8 @@ export default async function HhLeasesPage() {
     status: keyof typeof statusVariant;
     document_no: string | null;
     document_date: string | null;
+    rent_month: string | null;
+    is_vacant: boolean | null;
     tenants: { name: string } | null;
   };
 
@@ -159,6 +161,11 @@ export default async function HhLeasesPage() {
                 const propLabel = count > 1
                   ? `${firstAsset?.asset_name ?? "—"} +${count - 1} more`
                   : firstAsset?.asset_name ?? "—";
+                // How many of the voucher's properties earned nothing that month.
+                const vacantCount = group.lines.filter((l) => l.is_vacant).length;
+                // The month the invoice was made FOR, when it was recorded;
+                // older vouchers fall back to the month their period starts in.
+                const groupMonth = group.lines.map((l) => l.rent_month).find(Boolean) ?? null;
                 const start = group.lines.reduce((m, l) => (l.lease_start < m ? l.lease_start : m), first.lease_start);
                 const end = group.lines.reduce((m, l) => (l.lease_end > m ? l.lease_end : m), first.lease_end);
                 const invId = group.docNo ? invoiceByDoc.get(group.docNo) : undefined;
@@ -172,12 +179,15 @@ export default async function HhLeasesPage() {
                       <Link href={href} className="font-medium text-primary hover:underline">
                         {propLabel}
                       </Link>
+                      {vacantCount > 0 && (
+                        <span className="ml-2 text-xs text-muted-foreground">· {vacantCount} vacant</span>
+                      )}
                     </TableCell>
                     <TableCell>{first.tenants?.name ?? "—"}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {formatDate(start)} – {formatDate(end)}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap">{rentMonthLabel(start)}</TableCell>
+                    <TableCell className="whitespace-nowrap">{rentMonthLabel(groupMonth ?? start)}</TableCell>
                     <TableCell className="text-right font-mono tabular-nums">{formatMoney(total)}</TableCell>
                     <TableCell className="capitalize">{first.rent_cycle}</TableCell>
                     <TableCell>

@@ -61,11 +61,14 @@ export default async function EditRentInvoicePage({ params }: { params: Promise<
   const { data: termRows } = await supabase
     .schema("rental")
     .from("uae_leases")
-    .select("id, payment_terms")
+    .select("id, payment_terms, is_vacant, rent_month")
     .in("id", leaseRows.map((l) => l.id));
-  const termsByLease = new Map(
-    ((termRows as { id: string; payment_terms: string | null }[]) ?? []).map((t) => [t.id, t.payment_terms]),
-  );
+  type TermRow = { id: string; payment_terms: string | null; is_vacant: boolean | null; rent_month: string | null };
+  const extraByLease = new Map(((termRows as TermRow[]) ?? []).map((t) => [t.id, t]));
+  const termsByLease = new Map(((termRows as TermRow[]) ?? []).map((t) => [t.id, t.payment_terms]));
+  // The month the invoice is for is a fact of the document, so it comes back on
+  // an edit rather than being re-picked (or silently lost).
+  const invoiceMonth = ((termRows as TermRow[]) ?? []).map((t) => t.rent_month).find(Boolean) ?? "";
 
   // Named expenses per lease.
   const { data: expenseRows } = await supabase
@@ -114,6 +117,7 @@ export default async function EditRentInvoicePage({ params }: { params: Promise<
   const initialValues = {
     tenantId: tenantAccountId,
     documentDate: invoice.invoice_date as string,
+    rentMonth: invoiceMonth,
     currencyId: invoice.currency_id as string,
     rentCycle: (firstLease?.rent_cycle as "monthly" | "yearly") ?? "monthly",
     lines: leaseRows.map((l) => ({
@@ -130,6 +134,7 @@ export default async function EditRentInvoicePage({ params }: { params: Promise<
         | "quarterly"
         | "half_yearly"
         | "yearly",
+      vacant: extraByLease.get(l.id as string)?.is_vacant === true,
     })),
   };
 
@@ -160,6 +165,7 @@ export default async function EditRentInvoicePage({ params }: { params: Promise<
         docLabel={docLabel}
         submitLabel={`Update ${docLabel}`}
         managementPct={isHh ? 0.1 : 0.05}
+        monthly={isHh}
         initialValues={initialValues}
         redirectHref={isHh ? "/rental/uae/hh-lease" : "/rental/uae/leases"}
       />

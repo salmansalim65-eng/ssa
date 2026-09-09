@@ -68,6 +68,9 @@ export async function OccupancyView({ companyId, year }: { companyId: string; ye
       .select("asset_id, lease_start, lease_end")
       .eq("company_id", companyId)
       .eq("lease_type", "hh")
+      // A vacant line is the record of an EMPTY period — counting it as a stay
+      // would turn the very months it documents into occupancy.
+      .eq("is_vacant", false)
       .is("deleted_at", null),
     supabase
       .schema("accounting")

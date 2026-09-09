@@ -132,7 +132,7 @@ export async function loadLeaseRenewals(
     supabase
       .schema("rental")
       .from("uae_leases")
-      .select("id, asset_id, tenant_id, lease_start, lease_end, lease_type, rent_month")
+      .select("id, asset_id, tenant_id, lease_start, lease_end, lease_type, rent_month, is_vacant")
       .eq("company_id", companyId)
       .eq("status", "active")
       .is("deleted_at", null),
@@ -155,6 +155,8 @@ export async function loadLeaseRenewals(
   const leases: RawLease[] = [];
   for (const l of uaeLeases ?? []) {
     if (!l.lease_end) continue;
+    // A vacant line records an EMPTY period, so it must never read as a let.
+    if ((l as { is_vacant?: boolean }).is_vacant) continue;
     leases.push({
       id: l.id as string,
       assetId: (l.asset_id as string | null) ?? null,
@@ -262,7 +264,7 @@ export async function loadLeaseRenewals(
       tenant: (subject?.tenantId && tenantName.get(subject.tenantId)) || "—",
       start: subject?.start ?? null,
       end,
-      renewLabel: subject?.rentMonth || monthLabel(end),
+      renewLabel: monthLabel(subject?.rentMonth) || monthLabel(end),
       daysLeft,
       // Empty with a tenancy already signed is a gap, not a renewal anyone has
       // to chase; empty with nothing to follow is a renewal that is overdue.

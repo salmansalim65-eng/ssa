@@ -15,7 +15,8 @@ export const hhLeaseExpenseSchema = z.object({
 export const hhLeaseLineSchema = z
   .object({
     assetId: z.string().uuid("Select an asset"),
-    rentalAmount: z.coerce.number().positive("Must be greater than zero"),
+    // Zero is allowed only on a vacant line; the refine below enforces that.
+    rentalAmount: z.coerce.number().nonnegative("Must be zero or more"),
     leaseStart: z.string().date("Enter a valid date"),
     leaseEnd: z.string().date("Enter a valid date"),
     // Named monthly other-expenses for this property; each feeds the Rent Balance
@@ -26,15 +27,27 @@ export const hhLeaseLineSchema = z
     // How THIS property's rent falls due (per-property, so one voucher can mix
     // Advance and Monthly). The ledger still books the whole voucher as one entry.
     paymentTerms: z.enum(["advance", "monthly", "quarterly", "half_yearly", "yearly"]).default("monthly"),
+    // The property stood empty for this period. It is still a line — the vacancy
+    // is recorded with its dates — but it bills nothing and posts nothing.
+    vacant: z.boolean().default(false),
   })
   .refine((d) => d.leaseEnd > d.leaseStart, {
     message: "Lease end must be after lease start",
     path: ["leaseEnd"],
+  })
+  .refine((d) => d.vacant || d.rentalAmount > 0, {
+    message: "Must be greater than zero",
+    path: ["rentalAmount"],
   });
 
 export const hhLeaseSchema = z.object({
   tenantId: z.string().uuid("Select a tenant"),
   documentDate: z.string().date("Enter a valid date"),
+  // The month the invoice is FOR, as the first of that month — HH is billed one
+  // invoice per month, so the month is a fact of the document, not something to
+  // be guessed later from the line dates. Optional for the yearly UAE grid,
+  // which is not a monthly run.
+  rentMonth: z.string().date("Pick a month").optional().or(z.literal("")),
   currencyId: z.string().uuid("Select a currency"),
   rentCycle: z.enum(["monthly", "yearly"], { message: "Select a rent cycle" }),
   lines: z.array(hhLeaseLineSchema).min(1, "Add at least one asset line"),

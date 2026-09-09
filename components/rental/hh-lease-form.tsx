@@ -4,12 +4,15 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { useFieldArray, useForm, useWatch, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { PlusIcon, Trash2Icon } from "lucide-react";
+import { CopyIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { blankAmount, amountValue } from "@/lib/forms/amount";
+import { MONTH_NAMES } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import {
   Form,
   FormControl,
@@ -26,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CurrencySelect, type CurrencyOption } from "@/components/vouchers/currency-select";
+import { MonthInput } from "@/components/vouchers/month-input";
 import { createHhLease } from "@/features/rental/hh-leases/actions";
 import { hhLeaseSchema, type HhLeaseFormValues, type HhLeaseInput } from "@/features/rental/hh-leases/schemas";
 
@@ -50,15 +54,40 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function emptyLine() {
+/** The first of the month a date falls in, as the ISO date months are stored as. */
+function monthStart(date: string) {
+  return `${date.slice(0, 7)}-01`;
+}
+
+/** The last day of that month. */
+function monthEnd(month: string) {
+  const year = Number(month.slice(0, 4));
+  const m = Number(month.slice(5, 7));
+  return `${month.slice(0, 7)}-${String(new Date(Date.UTC(year, m, 0)).getUTCDate()).padStart(2, "0")}`;
+}
+
+/** "September 2026", for saying which month is being invoiced. */
+function monthName(month: string) {
+  const m = Number(month.slice(5, 7));
+  return m >= 1 && m <= 12 ? `${MONTH_NAMES[m - 1]} ${month.slice(0, 4)}` : "";
+}
+
+/** True when a line covers a whole calendar month exactly, start to end. */
+function spansWholeMonth(start?: string, end?: string) {
+  if (!start || !end) return false;
+  return start === monthStart(start) && end === monthEnd(start) && start.slice(0, 7) === end.slice(0, 7);
+}
+
+function emptyLine(month?: string) {
   return {
     assetId: "",
     rentalAmount: blankAmount,
-    leaseStart: today(),
-    leaseEnd: today(),
+    leaseStart: month ? monthStart(month) : today(),
+    leaseEnd: month ? monthEnd(month) : today(),
     expenses: [],
     remarks: "",
     paymentTerms: "monthly" as const,
+    vacant: false,
   };
 }
 
@@ -164,6 +193,9 @@ export function HhLeaseForm({
   managementPct = 0.1,
   initialValues,
   submitLabel,
+  monthly = false,
+  lastInvoice,
+  invoicedMonths = [],
 }: {
   assets: AssetOption[];
   tenants: TenantOption[];
@@ -186,6 +218,14 @@ export function HhLeaseForm({
   // When editing an existing voucher, its current values pre-fill the grid.
   initialValues?: HhLeaseFormValues;
   submitLabel?: string;
+  // HH is invoiced once a month for every property at once. That turns on the
+  // month field, the "copy last month" fill and the per-property Vacant mark.
+  // The yearly UAE grid leaves it off and behaves exactly as before.
+  monthly?: boolean;
+  /** The previous month's invoice, offered as the starting point for this one. */
+  lastInvoice?: { documentNo: string; rentMonth: string | null; lines: HhLeaseFormValues["lines"] };
+  /** Months already invoiced (ISO first-of-month), so a repeat is caught early. */
+  invoicedMonths?: string[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -196,13 +236,58 @@ export function HhLeaseForm({
     defaultValues: initialValues ?? {
       tenantId: "",
       documentDate: today(),
+      rentMonth: monthly ? monthStart(today()) : "",
       currencyId: defaultCurrencyId ?? currencies[0]?.id ?? "",
       rentCycle: "monthly",
-      lines: [emptyLine()],
+      lines: [emptyLine(monthly ? monthStart(today()) : undefined)],
     },
   });
 
-  const { fields, append, remove } = useFieldArray({ control: form.control, name: "lines" });
+  const { fields, append, remove, replace } = useFieldArray({ control: form.control, name: "lines" });
+
+  const rentMonth = (useWatch({ control: form.control, name: "rentMonth" }) as string | undefined) ?? "";
+  // An invoice already exists for this month. Not blocked — a correction or a
+  // second batch is legitimate — but said plainly before it is saved twice.
+  const alreadyInvoiced = monthly && rentMonth !== "" && invoicedMonths.includes(rentMonth);
+
+  /**
+   * Moving the invoice to another month re-dates the lines that cover a WHOLE
+   * month, which is what a routine monthly line looks like. A line carrying real
+   * stay dates (an HH let that ran 3–19 August) is left exactly as entered —
+   * those are facts about the stay, not a default to be overwritten.
+   */
+  function applyMonth(month: string) {
+    form.setValue("rentMonth", month, { shouldDirty: true });
+    if (!month) return;
+    const lines = form.getValues("lines") ?? [];
+    lines.forEach((line, i) => {
+      if (!spansWholeMonth(line?.leaseStart, line?.leaseEnd)) return;
+      form.setValue(`lines.${i}.leaseStart`, monthStart(month), { shouldDirty: true });
+      form.setValue(`lines.${i}.leaseEnd`, monthEnd(month), { shouldDirty: true });
+    });
+  }
+
+  /**
+   * Start this month from the last invoice: the same properties, rents, terms
+   * and expenses, re-dated to the month being billed. Nothing is posted by this
+   * — it only fills the grid, and every line is still editable (or markable
+   * vacant) before it is saved.
+   */
+  function copyLastInvoice() {
+    if (!lastInvoice) return;
+    const month = rentMonth || monthStart(today());
+    replace(
+      lastInvoice.lines.map((line) => ({
+        ...line,
+        // Carry a line's own stay dates across only as far as the month; a
+        // routine full-month line lands on the new month, a short stay keeps its
+        // shape but is the user's to correct.
+        leaseStart: monthStart(month),
+        leaseEnd: monthEnd(month),
+        vacant: false,
+      })),
+    );
+  }
 
   // Live column totals for the grid footer. Blank amount fields are "" so
   // `Number(x) || 0` keeps NaN out of the sums.
@@ -257,6 +342,26 @@ export function HhLeaseForm({
               </FormItem>
             )}
           />
+          {monthly && (
+            <FormField
+              control={form.control}
+              name="rentMonth"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Rent month</FormLabel>
+                  <FormControl>
+                    <MonthInput value={(field.value as string) ?? ""} onChange={applyMonth} />
+                  </FormControl>
+                  {alreadyInvoiced && (
+                    <p className="text-xs font-medium text-destructive">
+                      {monthName(rentMonth)} has already been invoiced — check before saving another.
+                    </p>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
           <FormField
             control={form.control}
             name="tenantId"
@@ -317,11 +422,29 @@ export function HhLeaseForm({
 
         {/* Asset lines grid */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-medium">Assets</h2>
-            <Button type="button" variant="outline" size="sm" onClick={() => append(emptyLine())}>
-              <PlusIcon className="size-4" /> Add row
-            </Button>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-lg font-medium">
+              Assets
+              {monthly && rentMonth && (
+                <span className="ml-2 text-sm font-normal text-muted-foreground">for {monthName(rentMonth)}</span>
+              )}
+            </h2>
+            <div className="flex items-center gap-2">
+              {monthly && lastInvoice && (
+                <Button type="button" variant="outline" size="sm" onClick={copyLastInvoice}>
+                  <CopyIcon className="size-4" /> Copy {lastInvoice.documentNo}
+                  {lastInvoice.rentMonth ? ` (${monthName(lastInvoice.rentMonth)})` : ""}
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => append(emptyLine(monthly ? rentMonth || undefined : undefined))}
+              >
+                <PlusIcon className="size-4" /> Add row
+              </Button>
+            </div>
           </div>
 
           <div className="overflow-x-auto rounded-md border">
@@ -330,6 +453,7 @@ export function HhLeaseForm({
                 <tr className="border-b bg-muted/50 text-left [&_th]:px-2 [&_th]:py-2 [&_th]:font-medium">
                   <th className="w-10">Sno</th>
                   <th className="min-w-[200px]">Asset</th>
+                  {monthly && <th className="w-20">Vacant</th>}
                   <th className="w-32">Rent/Month</th>
                   <th className="w-28">Management</th>
                   <th className="w-40">Lease Start</th>
@@ -342,8 +466,13 @@ export function HhLeaseForm({
                 </tr>
               </thead>
               <tbody>
-                {fields.map((line, index) => (
-                  <tr key={line.id} className="border-b align-top [&_td]:px-2 [&_td]:py-2">
+                {fields.map((line, index) => {
+                  // A vacant property is on the invoice to be COUNTED: it keeps
+                  // its dates so the empty period is on the record, but charges
+                  // nothing, so rent, management and expenses are switched off.
+                  const isVacant = watchedLines[index]?.vacant === true;
+                  return (
+                  <tr key={line.id} className={cn("border-b align-top [&_td]:px-2 [&_td]:py-2", isVacant && "bg-muted/40")}>
                     <td className="pt-4 text-muted-foreground">{index + 1}</td>
                     <td>
                       <FormField
@@ -370,6 +499,35 @@ export function HhLeaseForm({
                         )}
                       />
                     </td>
+                    {monthly && (
+                      <td className="pt-4">
+                        <FormField
+                          control={form.control}
+                          name={`lines.${index}.vacant`}
+                          render={({ field }) => (
+                            <FormItem className="flex items-center gap-2">
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value === true}
+                                  onCheckedChange={(checked) => {
+                                    const vacant = checked === true;
+                                    field.onChange(vacant);
+                                    // Marking a property vacant clears what it
+                                    // would have charged, so nothing is billed by
+                                    // a figure left behind from before.
+                                    if (vacant) {
+                                      form.setValue(`lines.${index}.rentalAmount`, blankAmount, { shouldDirty: true });
+                                      form.setValue(`lines.${index}.expenses`, [], { shouldDirty: true });
+                                    }
+                                  }}
+                                  aria-label="Property was vacant this period"
+                                />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                      </td>
+                    )}
                     <td>
                       <FormField
                         control={form.control}
@@ -377,7 +535,15 @@ export function HhLeaseForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormControl>
-                              <Input type="number" step="0.01" min="0" {...field} value={amountValue(field.value)} />
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                disabled={isVacant}
+                                {...field}
+                                value={isVacant ? "" : amountValue(field.value)}
+                                placeholder={isVacant ? "Vacant" : undefined}
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -441,7 +607,11 @@ export function HhLeaseForm({
                       />
                     </td>
                     <td>
-                      <LineExpenses control={form.control} index={index} expenseAccounts={expenseAccounts} />
+                      {isVacant ? (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      ) : (
+                        <LineExpenses control={form.control} index={index} expenseAccounts={expenseAccounts} />
+                      )}
                     </td>
                     <td className="pt-3 text-right font-mono font-medium tabular-nums">
                       {fmtAmount(
@@ -482,12 +652,18 @@ export function HhLeaseForm({
                       </Button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
               <tfoot>
                 <tr className="border-t bg-muted/50 font-semibold [&_td]:px-2 [&_td]:py-2">
                   <td />
                   <td className="text-right text-muted-foreground">Total</td>
+                  {monthly && (
+                    <td className="text-xs font-normal text-muted-foreground">
+                      {watchedLines.filter((l) => l?.vacant).length} vacant
+                    </td>
+                  )}
                   <td className="tabular-nums">{fmtAmount(totalRent)}</td>
                   <td className="text-right tabular-nums">{fmtAmount(totalManagement)}</td>
                   <td />

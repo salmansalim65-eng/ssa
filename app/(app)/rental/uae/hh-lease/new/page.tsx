@@ -57,14 +57,97 @@ async function loadRentalExpenseAccounts(companyId: string) {
   return out.sort((a, b) => a.account_code.localeCompare(b.account_code));
 }
 
+/**
+ * The last HH invoice, offered as the starting point for the next one.
+ *
+ * HH is billed one invoice a month for every property at once, and month to
+ * month it is largely the same grid: the same properties, the same rents, the
+ * same terms. Re-keying it invites both typos and omissions — and an omission is
+ * the worst kind, because a property left off looks exactly like one that was
+ * empty. So the previous invoice comes back as a draft to correct: change what
+ * moved, mark what stood empty.
+ *
+ * Vacant lines are carried across as ordinary properties, not as vacancies: last
+ * month's emptiness says nothing about this month's.
+ */
+async function loadLastHhInvoice(companyId: string) {
+  const supabase = await createClient();
+  const { data: latest } = await supabase
+    .schema("rental")
+    .from("uae_leases")
+    .select("document_no, rent_month, created_at")
+    .eq("company_id", companyId)
+    .eq("lease_type", "hh")
+    .not("document_no", "is", null)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!latest?.document_no) return undefined;
+
+  const { data: lines } = await supabase
+    .schema("rental")
+    .from("uae_leases")
+    .select("id, asset_id, rental_amount, lease_start, lease_end, payment_terms, remarks")
+    .eq("company_id", companyId)
+    .eq("document_no", latest.document_no as string)
+    .is("deleted_at", null)
+    .order("created_at");
+  if (!lines?.length) return undefined;
+
+  const { data: expenses } = await supabase
+    .schema("rental")
+    .from("lease_expenses")
+    .select("lease_id, account_id, amount")
+    .in("lease_id", lines.map((l) => l.id as string));
+  const expensesByLease = new Map<string, { accountId: string; amount: number }[]>();
+  for (const e of expenses ?? []) {
+    const key = e.lease_id as string;
+    const list = expensesByLease.get(key) ?? [];
+    list.push({ accountId: e.account_id as string, amount: Number(e.amount) });
+    expensesByLease.set(key, list);
+  }
+
+  return {
+    documentNo: latest.document_no as string,
+    rentMonth: (latest.rent_month as string | null) ?? null,
+    lines: lines.map((l) => ({
+      assetId: (l.asset_id as string) ?? "",
+      rentalAmount: Number(l.rental_amount),
+      leaseStart: l.lease_start as string,
+      leaseEnd: l.lease_end as string,
+      paymentTerms: ((l.payment_terms as string) ?? "monthly") as "advance" | "monthly" | "quarterly" | "half_yearly" | "yearly",
+      remarks: (l.remarks as string | null) ?? "",
+      expenses: expensesByLease.get(l.id as string) ?? [],
+      vacant: false,
+    })),
+  };
+}
+
+/** Months that already carry an HH invoice, so a second one is flagged early. */
+async function loadInvoicedMonths(companyId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .schema("rental")
+    .from("uae_leases")
+    .select("rent_month")
+    .eq("company_id", companyId)
+    .eq("lease_type", "hh")
+    .not("rent_month", "is", null)
+    .is("deleted_at", null);
+  return [...new Set((data ?? []).map((r) => r.rent_month as string))];
+}
+
 export default async function NewHhLeasePage() {
+
   const canCreate = await hasPermission("uae_rent_invoice", "create");
   if (!canCreate) redirect("/rental/uae/hh-lease");
 
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
 
-  const [{ data: assets }, tenants, { data: companyCurrencies }, expenseAccounts] = await Promise.all([
+  const [{ data: assets }, tenants, { data: companyCurrencies }, expenseAccounts, lastInvoice, invoicedMonths] =
+    await Promise.all([
     supabase
       .schema("assets")
       .from("assets")
@@ -83,6 +166,8 @@ export default async function NewHhLeasePage() {
       .eq("company_id", companyId)
       .eq("is_active", true),
     loadRentalExpenseAccounts(companyId),
+    loadLastHhInvoice(companyId),
+    loadInvoicedMonths(companyId),
   ]);
 
   type RawCurrency = { is_base_currency: boolean; currencies: { id: string; code: string } | null };
@@ -98,7 +183,7 @@ export default async function NewHhLeasePage() {
       <PageHeader
         eyebrow="Rentals"
         title="New HH Rent Invoice"
-        description="Enter one tenant and many properties at once. It posts as a single rent invoice with one accounting entry for the whole voucher."
+        description="One month, one tenant, every property. Start from last month's invoice, correct what moved, and mark anything that stood empty as vacant — it posts as a single rent invoice with one accounting entry."
         backHref="/rental/uae/hh-lease"
       />
       <HhLeaseForm
@@ -107,6 +192,9 @@ export default async function NewHhLeasePage() {
         currencies={currencyOptions}
         defaultCurrencyId={defaultCurrencyId}
         expenseAccounts={expenseAccounts}
+        monthly
+        lastInvoice={lastInvoice}
+        invoicedMonths={invoicedMonths}
       />
     </div>
   );

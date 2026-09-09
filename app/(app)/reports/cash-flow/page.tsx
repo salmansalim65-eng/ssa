@@ -102,6 +102,8 @@ export default async function CashFlowPage({
         .select("id, asset_id, rental_amount, lease_type, lease_start, lease_end")
         .eq("company_id", companyId)
         .eq("status", "active")
+        // A vacant line earns nothing, so it must not forecast rent.
+        .eq("is_vacant", false)
         .is("deleted_at", null),
       supabase
         .schema("rental")

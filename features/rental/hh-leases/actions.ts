@@ -149,7 +149,10 @@ async function createCombinedRentInvoice(
     rent_cycle: parsed.data.rentCycle,
     security_deposit: 0,
     currency_id: parsed.data.currencyId,
-    rent_month: null,
+    rent_month: parsed.data.rentMonth || null,
+    // A vacant line records that the property earned nothing this period. It
+    // bills nothing, posts nothing, and generates no payment schedule.
+    is_vacant: line.vacant === true,
     // Named expenses now live in rental.lease_expenses; the legacy single-amount
     // column stays 0 for HH leases created this way.
     expense_amount: 0,
@@ -252,6 +255,8 @@ async function createCombinedRentInvoice(
   for (let i = 0; i < created.length; i++) {
     const line = inputLines[i];
     if (!line) continue;
+    // A vacant property is on the invoice to be counted, not to be charged.
+    if (line.vacant) continue;
     // The entered rent is MONTHLY — the invoice bills it for every month of the
     // period (monthly rent × number of months).
     const lineTotal = round2(Number(line.rentalAmount) * monthsBetween(line.leaseStart, line.leaseEnd));

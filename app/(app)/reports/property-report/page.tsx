@@ -74,6 +74,9 @@ export default async function PropertyReportPage() {
       .from("uae_leases")
       .select("id, asset_id, rental_amount, rent_cycle, lease_start, lease_end, rent_month, lease_type")
       .eq("company_id", companyId)
+      // A vacant line records an empty period and earns nothing, so it is not a
+      // rent this report can show.
+      .eq("is_vacant", false)
       .is("deleted_at", null),
     supabase
       .schema("rental")
@@ -194,7 +197,7 @@ export default async function PropertyReportPage() {
           expensesMonthly,
           start,
           end,
-          renew: rentMonth || monthLabel(end),
+          renew: monthLabel(rentMonth) || monthLabel(end),
         });
       }
       return;
@@ -207,7 +210,7 @@ export default async function PropertyReportPage() {
       expensesMonthly,
       start,
       end,
-      renew: rentMonth || monthLabel(end),
+      renew: monthLabel(rentMonth) || monthLabel(end),
     });
   };
   for (const l of uaeLeases ?? []) {

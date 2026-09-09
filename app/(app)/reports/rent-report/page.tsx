@@ -108,6 +108,8 @@ export default async function RentReportPage({
         .select("id, asset_id, tenant_id, rental_amount, rent_cycle, lease_start, lease_end, lease_type, rent_month, document_no, created_at")
         .eq("company_id", companyId)
         .eq("status", "active")
+        // A vacant line bills nothing: it records that the property was empty.
+        .eq("is_vacant", false)
         .is("deleted_at", null)
         .order("created_at"),
       supabase.schema("core").from("currencies").select("code, symbol"),
@@ -167,7 +169,7 @@ export default async function RentReportPage({
       gross: Number(l.monthly_rent) || 0,
       start: (l.lease_start as string) ?? null,
       end: (l.lease_end as string) ?? null,
-      renew: (l.rent_month as string) || monthLabel(l.lease_end as string),
+      renew: monthLabel(l.rent_month as string | null) || monthLabel(l.lease_end as string),
       tenantId: (l.tenant_id as string) ?? null,
       billingKeys: billingKeysOf((l.lease_start as string) ?? null, (l.lease_end as string) ?? null),
       leaseType: null,
@@ -201,7 +203,7 @@ export default async function RentReportPage({
       gross,
       start: (l.lease_start as string) ?? null,
       end: (l.lease_end as string) ?? null,
-      renew: (l.rent_month as string) || monthLabel(l.lease_end as string),
+      renew: monthLabel(l.rent_month as string | null) || monthLabel(l.lease_end as string),
       tenantId: (l.tenant_id as string) ?? null,
       billingKeys: billingKeysOf((l.lease_start as string) ?? null, (l.lease_end as string) ?? null),
       leaseType: (l.lease_type as string | null) ?? null,

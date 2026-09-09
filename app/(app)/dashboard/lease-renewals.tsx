@@ -24,9 +24,12 @@ import {
 // colour alone — every row states its status in words and days as well.
 const COLOUR: Record<LeaseRenewal["status"], string> = {
   overdue: "#d03b3b",
-  due: "#a05c00",
+  due: "#eab308",
   later: "#0ca30c",
 };
+
+/** A darker rim for the yellow bar, which is otherwise too light to read. */
+const COLOUR_EDGE_DUE = "#8a6a00";
 
 // How much time the track shows: three months behind so an expired contract has
 // somewhere to be drawn, a year ahead so the next renewal season is visible.
@@ -59,7 +62,7 @@ function statusText(r: LeaseRenewal): string {
 function statusClass(status: LeaseRenewal["status"], overdueOnly = false): string {
   if (status === "overdue") return "text-destructive";
   if (overdueOnly) return "";
-  return status === "due" ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground";
+  return status === "due" ? "text-yellow-700 dark:text-yellow-400" : "text-muted-foreground";
 }
 
 /**
@@ -134,7 +137,11 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
             Overdue
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="size-2.5 rounded-sm" style={{ backgroundColor: COLOUR.due }} aria-hidden />
+            <span
+              className="size-2.5 rounded-sm"
+              style={{ backgroundColor: COLOUR.due, boxShadow: `inset 0 0 0 1px ${COLOUR_EDGE_DUE}` }}
+              aria-hidden
+            />
             Due within {DUE_SOON_DAYS} days
           </span>
           <span className="flex items-center gap-1.5">
@@ -186,7 +193,7 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
             "flex items-start gap-2.5 rounded-lg border p-3 text-sm",
             overdue.length > 0
               ? "border-destructive/40 bg-destructive/10 text-destructive"
-              : "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+              : "border-yellow-500/50 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400",
           )}
         >
           <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
@@ -221,7 +228,7 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
                 {countryRows.length} {countryRows.length === 1 ? "property" : "properties"} · <span className={cn(countryOverdue > 0 && "font-semibold text-destructive")}>
                   {countryOverdue} overdue
                 </span>{" "}
-                · <span className={cn(countryDue > 0 && "font-semibold text-amber-700 dark:text-amber-400")}>
+                · <span className={cn(countryDue > 0 && "font-semibold text-yellow-700 dark:text-yellow-400")}>
                   {countryDue} due soon
                 </span>
               </p>
@@ -233,6 +240,7 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
                     so a bar is always read against it. */}
                 <div className="flex items-end gap-3 pb-1">
                   <span className="w-44 shrink-0" />
+                  <span className="w-56 shrink-0" />
                   <div className="relative h-4 flex-1">
                     {ticks.map((t) => (
                       <span
@@ -244,7 +252,6 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
                       </span>
                     ))}
                   </div>
-                  <span className="w-56 shrink-0" />
                 </div>
 
                 <div className="space-y-1.5">
@@ -267,20 +274,10 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
                         >
                           {r.property}
                         </span>
-                        <div className="relative h-5 flex-1 rounded-sm bg-muted/60">
-                          {/* Today */}
-                          <span
-                            className="absolute top-0 h-full w-px bg-foreground/40"
-                            style={{ left: `${TODAY_PCT}%` }}
-                            aria-hidden
-                          />
-                          <span
-                            className="absolute top-0.5 h-4 rounded-sm"
-                            style={{ left: `${left}%`, width: `${width}%`, backgroundColor: COLOUR[r.status] }}
-                            title={`${r.property} — contract ends ${formatDate(r.end)} (${statusText(r)})`}
-                          />
-                        </div>
-                        <span className="w-56 shrink-0 text-right text-xs">
+                        {/* The end date and how long is left sit beside the
+                            property name, so a row is read without crossing the
+                            chart; the chart itself is the last column. */}
+                        <span className="w-56 shrink-0 text-xs">
                           <span
                             className={cn(
                               "font-mono tabular-nums",
@@ -291,6 +288,26 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
                           </span>
                           <span className={cn("ml-2 font-medium", statusClass(r.status))}>{statusText(r)}</span>
                         </span>
+                        <div className="relative h-5 flex-1 rounded-sm bg-muted/60">
+                          {/* Today */}
+                          <span
+                            className="absolute top-0 h-full w-px bg-foreground/40"
+                            style={{ left: `${TODAY_PCT}%` }}
+                            aria-hidden
+                          />
+                          <span
+                            className="absolute top-0.5 h-4 rounded-sm"
+                            style={{
+                              left: `${left}%`,
+                              width: `${width}%`,
+                              backgroundColor: COLOUR[r.status],
+                              // Yellow is too light to hold its own against the
+                              // track, so the due bar keeps a darker edge.
+                              boxShadow: r.status === "due" ? `inset 0 0 0 1px ${COLOUR_EDGE_DUE}` : undefined,
+                            }}
+                            title={`${r.property} — contract ends ${formatDate(r.end)} (${statusText(r)})`}
+                          />
+                        </div>
                       </div>
                     );
                   })}

@@ -55,6 +55,8 @@ export const COUNTRY_LABEL: Record<RenewalCountry, string> = { AE: "UAE", PK: "P
 export interface LeaseRenewal {
   key: string;
   source: "uae" | "pk";
+  /** The property this contract is on; the row is one per property. */
+  assetId: string | null;
   /** Where the property is. HH lettings sit under the UAE, not on their own. */
   country: RenewalCountry;
   /** "HH" for a holiday-homes letting, else the plain country lease. */
@@ -69,6 +71,8 @@ export interface LeaseRenewal {
   /** Days from today to the end date; negative once the contract has ended. */
   daysLeft: number;
   status: RenewalStatus;
+  /** How many active contracts the property carries, this one included. */
+  contracts: number;
 }
 
 export function renewalStatus(daysLeft: number): RenewalStatus {
@@ -135,6 +139,7 @@ export async function loadLeaseRenewals(
     rows.push({
       key: `${source}:${lease.id as string}`,
       source,
+      assetId: (lease.asset_id as string | null) ?? null,
       country,
       segment,
       property: assetName.get(lease.asset_id as string) ?? "—",
@@ -144,14 +149,34 @@ export async function loadLeaseRenewals(
       renewLabel: (lease.rent_month as string | null) || monthLabel(end),
       daysLeft,
       status: renewalStatus(daysLeft),
+      contracts: 1,
     });
   };
 
   for (const l of uaeLeases ?? []) push("uae", "AE", l.lease_type === "hh" ? "HH" : "UAE", l);
   for (const l of pkLeases ?? []) push("pk", "PK", "PK", l);
 
-  rows.sort((a, b) => a.daysLeft - b.daysLeft || a.property.localeCompare(b.property));
-  return rows;
+  // One row per PROPERTY, not per contract. A property is often let on several
+  // active contracts at once — back-to-back periods for the same tenant, or a
+  // run of short HH stays — and it is the LAST of them that says when the
+  // property actually falls due for renewal. Keeping the earliest would raise a
+  // renewal alarm on a property that is still let for months.
+  const byProperty = new Map<string, LeaseRenewal>();
+  for (const row of rows) {
+    // A lease with no property recorded can only stand for itself.
+    const key = row.assetId ?? `lease:${row.key}`;
+    const kept = byProperty.get(key);
+    if (!kept) {
+      byProperty.set(key, row);
+      continue;
+    }
+    const winner = row.end > kept.end ? row : kept;
+    byProperty.set(key, { ...winner, contracts: kept.contracts + 1 });
+  }
+
+  const collapsed = [...byProperty.values()];
+  collapsed.sort((a, b) => a.daysLeft - b.daysLeft || a.property.localeCompare(b.property));
+  return collapsed;
 }
 
 /** Leases needing attention now: already ended, or ending within the month. */

@@ -57,7 +57,7 @@ export async function GET(request: Request) {
         : `${rows.length} contract${rows.length === 1 ? "" : "s"} due within ${DUE_SOON_DAYS} days`;
     const body = rows
       .slice(0, 4)
-      .map((r) => `${r.property}: ${r.status === "overdue" ? `overdue ${-r.daysLeft}d` : `${r.daysLeft}d left`}`)
+      .map((r) => `${r.property}: ${r.status === "overdue" ? `overdue ${-(r.daysLeft ?? 0)}d` : `${r.daysLeft ?? 0}d left`}`)
       .join(" · ");
 
     await sendPushToUsers([...recipients], {

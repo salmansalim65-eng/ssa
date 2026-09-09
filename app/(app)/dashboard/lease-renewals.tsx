@@ -65,7 +65,9 @@ function statusClass(status: LeaseRenewal["status"], overdueOnly = false): strin
 /**
  * Contract renewals, by country.
  *
- * One bar per running lease, drawn from today to the day its contract ends, so
+ * One bar per PROPERTY — not per contract — drawn from today to the day its last
+ * running contract ends, so a property let on back-to-back periods is one row
+ * and falls due only when the last of them expires. The bar runs from today, so
  * the shortest bar is the next renewal to deal with. A contract that has already
  * ended is drawn on the other side of the today line, in red, as far back as it
  * is late — it reads as time lost rather than time left. An overdue property's
@@ -123,7 +125,7 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Contract renewals</p>
           <p className="text-sm text-muted-foreground">
-            When each running contract ends, and when it is due for renewal
+            When each let property&rsquo;s contract ends, and when it is due for renewal
           </p>
         </div>
         <div className="flex items-center gap-4 text-xs text-muted-foreground">
@@ -145,7 +147,7 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
       {/* The headline numbers, before any chart is read. */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
-          label="Running contracts"
+          label="Properties on lease"
           value={rows.length.toLocaleString()}
           subtext={COUNTRIES.map((c) => `${COUNTRY_LABEL[c]} ${rows.filter((r) => r.country === c).length}`).join(" · ")}
           icon={FileTextIcon}
@@ -216,7 +218,7 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
             <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
               <h3 className="text-sm font-semibold text-foreground">{COUNTRY_LABEL[country]}</h3>
               <p className="text-xs text-muted-foreground">
-                {countryRows.length} running · <span className={cn(countryOverdue > 0 && "font-semibold text-destructive")}>
+                {countryRows.length} {countryRows.length === 1 ? "property" : "properties"} · <span className={cn(countryOverdue > 0 && "font-semibold text-destructive")}>
                   {countryOverdue} overdue
                 </span>{" "}
                 · <span className={cn(countryDue > 0 && "font-semibold text-amber-700 dark:text-amber-400")}>
@@ -261,7 +263,7 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
                             // without tracing its bar.
                             r.status === "overdue" ? "font-semibold text-destructive" : "text-muted-foreground",
                           )}
-                          title={`${r.property} — ${r.tenant}`}
+                          title={`${r.property} — ${r.tenant}${r.contracts > 1 ? ` (${r.contracts} contracts)` : ""}`}
                         >
                           {r.property}
                         </span>
@@ -313,7 +315,15 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
                     <tr key={r.key} className="border-b last:border-0 [&>td]:px-2 [&>td]:py-1.5">
                       <td className={cn("font-medium", r.status === "overdue" && "text-destructive")}>{r.property}</td>
                       <td className="text-muted-foreground">{r.tenant}</td>
-                      <td className="text-muted-foreground">{r.segment}</td>
+                      <td className="text-muted-foreground">
+                        {r.segment}
+                        {/* A property let on several running contracts is one
+                            row, ending with the last of them — say so rather
+                            than quietly dropping the others. */}
+                        {r.contracts > 1 && (
+                          <span className="ml-1 text-xs">· {r.contracts} contracts</span>
+                        )}
+                      </td>
                       <td
                         className={cn("text-right font-mono tabular-nums", r.status === "overdue" && "text-destructive")}
                       >

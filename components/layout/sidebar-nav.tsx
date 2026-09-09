@@ -57,15 +57,22 @@ export function SidebarNav({
   onNavigate,
   collapsed = false,
   allowedModules = null,
+  omitSections,
 }: {
   onNavigate?: () => void;
   collapsed?: boolean;
   allowedModules?: string[] | null;
+  /** Sections shown elsewhere — the header's drop-downs — and so left out here.
+   *  The mobile sheet passes nothing and keeps every section, since a phone has
+   *  no room for a menu bar. */
+  omitSections?: string[];
 }) {
   const pathname = usePathname();
   const router = useRouter();
   // Only the sections/items this user may view.
-  const sections = filterNavSections(navSections, allowedModules);
+  const sections = filterNavSections(navSections, allowedModules).filter(
+    (s) => !(s.label && omitSections?.includes(s.label)),
+  );
   const collapsibleSectionLabels = sections.filter((s) => s.label).map((s) => s.label!);
   const { tabs, activeId } = useWorkspace();
   const expandedList = useSyncExternalStore(subscribeSections, getExpandedSnapshot, getExpandedServerSnapshot);

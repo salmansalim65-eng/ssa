@@ -27,6 +27,7 @@ import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { hasPermission } from "@/lib/auth/permissions";
 import { isRentOverdue } from "@/lib/rental/overdue";
 import { billingMonthStarts } from "@/lib/rental/billing-months";
+import { LeaseRenewals } from "./lease-renewals";
 
 // Always render fresh — the dashboard reflects live invoices, rent balances and
 // ledger figures, so it must never be served from the route cache (otherwise a
@@ -716,6 +717,14 @@ export default async function DashboardPage({
 
       </div>
 
+      {/* Which contracts are running out, right after the cards. It streams on
+          its own so the cards are never held back by the lease queries. */}
+      {(canRentalUae || canRentalPk) && (
+        <Suspense fallback={<RenewalsSkeleton />}>
+          <LeaseRenewals companyId={companyId} />
+        </Suspense>
+      )}
+
       {/* The selected tab's detail/report renders here — below ALL the cards.
           It streams: the cards paint as soon as the page's own data is in, and
           the panel drops in when its report is ready, rather than the whole
@@ -748,6 +757,20 @@ export default async function DashboardPage({
           />
         </Suspense>
       )}
+    </div>
+  );
+}
+
+/** Placeholder while the renewal timeline loads. */
+function RenewalsSkeleton() {
+  return (
+    <div className="rounded-xl border bg-card p-4 shadow-xs">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Contract renewals</p>
+      <div className="mt-3 space-y-1.5">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-5 animate-pulse rounded-sm bg-muted" />
+        ))}
+      </div>
     </div>
   );
 }

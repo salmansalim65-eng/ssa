@@ -395,18 +395,27 @@ export default async function BalanceSheetPage({
   ];
 
   // Pre-formatted totals + profit row for the client tree.
+  // A total is ONE figure, not a debit and a credit side by side. Adding up both
+  // columns gross said nothing — assets came to 36.9m debit and 14.2m credit —
+  // and the answer, what the side is actually worth, was only in the balance
+  // column. The net now sits in the column it belongs to and the other is blank,
+  // so the two totals can be read straight against each other.
+  const netCells = (net: number) => ({
+    debit: net >= 0.005 ? money(net) : "",
+    credit: net <= -0.005 ? money(-net) : "",
+  });
   const totalsForTree: BsTotal[] = [
     {
       label: "Total assets",
-      debit: moneyOrBlank(sumDebit(buckets.asset)),
-      credit: moneyOrBlank(sumCredit(buckets.asset)),
+      ...netCells(assetNet),
       balance: balanceLabel(assetNet),
     },
     {
       label: "Total liabilities + equity",
-      debit: moneyOrBlank(sumDebit(buckets.liability) + sumDebit(buckets.equity) + profitRow.debit),
-      credit: moneyOrBlank(sumCredit(buckets.liability) + sumCredit(buckets.equity) + profitRow.credit),
-      balance: balanceLabel(liabilitiesAndEquityNet),
+      // Credit-positive, unlike assets: negate so the net lands in the credit
+      // column and reads "Cr" — it was printing "Dr" beside the asset total.
+      ...netCells(-liabilitiesAndEquityNet),
+      balance: balanceLabel(-liabilitiesAndEquityNet),
       emphatic: true,
     },
   ];

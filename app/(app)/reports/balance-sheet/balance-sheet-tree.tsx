@@ -139,13 +139,24 @@ export function BalanceSheetTree({
         <TableBody>
           {rows.map(renderRow)}
 
+          {/* The period's result is a section of the sheet in its own right, not
+              one account among many, so it carries the same green band the
+              top-level groups do. */}
           {profit && (
-            <TableRow>
-              <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">{profit.seq}</TableCell>
-              <TableCell className="pl-2">Current period profit/(loss)</TableCell>
-              <TableCell className="text-right font-mono tabular-nums">{profit.debit}</TableCell>
-              <TableCell className="text-right font-mono tabular-nums">{profit.credit}</TableCell>
-              <TableCell className="text-right font-mono tabular-nums">{profit.balance}</TableCell>
+            <TableRow className="bg-ledger/15 hover:bg-ledger/25">
+              <TableCell className="text-right font-mono text-xs tabular-nums text-ledger-dark">{profit.seq}</TableCell>
+              <TableCell className="pl-2 font-semibold uppercase tracking-wide text-ledger-dark">
+                Current period profit/(loss)
+              </TableCell>
+              <TableCell className="text-right font-mono font-semibold tabular-nums text-ledger-dark">
+                {profit.debit}
+              </TableCell>
+              <TableCell className="text-right font-mono font-semibold tabular-nums text-ledger-dark">
+                {profit.credit}
+              </TableCell>
+              <TableCell className="text-right font-mono font-semibold tabular-nums text-ledger-dark">
+                {profit.balance}
+              </TableCell>
             </TableRow>
           )}
 

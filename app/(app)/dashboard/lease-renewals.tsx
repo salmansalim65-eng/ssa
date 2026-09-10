@@ -267,11 +267,14 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
           acted on without reading the chart. */}
       {(overdue.length > 0 || due.length > 0) && (
         <div
+          // The card's own background, so the banner sits in the page rather
+          // than staining a band of it; the border and the text carry the
+          // urgency, which is enough to find it at a glance.
           className={cn(
-            "flex items-start gap-2.5 rounded-lg border p-3 text-sm",
+            "flex items-start gap-2.5 rounded-lg border bg-card p-3 text-sm shadow-xs",
             overdue.length > 0
-              ? "border-destructive/40 bg-destructive/10 text-destructive"
-              : "border-yellow-500/50 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400",
+              ? "border-destructive/50 text-destructive"
+              : "border-yellow-500/60 text-yellow-700 dark:text-yellow-400",
           )}
         >
           <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" aria-hidden />

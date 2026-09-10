@@ -42,7 +42,10 @@ function today() {
 // instalment falls due at the FIRST month of its block; `count` is how many
 // months it covers. advance = one block (whole period); monthly = 1-month blocks;
 // quarterly/half_yearly/yearly = 3/6/12-month blocks.
-function rentDueChunks(months: string[], terms: string | null | undefined): { dueMonth: string; count: number }[] {
+function rentDueChunks(
+  months: string[],
+  terms: string | null | undefined,
+): { dueMonth: string; lastMonth: string; count: number }[] {
   const n = months.length;
   if (n === 0) return [];
   const size =
@@ -56,8 +59,14 @@ function rentDueChunks(months: string[], terms: string | null | undefined): { du
             ? 12
             : 1; // monthly (default)
   const step = Math.max(1, size);
-  const chunks: { dueMonth: string; count: number }[] = [];
-  for (let i = 0; i < n; i += step) chunks.push({ dueMonth: months[i], count: Math.min(step, n - i) });
+  const chunks: { dueMonth: string; lastMonth: string; count: number }[] = [];
+  for (let i = 0; i < n; i += step) {
+    const count = Math.min(step, n - i);
+    // The instalment falls due in its first month but PAYS FOR every month of
+    // the block, so both ends are kept: an advance covering Aug–Mar is due in
+    // August and is rent for all eight.
+    chunks.push({ dueMonth: months[i], lastMonth: months[i + count - 1], count });
+  }
   return chunks;
 }
 
@@ -1136,8 +1145,42 @@ async function loadDetail(
   const { data } = await rentQuery.order("due_date");
 
   const rawRows = data ?? [];
-  type RentRow = (typeof rawRows)[number] & { _rowKey?: string };
+  // `due_date` is when the money falls due; the RENT MONTH is what it pays for,
+  // and the two are not the same the moment rent is billed in advance. Both are
+  // carried so a row can say which month it is for.
+  type RentRow = (typeof rawRows)[number] & { _rowKey?: string; _rentFrom?: string; _rentTo?: string };
   let rows: RentRow[] = rawRows as RentRow[];
+
+  // Rent billed off a payment schedule carries its month on the SCHEDULE row,
+  // not on the invoice: an advance instalment for September is dated due in
+  // August, and both then look identical in a list ordered by due date. Read the
+  // schedule so each row can say the month it actually pays for.
+  const invoiceIds = rawRows.map((r) => r.invoice_id as string).filter(Boolean);
+  const rentMonthByInvoice = new Map<string, string>();
+  if (invoiceIds.length) {
+    const invoiceTable = cfg.rentCountry === "PK" ? "pk_rent_invoices" : "uae_rent_invoices";
+    const scheduleTable = cfg.rentCountry === "PK" ? "pk_payment_schedules" : "uae_payment_schedules";
+    const { data: schedLinks } = await supabase
+      .schema("rental")
+      .from(invoiceTable as "uae_rent_invoices")
+      .select("id, schedule_id")
+      .in("id", invoiceIds);
+    const links = ((schedLinks as { id: string; schedule_id: string | null }[]) ?? []).filter((l) => l.schedule_id);
+    if (links.length) {
+      const { data: scheds } = await supabase
+        .schema("rental")
+        .from(scheduleTable as "uae_payment_schedules")
+        .select("id, due_date")
+        .in("id", links.map((l) => l.schedule_id as string));
+      const dueBySchedule = new Map(
+        ((scheds as { id: string; due_date: string }[]) ?? []).map((x) => [x.id, x.due_date]),
+      );
+      for (const l of links) {
+        const due = dueBySchedule.get(l.schedule_id as string);
+        if (due) rentMonthByInvoice.set(l.id, due);
+      }
+    }
+  }
 
   // Spread a combined HH/UAE invoice (one voucher for a multi-month period) into
   // monthly rows, so the Rent Balance shows the rent due each month — current
@@ -1240,7 +1283,10 @@ async function loadDetail(
       const vLeases = [...byAsset.values()];
       // Not an expandable combined voucher (schedule-based, or leases missing) →
       // keep the invoice's single row as-is.
-      if (!meta || meta.schedule_id || vLeases.length === 0) return [{ ...r } as RentRow];
+      if (!meta || meta.schedule_id || vLeases.length === 0) {
+        const scheduled = rentMonthByInvoice.get(r.invoice_id as string);
+        return [{ ...r, _rentFrom: scheduled ?? (r.due_date as string) } as RentRow];
+      }
 
       // Preserve the invoice's paid proportion so a part-paid voucher still shows
       // the right outstanding per property/month.
@@ -1278,6 +1324,8 @@ async function loadDetail(
             other_expenses: exp,
             net_amount: net,
             net_outstanding: round2(net * paidRatio),
+            _rentFrom: ch.dueMonth,
+            _rentTo: ch.lastMonth,
             _rowKey: `${r.invoice_id}-${lease.id}-${ch.dueMonth}`,
           } as RentRow);
         }
@@ -1286,6 +1334,15 @@ async function loadDetail(
     });
     rows.sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)));
   }
+
+  // Every row that has not been given a rent month by the expansion above takes
+  // it from its schedule, falling back to the due date when a one-off invoice
+  // has no schedule behind it.
+  rows = rows.map((r) =>
+    r._rentFrom
+      ? r
+      : ({ ...r, _rentFrom: rentMonthByInvoice.get(r.invoice_id as string) ?? (r.due_date as string) } as RentRow),
+  );
 
   // The pickers list what this range holds, taken BEFORE filtering so choosing a
   // tenant never empties the property list (or the other way round).
@@ -1302,6 +1359,16 @@ async function loadDetail(
   const dueMonth = (d: string | null | undefined) => {
     const m = /^(\d{4})-(\d{2})/.exec(String(d ?? ""));
     return m ? `${MONTHS[Number(m[2]) - 1]} ${m[1]}` : "—";
+  };
+  // The month (or run of months) a row's rent pays for. An instalment covering a
+  // whole advance period names both ends, so a single row is never mistaken for
+  // one month's rent.
+  const rentMonthLabel = (r: RentRow) => {
+    const from = r._rentFrom;
+    if (!from) return "—";
+    const to = r._rentTo;
+    if (!to || to.slice(0, 7) === from.slice(0, 7)) return dueMonth(from);
+    return `${dueMonth(from)} – ${dueMonth(to)}`;
   };
   const totals = rows.reduce(
     (acc, r) => ({
@@ -1350,7 +1417,7 @@ async function loadDetail(
           <TableRow className="hover:bg-transparent">
             <TableHead>Date</TableHead>
             <TableHead>Voucher No</TableHead>
-            <TableHead>Due Month</TableHead>
+            <TableHead>Rent Month</TableHead>
             <TableHead>Due Date</TableHead>
             <TableHead>Property</TableHead>
             <TableHead>Tenant</TableHead>
@@ -1396,7 +1463,7 @@ async function loadDetail(
                     colSpan={6}
                     className="bg-ledger/15 py-1.5 text-xs font-semibold uppercase tracking-wide text-ledger dark:bg-ledger/25"
                   >
-                    {dueMonth(r.due_date as string)}
+                    Due {dueMonth(r.due_date as string)}
                   </TableCell>
                   <TableCell className={bandCell}>{fmt(mt.rent)}</TableCell>
                   {showAgentCols && <TableCell className={bandCell}>{fmt(mt.share)}</TableCell>}
@@ -1411,7 +1478,9 @@ async function loadDetail(
             <TableRow key={r._rowKey ?? r.invoice_id} className={paid ? "bg-emerald-50 dark:bg-emerald-950/30" : undefined}>
               <TableCell className="text-muted-foreground">{formatDate(r.invoice_date)}</TableCell>
               <TableCell>{r.voucher_no ? formatVoucherNo(r.voucher_no) : "Draft"}</TableCell>
-              <TableCell className="text-muted-foreground">{dueMonth(r.due_date as string)}</TableCell>
+              {/* What the rent is FOR, not when it falls due — the due date is
+                  its own column, and in an advance month the two differ. */}
+              <TableCell className="whitespace-nowrap font-medium">{rentMonthLabel(r)}</TableCell>
               <TableCell className={overdue ? "text-destructive" : "text-muted-foreground"}>
                 {formatDate(r.due_date)}
               </TableCell>

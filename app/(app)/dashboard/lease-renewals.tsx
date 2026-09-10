@@ -57,7 +57,9 @@ function barSpan(r: LeaseRenewal, today: string): { from: number; to: number } |
     };
   }
   if (r.daysLeft === null) return null;
-  return { from: 0, to: r.daysLeft };
+  // An overdue contract runs BACKWARDS from today to the day it lapsed, so the
+  // ends are ordered rather than assumed.
+  return { from: Math.min(0, r.daysLeft), to: Math.max(0, r.daysLeft) };
 }
 
 /** Where a day sits on the track, clipped to its ends. */
@@ -87,16 +89,17 @@ const SEGMENT_SHORT: Record<LeaseRenewal["segment"], string> = { HH: "HH", UAE: 
 function statusText(r: LeaseRenewal): string {
   if (r.status === "overdue") {
     const late = -(r.daysLeft ?? 0);
-    // A contract that has run out means the property is standing empty, so the
-    // row says both rather than leaving the vacancy to be inferred. The dates
-    // of the vacancy are spelled out in the table's own column.
-    return `Overdue ${late} ${late === 1 ? "day" : "days"} · empty`;
+    // Only that the renewal is late. Whether the property is actually empty is
+    // something an invoice has to say, not something a lapsed date can imply.
+    return `Overdue ${late} ${late === 1 ? "day" : "days"}`;
   }
   if (r.isVacant) {
-    if (r.vacantTo) return `Empty until ${formatDate(r.vacantTo)}`;
-    if (r.vacantFrom) return `Empty since ${formatDate(r.vacantFrom)}`;
+    if (r.vacantTo) return `Vacant until ${formatDate(r.vacantTo)}`;
+    if (r.vacantFrom) return `Vacant since ${formatDate(r.vacantFrom)}`;
     return "Never let";
   }
+  // Signed but not begun — not let today, and not claimed to be empty either.
+  if (r.notStartedYet && r.start) return `Starts ${formatDate(r.start)}`;
   if (r.daysLeft === 0) return "Renewal due today";
   return `Due in ${r.daysLeft} ${r.daysLeft === 1 ? "day" : "days"}`;
 }
@@ -111,9 +114,7 @@ function vacancyText(r: LeaseRenewal): string {
   if (!r.vacantFrom && !r.vacantTo) return "Never let";
   const days = r.vacantDays ?? 0;
   const count = `${days} ${days === 1 ? "day" : "days"}`;
-  // With nothing let before, the books cannot say when the property fell empty,
-  // only that it is empty now and until when.
-  const from = r.vacantFrom ? formatDate(r.vacantFrom) : "not let yet";
+  const from = r.vacantFrom ? formatDate(r.vacantFrom) : "—";
   const to = r.vacantTo ? formatDate(r.vacantTo) : "today";
   return `${from} → ${to} · ${count}`;
 }
@@ -244,12 +245,12 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
           tone={due.length > 0 ? "warning" : undefined}
         />
         <KpiCard
-          label="Empty today"
+          label="Vacant today"
           value={empty.length.toLocaleString()}
           subtext={
             empty.length > 0
               ? empty.map((r) => r.property).slice(0, 2).join(" · ")
-              : "Every property is let"
+              : "None marked vacant"
           }
           icon={DoorOpenIcon}
           tone={empty.length > 0 ? "destructive" : "success"}
@@ -333,7 +334,7 @@ export async function LeaseRenewals({ companyId }: { companyId: string }) {
                   {countryOverdue} overdue
                 </span>{" "}
                 ·{" "}
-                <span className={cn(countryEmpty > 0 && "font-semibold text-destructive")}>{countryEmpty} empty</span>{" "}
+                <span className={cn(countryEmpty > 0 && "font-semibold text-destructive")}>{countryEmpty} vacant</span>{" "}
                 ·{" "}
                 <span className={cn(countryDue > 0 && "font-semibold text-yellow-700 dark:text-yellow-400")}>
                   {countryDue} due soon

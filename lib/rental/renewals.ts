@@ -11,10 +11,16 @@ import type { Database } from "@/types/database.types";
  * and the header bell and the daily push count it, all from this same rule, so
  * a property that is red on the dashboard is the property the alert is about.
  *
- * A property is read against today rather than against its newest contract: it
- * is let if some contract covers today, and empty otherwise — even when a later
- * contract is already signed. That is the only way a gap between two tenancies
- * shows up at all.
+ * A property is read against today rather than against its newest contract, so a
+ * contract signed to start later never hides what is true now.
+ *
+ * Vacancy is DECLARED, never inferred. A property counts as empty only when an
+ * invoice line says it was — ticked Vacant for a period covering today — or when
+ * it has never been let at all. A contract that has simply run out is a renewal
+ * nobody has chased, which is a different thing and has its own band: the tenant
+ * may well still be in the property while the paperwork catches up, and the
+ * books cannot tell. Guessing there would put a property in the empty count that
+ * nobody has said is empty.
  *
  * Dates are plain calendar strings (`YYYY-MM-DD`) throughout and day arithmetic
  * is done in UTC, so a server in another time zone never shifts a contract into
@@ -48,12 +54,12 @@ function monthLabel(date: string | null | undefined): string {
 
 /**
  * What a property's row means:
- * - `due` / `later` — let today, and this is how long its contract still runs.
- * - `overdue` — the contract ran out and nothing has been signed to follow it,
- *   so the property is both un-renewed and empty.
- * - `vacant` — empty today with no renewal outstanding: either the next tenancy
- *   is already signed and this is the gap before it, or the property has never
- *   been let at all.
+ * - `due` / `later` — under contract: let today, or signed to start shortly.
+ *   This is how long that contract still runs.
+ * - `overdue` — the contract ran out and nothing has been signed to follow it.
+ *   A renewal nobody has chased; it does NOT claim the property is empty.
+ * - `vacant` — declared empty: an invoice line ticked Vacant covers today, or
+ *   the property has never been let.
  */
 export type RenewalStatus = "overdue" | "due" | "later" | "vacant";
 
@@ -91,9 +97,9 @@ export interface LeaseRenewal {
   contracts: number;
 
   // --- vacancy, stated as a period rather than left to be inferred ---
-  /** True when no contract covers today. */
+  /** True when the property is DECLARED empty today, or has never been let. */
   isVacant: boolean;
-  /** First empty day. Null when the property has not been let before. */
+  /** First day of the declared vacancy. Null when the property was never let. */
   vacantFrom: string | null;
   /** Last empty day — null while the vacancy is still open-ended. */
   vacantTo: string | null;
@@ -101,6 +107,8 @@ export interface LeaseRenewal {
   vacantDays: number | null;
   /** When the next tenancy starts, if one is already signed. */
   nextStart: string | null;
+  /** Under contract, but that contract has not begun yet. */
+  notStartedYet: boolean;
 }
 
 /** One lease as this module needs it, from either country's table. */
@@ -111,6 +119,8 @@ interface RawLease {
   start: string | null;
   end: string;
   rentMonth: string | null;
+  /** The line declares the property EMPTY for this period rather than letting it. */
+  isVacant: boolean;
   source: "uae" | "pk";
   country: RenewalCountry;
   segment: LeaseRenewal["segment"];
@@ -155,8 +165,6 @@ export async function loadLeaseRenewals(
   const leases: RawLease[] = [];
   for (const l of uaeLeases ?? []) {
     if (!l.lease_end) continue;
-    // A vacant line records an EMPTY period, so it must never read as a let.
-    if ((l as { is_vacant?: boolean }).is_vacant) continue;
     leases.push({
       id: l.id as string,
       assetId: (l.asset_id as string | null) ?? null,
@@ -164,6 +172,7 @@ export async function loadLeaseRenewals(
       start: (l.lease_start as string | null) ?? null,
       end: l.lease_end as string,
       rentMonth: (l.rent_month as string | null) ?? null,
+      isVacant: (l as { is_vacant?: boolean }).is_vacant === true,
       source: "uae",
       country: "AE",
       segment: l.lease_type === "hh" ? "HH" : "UAE",
@@ -178,6 +187,8 @@ export async function loadLeaseRenewals(
       start: (l.lease_start as string | null) ?? null,
       end: l.lease_end as string,
       rentMonth: (l.rent_month as string | null) ?? null,
+      // Pakistan leases carry no vacancy marking; the HH run is where it is used.
+      isVacant: false,
       source: "pk",
       country: "PK",
       segment: "PK",
@@ -221,34 +232,42 @@ export async function loadLeaseRenewals(
     const own = leasesByAsset.get(key) ?? [];
     const asset = assetById.get(key);
 
+    // Lines that let the property, and lines that declare it empty. Only the
+    // second kind makes a property vacant — see the note at the top of the file.
+    const lets = own.filter((l) => !l.isVacant);
+    const declaredVacant = own.filter((l) => l.isVacant);
+
     // Let today? A lease with no start date is treated as having always run.
-    const current = own
+    const current = lets
       .filter((l) => (l.start ?? "") <= asOf && asOf <= l.end)
       .sort((a, b) => b.end.localeCompare(a.end))[0];
     // The soonest tenancy still to begin, and the last one that has ended.
-    const next = own.filter((l) => l.start && l.start > asOf).sort((a, b) => a.start!.localeCompare(b.start!))[0];
-    const ended = own.filter((l) => l.end < asOf).sort((a, b) => b.end.localeCompare(a.end))[0];
+    const next = lets.filter((l) => l.start && l.start > asOf).sort((a, b) => a.start!.localeCompare(b.start!))[0];
+    const ended = lets.filter((l) => l.end < asOf).sort((a, b) => b.end.localeCompare(a.end))[0];
+    // A Vacant line covering today is the property SAYING it is empty.
+    const vacantNow = declaredVacant
+      .filter((l) => (l.start ?? "") <= asOf && asOf <= l.end)
+      .sort((a, b) => b.end.localeCompare(a.end))[0];
 
     // The lease the row speaks for, and the term it runs to. Back-to-back
     // contracts extend one tenancy, so a let property's term is the LAST end
     // date on it — otherwise a property let for another year would look due.
-    const subject = current ?? ended ?? next ?? own[0];
-    // The term shown: to the last day of the running tenancy, or of the one
-    // that ended, or of the one already signed to start.
+    const subject = current ?? next ?? ended ?? vacantNow ?? own[0];
+    // The term shown: to the last day of the running tenancy, of the one already
+    // signed to start, or of the one that ended.
     const end = current
-      ? own.reduce((max, l) => (l.end > max ? l.end : max), current.end)
-      : (ended?.end ?? next?.end ?? null);
+      ? lets.reduce((max, l) => (l.end > max ? l.end : max), current.end)
+      : (next?.end ?? ended?.end ?? null);
 
     const country: RenewalCountry = subject?.country ?? normCountry((asset?.country as string | null) ?? null);
-    const isVacant = !current;
-    // The vacancy runs from the day after the last tenancy ended — unknown when
-    // the property has not been let yet — to the day before the next one starts,
-    // open-ended while nothing is signed.
-    const vacantFrom = isVacant && ended ? addDays(ended.end, 1) : null;
-    const vacantTo = isVacant && next?.start ? addDays(next.start, -1) : null;
-    // With no start on record the count can only run from today, which is all
-    // the books actually know.
-    const vacantCountFrom = vacantFrom ?? (isVacant && vacantTo ? asOf : null);
+    // Empty only when it has been said so, or when the property has never been
+    // let at all — a lapsed contract is a renewal to chase, not a vacancy.
+    const neverLet = lets.length === 0 && !next;
+    const isVacant = Boolean(vacantNow) || neverLet;
+    // A declared vacancy carries its own dates; a property never let has none.
+    const vacantFrom = vacantNow?.start ?? null;
+    const vacantTo = vacantNow?.end ?? null;
+    const vacantCountFrom = vacantFrom ?? (vacantTo ? asOf : null);
     const vacantDays = vacantCountFrom ? daysBetween(vacantCountFrom, vacantTo ?? asOf) + 1 : null;
     const daysLeft = end ? daysBetween(asOf, end) : null;
 
@@ -266,15 +285,19 @@ export async function loadLeaseRenewals(
       end,
       renewLabel: monthLabel(subject?.rentMonth) || monthLabel(end),
       daysLeft,
-      // Empty with a tenancy already signed is a gap, not a renewal anyone has
-      // to chase; empty with nothing to follow is a renewal that is overdue.
-      status: isVacant ? (ended && !next ? "overdue" : "vacant") : renewalStatusOf(daysLeft),
-      contracts: own.length,
+      // Declared empty wins the row. Otherwise a property under contract — let
+      // today, or signed to start — reads by how long that contract runs, and
+      // one whose contract has simply run out is an overdue renewal.
+      status: isVacant ? "vacant" : renewalStatusOf(daysLeft),
+      contracts: lets.length,
       isVacant,
       vacantFrom,
       vacantTo,
       vacantDays,
       nextStart: next?.start ?? null,
+      // Signed but not begun: the property is not let today and is not claimed
+      // to be empty either — it is simply waiting for its tenancy to start.
+      notStartedYet: !current && !isVacant && Boolean(next),
     });
   }
 

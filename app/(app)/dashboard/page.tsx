@@ -1148,7 +1148,7 @@ async function loadDetail(
   // `due_date` is when the money falls due; the RENT MONTH is what it pays for,
   // and the two are not the same the moment rent is billed in advance. Both are
   // carried so a row can say which month it is for.
-  type RentRow = (typeof rawRows)[number] & { _rowKey?: string; _rentFrom?: string; _rentTo?: string };
+  type RentRow = (typeof rawRows)[number] & { _rowKey?: string; _rentFrom?: string; _rentTill?: string };
   let rows: RentRow[] = rawRows as RentRow[];
 
   // Rent billed off a payment schedule carries its month on the SCHEDULE row,
@@ -1157,30 +1157,67 @@ async function loadDetail(
   // schedule so each row can say the month it actually pays for.
   const invoiceIds = rawRows.map((r) => r.invoice_id as string).filter(Boolean);
   const rentMonthByInvoice = new Map<string, string>();
+  // The lease behind each invoice, so a rent period is clipped to the tenancy
+  // instead of running to a month end the lease never reached.
+  const leasePeriodByInvoice = new Map<string, { start: string; end: string }>();
   if (invoiceIds.length) {
     const invoiceTable = cfg.rentCountry === "PK" ? "pk_rent_invoices" : "uae_rent_invoices";
     const scheduleTable = cfg.rentCountry === "PK" ? "pk_payment_schedules" : "uae_payment_schedules";
+    const leaseTable = cfg.rentCountry === "PK" ? "pk_leases" : "uae_leases";
     const { data: schedLinks } = await supabase
       .schema("rental")
       .from(invoiceTable as "uae_rent_invoices")
-      .select("id, schedule_id")
+      .select("id, schedule_id, lease_id")
       .in("id", invoiceIds);
-    const links = ((schedLinks as { id: string; schedule_id: string | null }[]) ?? []).filter((l) => l.schedule_id);
-    if (links.length) {
-      const { data: scheds } = await supabase
-        .schema("rental")
-        .from(scheduleTable as "uae_payment_schedules")
-        .select("id, due_date")
-        .in("id", links.map((l) => l.schedule_id as string));
-      const dueBySchedule = new Map(
-        ((scheds as { id: string; due_date: string }[]) ?? []).map((x) => [x.id, x.due_date]),
-      );
-      for (const l of links) {
-        const due = dueBySchedule.get(l.schedule_id as string);
-        if (due) rentMonthByInvoice.set(l.id, due);
-      }
+    const invRows = (schedLinks as { id: string; schedule_id: string | null; lease_id: string | null }[]) ?? [];
+
+    const scheduleIds = invRows.map((l) => l.schedule_id).filter((x): x is string => Boolean(x));
+    const leaseIds = [...new Set(invRows.map((l) => l.lease_id).filter((x): x is string => Boolean(x)))];
+    const [{ data: scheds }, { data: leaseRows }] = await Promise.all([
+      scheduleIds.length
+        ? supabase
+            .schema("rental")
+            .from(scheduleTable as "uae_payment_schedules")
+            .select("id, due_date")
+            .in("id", scheduleIds)
+        : Promise.resolve({ data: [] as { id: string; due_date: string }[] }),
+      leaseIds.length
+        ? supabase
+            .schema("rental")
+            .from(leaseTable as "uae_leases")
+            .select("id, lease_start, lease_end")
+            .in("id", leaseIds)
+        : Promise.resolve({ data: [] as { id: string; lease_start: string; lease_end: string }[] }),
+    ]);
+
+    const dueBySchedule = new Map(((scheds as { id: string; due_date: string }[]) ?? []).map((x) => [x.id, x.due_date]));
+    const periodByLease = new Map(
+      ((leaseRows as { id: string; lease_start: string; lease_end: string }[]) ?? []).map((l) => [
+        l.id,
+        { start: l.lease_start, end: l.lease_end },
+      ]),
+    );
+    for (const l of invRows) {
+      const due = l.schedule_id ? dueBySchedule.get(l.schedule_id) : undefined;
+      if (due) rentMonthByInvoice.set(l.id, due);
+      const period = l.lease_id ? periodByLease.get(l.lease_id) : undefined;
+      if (period) leasePeriodByInvoice.set(l.id, period);
     }
   }
+
+  // First and last day of the month a date falls in.
+  const firstOfMonth = (d: string) => `${d.slice(0, 7)}-01`;
+  const lastOfMonth = (d: string) =>
+    `${d.slice(0, 7)}-${String(new Date(Number(d.slice(0, 4)), Number(d.slice(5, 7)), 0).getDate()).padStart(2, "0")}`;
+  /** The days a block of months actually bills, clipped to the tenancy. */
+  const rentPeriod = (fromMonth: string, toMonth: string, lease?: { start: string; end: string }) => {
+    const from = firstOfMonth(fromMonth);
+    const till = lastOfMonth(toMonth);
+    return {
+      from: lease && lease.start > from ? lease.start : from,
+      till: lease && lease.end < till ? lease.end : till,
+    };
+  };
 
   // Spread a combined HH/UAE invoice (one voucher for a multi-month period) into
   // monthly rows, so the Rent Balance shows the rent due each month — current
@@ -1284,8 +1321,9 @@ async function loadDetail(
       // Not an expandable combined voucher (schedule-based, or leases missing) →
       // keep the invoice's single row as-is.
       if (!meta || meta.schedule_id || vLeases.length === 0) {
-        const scheduled = rentMonthByInvoice.get(r.invoice_id as string);
-        return [{ ...r, _rentFrom: scheduled ?? (r.due_date as string) } as RentRow];
+        const month = rentMonthByInvoice.get(r.invoice_id as string) ?? (r.due_date as string);
+        const period = rentPeriod(month, month, leasePeriodByInvoice.get(r.invoice_id as string));
+        return [{ ...r, _rentFrom: period.from, _rentTill: period.till } as RentRow];
       }
 
       // Preserve the invoice's paid proportion so a part-paid voucher still shows
@@ -1324,8 +1362,13 @@ async function loadDetail(
             other_expenses: exp,
             net_amount: net,
             net_outstanding: round2(net * paidRatio),
-            _rentFrom: ch.dueMonth,
-            _rentTo: ch.lastMonth,
+            ...(() => {
+              const period = rentPeriod(ch.dueMonth, ch.lastMonth, {
+                start: lease.lease_start,
+                end: lease.lease_end,
+              });
+              return { _rentFrom: period.from, _rentTill: period.till };
+            })(),
             _rowKey: `${r.invoice_id}-${lease.id}-${ch.dueMonth}`,
           } as RentRow);
         }
@@ -1338,11 +1381,12 @@ async function loadDetail(
   // Every row that has not been given a rent month by the expansion above takes
   // it from its schedule, falling back to the due date when a one-off invoice
   // has no schedule behind it.
-  rows = rows.map((r) =>
-    r._rentFrom
-      ? r
-      : ({ ...r, _rentFrom: rentMonthByInvoice.get(r.invoice_id as string) ?? (r.due_date as string) } as RentRow),
-  );
+  rows = rows.map((r) => {
+    if (r._rentFrom) return r;
+    const month = rentMonthByInvoice.get(r.invoice_id as string) ?? (r.due_date as string);
+    const period = rentPeriod(month, month, leasePeriodByInvoice.get(r.invoice_id as string));
+    return { ...r, _rentFrom: period.from, _rentTill: period.till } as RentRow;
+  });
 
   // The pickers list what this range holds, taken BEFORE filtering so choosing a
   // tenant never empties the property list (or the other way round).
@@ -1366,9 +1410,9 @@ async function loadDetail(
   const rentMonthLabel = (r: RentRow) => {
     const from = r._rentFrom;
     if (!from) return "—";
-    const to = r._rentTo;
-    if (!to || to.slice(0, 7) === from.slice(0, 7)) return dueMonth(from);
-    return `${dueMonth(from)} – ${dueMonth(to)}`;
+    const till = r._rentTill;
+    if (!till || till.slice(0, 7) === from.slice(0, 7)) return dueMonth(from);
+    return `${dueMonth(from)} – ${dueMonth(till)}`;
   };
   const totals = rows.reduce(
     (acc, r) => ({
@@ -1400,9 +1444,10 @@ async function loadDetail(
     monthTotals.set(k, t);
   }
 
-  // Columns: Date, Voucher, Due Month, Due Date, Property, Tenant, Rent,
-  // [Management, Other Expenses], Balance Rent, Receipt, Outstanding.
-  const colCount = showAgentCols ? 12 : 10;
+  // Columns: Date, Voucher, Due Month, Rent Month, Rent Start – Till, Property,
+  // Tenant, Rent, [Management, Other Expenses], Balance Rent, Receipt,
+  // Outstanding.
+  const colCount = showAgentCols ? 13 : 11;
 
   return {
     title: `Rent Balance — ${cfg.label}`,
@@ -1410,15 +1455,16 @@ async function loadDetail(
     propertyOptions,
     body: (
       <Table
-        className="min-w-[900px] [&_td]:first:pl-5 [&_td]:last:pr-5 [&_th]:first:pl-5 [&_th]:last:pr-5"
+        className="min-w-[1020px] [&_td]:first:pl-5 [&_td]:last:pr-5 [&_th]:first:pl-5 [&_th]:last:pr-5"
         containerClassName="overflow-x-auto"
       >
         <TableHeader>
           <TableRow className="hover:bg-transparent">
             <TableHead>Date</TableHead>
             <TableHead>Voucher No</TableHead>
+            <TableHead>Due Month</TableHead>
             <TableHead>Rent Month</TableHead>
-            <TableHead>Due Date</TableHead>
+            <TableHead>Rent Start – Till</TableHead>
             <TableHead>Property</TableHead>
             <TableHead>Tenant</TableHead>
             <TableHead className="text-right">Rent</TableHead>
@@ -1460,7 +1506,7 @@ async function loadDetail(
               monthKey !== prevKey ? (
                 <TableRow key={`grp-${monthKey}`} className="hover:bg-transparent">
                   <TableCell
-                    colSpan={6}
+                    colSpan={7}
                     className="bg-ledger/15 py-1.5 text-xs font-semibold uppercase tracking-wide text-ledger dark:bg-ledger/25"
                   >
                     Due {dueMonth(r.due_date as string)}
@@ -1478,11 +1524,15 @@ async function loadDetail(
             <TableRow key={r._rowKey ?? r.invoice_id} className={paid ? "bg-emerald-50 dark:bg-emerald-950/30" : undefined}>
               <TableCell className="text-muted-foreground">{formatDate(r.invoice_date)}</TableCell>
               <TableCell>{r.voucher_no ? formatVoucherNo(r.voucher_no) : "Draft"}</TableCell>
-              {/* What the rent is FOR, not when it falls due — the due date is
-                  its own column, and in an advance month the two differ. */}
+              {/* When the money falls due... */}
+              <TableCell className={cn("whitespace-nowrap", overdue ? "text-destructive" : "text-muted-foreground")}>
+                {dueMonth(r.due_date as string)}
+              </TableCell>
+              {/* ...and what it is FOR, which in an advance month is a different
+                  month again, with the exact days it covers beside it. */}
               <TableCell className="whitespace-nowrap font-medium">{rentMonthLabel(r)}</TableCell>
-              <TableCell className={overdue ? "text-destructive" : "text-muted-foreground"}>
-                {formatDate(r.due_date)}
+              <TableCell className="whitespace-nowrap font-mono text-xs tabular-nums text-muted-foreground">
+                {r._rentFrom ? `${formatDate(r._rentFrom)} – ${formatDate(r._rentTill ?? r._rentFrom)}` : "—"}
               </TableCell>
               <TableCell>{r.asset_name}</TableCell>
               <TableCell>{r.tenant_name}</TableCell>

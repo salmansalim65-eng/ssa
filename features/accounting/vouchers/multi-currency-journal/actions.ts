@@ -48,7 +48,7 @@ function toEntryLineRows(jeId: string, lines: MultiCurrencyJournalInput["lines"]
       exchange_rate: l.exchangeRate,
       base_debit_amount: isDebit ? base : 0,
       base_credit_amount: isDebit ? 0 : base,
-      description: null as string | null,
+      description: (l.remarks || null) as string | null,
     };
   });
 }

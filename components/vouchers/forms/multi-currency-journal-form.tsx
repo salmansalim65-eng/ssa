@@ -73,6 +73,7 @@ export function MultiCurrencyJournalForm({
     currencyId: defaultCurrency,
     exchangeRate: defaultRate,
     amount: blankAmount,
+    remarks: "",
   });
 
   const form = useForm<MultiCurrencyJournalFormValues, unknown, MultiCurrencyJournalInput>({
@@ -306,6 +307,7 @@ export function MultiCurrencyJournalForm({
                   <th className="w-32 text-right">Rate</th>
                   <th className="w-36 text-right">Amount</th>
                   <th className="w-36 text-right">Base</th>
+                  <th className="min-w-[180px]">Remarks</th>
                   <th className="w-10" />
                 </tr>
               </thead>
@@ -478,6 +480,23 @@ export function MultiCurrencyJournalForm({
                             <ScaleIcon className="size-4" />
                           </Button>
                         </div>
+                      </td>
+                      <td>
+                        {/* Per line, so the ledger shows what THIS account's
+                            share of the entry was for — the voucher's single
+                            narration cannot say that. */}
+                        <FormField
+                          control={form.control}
+                          name={`lines.${index}.remarks`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormControl>
+                                <Input placeholder="Optional" {...field} value={(field.value as string) ?? ""} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
                       </td>
                       <td className="pt-1">
                         <Button

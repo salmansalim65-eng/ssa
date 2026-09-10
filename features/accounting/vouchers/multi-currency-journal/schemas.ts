@@ -11,6 +11,10 @@ export const multiCurrencyJournalLineSchema = z.object({
   currencyId: z.string().uuid("Select a currency"),
   exchangeRate: z.coerce.number().positive("Currency conversion is required"),
   amount: z.coerce.number().positive("Amount must be greater than zero"),
+  // What this particular line is for. Stored on the journal line itself, so it
+  // shows against the account in the ledger rather than only in the voucher's
+  // one narration.
+  remarks: z.string().trim().max(200, "Keep it under 200 characters").optional().or(z.literal("")),
 });
 
 function round2(n: number) {

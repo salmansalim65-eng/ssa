@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { requirePermission } from "@/lib/auth/permissions";
+import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { EDITABLE_STATUSES, ensureCanEditVoucher, getCurrentCompanyId, postVoucher, resubmitEditedVoucher, routeNewVoucher } from "@/lib/vouchers/engine";
 import { multiCurrencyJournalSchema, type MultiCurrencyJournalInput } from "./schemas";
@@ -150,6 +150,28 @@ export async function updateMultiCurrencyJournal(id: string, input: MultiCurrenc
   // The Edit permission, or your own voucher while it is unposted.
   const notAllowed = await ensureCanEditVoucher("multi_currency_journal", je);
   if (notAllowed) return { error: notAllowed };
+
+  // A posted journal entry is immutable at the database level — posted entries
+  // and their lines cannot be changed. Editing a POSTED multi-currency journal
+  // therefore removes it outright and re-creates a replacement from the edited
+  // values, re-posted with a new number. Same route the receipt, payment, PDC
+  // and cheque-return vouchers take.
+  if (je.status === "posted") {
+    if (!(await isCurrentUserAdmin())) {
+      return { error: "Only administrators can edit a posted multi-currency journal." };
+    }
+    const { error: delErr } = await supabase
+      .schema("accounting")
+      .rpc("fn_admin_delete_posted_voucher", { p_voucher_type: "multi_currency_journal", p_id: id });
+    if (delErr) return { error: delErr.message };
+
+    const created = await createMultiCurrencyJournal(parsed.data);
+    if ("error" in created) return { error: created.error };
+
+    revalidatePath(LIST_PATH);
+    revalidatePath("/dashboard");
+    return { success: true, id: created.id };
+  }
   if (!EDITABLE_STATUSES.includes(je.status)) {
     return { error: "A posted voucher can no longer be edited" };
   }

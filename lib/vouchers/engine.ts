@@ -286,6 +286,7 @@ export const EDITABLE_WHEN_POSTED: readonly string[] = [
   "pdc_receipt_voucher",
   "pdc_payment_voucher",
   "cheque_return_voucher",
+  "multi_currency_journal",
 ];
 
 /**

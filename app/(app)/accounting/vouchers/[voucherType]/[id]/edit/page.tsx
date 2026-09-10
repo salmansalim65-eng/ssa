@@ -231,12 +231,13 @@ export default async function EditVoucherPage({
     currencyId: string;
     exchangeRate: number;
     amount: number;
+    remarks: string;
   }[] = [];
   if (isMultiCurrencyJournal && jeEmbed) {
     const { data: lines } = await supabase
       .schema("accounting")
       .from("journal_entry_lines")
-      .select("account_id, cost_center_id, debit_amount, credit_amount, currency_id, exchange_rate")
+      .select("account_id, cost_center_id, debit_amount, credit_amount, currency_id, exchange_rate, description")
       .eq("journal_entry_id", (voucher as unknown as { journal_entry_id: string }).journal_entry_id)
       .order("line_no");
     mcjLines = (lines ?? []).map((l) => {
@@ -248,6 +249,7 @@ export default async function EditVoucherPage({
         currencyId: l.currency_id as string,
         exchangeRate: Number(l.exchange_rate) || 1,
         amount: Number(isDebit ? l.debit_amount : l.credit_amount) || 0,
+        remarks: (l.description as string | null) ?? "",
       };
     });
   }

@@ -14,6 +14,12 @@ import {
 import { formatDate } from "@/lib/format";
 
 export interface OutstandingBill {
+  /**
+   * Unique per ROW. A combined voucher is offered one bill per property per
+   * instalment, so several rows share one `id` (the invoice) — the key is what
+   * keeps their amounts apart. Defaults to `id` for a bill that is not split.
+   */
+  key?: string;
   id: string;
   // "rental" = a rental invoice (default); "jv" = an open Journal Voucher
   // ledger item on the party account. Same dialog, different save target.
@@ -62,13 +68,21 @@ export function InvoiceAdjustDialog({
 }) {
   // The dialog is mounted fresh each time a line opens it, so initialise the
   // per-bill inputs from any existing allocations once, lazily.
+  // Keyed by the bill ROW, not the invoice: one invoice can appear as several
+  // instalments and each carries its own amount.
+  const keyOf = (b: OutstandingBill) => b.key ?? b.id;
   const [draft, setDraft] = useState<Record<string, string>>(() => {
     const m: Record<string, string> = {};
-    for (const a of value) m[a.invoiceId] = String(a.amount);
+    // An existing allocation is per invoice; put it back on that invoice's first
+    // row, which is where FIFO would have placed it.
+    for (const a of value) {
+      const first = bills.find((b) => b.id === a.invoiceId);
+      if (first) m[keyOf(first)] = String(a.amount);
+    }
     return m;
   });
 
-  const adjusted = round2(bills.reduce((s, b) => s + (Number(draft[b.id]) || 0), 0));
+  const adjusted = round2(bills.reduce((s, b) => s + (Number(draft[keyOf(b)]) || 0), 0));
   const remaining = round2(lineAmount - adjusted);
 
   function autoFifo() {
@@ -77,22 +91,30 @@ export function InvoiceAdjustDialog({
     for (const b of bills) {
       if (rem <= 0) break;
       const take = Math.min(rem, b.billAmount);
-      if (take > 0) m[b.id] = String(round2(take));
+      if (take > 0) m[keyOf(b)] = String(round2(take));
       rem = round2(rem - take);
     }
     setDraft(m);
   }
 
   function save() {
-    const allocations = bills
-      .filter((b) => Number(draft[b.id]) > 0)
-      .map((b) => ({
-        invoiceId: b.id,
-        source: b.source ?? "rental",
-        country: b.country,
-        amount: round2(Number(draft[b.id])),
-      }));
-    onSave(allocations);
+    // Rows are per instalment but an allocation is per invoice, so instalments
+    // of the same invoice are added together into one allocation.
+    const byInvoice = new Map<string, BillAllocation>();
+    for (const b of bills) {
+      const amount = Number(draft[keyOf(b)]);
+      if (!(amount > 0)) continue;
+      const existing = byInvoice.get(b.id);
+      if (existing) existing.amount = round2(existing.amount + amount);
+      else
+        byInvoice.set(b.id, {
+          invoiceId: b.id,
+          source: b.source ?? "rental",
+          country: b.country,
+          amount: round2(amount),
+        });
+    }
+    onSave([...byInvoice.values()]);
     onOpenChange(false);
   }
 
@@ -120,7 +142,7 @@ export function InvoiceAdjustDialog({
               </thead>
               <tbody>
                 {bills.map((b) => (
-                  <tr key={b.id} className="border-t [&_td]:px-3 [&_td]:py-1.5">
+                  <tr key={keyOf(b)} className="border-t [&_td]:px-3 [&_td]:py-1.5">
                     <td>{b.reference}</td>
                     <td className="text-muted-foreground">{b.dueDate ? formatDate(b.dueDate) : ""}</td>
                     <td className="text-right font-mono tabular-nums">{fmt(b.billAmount)}</td>
@@ -130,8 +152,8 @@ export function InvoiceAdjustDialog({
                         step="0.01"
                         min="0"
                         max={b.billAmount}
-                        value={draft[b.id] ?? ""}
-                        onChange={(e) => setDraft((d) => ({ ...d, [b.id]: e.target.value }))}
+                        value={draft[keyOf(b)] ?? ""}
+                        onChange={(e) => setDraft((d) => ({ ...d, [keyOf(b)]: e.target.value }))}
                         className="h-8 text-right tabular-nums"
                         placeholder="0.00"
                       />

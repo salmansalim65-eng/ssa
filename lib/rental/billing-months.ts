@@ -39,3 +39,44 @@ export function billingMonthStarts(start: string, end: string): string[] {
 export function billingMonthCount(start: string, end: string): number {
   return billingMonthStarts(start, end).length;
 }
+
+/**
+ * Split a combined voucher's rental months into the instalments they fall due
+ * in, per the property's payment terms.
+ *
+ * Each instalment falls due at the FIRST month of its block but PAYS FOR every
+ * month in it: an advance covering Aug–Mar is due in August and is rent for all
+ * eight. `count` is how many months the block covers, `lastMonth` the final one.
+ *
+ * advance = one block (the whole period); monthly = one-month blocks;
+ * quarterly / half_yearly / yearly = 3 / 6 / 12-month blocks.
+ *
+ * This is the rule the Rent Balance report groups by AND the rule the receipt
+ * adjustment dialog offers bills by, so a receipt settling "what is overdue"
+ * lands on exactly the months the report calls overdue. They drifted apart once
+ * and a receipt silently prepaid a future month.
+ */
+export function rentDueChunks(
+  months: string[],
+  terms: string | null | undefined,
+): { dueMonth: string; lastMonth: string; count: number }[] {
+  const n = months.length;
+  if (n === 0) return [];
+  const size =
+    terms === "advance"
+      ? n
+      : terms === "quarterly"
+        ? 3
+        : terms === "half_yearly"
+          ? 6
+          : terms === "yearly"
+            ? 12
+            : 1; // monthly (default)
+  const step = Math.max(1, size);
+  const chunks: { dueMonth: string; lastMonth: string; count: number }[] = [];
+  for (let i = 0; i < n; i += step) {
+    const count = Math.min(step, n - i);
+    chunks.push({ dueMonth: months[i], lastMonth: months[i + count - 1], count });
+  }
+  return chunks;
+}

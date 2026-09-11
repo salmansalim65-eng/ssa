@@ -35,10 +35,11 @@ export const hhLeaseLineSchema = z
     message: "Lease end must be after lease start",
     path: ["leaseEnd"],
   })
-  .refine((d) => d.vacant || d.rentalAmount > 0, {
-    message: "Must be greater than zero",
-    path: ["rentalAmount"],
-  });
+  // Zero rent is allowed and means a RENT-FREE letting: the property is
+  // occupied, nothing is charged (a fit-out or grace period). That is not the
+  // same as Vacant, which means empty — the lease still runs and the property
+  // still reads as let everywhere. The line bills nothing and posts nothing.
+  ;
 
 export const hhLeaseSchema = z.object({
   tenantId: z.string().uuid("Select a tenant"),

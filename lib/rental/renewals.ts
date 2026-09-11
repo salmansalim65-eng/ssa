@@ -46,10 +46,24 @@ export function addDays(date: string, days: number): string {
   return new Date(utcDay(date) + days * DAY_MS).toISOString().slice(0, 10);
 }
 
-/** "MMM YYYY" for a date, used when a lease carries no explicit renewal month. */
+/** "MMM YYYY" for a date. */
 function monthLabel(date: string | null | undefined): string {
   const m = /^(\d{4})-(\d{2})/.exec(String(date ?? ""));
   return m ? `${MONTHS[Number(m[2]) - 1]} ${m[1]}` : "";
+}
+
+/**
+ * The month a contract falls due for renewal: the one holding the day AFTER it
+ * ends. A tenancy running to 31 August has to be renewed from 1 September, so it
+ * renews in September, not August.
+ *
+ * It is NOT the lease's rent_month. That says which month an invoice BILLS for,
+ * which is a different fact — an August invoice can perfectly well cover a
+ * tenancy that runs into September — and reading it here labelled every HH
+ * contract "Aug 2026" the moment the invoices were stamped with their month.
+ */
+export function renewalMonthLabel(end: string | null | undefined): string {
+  return end ? monthLabel(addDays(end, 1)) : "";
 }
 
 /**
@@ -88,7 +102,7 @@ export interface LeaseRenewal {
    * of the one that ended when the property is empty. Null when never let.
    */
   end: string | null;
-  /** The lease's own renewal month when set, else the month the contract ends. */
+  /** The month it falls due for renewal: the month after the contract ends. */
   renewLabel: string;
   /** Days to `end`; negative once it has passed, null when there is no contract. */
   daysLeft: number | null;
@@ -283,7 +297,7 @@ export async function loadLeaseRenewals(
       tenant: (subject?.tenantId && tenantName.get(subject.tenantId)) || "—",
       start: subject?.start ?? null,
       end,
-      renewLabel: monthLabel(subject?.rentMonth) || monthLabel(end),
+      renewLabel: renewalMonthLabel(end),
       daysLeft,
       // Declared empty wins the row. Otherwise a property under contract — let
       // today, or signed to start — reads by how long that contract runs, and

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { renewalMonthLabel } from "@/lib/rental/renewals";
 import { fetchRefs } from "@/lib/supabase/hydrate";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import {
@@ -26,12 +27,6 @@ function monthsSpan(start: string | null, end: string | null): number {
   return Math.max(1, (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()) + 1);
 }
 
-function monthLabel(date: string | null | undefined): string | null {
-  if (!date) return null;
-  const d = new Date(`${date}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleString("en-GB", { month: "long" });
-}
 
 export default async function PropertyReportPage() {
   const supabase = await createClient();
@@ -197,7 +192,7 @@ export default async function PropertyReportPage() {
           expensesMonthly,
           start,
           end,
-          renew: monthLabel(rentMonth) || monthLabel(end),
+          renew: renewalMonthLabel(end),
         });
       }
       return;
@@ -210,7 +205,7 @@ export default async function PropertyReportPage() {
       expensesMonthly,
       start,
       end,
-      renew: monthLabel(rentMonth) || monthLabel(end),
+      renew: renewalMonthLabel(end),
     });
   };
   for (const l of uaeLeases ?? []) {

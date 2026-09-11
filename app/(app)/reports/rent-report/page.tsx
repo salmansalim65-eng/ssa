@@ -8,6 +8,7 @@ import { ReportSelectFilter } from "@/components/reports/report-select-filter";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
+import { renewalMonthLabel } from "@/lib/rental/renewals";
 import { formatAccountCode, formatDate, formatMoney } from "@/lib/format";
 import { HH_AGENT_PCT, UAE_AGENT_PCT } from "@/lib/rental/lease-accounting";
 import { billingMonthStarts, billingMonthCount } from "@/lib/rental/billing-months";
@@ -146,7 +147,7 @@ export default async function RentReportPage({
     gross: number; // contract monthly rent (before deductions)
     start: string | null;
     end: string | null;
-    renew: string | null; // rent_month label, else derived from lease end
+    renew: string | null; // the month AFTER the lease ends — when it falls due
     tenantId: string | null;
     billingKeys: Set<string>; // "YYYY-MM" of each rental month the lease bills
     leaseType: string | null; // "hh" for HH leases, else standard/PK
@@ -169,7 +170,7 @@ export default async function RentReportPage({
       gross: Number(l.monthly_rent) || 0,
       start: (l.lease_start as string) ?? null,
       end: (l.lease_end as string) ?? null,
-      renew: monthLabel(l.rent_month as string | null) || monthLabel(l.lease_end as string),
+      renew: renewalMonthLabel(l.lease_end as string | null),
       tenantId: (l.tenant_id as string) ?? null,
       billingKeys: billingKeysOf((l.lease_start as string) ?? null, (l.lease_end as string) ?? null),
       leaseType: null,
@@ -203,7 +204,7 @@ export default async function RentReportPage({
       gross,
       start: (l.lease_start as string) ?? null,
       end: (l.lease_end as string) ?? null,
-      renew: monthLabel(l.rent_month as string | null) || monthLabel(l.lease_end as string),
+      renew: renewalMonthLabel(l.lease_end as string | null),
       tenantId: (l.tenant_id as string) ?? null,
       billingKeys: billingKeysOf((l.lease_start as string) ?? null, (l.lease_end as string) ?? null),
       leaseType: (l.lease_type as string | null) ?? null,

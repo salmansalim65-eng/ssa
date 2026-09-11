@@ -26,7 +26,7 @@ import { formatAccountCode, formatDate, formatMoney, formatVoucherNo } from "@/l
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { hasPermission } from "@/lib/auth/permissions";
 import { isRentOverdue } from "@/lib/rental/overdue";
-import { billingMonthStarts } from "@/lib/rental/billing-months";
+import { billingMonthStarts, rentDueChunks } from "@/lib/rental/billing-months";
 import { LeaseRenewals } from "./lease-renewals";
 
 // Always render fresh — the dashboard reflects live invoices, rent balances and
@@ -36,38 +36,6 @@ export const dynamic = "force-dynamic";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
-}
-
-// Split a combined voucher's months into due instalments per payment terms. Each
-// instalment falls due at the FIRST month of its block; `count` is how many
-// months it covers. advance = one block (whole period); monthly = 1-month blocks;
-// quarterly/half_yearly/yearly = 3/6/12-month blocks.
-function rentDueChunks(
-  months: string[],
-  terms: string | null | undefined,
-): { dueMonth: string; lastMonth: string; count: number }[] {
-  const n = months.length;
-  if (n === 0) return [];
-  const size =
-    terms === "advance"
-      ? n
-      : terms === "quarterly"
-        ? 3
-        : terms === "half_yearly"
-          ? 6
-          : terms === "yearly"
-            ? 12
-            : 1; // monthly (default)
-  const step = Math.max(1, size);
-  const chunks: { dueMonth: string; lastMonth: string; count: number }[] = [];
-  for (let i = 0; i < n; i += step) {
-    const count = Math.min(step, n - i);
-    // The instalment falls due in its first month but PAYS FOR every month of
-    // the block, so both ends are kept: an advance covering Aug–Mar is due in
-    // August and is rent for all eight.
-    chunks.push({ dueMonth: months[i], lastMonth: months[i + count - 1], count });
-  }
-  return chunks;
 }
 
 // Each country card shows figures in that country's own currency.

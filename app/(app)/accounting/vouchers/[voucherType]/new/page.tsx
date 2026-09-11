@@ -12,6 +12,7 @@ import { PdcReceiptVoucherForm } from "@/components/vouchers/forms/pdc-receipt-v
 import { ReceiptVoucherForm } from "@/components/vouchers/forms/receipt-voucher-form";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { loadOutstandingRentBills } from "@/lib/rental/outstanding-bills";
 import { toAccountOptions, type RawAccountRow } from "@/lib/vouchers/account-currency";
 import { mapVoucherCurrencies, type RawCompanyCurrency } from "@/lib/vouchers/currencies";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
@@ -99,6 +100,7 @@ export default async function NewVoucherPage({
   // Outstanding rental bills a receipt/payment line can be adjusted against,
   // grouped by the party (tenant) account so the dialog shows only that account.
   let outstandingBills: {
+    key?: string;
     id: string;
     source?: "rental" | "jv";
     country: "UAE" | "PK";
@@ -112,21 +114,18 @@ export default async function NewVoucherPage({
     voucherType === "payment_voucher" ||
     voucherType === "pdc_receipt_voucher"
   ) {
-    const { data: inv } = await supabase
-      .schema("reporting")
-      .from("v_outstanding_rent")
-      .select("invoice_id, country, tenant_account_id, voucher_no, tenant_name, asset_name, due_date, net_outstanding")
-      .eq("company_id", companyId)
-      .gt("net_outstanding", 0)
-      .order("due_date");
-    outstandingBills = (inv ?? []).map((r) => ({
-      id: r.invoice_id as string,
+    // A combined voucher is offered one bill per property per instalment, at the
+    // date that instalment falls due — the same split the Rent Balance shows —
+    // so settling what the report calls overdue settles exactly those months.
+    outstandingBills = (await loadOutstandingRentBills(companyId)).map((b) => ({
+      key: b.key,
+      id: b.invoiceId,
       source: "rental" as const,
-      country: r.country as "UAE" | "PK",
-      accountId: (r.tenant_account_id as string | null) ?? null,
-      reference: [r.voucher_no ?? "Draft", r.tenant_name, r.asset_name].filter(Boolean).join(" · "),
-      dueDate: (r.due_date as string | null) ?? null,
-      billAmount: Number(r.net_outstanding),
+      country: b.country,
+      accountId: b.accountId,
+      reference: b.reference,
+      dueDate: b.dueDate,
+      billAmount: b.billAmount,
     }));
   }
 

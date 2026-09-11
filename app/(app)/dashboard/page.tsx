@@ -106,9 +106,20 @@ function computeFixedAssetAccountIds(
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ panel?: string; from?: string; to?: string; tenant?: string; property?: string }>;
+  searchParams: Promise<{
+    panel?: string;
+    from?: string;
+    to?: string;
+    tenant?: string;
+    property?: string;
+    history?: string;
+  }>;
 }) {
-  const { panel = "", from = "", to = "", tenant = "", property = "" } = await searchParams;
+  const { panel = "", from = "", to = "", tenant = "", property = "", history = "" } = await searchParams;
+  // The Rent Balance sheet answers "what is still owed", so a month that has
+  // gone by fully settled has no business on it. Those rows move to a History
+  // view behind this flag rather than being lost.
+  const showHistory = history === "1";
   const dateFrom = from || null;
   const dateTo = to || null;
   // Rent Balance can be narrowed to one tenant and/or one property, so opening
@@ -711,7 +722,7 @@ export default async function DashboardPage({
           filters change, so a re-filter shows the skeleton too. */}
       {(selected || isBank || isCash) && (
         <Suspense
-          key={`${selected}-${isBank}-${isCash}-${rangeFrom}-${rangeTo}-${tenantFilter}-${propertyFilter}`}
+          key={`${selected}-${isBank}-${isCash}-${rangeFrom}-${rangeTo}-${tenantFilter}-${propertyFilter}-${showHistory}`}
           fallback={<DetailSkeleton />}
         >
           <DetailPanel
@@ -728,6 +739,7 @@ export default async function DashboardPage({
             property={property}
             tenantFilter={tenantFilter}
             propertyFilter={propertyFilter}
+            showHistory={showHistory}
             bankAccounts={bankOnly}
             cashAccounts={cashOnly}
             ledger={(ledgerRows ?? []) as unknown as BalanceLedgerRow[]}
@@ -789,6 +801,7 @@ async function DetailPanel({
   property,
   tenantFilter,
   propertyFilter,
+  showHistory,
   bankAccounts,
   cashAccounts,
   ledger,
@@ -808,6 +821,8 @@ async function DetailPanel({
   property: string;
   tenantFilter: string | null;
   propertyFilter: string | null;
+  /** Show the settled past months instead of what is still owed. */
+  showHistory: boolean;
   bankAccounts: { id: string; code: string; name: string; symbol: string; balance: number }[];
   cashAccounts: { id: string; code: string; name: string; symbol: string; balance: number }[];
   ledger: BalanceLedgerRow[];
@@ -823,6 +838,7 @@ async function DetailPanel({
         rangeTo,
         tenantFilter,
         propertyFilter,
+        showHistory,
         ledger,
         coaCountryById,
         fixedAssetAccountIds,
@@ -836,10 +852,27 @@ async function DetailPanel({
 
   // The rent-balance detail panels support a date range, and the rent ones also
   // hand back the tenants and properties they cover.
-  const rentPanelDetail = detail as { tenantOptions?: string[]; propertyOptions?: string[] };
+  const rentPanelDetail = detail as {
+    tenantOptions?: string[];
+    propertyOptions?: string[];
+    liveCount?: number;
+    historyCount?: number;
+  };
   const rentFilters = rentPanelDetail.tenantOptions
     ? { tenants: rentPanelDetail.tenantOptions, properties: rentPanelDetail.propertyOptions ?? [] }
     : null;
+  // Which sheet is being read: what is still owed, or the months already
+  // settled. Carrying the current filters across, so switching does not reset
+  // the date range or the tenant you were looking at.
+  const sheetHref = (history: boolean) => {
+    const q = new URLSearchParams({ panel: selected });
+    if (dateFrom) q.set("from", dateFrom);
+    if (dateTo) q.set("to", dateTo);
+    if (tenantFilter) q.set("tenant", tenantFilter);
+    if (propertyFilter) q.set("property", propertyFilter);
+    if (history) q.set("history", "1");
+    return `/dashboard?${q.toString()}`;
+  };
   const detailPanelKey = selected;
   const showDateRange = detailPanelKey !== "";
 
@@ -848,9 +881,20 @@ async function DetailPanel({
       <CardHeader className="border-b pb-4">
         <CardTitle>{detail.title}</CardTitle>
         <CardAction className="flex flex-wrap items-end gap-2">
+          {rentFilters && (
+            <div className="flex items-end gap-1">
+              <Button asChild variant={showHistory ? "ghost" : "default"} size="sm">
+                <Link href={sheetHref(false)}>Balance ({rentPanelDetail.liveCount ?? 0})</Link>
+              </Button>
+              <Button asChild variant={showHistory ? "default" : "ghost"} size="sm">
+                <Link href={sheetHref(true)}>History ({rentPanelDetail.historyCount ?? 0})</Link>
+              </Button>
+            </div>
+          )}
           {showDateRange && (
             <form method="get" action="/dashboard" className="flex flex-wrap items-end gap-2">
               <input type="hidden" name="panel" value={detailPanelKey} />
+              {showHistory && <input type="hidden" name="history" value="1" />}
               <label className="flex flex-col text-[0.7rem] font-medium text-muted-foreground">
                 From
                 <input
@@ -995,6 +1039,7 @@ async function loadDetail(
   dateTo: string | null,
   tenant: string | null,
   property: string | null,
+  showHistory: boolean,
   ledger: BalanceLedgerRow[],
   coaCountryById: Map<string, string | null>,
   fixedAssetAccountIds: Set<string>,
@@ -1364,6 +1409,17 @@ async function loadDetail(
   if (property) rows = rows.filter((r) => String(r.asset_name ?? "") === property);
 
   const nowDate = today();
+  // A month that has gone by and owes nothing is history: it answers "what did
+  // we collect", not "what is still owed", and burying the few live rows under
+  // dozens of settled ones is what made the sheet hard to read. The current
+  // month and anything still owing always stay on the balance sheet, however
+  // old — an unpaid August row is exactly what the sheet is for.
+  const thisMonth = nowDate.slice(0, 7);
+  const isSettledPast = (r: RentRow) =>
+    Number(r.net_outstanding) <= 0.005 && String(r.due_date ?? "").slice(0, 7) < thisMonth;
+  const historyRows = rows.filter(isSettledPast);
+  const liveRows = rows.filter((r) => !isSettledPast(r));
+  rows = showHistory ? historyRows : liveRows;
   // PK Rent Balance omits the Management (agent share) and Other Expenses columns
   // — those only apply to UAE/HH leases.
   const showAgentCols = cfg.rentCountry !== "PK";
@@ -1418,9 +1474,11 @@ async function loadDetail(
   const colCount = showAgentCols ? 13 : 11;
 
   return {
-    title: `Rent Balance — ${cfg.label}`,
+    title: `${showHistory ? "Rent History" : "Rent Balance"} — ${cfg.label}`,
     tenantOptions,
     propertyOptions,
+    liveCount: liveRows.length,
+    historyCount: historyRows.length,
     body: (
       <Table
         className="min-w-[1020px] [&_td]:first:pl-5 [&_td]:last:pr-5 [&_th]:first:pl-5 [&_th]:last:pr-5"
@@ -1528,7 +1586,9 @@ async function loadDetail(
           {rows.length === 0 && (
             <TableRow className="hover:bg-transparent">
               <TableCell colSpan={colCount} className="py-10 text-center text-muted-foreground">
-                No rent invoices for {cfg.label} in this period.
+                {showHistory
+                  ? `No settled months for ${cfg.label} in this period.`
+                  : `Nothing outstanding for ${cfg.label} in this period.`}
               </TableCell>
             </TableRow>
           )}

@@ -48,6 +48,73 @@ export async function createTag(input: TagInput) {
   return { success: true };
 }
 
+/**
+ * Add a whole list of tags at once, one name per line.
+ *
+ * A tag list is almost always pasted out of a message or a spreadsheet, so the
+ * numbering people type in front of each item ("1. Petrol", "3) Pharmacy") is
+ * stripped and blank lines are dropped. Names already in use are reported as
+ * skipped rather than failing the batch — re-pasting a list that has grown by
+ * two entries should add exactly those two.
+ */
+export async function createTagsBulk(raw: string) {
+  await requirePermission("tags", "create");
+  const companyId = await getCurrentCompanyId();
+  const supabase = await createClient();
+  const { data: user } = await supabase.auth.getUser();
+
+  const { data: existing, error: readError } = await supabase
+    .schema("core")
+    .from("tags")
+    .select("name")
+    .eq("company_id", companyId)
+    .is("deleted_at", null);
+  if (readError) return { error: readError.message };
+  const taken = new Set((existing ?? []).map((t) => (t.name as string).trim().toLowerCase()));
+
+  const names: string[] = [];
+  const skipped: string[] = [];
+  const invalid: string[] = [];
+  for (const line of raw.split("\n")) {
+    const name = line
+      .replace(/^\s*\d+\s*[.)\]-]\s*/, "")
+      .trim()
+      .replace(/\s+/g, " ");
+    if (!name) continue;
+    const parsed = tagSchema.safeParse({ name, description: "", isActive: true });
+    if (!parsed.success) {
+      invalid.push(name);
+      continue;
+    }
+    const key = parsed.data.name.toLowerCase();
+    if (taken.has(key)) {
+      skipped.push(parsed.data.name);
+      continue;
+    }
+    taken.add(key);
+    names.push(parsed.data.name);
+  }
+
+  if (names.length === 0) return { created: 0, skipped, invalid };
+
+  const { error } = await supabase
+    .schema("core")
+    .from("tags")
+    .insert(
+      names.map((name) => ({
+        name,
+        description: null,
+        is_active: true,
+        company_id: companyId,
+        created_by: user.user!.id,
+      })),
+    );
+  if (error) return { error: friendlyError(error.message) };
+
+  revalidateTagPages();
+  return { created: names.length, skipped, invalid };
+}
+
 export async function updateTag(id: string, input: TagInput) {
   const parsed = tagSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };

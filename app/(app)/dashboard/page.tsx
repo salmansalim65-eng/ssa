@@ -208,7 +208,7 @@ export default async function DashboardPage({
     supabase
       .schema("reporting")
       .from("v_ledger_entries")
-      .select("account_id, debit_amount, credit_amount, doc_debit_amount, doc_credit_amount, currency_code")
+      .select("account_id, voucher_type, debit_amount, credit_amount, doc_debit_amount, doc_credit_amount, currency_code")
       .eq("company_id", companyId)
       .eq("account_type", "expense")
       .gte("entry_date", `${new Date().getFullYear()}-01-01`)
@@ -227,6 +227,23 @@ export default async function DashboardPage({
     (s, r) => s + Number(r.debit_amount) - Number(r.credit_amount),
     0,
   );
+
+  // The expense float: money taken in FOR expenses against an expense account,
+  // what the Expense Voucher has since spent, and what is therefore left. A
+  // receipt credited to an expense account is money held to spend — the float —
+  // so it is what "received" means here; anything else crediting an expense
+  // account is a refund or a correction and belongs in the head totals below,
+  // not in this card.
+  const expenseFloat = (expenseLedger ?? []).reduce(
+    (acc, r) => {
+      const type = r.voucher_type as string | null;
+      if (type === "receipt_voucher") acc.received += Number(r.credit_amount);
+      if (type === "expense_voucher") acc.spent += Number(r.debit_amount) - Number(r.credit_amount);
+      return acc;
+    },
+    { received: 0, spent: 0 },
+  );
+  const expenseFloatBalance = expenseFloat.received - expenseFloat.spent;
 
   // The same year split by GROUP HEAD, each in the currency it was spent in. A
   // base-currency total alone hides that (say) SR 10,014 is really PKR 286,400
@@ -475,11 +492,12 @@ export default async function DashboardPage({
   // Each dashboard card is gated by the permission for what it reveals, so a
   // limited role (e.g. an Accountant with no rental access) doesn't see cards it
   // isn't allowed into. Admins have every permission.
-  const [canReports, canRentalUae, canRentalPk, canApprovals] = await Promise.all([
+  const [canReports, canRentalUae, canRentalPk, canApprovals, canExpenseVouchers] = await Promise.all([
     hasPermission("reports", "view"),
     hasPermission("uae_rent_invoice", "view"),
     hasPermission("pk_rent_invoice", "view"),
     hasPermission("approval_workflows", "view"),
+    hasPermission("expense_voucher", "view"),
   ]);
 
   return (
@@ -689,6 +707,34 @@ export default async function DashboardPage({
           ) : (
             <div className="py-1 text-sm text-muted-foreground">No expenses this year.</div>
           )}
+        </SummaryCard>
+        )}
+
+        {/* What was taken in to spend, what the Expense Voucher spent, and what is
+            left. Base currency throughout: the money can come in on one currency
+            and go out on another, and only the base figures add up. */}
+        {canExpenseVouchers && (
+        <SummaryCard
+          title={`Expense Float (${new Date().getFullYear()})`}
+          href="/accounting/vouchers/expense_voucher"
+          footer={
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-xs font-medium text-muted-foreground">Balance left to spend</span>
+              <span
+                className={cn(
+                  "shrink-0 text-sm font-bold tabular-nums",
+                  expenseFloatBalance < 0 && "text-destructive",
+                )}
+              >
+                {`${baseSymbol ? baseSymbol + " " : ""}${formatMoney(expenseFloatBalance)}`}
+              </span>
+            </div>
+          }
+        >
+          <div className="flex justify-between gap-2">
+            <StatCol value={money("", expenseFloat.received)} label="Received" />
+            <StatCol value={money("", expenseFloat.spent)} label="Spent" align="right" />
+          </div>
         </SummaryCard>
         )}
 

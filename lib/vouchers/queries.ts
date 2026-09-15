@@ -267,6 +267,28 @@ export async function getVoucherListRows(
         status: (r.journal_entries as unknown as { status: JournalEntryStatus } | null)?.status ?? "draft",
       }));
     }
+    case "expense_voucher": {
+      const { data } = await supabase
+        .schema("accounting")
+        .from("expense_vouchers")
+        .select(
+          "id, voucher_no, expense_date, paid_to, narration, total_amount, exchange_rate, currency_id, journal_entry_id, journal_entries:journal_entry_id(status)",
+        )
+        .eq("company_id", companyId)
+        .order("created_at", { ascending: false });
+      return (data ?? []).map((r) => ({
+        id: r.id,
+        voucherNo: r.voucher_no,
+        date: r.expense_date,
+        // Who the money went to, else what the voucher was for.
+        party: (r.paid_to as string | null) || (r.narration as string | null) || "",
+        amount: Number(r.total_amount),
+        currencySymbol: symbolFor(r.currency_id),
+        baseAmount: Number(r.total_amount) * (Number(r.exchange_rate) || 1),
+        journalEntryId: r.journal_entry_id,
+        status: (r.journal_entries as unknown as { status: JournalEntryStatus } | null)?.status ?? "draft",
+      }));
+    }
     case "journal_voucher": {
       const { data } = await supabase
         .schema("accounting")
@@ -626,6 +648,45 @@ export async function getVoucherDetail(
           { label: "Original PDC type", value: v.original_pdc_type },
           { label: "Return reason", value: v.return_reason },
           { label: "Penalty amount", value: v.penalty_amount.toLocaleString() },
+        ],
+        lines: je.lines,
+      };
+    }
+    case "expense_voucher": {
+      const { data: v } = await supabase
+        .schema("accounting")
+        .from("expense_vouchers")
+        .select("*")
+        .eq("company_id", companyId)
+        .eq("id", id)
+        .maybeSingle();
+      if (!v) return null;
+      const je = await getJournalEntryWithLines(v.journal_entry_id);
+      const { data: paidFrom } = await supabase
+        .schema("accounting")
+        .from("chart_of_accounts")
+        .select("account_code, account_name")
+        .eq("id", v.credit_account_id)
+        .maybeSingle();
+      return {
+        id: v.id,
+        voucherNo: v.voucher_no,
+        date: v.expense_date,
+        narration: v.narration,
+        journalEntryId: v.journal_entry_id,
+        status: je.status,
+        currencyCode: je.currencyCode,
+        currencySymbol: je.currencySymbol,
+        exchangeRate: je.exchangeRate,
+        fields: [
+          {
+            label: "Paid from",
+            value: paidFrom
+              ? `${formatAccountCode(paidFrom.account_code as string)} — ${paidFrom.account_name as string}`
+              : "—",
+          },
+          { label: "Paid to", value: (v.paid_to as string | null) || "—" },
+          { label: "Currency conv.", value: formatRate(je.exchangeRate) },
         ],
         lines: je.lines,
       };

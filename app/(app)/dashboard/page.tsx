@@ -223,16 +223,28 @@ export default async function DashboardPage({
   // so it is what "received" means here; anything else crediting an expense
   // account is a refund or a correction and belongs in the head totals below,
   // not in this card.
-  const expenseFloat = (expenseLedger ?? []).reduce(
-    (acc, r) => {
-      const type = r.voucher_type as string | null;
-      if (type === "receipt_voucher") acc.received += Number(r.credit_amount);
-      if (type === "expense_voucher") acc.spent += Number(r.debit_amount) - Number(r.credit_amount);
-      return acc;
-    },
-    { received: 0, spent: 0 },
-  );
-  const expenseFloatBalance = expenseFloat.received - expenseFloat.spent;
+  //
+  // Kept in the currency the money is actually held in, on the DOCUMENT amounts.
+  // A float is a cash box, not a valuation: rupees taken in to spend in Karachi
+  // stay rupees, and converting them to the base currency made the card read
+  // "SR 396" for what is really Rs 396 — a figure nobody could check against the
+  // box. A currency that saw no float activity never appears.
+  const floatByCurrency = new Map<string, { code: string; received: number; spent: number }>();
+  for (const r of expenseLedger ?? []) {
+    const type = r.voucher_type as string | null;
+    if (type !== "receipt_voucher" && type !== "expense_voucher") continue;
+    const code = (r.currency_code as string | null) ?? "";
+    const row = floatByCurrency.get(code) ?? { code, received: 0, spent: 0 };
+    if (type === "receipt_voucher") row.received += Number(r.doc_credit_amount);
+    else row.spent += Number(r.doc_debit_amount) - Number(r.doc_credit_amount);
+    floatByCurrency.set(code, row);
+  }
+  const expenseFloats = [...floatByCurrency.values()]
+    .map((f) => ({ ...f, balance: f.received - f.spent }))
+    .filter((f) => f.received || f.spent)
+    .sort((a, b) => b.received + b.spent - (a.received + a.spent));
+  // The busiest currency leads the card; anything else gets a balance line.
+  const mainFloat = expenseFloats[0] ?? { code: "", received: 0, spent: 0, balance: 0 };
 
   // The same year split by GROUP HEAD, each in the currency it was spent in. A
   // base-currency total alone hides that (say) SR 10,014 is really PKR 286,400
@@ -705,9 +717,9 @@ export default async function DashboardPage({
         </SummaryCard>
         )}
 
-        {/* What was taken in to spend, what the Expense Voucher spent, and what is
-            left. Base currency throughout: the money can come in on one currency
-            and go out on another, and only the base figures add up. */}
+        {/* What was taken in to spend, what the Expense Voucher spent, and what
+            is left — each currency on its own, because a float is money held,
+            not a valuation. */}
         {canExpenseVouchers && (
         <SummaryCard
           title={`Expense KHI (${new Date().getFullYear()})`}
@@ -719,17 +731,27 @@ export default async function DashboardPage({
               <span
                 className={cn(
                   "shrink-0 text-sm font-bold tabular-nums",
-                  expenseFloatBalance < 0 && "text-destructive",
+                  mainFloat.balance < 0 && "text-destructive",
                 )}
               >
-                {`${baseSymbol ? baseSymbol + " " : ""}${formatMoney(expenseFloatBalance)}`}
+                {money(sym(mainFloat.code), mainFloat.balance)}
               </span>
             </div>
           }
         >
-          <div className="flex justify-between gap-2">
-            <StatCol value={money("", expenseFloat.received)} label="Received" />
-            <StatCol value={money("", expenseFloat.spent)} label="Spent" align="right" />
+          <div className="space-y-1">
+            <div className="flex justify-between gap-2">
+              <StatCol value={money(sym(mainFloat.code), mainFloat.received)} label="Received" />
+              <StatCol value={money(sym(mainFloat.code), mainFloat.spent)} label="Spent" align="right" />
+            </div>
+            {expenseFloats.slice(1).map((f) => (
+              <div key={f.code} className="flex items-baseline justify-between gap-3 text-sm">
+                <span className="truncate text-muted-foreground">{f.code} balance</span>
+                <span className="shrink-0 font-mono font-medium tabular-nums">
+                  {money(sym(f.code), f.balance)}
+                </span>
+              </div>
+            ))}
           </div>
         </SummaryCard>
         )}

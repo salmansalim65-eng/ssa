@@ -116,7 +116,36 @@ export async function ExpenseReport({ companyId, year }: { companyId: string; ye
   );
 
   const total = lines.reduce((s, l) => s + l.amount, 0);
-  const currency = lines[0]?.currency ?? "";
+
+  // The card's "Received" figure, itemised. It counts every posted receipt
+  // voucher that CREDITS an expense account — money handed over to be spent —
+  // and a bare total on a card is impossible to check, so the vouchers behind
+  // it are listed here. If a receipt in this list is not float money (an
+  // expense refund, say), it is the receipt's posting that needs looking at,
+  // not the card.
+  const { data: receiptRows } = await supabase
+    .schema("reporting")
+    .from("v_ledger_entries")
+    .select("journal_entry_id, line_no, entry_date, voucher_no, account_name, doc_credit_amount, currency_code")
+    .eq("company_id", companyId)
+    .eq("account_type", "expense")
+    .eq("voucher_type", "receipt_voucher")
+    .gte("entry_date", `${year}-01-01`)
+    .lte("entry_date", `${year}-12-31`)
+    .order("entry_date", { ascending: false });
+  const receipts = (receiptRows ?? [])
+    .map((r) => ({
+      key: `${r.journal_entry_id}-${r.line_no}`,
+      date: r.entry_date as string,
+      voucherNo: (r.voucher_no as string | null) ?? null,
+      account: (r.account_name as string | null) ?? "—",
+      amount: Number(r.doc_credit_amount) || 0,
+      currency: (r.currency_code as string | null) ?? "",
+    }))
+    .filter((r) => r.amount > 0);
+  const receivedTotal = receipts.reduce((s, r) => s + r.amount, 0);
+
+  const currency = lines[0]?.currency ?? receipts[0]?.currency ?? "";
 
   function groupBy(pick: (l: Line) => { key: string; label: string; sub?: string }): Group[] {
     const map = new Map<string, Group>();
@@ -148,6 +177,47 @@ export async function ExpenseReport({ companyId, year }: { companyId: string; ye
         <CardTitle>Expense KHI — {year}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6 pt-4">
+        {receipts.length > 0 && (
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-foreground">
+              Received — receipts into expense accounts
+            </h3>
+            <div className="overflow-x-auto rounded-md border">
+              <table className="w-full min-w-[520px] text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/50 text-left [&_th]:px-3 [&_th]:py-2 [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground">
+                    <th className="w-12">Sno</th>
+                    <th className="w-28">Date</th>
+                    <th className="w-28">Voucher</th>
+                    <th>Account</th>
+                    <th className="w-32 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {receipts.map((r, i) => (
+                    <tr key={r.key} className="border-b last:border-0 [&_td]:px-3 [&_td]:py-2">
+                      <td className="text-muted-foreground tabular-nums">{i + 1}</td>
+                      <td className="whitespace-nowrap tabular-nums">{formatDate(r.date)}</td>
+                      <td className="whitespace-nowrap font-medium">{formatVoucherNo(r.voucherNo) || "—"}</td>
+                      <td>{r.account}</td>
+                      <td className="text-right font-medium tabular-nums">{formatMoney(r.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 bg-muted/30 font-semibold [&_td]:px-3 [&_td]:py-2">
+                    <td colSpan={4}>Total received</td>
+                    <td className="text-right tabular-nums">
+                      {currency && <span className="mr-1 text-xs font-medium">{currency}</span>}
+                      {formatMoney(receivedTotal)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        )}
+
         {lines.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
             No posted expense vouchers this year.

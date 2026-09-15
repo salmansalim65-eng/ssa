@@ -82,7 +82,7 @@ export async function ExpenseReport({ companyId, year }: { companyId: string; ye
       ? supabase.schema("core").from("tags").select("id, name").in("id", tagIds)
       : Promise.resolve({ data: [] }),
     currencyIds.length
-      ? supabase.schema("core").from("currencies").select("id, code").in("id", currencyIds)
+      ? supabase.schema("core").from("currencies").select("id, code, symbol").in("id", currencyIds)
       : Promise.resolve({ data: [] }),
   ]);
   const accountById = new Map(
@@ -92,7 +92,11 @@ export async function ExpenseReport({ companyId, year }: { companyId: string; ye
     ]),
   );
   const tagById = new Map((tags ?? []).map((t) => [t.id as string, t.name as string]));
-  const currencyById = new Map((currencies ?? []).map((c) => [c.id as string, c.code as string]));
+  // The symbol if the currency has one, else its code — the card beside this
+  // report reads "Rs", so the report must not read "PKR" for the same money.
+  const currencyById = new Map(
+    (currencies ?? []).map((c) => [c.id as string, ((c.symbol as string | null) || (c.code as string)) ?? ""]),
+  );
 
   const lines: Line[] = posted.flatMap((v) =>
     (v.lines ?? []).map((l) => {

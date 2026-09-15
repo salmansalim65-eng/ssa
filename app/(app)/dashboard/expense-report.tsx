@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
 import { formatAccountCode, formatDate, formatMoney, formatVoucherNo } from "@/lib/format";
+import { PostExpenseButton } from "./post-expense-button";
 
 type Line = {
   key: string;
@@ -218,6 +219,7 @@ export async function ExpenseReport({
       id: v.id as string,
       date: v.expense_date as string,
       voucherNo: (v.voucher_no as string | null) ?? null,
+      journalEntryId: v.journal_entry_id as string,
       amount: Number(v.total_amount) || 0,
       status: statusByJournal.get(v.journal_entry_id as string) ?? "draft",
     }))
@@ -272,8 +274,8 @@ export async function ExpenseReport({
                   Not posted yet — {unposted.length} voucher{unposted.length === 1 ? "" : "s"}
                 </h3>
                 <p className="mb-2 text-sm text-muted-foreground">
-                  These are not in the ledger, so they are not counted anywhere below. Open one and
-                  post it.
+                  These are not in the ledger, so they are not counted anywhere below. Post one
+                  here and the figures pick it up.
                 </p>
                 <div className="overflow-x-auto rounded-md border">
                   <table className="w-full min-w-[520px] text-sm">
@@ -284,6 +286,7 @@ export async function ExpenseReport({
                         <th className="w-32">Voucher</th>
                         <th className="w-28">Status</th>
                         <th className="w-32 text-right">Amount</th>
+                        <th className="w-24" />
                       </tr>
                     </thead>
                     <tbody>
@@ -301,6 +304,9 @@ export async function ExpenseReport({
                           </td>
                           <td className="capitalize text-muted-foreground">{v.status.replace("_", " ")}</td>
                           <td className="text-right font-medium tabular-nums">{formatMoney(v.amount)}</td>
+                          <td className="text-right">
+                            <PostExpenseButton voucherId={v.id} journalEntryId={v.journalEntryId} />
+                          </td>
                         </tr>
                       ))}
                     </tbody>

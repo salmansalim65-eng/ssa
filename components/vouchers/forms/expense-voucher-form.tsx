@@ -66,12 +66,22 @@ export function ExpenseVoucherForm({
   accounts,
   currencies,
   tags,
+  defaultCreditAccountId,
+  expenseAccountIds,
   voucherId,
   initialValues,
 }: {
   accounts: AccountOption[];
   currencies: CurrencyOption[];
   tags: TagOption[];
+  /** The float bank account, pre-selected on a new voucher. */
+  defaultCreditAccountId?: string | null;
+  /**
+   * The only accounts an expense line may be posted to. Undefined leaves the
+   * picker open — the restriction is a property of this company's chart, not of
+   * the form, so a chart without the group simply doesn't narrow anything.
+   */
+  expenseAccountIds?: string[];
   voucherId?: string;
   initialValues?: ExpenseVoucherFormValues;
 }) {
@@ -80,20 +90,32 @@ export function ExpenseVoucherForm({
   const [isPending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
 
+  const rateById = new Map(currencies.map((c) => [c.id, c.rate ?? 1] as const));
+
+  // An account carries its own currency, so the first one picked sets the
+  // voucher's: choose MEEZAAN BANK and the voucher becomes PKR. From then on
+  // every picker offers only that currency's accounts (plus the currency-less
+  // ones), so a voucher can't mix a PKR bank with an AED expense.
+  const currencyOf = useMemo(() => buildAccountCurrency(accounts, currencies), [accounts, currencies]);
+  const costCentreOf = useMemo(() => buildAccountCostCentre(accounts), [accounts]);
+
+  // A pre-selected bank brings its currency with it, or the form would open in
+  // the base currency and show a conversion row for money that needs none.
+  const defaultCurrencyId =
+    (defaultCreditAccountId && currencyOf(defaultCreditAccountId)) || currencies[0]?.id || "";
+
   const form = useForm<ExpenseVoucherFormValues, unknown, ExpenseVoucherInput>({
     resolver: zodResolver(expenseVoucherSchema),
     defaultValues: initialValues ?? {
       expenseDate: today(),
-      creditAccountId: "",
+      creditAccountId: defaultCreditAccountId ?? "",
       paidTo: "",
-      currencyId: currencies[0]?.id ?? "",
-      exchangeRate: currencies[0]?.rate ?? 1,
+      currencyId: defaultCurrencyId,
+      exchangeRate: rateById.get(defaultCurrencyId) ?? 1,
       narration: "",
       lines: [emptyLine()],
     },
   });
-
-  const rateById = new Map(currencies.map((c) => [c.id, c.rate ?? 1] as const));
 
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "lines" });
   const watchedLines = useWatch({ control: form.control, name: "lines" });
@@ -106,12 +128,6 @@ export function ExpenseVoucherForm({
   const isBaseCurrency = !currencyId || currencyId === currencies[0]?.id;
   const headerAccountId = useWatch({ control: form.control, name: "creditAccountId" });
 
-  // An account carries its own currency, so the first one picked sets the
-  // voucher's: choose MEEZAN BANK and the voucher becomes PKR. From then on
-  // every picker offers only that currency's accounts (plus the currency-less
-  // ones), so a voucher can't mix a PKR bank with an AED expense.
-  const currencyOf = useMemo(() => buildAccountCurrency(accounts, currencies), [accounts, currencies]);
-  const costCentreOf = useMemo(() => buildAccountCostCentre(accounts), [accounts]);
   function applyAccountCurrency(accountId: string) {
     const cur = currencyOf(accountId);
     if (!cur || !rateById.has(cur)) return;
@@ -134,6 +150,17 @@ export function ExpenseVoucherForm({
   /** The accounts a picker may offer; `value` is its own, never filtered away. */
   const accountsFor = (value?: string) =>
     anchored ? accountsForCurrency(accounts, currencyId, currencyOf, value) : accounts;
+  /**
+   * An expense line may only be posted under the KHI EXPENSE group. A line
+   * already holding some other account keeps it visible, so opening an older
+   * voucher never blanks a field the picker no longer offers.
+   */
+  const expenseAllowed = expenseAccountIds?.length ? new Set(expenseAccountIds) : null;
+  const expenseAccountsFor = (value?: string) => {
+    const offered = accountsFor(value);
+    if (!expenseAllowed) return offered;
+    return offered.filter((a) => expenseAllowed.has(a.id) || a.id === value);
+  };
 
   function onSubmit(values: ExpenseVoucherInput) {
     setFormError(null);
@@ -279,7 +306,7 @@ export function ExpenseVoucherForm({
                         render={({ field }) => (
                           <FormItem>
                             <AccountCombobox
-                              accounts={accountsFor(field.value)}
+                              accounts={expenseAccountsFor(field.value)}
                               value={field.value}
                               onValueChange={(v) => {
                                 field.onChange(v);

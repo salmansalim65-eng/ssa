@@ -6,6 +6,7 @@ import { JvMaintenanceVoucherForm } from "@/components/vouchers/forms/jv-mainten
 import { MultiCurrencyJournalForm } from "@/components/vouchers/forms/multi-currency-journal-form";
 import { OpeningBalanceVoucherForm } from "@/components/vouchers/forms/opening-balance-voucher-form";
 import { ExpenseVoucherForm } from "@/components/vouchers/forms/expense-voucher-form";
+import { resolveExpenseKhiAccounts, type ChartAccountRow } from "@/lib/accounting/expense-khi";
 import { PaymentVoucherForm } from "@/components/vouchers/forms/payment-voucher-form";
 import { PdcPaymentVoucherForm } from "@/components/vouchers/forms/pdc-payment-voucher-form";
 import { PdcReceiptVoucherForm } from "@/components/vouchers/forms/pdc-receipt-voucher-form";
@@ -276,6 +277,19 @@ export default async function EditVoucherPage({
         .order("name")
     : { data: [] as { id: string; name: string }[] };
   const tagOptions = (tagRows ?? []).map((t) => ({ id: t.id as string, name: t.name as string }));
+
+  // The same restriction the new-voucher form applies: an expense line belongs
+  // under the KHI EXPENSE group. A line already holding some other account
+  // keeps it — the form never blanks a field it no longer offers.
+  const { data: khiChart } = isExpense
+    ? await supabase
+        .schema("accounting")
+        .from("chart_of_accounts")
+        .select("id, parent_id, account_name")
+        .eq("company_id", companyId)
+    : { data: [] as { id: string; parent_id: string | null; account_name: string | null }[] };
+  const khiExpenseIds = resolveExpenseKhiAccounts((khiChart ?? []) as ChartAccountRow[]).expenseIds;
+  const khiExpenseAccountIds = accountOptions.map((a) => a.id).filter((id) => khiExpenseIds.has(id));
 
   const HEADER_DOC_LINES: Record<string, string> = {
     receipt_voucher: "receipt_voucher_lines",
@@ -556,6 +570,7 @@ export default async function EditVoucherPage({
           accounts={accountOptions}
           currencies={docCurrencies}
           tags={tagOptions}
+          expenseAccountIds={khiExpenseAccountIds}
           voucherId={id}
           initialValues={{
             expenseDate: v.expense_date as string,

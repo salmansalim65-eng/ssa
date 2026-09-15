@@ -18,6 +18,11 @@ import { DashboardLiveRefresh } from "@/components/dashboard/live-refresh";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
 import { formatAccountCode, formatDate, formatMoney, formatVoucherNo } from "@/lib/format";
+import {
+  EXPENSE_KHI_BANK_ACCOUNT,
+  EXPENSE_KHI_EXPENSE_GROUP,
+  resolveExpenseKhiAccounts,
+} from "@/lib/accounting/expense-khi";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { hasPermission } from "@/lib/auth/permissions";
 import { isRentOverdue } from "@/lib/rental/overdue";
@@ -75,51 +80,6 @@ function isExcludedFromBalances(r: {
 }) {
   if (r.account_type && NON_BALANCE_TYPES.has(r.account_type)) return true;
   return Boolean(r.is_cash || r.is_bank || r.is_tenant_account || r.is_fixed_asset_account);
-}
-
-// The two accounts the Expense KHI card is built on. Names, not ids: the card
-// has to survive a database restore, and an id pasted into the source would be
-// silently wrong afterwards. Renaming an account here is how the card is
-// pointed somewhere else.
-const FLOAT_BANK_ACCOUNT_NAME = "UZMA MEEZAAN BANK";
-const FLOAT_EXPENSE_GROUP_NAME = "KHI EXPENSE";
-
-/** Case- and spacing-insensitive, so "Khi  Expense" still matches. */
-function sameAccountName(name: string | null | undefined, wanted: string) {
-  return (name ?? "").trim().replace(/\s+/g, " ").toLowerCase() === wanted.toLowerCase();
-}
-
-/**
- * The float bank account, and every account under the KHI EXPENSE group.
- *
- * The group is a heading, not a posting account — the spend sits on its
- * children (and their children), so the whole subtree is walked. A missing
- * name yields nothing rather than a wrong total, and the card says so.
- */
-function resolveFloatAccounts(
-  rows: { id: string; parent_id: string | null; account_name: string | null }[],
-): { bankId: string | null; expenseIds: Set<string> } {
-  const bankId = rows.find((a) => sameAccountName(a.account_name, FLOAT_BANK_ACCOUNT_NAME))?.id ?? null;
-  const groupId = rows.find((a) => sameAccountName(a.account_name, FLOAT_EXPENSE_GROUP_NAME))?.id ?? null;
-
-  const expenseIds = new Set<string>();
-  if (!groupId) return { bankId, expenseIds };
-
-  const childrenOf = new Map<string, string[]>();
-  for (const a of rows) {
-    if (!a.parent_id) continue;
-    const kids = childrenOf.get(a.parent_id);
-    if (kids) kids.push(a.id);
-    else childrenOf.set(a.parent_id, [a.id]);
-  }
-  const stack = [groupId];
-  while (stack.length) {
-    const id = stack.pop()!;
-    if (expenseIds.has(id)) continue;
-    expenseIds.add(id);
-    for (const child of childrenOf.get(id) ?? []) stack.push(child);
-  }
-  return { bankId, expenseIds };
 }
 
 // Ledger accounts that are fixed assets, so the "Balances" cards can leave them
@@ -190,7 +150,7 @@ export default async function DashboardPage({
   // and is spent under the KHI EXPENSE group. Resolved by name so the card
   // follows those two wherever they sit in the chart, and so renaming either
   // one is the only thing needed to point the card somewhere else.
-  const { bankId: floatBankId, expenseIds: floatExpenseIds } = resolveFloatAccounts(coaCountries ?? []);
+  const { bankId: floatBankId, expenseIds: floatExpenseIds } = resolveExpenseKhiAccounts(coaCountries ?? []);
 
   const [
     { data: ledgerRows },
@@ -303,8 +263,8 @@ export default async function DashboardPage({
   // Named accounts can be renamed or deleted; when that happens the card names
   // the one it could not find rather than quietly reading zero.
   const floatMissing = [
-    !floatBankId ? FLOAT_BANK_ACCOUNT_NAME : null,
-    floatExpenseIds.size === 0 ? `${FLOAT_EXPENSE_GROUP_NAME} group` : null,
+    !floatBankId ? EXPENSE_KHI_BANK_ACCOUNT : null,
+    floatExpenseIds.size === 0 ? `${EXPENSE_KHI_EXPENSE_GROUP} group` : null,
   ].filter(Boolean);
 
   // The same year split by GROUP HEAD, each in the currency it was spent in. A
@@ -833,8 +793,8 @@ export default async function DashboardPage({
             year={new Date().getFullYear()}
             bankAccountId={floatBankId}
             expenseAccountIds={[...floatExpenseIds]}
-            bankAccountName={FLOAT_BANK_ACCOUNT_NAME}
-            expenseGroupName={FLOAT_EXPENSE_GROUP_NAME}
+            bankAccountName={EXPENSE_KHI_BANK_ACCOUNT}
+            expenseGroupName={EXPENSE_KHI_EXPENSE_GROUP}
           />
         </Suspense>
       )}

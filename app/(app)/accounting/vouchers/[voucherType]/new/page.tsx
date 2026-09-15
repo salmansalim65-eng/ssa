@@ -16,6 +16,7 @@ import { createClient } from "@/lib/supabase/server";
 import { loadOutstandingRentBills } from "@/lib/rental/outstanding-bills";
 import { toAccountOptions, type RawAccountRow } from "@/lib/vouchers/account-currency";
 import { mapVoucherCurrencies, type RawCompanyCurrency } from "@/lib/vouchers/currencies";
+import { resolveExpenseKhiAccounts, type ChartAccountRow } from "@/lib/accounting/expense-khi";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { isPhase5VoucherType, VOUCHER_TYPE_LABELS } from "@/lib/vouchers/meta";
 import { isJournalTabType, VoucherTypeTabs } from "@/components/vouchers/voucher-type-tabs";
@@ -103,6 +104,23 @@ export default async function NewVoucherPage({
           .order("name")
       : { data: [] as { id: string; name: string }[] };
   const tagOptions = (tagRows ?? []).map((t) => ({ id: t.id as string, name: t.name as string }));
+
+  // Which chart accounts the Expense Voucher is allowed to touch: the float
+  // bank on the header, the KHI EXPENSE group's children on the lines. Groups
+  // are not postable, so the group node itself is dropped — only accounts the
+  // picker already offers survive.
+  const { data: khiChart } =
+    voucherType === "expense_voucher"
+      ? await supabase
+          .schema("accounting")
+          .from("chart_of_accounts")
+          .select("id, parent_id, account_name")
+          .eq("company_id", companyId)
+      : { data: [] as { id: string; parent_id: string | null; account_name: string | null }[] };
+  const khi = resolveExpenseKhiAccounts((khiChart ?? []) as ChartAccountRow[]);
+  const khiExpenseAccountIds = accountOptions
+    .map((a) => a.id)
+    .filter((id) => khi.expenseIds.has(id));
 
   const today = new Date().toISOString().slice(0, 10);
   // Options are ordered base-currency-first so each voucher form defaults its
@@ -225,6 +243,8 @@ export default async function NewVoucherPage({
           accounts={accountOptions}
           currencies={currencyOptions}
           tags={tagOptions}
+          defaultCreditAccountId={khi.bankId}
+          expenseAccountIds={khiExpenseAccountIds}
         />
       )}
       {voucherType === "payment_voucher" && (

@@ -10,8 +10,6 @@ import {
   ensureCanEditVoucher,
   getCurrentCompanyId,
   postVoucher,
-  resubmitEditedVoucher,
-  routeNewVoucher,
   type EntryLineInput,
 } from "@/lib/vouchers/engine";
 import { expenseVoucherSchema, type ExpenseVoucherInput } from "./schemas";
@@ -61,7 +59,7 @@ function toLineRows(voucherId: string, input: ExpenseVoucherInput) {
   }));
 }
 
-export async function createExpenseVoucher(input: ExpenseVoucherInput, options?: { autoPostIfAdmin?: boolean }) {
+export async function createExpenseVoucher(input: ExpenseVoucherInput, options?: { autoPost?: boolean }) {
   const parsed = expenseVoucherSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
 
@@ -111,18 +109,33 @@ export async function createExpenseVoucher(input: ExpenseVoucherInput, options?:
 
   revalidatePath(LIST_PATH);
   revalidatePath("/dashboard");
-  // An admin's voucher posts on the spot; anyone else's goes straight to the
-  // approver — no "Submit for approval" click in between.
-  if (options?.autoPostIfAdmin !== false) {
-    await routeNewVoucher({
-      companyId,
-      voucherType: "expense_voucher",
-      voucherId,
-      journalEntryId: je.journalEntryId,
-      post: () => postExpenseVoucher(voucherId, je.journalEntryId),
-    });
+
+  // An expense voucher records money that has ALREADY left the box — it is not
+  // a request for permission to spend. So it posts on the spot rather than
+  // parking in a draft for someone to route by hand, and it skips the approval
+  // workflow the larger vouchers go through.
+  if (options?.autoPost !== false) {
+    const warning = await tryPost(voucherId, je.journalEntryId);
+    if (warning) return { success: true, id: voucherId, warning };
   }
   return { success: true, id: voucherId };
+}
+
+/**
+ * Post, and hand back WHY if it could not be — a missing post permission, an
+ * unbalanced entry. The voucher is saved either way, so this never throws: it
+ * returns a message the form shows, instead of leaving a silent draft nobody
+ * knows to chase.
+ */
+async function tryPost(voucherId: string, journalEntryId: string): Promise<string | null> {
+  try {
+    const result = await postExpenseVoucher(voucherId, journalEntryId);
+    if (result && "error" in result) return `Saved, but not posted: ${result.error}`;
+    return null;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return `Saved, but not posted: ${message}`;
+  }
 }
 
 export async function updateExpenseVoucher(id: string, input: ExpenseVoucherInput) {
@@ -248,20 +261,14 @@ export async function updateExpenseVoucher(id: string, input: ExpenseVoucherInpu
     .insert(toLineRows(id, parsed.data));
   if (insOwn) return { error: insOwn.message };
 
-  // An edited voucher goes back to the approver: the workflow step is chosen by
-  // amount, and a sent-back voucher is corrected precisely so it can return.
-  await resubmitEditedVoucher({
-    companyId,
-    voucherType: "expense_voucher",
-    voucherId: id,
-    journalEntryId: jeId,
-    previousStatus: je.status,
-  });
+  // Same rule as on create: the money is already spent, so the corrected
+  // voucher posts rather than going back round an approver.
+  const warning = await tryPost(id, jeId);
 
   revalidatePath(LIST_PATH);
   revalidatePath(`${LIST_PATH}/${id}`);
   revalidatePath("/dashboard");
-  return { success: true, id };
+  return warning ? { success: true, id, warning } : { success: true, id };
 }
 
 export async function postExpenseVoucher(id: string, journalEntryId: string) {

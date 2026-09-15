@@ -111,7 +111,7 @@ export const navSections: NavSection[] = [
     items: [
       { label: "Receipt Vouchers", href: "/accounting/vouchers/receipt_voucher", icon: ArrowDownToLineIcon, module: "receipt_voucher" },
       { label: "Payment Vouchers", href: "/accounting/vouchers/payment_voucher", icon: ArrowUpFromLineIcon, module: "payment_voucher" },
-      { label: "Expense Vouchers", href: "/accounting/vouchers/expense_voucher", icon: WalletIcon, module: "expense_voucher" },
+      { label: "Expense Vouchers KHI", href: "/accounting/vouchers/expense_voucher", icon: WalletIcon, module: "expense_voucher" },
       { label: "PDC Payments", href: "/accounting/vouchers/pdc_payment_voucher", icon: ClockIcon, module: "pdc_payment_voucher" },
       { label: "PDC Receipts", href: "/accounting/vouchers/pdc_receipt_voucher", icon: ClockIcon, module: "pdc_receipt_voucher" },
       { label: "Cheque Returns", href: "/accounting/vouchers/cheque_return_voucher", icon: RotateCcwIcon, module: "cheque_return_voucher" },

@@ -130,12 +130,25 @@ export async function createExpenseVoucher(input: ExpenseVoucherInput, options?:
 async function tryPost(voucherId: string, journalEntryId: string): Promise<string | null> {
   try {
     const result = await postExpenseVoucher(voucherId, journalEntryId);
-    if (result && "error" in result) return `Saved, but not posted: ${result.error}`;
+    if (result && "error" in result) return notPosted(result.error);
     return null;
   } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    return `Saved, but not posted: ${message}`;
+    return notPosted(e instanceof Error ? e.message : String(e));
   }
+}
+
+/**
+ * The one refusal worth translating. A voucher posts on creation now, so a role
+ * that may CREATE one but not POST it leaves the money recorded nowhere — and
+ * "Not permitted: expense_voucher.post" tells the person at the keyboard
+ * nothing they can act on. The database trigger enforces this independently of
+ * the app, so the tick is the only fix and the message says where it is.
+ */
+function notPosted(reason: string) {
+  if (/not permitted.*expense_voucher|expense_voucher\.post/i.test(reason)) {
+    return "Saved, but not posted: this role does not have the Post permission for Expense Voucher KHI. An administrator can tick it under Admin → Roles.";
+  }
+  return `Saved, but not posted: ${reason}`;
 }
 
 export async function updateExpenseVoucher(id: string, input: ExpenseVoucherInput) {

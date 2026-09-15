@@ -5,6 +5,7 @@ import { JournalVoucherForm } from "@/components/vouchers/forms/journal-voucher-
 import { JvMaintenanceVoucherForm } from "@/components/vouchers/forms/jv-maintenance-voucher-form";
 import { MultiCurrencyJournalForm } from "@/components/vouchers/forms/multi-currency-journal-form";
 import { OpeningBalanceVoucherForm } from "@/components/vouchers/forms/opening-balance-voucher-form";
+import { ExpenseVoucherForm } from "@/components/vouchers/forms/expense-voucher-form";
 import { PaymentVoucherForm } from "@/components/vouchers/forms/payment-voucher-form";
 import { PdcPaymentVoucherForm } from "@/components/vouchers/forms/pdc-payment-voucher-form";
 import { PdcReceiptVoucherForm } from "@/components/vouchers/forms/pdc-receipt-voucher-form";
@@ -38,6 +39,7 @@ const EDITABLE_TABLE = {
   jv_maintenance_voucher: "jv_maintenance_vouchers",
   multi_currency_journal: "multi_currency_journal_vouchers",
   cheque_return_voucher: "cheque_return_vouchers",
+  expense_voucher: "expense_vouchers",
 } as const;
 type EditableVoucherType = keyof typeof EDITABLE_TABLE;
 
@@ -260,6 +262,21 @@ export default async function EditVoucherPage({
 
   // The Receipt, Payment and PDC vouchers are header + line documents: load
   // their cost centres, conversion-rate-carrying currencies, and their own lines.
+  // The tags an expense line can be filed under. Its own query: the master is
+  // small, and a voucher that is not an expense simply ignores it.
+  const isExpense = voucherType === "expense_voucher";
+  const { data: tagRows } = isExpense
+    ? await supabase
+        .schema("core")
+        .from("tags")
+        .select("id, name")
+        .eq("company_id", companyId)
+        .eq("is_active", true)
+        .is("deleted_at", null)
+        .order("name")
+    : { data: [] as { id: string; name: string }[] };
+  const tagOptions = (tagRows ?? []).map((t) => ({ id: t.id as string, name: t.name as string }));
+
   const HEADER_DOC_LINES: Record<string, string> = {
     receipt_voucher: "receipt_voucher_lines",
     payment_voucher: "payment_voucher_lines",
@@ -283,7 +300,7 @@ export default async function EditVoucherPage({
     allocations?: DocAllocation[];
   }[] = [];
   let obLines: { accountId: string; debit: number; credit: number; remarks: string }[] = [];
-  if (isHeaderDoc || isOpeningBalance || isMultiLine || isJvMaintenance || isMultiCurrencyJournal) {
+  if (isHeaderDoc || isOpeningBalance || isMultiLine || isJvMaintenance || isMultiCurrencyJournal || isExpense) {
     const today = new Date().toISOString().slice(0, 10);
     const [{ data: ccs }, rates] = await Promise.all([
       supabase
@@ -310,6 +327,29 @@ export default async function EditVoucherPage({
     docCostCenters = ccs ?? [];
     docCurrencies = rates;
   }
+  let expenseLines: {
+    accountId: string;
+    costCenterId: string;
+    tagId: string;
+    amount: number;
+    remarks: string;
+  }[] = [];
+  if (isExpense) {
+    const { data: elines } = await supabase
+      .schema("accounting")
+      .from("expense_voucher_lines")
+      .select("account_id, cost_center_id, tag_id, amount, remarks")
+      .eq("voucher_id", id)
+      .order("line_no");
+    expenseLines = (elines ?? []).map((l) => ({
+      accountId: l.account_id as string,
+      costCenterId: (l.cost_center_id as string | null) ?? "",
+      tagId: (l.tag_id as string | null) ?? "",
+      amount: Number(l.amount),
+      remarks: (l.remarks as string | null) ?? "",
+    }));
+  }
+
   if (isHeaderDoc) {
     const { data: dlines } = await supabase
       .schema("accounting")
@@ -508,6 +548,26 @@ export default async function EditVoucherPage({
             exchangeRate: v.exchange_rate as number,
             narration: (v.narration as string | null) ?? "",
             lines: docLines.length ? docLines : [{ accountId: "", amount: 0, rentMonth: "", remarks: "" }],
+          }}
+        />
+      )}
+      {voucherType === "expense_voucher" && (
+        <ExpenseVoucherForm
+          accounts={accountOptions}
+          currencies={docCurrencies}
+          costCenters={docCostCenters}
+          tags={tagOptions}
+          voucherId={id}
+          initialValues={{
+            expenseDate: v.expense_date as string,
+            creditAccountId: v.credit_account_id as string,
+            paidTo: (v.paid_to as string | null) ?? "",
+            currencyId: v.currency_id as string,
+            exchangeRate: v.exchange_rate as number,
+            narration: (v.narration as string | null) ?? "",
+            lines: expenseLines.length
+              ? expenseLines
+              : [{ accountId: "", costCenterId: "", tagId: "", amount: 0, remarks: "" }],
           }}
         />
       )}

@@ -44,6 +44,7 @@ import { postOpeningBalanceVoucher } from "@/features/accounting/vouchers/openin
 import { postPaymentVoucher } from "@/features/accounting/vouchers/payment/actions";
 import { postPdcPaymentVoucher, setPdcPaymentStatus } from "@/features/accounting/vouchers/pdc-payment/actions";
 import { postPdcReceiptVoucher, setPdcReceiptStatus } from "@/features/accounting/vouchers/pdc-receipt/actions";
+import { postExpenseVoucher } from "@/features/accounting/vouchers/expense/actions";
 import { postReceiptVoucher } from "@/features/accounting/vouchers/receipt/actions";
 import { copyAccountingVoucher, deleteAccountingVoucher } from "@/features/accounting/vouchers/shared-actions";
 import { getSignedUrl } from "@/features/attachments/actions";
@@ -60,6 +61,7 @@ const EDITABLE_VOUCHER_TYPES = [
   "jv_maintenance_voucher",
   "multi_currency_journal",
   "cheque_return_voucher",
+  "expense_voucher",
 ] as const;
 
 const POST_ACTIONS = {
@@ -72,6 +74,7 @@ const POST_ACTIONS = {
   jv_maintenance_voucher: postJvMaintenanceVoucher,
   opening_balance_voucher: postOpeningBalanceVoucher,
   multi_currency_journal: postMultiCurrencyJournal,
+  expense_voucher: postExpenseVoucher,
 } as const;
 
 export default async function VoucherDetailPage({

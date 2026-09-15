@@ -35,6 +35,7 @@ export const VOUCHER_TABLES: Record<Phase5VoucherType, string> = {
   jv_maintenance_voucher: "jv_maintenance_vouchers",
   opening_balance_voucher: "opening_balance_vouchers",
   multi_currency_journal: "multi_currency_journal_vouchers",
+  expense_voucher: "expense_vouchers",
 };
 
 export async function getRecordNeighbours(

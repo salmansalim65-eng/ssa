@@ -6,6 +6,7 @@ import { JournalVoucherForm } from "@/components/vouchers/forms/journal-voucher-
 import { JvMaintenanceVoucherForm } from "@/components/vouchers/forms/jv-maintenance-voucher-form";
 import { MultiCurrencyJournalForm } from "@/components/vouchers/forms/multi-currency-journal-form";
 import { OpeningBalanceVoucherForm } from "@/components/vouchers/forms/opening-balance-voucher-form";
+import { ExpenseVoucherForm } from "@/components/vouchers/forms/expense-voucher-form";
 import { PaymentVoucherForm } from "@/components/vouchers/forms/payment-voucher-form";
 import { PdcPaymentVoucherForm } from "@/components/vouchers/forms/pdc-payment-voucher-form";
 import { PdcReceiptVoucherForm } from "@/components/vouchers/forms/pdc-receipt-voucher-form";
@@ -88,6 +89,21 @@ export default async function NewVoucherPage({
     name: c.name as string,
     chargeAmount: c.asset_id ? chargeByAsset.get(c.asset_id as string) ?? 0 : 0,
   }));
+  // The tags an expense line can be filed under. Its own query: the master is
+  // small, and a voucher that is not an expense simply ignores it.
+  const { data: tagRows } =
+    voucherType === "expense_voucher"
+      ? await supabase
+          .schema("core")
+          .from("tags")
+          .select("id, name")
+          .eq("company_id", companyId)
+          .eq("is_active", true)
+          .is("deleted_at", null)
+          .order("name")
+      : { data: [] as { id: string; name: string }[] };
+  const tagOptions = (tagRows ?? []).map((t) => ({ id: t.id as string, name: t.name as string }));
+
   const today = new Date().toISOString().slice(0, 10);
   // Options are ordered base-currency-first so each voucher form defaults its
   // currency to the system base currency (dynamic — see mapVoucherCurrencies).
@@ -202,6 +218,14 @@ export default async function NewVoucherPage({
           currencies={currencyOptions}
           costCenters={costCenterOptions}
           outstandingBills={outstandingBills}
+        />
+      )}
+      {voucherType === "expense_voucher" && (
+        <ExpenseVoucherForm
+          accounts={accountOptions}
+          currencies={currencyOptions}
+          costCenters={costCenterOptions}
+          tags={tagOptions}
         />
       )}
       {voucherType === "payment_voucher" && (

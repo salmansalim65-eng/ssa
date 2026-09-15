@@ -28,6 +28,7 @@ import {
   ReceiptIcon,
   BadgeDollarSignIcon,
   CalendarRangeIcon,
+  TagsIcon,
 } from "lucide-react";
 
 export interface NavItem {
@@ -99,6 +100,7 @@ export const navSections: NavSection[] = [
       { label: "Chart of Accounts", href: "/accounting/chart-of-accounts", icon: ListTreeIcon, module: "chart_of_accounts" },
       { label: "Cost Centers", href: "/accounting/cost-centers", icon: LandmarkIcon, module: "cost_centers" },
       { label: "Recurring Expenses", href: "/accounting/recurring-expenses", icon: RotateCcwIcon, module: "recurring_expenses" },
+      { label: "Tags", href: "/accounting/tags", icon: TagsIcon, module: "tags" },
       { label: "Document Sequences", href: "/admin/document-sequences", icon: HashIcon, module: "document_sequences" },
       { label: "Approval Workflows", href: "/admin/approval-workflows", icon: GitBranchIcon, module: "approval_workflows" },
       { label: "Posting Templates", href: "/admin/posting-templates", icon: SlidersHorizontalIcon, module: "posting_templates" },
@@ -109,6 +111,7 @@ export const navSections: NavSection[] = [
     items: [
       { label: "Receipt Vouchers", href: "/accounting/vouchers/receipt_voucher", icon: ArrowDownToLineIcon, module: "receipt_voucher" },
       { label: "Payment Vouchers", href: "/accounting/vouchers/payment_voucher", icon: ArrowUpFromLineIcon, module: "payment_voucher" },
+      { label: "Expense Vouchers", href: "/accounting/vouchers/expense_voucher", icon: WalletIcon, module: "expense_voucher" },
       { label: "PDC Payments", href: "/accounting/vouchers/pdc_payment_voucher", icon: ClockIcon, module: "pdc_payment_voucher" },
       { label: "PDC Receipts", href: "/accounting/vouchers/pdc_receipt_voucher", icon: ClockIcon, module: "pdc_receipt_voucher" },
       { label: "Cheque Returns", href: "/accounting/vouchers/cheque_return_voucher", icon: RotateCcwIcon, module: "cheque_return_voucher" },

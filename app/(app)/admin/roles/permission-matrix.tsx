@@ -37,6 +37,7 @@ export interface PermissionRow {
 // key. Kept minimal — the key itself stays stable for grants/RLS.
 const MODULE_LABEL_OVERRIDES: Record<string, string> = {
   jv_maintenance_voucher: "JV Service Charges",
+  expense_voucher: "Expense Voucher KHI",
 };
 
 function moduleLabel(moduleKey: string) {

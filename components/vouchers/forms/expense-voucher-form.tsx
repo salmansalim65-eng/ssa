@@ -172,7 +172,11 @@ export function ExpenseVoucherForm({
         setFormError(result.error);
         return;
       }
-      toast.success(isEdit ? "Expense voucher updated" : "Expense voucher created");
+      // Saved but unposted is not a failure — the voucher exists and the reason
+      // it did not post is the one thing worth reading, so it is said out loud
+      // rather than left to be noticed as a "Draft" badge later.
+      if (result?.warning) toast.warning(result.warning);
+      else toast.success(isEdit ? "Expense voucher updated" : "Expense voucher created");
       router.push(`/accounting/vouchers/expense_voucher/${isEdit ? voucherId : result.id}`);
     });
   }

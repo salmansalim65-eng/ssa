@@ -81,7 +81,7 @@ function isExcludedFromBalances(r: {
 // has to survive a database restore, and an id pasted into the source would be
 // silently wrong afterwards. Renaming an account here is how the card is
 // pointed somewhere else.
-const FLOAT_BANK_ACCOUNT_NAME = "UZMA MEEZAN BANK";
+const FLOAT_BANK_ACCOUNT_NAME = "UZMA MEEZAAN BANK";
 const FLOAT_EXPENSE_GROUP_NAME = "KHI EXPENSE";
 
 /** Case- and spacing-insensitive, so "Khi  Expense" still matches. */
@@ -300,9 +300,12 @@ export default async function DashboardPage({
   const floatCurrency =
     ((floatBankLedger ?? [])[0]?.currency_code as string | null) ??
     ((floatSpentRows[0]?.currency_code as string | null) || "");
-  // Named accounts can be renamed or deleted; when that happens the card says
-  // so rather than quietly reading zero.
-  const floatAccountsMissing = !floatBankId || floatExpenseIds.size === 0;
+  // Named accounts can be renamed or deleted; when that happens the card names
+  // the one it could not find rather than quietly reading zero.
+  const floatMissing = [
+    !floatBankId ? FLOAT_BANK_ACCOUNT_NAME : null,
+    floatExpenseIds.size === 0 ? `${FLOAT_EXPENSE_GROUP_NAME} group` : null,
+  ].filter(Boolean);
 
   // The same year split by GROUP HEAD, each in the currency it was spent in. A
   // base-currency total alone hides that (say) SR 10,014 is really PKR 286,400
@@ -796,9 +799,9 @@ export default async function DashboardPage({
             </div>
           }
         >
-          {floatAccountsMissing ? (
+          {floatMissing.length > 0 ? (
             <div className="py-1 text-sm text-muted-foreground">
-              {FLOAT_BANK_ACCOUNT_NAME} or the {FLOAT_EXPENSE_GROUP_NAME} group was not found.
+              Not found in the chart of accounts: {floatMissing.join(", ")}.
             </div>
           ) : (
             <div className="flex justify-between gap-2">

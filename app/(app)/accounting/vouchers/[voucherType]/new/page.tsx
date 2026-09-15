@@ -224,7 +224,6 @@ export default async function NewVoucherPage({
         <ExpenseVoucherForm
           accounts={accountOptions}
           currencies={currencyOptions}
-          costCenters={costCenterOptions}
           tags={tagOptions}
         />
       )}

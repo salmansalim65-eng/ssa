@@ -42,11 +42,6 @@ import {
   type ExpenseVoucherInput,
 } from "@/features/accounting/vouchers/expense/schemas";
 
-export interface CostCenterOption {
-  id: string;
-  name: string;
-}
-
 export interface TagOption {
   id: string;
   name: string;
@@ -70,14 +65,12 @@ function emptyLine() {
 export function ExpenseVoucherForm({
   accounts,
   currencies,
-  costCenters,
   tags,
   voucherId,
   initialValues,
 }: {
   accounts: AccountOption[];
   currencies: CurrencyOption[];
-  costCenters: CostCenterOption[];
   tags: TagOption[];
   voucherId?: string;
   initialValues?: ExpenseVoucherFormValues;
@@ -107,6 +100,10 @@ export function ExpenseVoucherForm({
   const currencyId = useWatch({ control: form.control, name: "currencyId" });
   const total = (watchedLines ?? []).reduce((sum, l) => sum + (Number(l?.amount) || 0), 0);
   const currencyCode = currencies.find((c) => c.id === currencyId)?.code ?? "";
+  // The company's base currency comes first, so a voucher in it is the ordinary
+  // case and needs no currency row at all — the cash/bank account decides. Only
+  // a foreign-currency account reveals the currency and its conversion rate.
+  const isBaseCurrency = !currencyId || currencyId === currencies[0]?.id;
   const headerAccountId = useWatch({ control: form.control, name: "creditAccountId" });
 
   // An account carries its own currency, so the first one picked sets the
@@ -122,9 +119,10 @@ export function ExpenseVoucherForm({
     form.setValue("exchangeRate", rateById.get(cur) ?? 1, { shouldValidate: true });
   }
   /**
-   * An expense account can carry a default cost centre; picking it fills the
-   * line's, unless one is already chosen. The cash/bank side never drives it —
-   * the same bank serves every cost centre.
+   * The grid has no cost-centre column: an expense account carries its own
+   * default, and picking the account fills the line's silently, so cost-centre
+   * reports still work without anyone choosing one. The cash/bank side never
+   * drives it — the same bank serves every cost centre.
    */
   function applyLineCostCentre(index: number, accountId: string) {
     const cc = costCentreOf(accountId);
@@ -209,56 +207,47 @@ export function ExpenseVoucherForm({
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="currencyId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Currency</FormLabel>
-                  <CurrencySelect
-                    currencies={currencies}
-                    value={field.value}
-                    onValueChange={(v) => {
-                      field.onChange(v);
-                      form.setValue("exchangeRate", rateById.get(v) ?? 1, { shouldValidate: true });
-                    }}
-                  />
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="exchangeRate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Currency Conv.</FormLabel>
-                  <FormControl>
-                    <Input type="number" step="0.000001" min="0" {...field} value={field.value as number} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="narration"
-              render={({ field }) => (
-                <FormItem className="sm:col-span-2">
-                  <FormLabel>Narration</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Optional" {...field} value={(field.value as string) ?? ""} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {!isBaseCurrency && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="currencyId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Currency</FormLabel>
+                      <CurrencySelect
+                        currencies={currencies}
+                        value={field.value}
+                        onValueChange={(v) => {
+                          field.onChange(v);
+                          form.setValue("exchangeRate", rateById.get(v) ?? 1, { shouldValidate: true });
+                        }}
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="exchangeRate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Currency Conv.</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.000001" min="0" {...field} value={field.value as number} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
           </div>
         </FormSection>
 
         <FormSection
           title="Expenses"
-          description="What was spent, on which cost centre, under which tag."
+          description="What was spent, under which tag."
           icon={ListPlusIcon}
           contentClassName="p-0"
           actions={
@@ -268,12 +257,11 @@ export function ExpenseVoucherForm({
           }
         >
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1000px] text-sm">
+            <table className="w-full min-w-[820px] text-sm">
               <thead>
                 <tr className="border-b bg-muted/50 text-left [&_th]:px-3 [&_th]:py-2 [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground">
                   <th className="w-10">Sno</th>
                   <th className="min-w-[220px]">Expense account (Dr)</th>
-                  <th className="min-w-[150px]">Cost Center</th>
                   <th className="min-w-[140px]">Tag</th>
                   <th className="w-36 text-right">Amount</th>
                   <th className="min-w-[150px]">Remarks</th>
@@ -299,35 +287,6 @@ export function ExpenseVoucherForm({
                                 applyLineCostCentre(index, v);
                               }}
                             />
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </td>
-                    <td>
-                      <FormField
-                        control={form.control}
-                        name={`lines.${index}.costCenterId`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <Select
-                              value={field.value ? field.value : "none"}
-                              onValueChange={(v) => field.onChange(v === "none" ? "" : v)}
-                            >
-                              <FormControl>
-                                <SelectTrigger className="w-full">
-                                  <SelectValue placeholder="None" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="none">— None —</SelectItem>
-                                {costCenters.map((c) => (
-                                  <SelectItem key={c.id} value={c.id}>
-                                    {c.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
                             <FormMessage />
                           </FormItem>
                         )}

@@ -162,6 +162,7 @@ export default async function DashboardPage({
     { data: expenseLedger },
     { data: baseCurrencyRow },
     { data: floatBankLedger },
+    { data: floatExpenseLedger },
   ] = await Promise.all([
     supabase
       .schema("reporting")
@@ -221,15 +222,24 @@ export default async function DashboardPage({
       .eq("company_id", companyId)
       .eq("is_base_currency", true)
       .maybeSingle(),
+    // Not year-scoped: a float carries forward, so the balance left to spend is
+    // every rupee ever put in less every rupee ever spent. The month's own
+    // figures are cut from the same rows.
     floatBankId
       ? supabase
           .schema("reporting")
           .from("v_ledger_entries")
-          .select("doc_debit_amount, currency_code")
+          .select("entry_date, doc_debit_amount, currency_code")
           .eq("company_id", companyId)
           .eq("account_id", floatBankId)
-          .gte("entry_date", `${new Date().getFullYear()}-01-01`)
-          .lte("entry_date", `${new Date().getFullYear()}-12-31`)
+      : Promise.resolve({ data: [] }),
+    floatExpenseIds.size
+      ? supabase
+          .schema("reporting")
+          .from("v_ledger_entries")
+          .select("entry_date, doc_debit_amount, doc_credit_amount, currency_code")
+          .eq("company_id", companyId)
+          .in("account_id", [...floatExpenseIds])
       : Promise.resolve({ data: [] }),
   ]);
 
@@ -240,7 +250,7 @@ export default async function DashboardPage({
   );
 
   // The Expense KHI float, read off the two accounts it actually lives in:
-  // money INTO UZMA MEEZAN BANK is what was received to spend, and the net of
+  // money INTO UZMA MEEZAAN BANK is what was received to spend, and the net of
   // the KHI EXPENSE group is what has been spent out of it. Every voucher type
   // counts on both sides — the money is gone whether an Expense Voucher or a
   // Payment Voucher recorded it.
@@ -248,18 +258,27 @@ export default async function DashboardPage({
   // Document amounts throughout. A float is a cash box, not a valuation:
   // rupees taken in to spend in Karachi stay rupees, and converting them to the
   // base currency made the card read "SR 396" for what is really Rs 396.
-  const floatReceived = (floatBankLedger ?? []).reduce((sum, r) => sum + Number(r.doc_debit_amount), 0);
-  const floatSpentRows = (expenseLedger ?? []).filter((r) => floatExpenseIds.has(r.account_id as string));
-  const floatSpent = floatSpentRows.reduce(
-    (sum, r) => sum + Number(r.doc_debit_amount) - Number(r.doc_credit_amount),
-    0,
-  );
-  const floatBalance = floatReceived - floatSpent;
+  //
+  // The card reads THIS MONTH — what came in and what went out since the 1st —
+  // while the balance stays cumulative, because money received in August is
+  // still in the box in September.
+  const thisMonth = new Date().toISOString().slice(0, 7);
+  const inThisMonth = (d: unknown) => String(d ?? "").slice(0, 7) === thisMonth;
+  const bankIn = (r: { doc_debit_amount: unknown }) => Number(r.doc_debit_amount);
+  const spendOf = (r: { doc_debit_amount: unknown; doc_credit_amount: unknown }) =>
+    Number(r.doc_debit_amount) - Number(r.doc_credit_amount);
+
+  const bankRows = floatBankLedger ?? [];
+  const spendRows = floatExpenseLedger ?? [];
+  const floatReceived = bankRows.filter((r) => inThisMonth(r.entry_date)).reduce((s, r) => s + bankIn(r), 0);
+  const floatSpent = spendRows.filter((r) => inThisMonth(r.entry_date)).reduce((s, r) => s + spendOf(r), 0);
+  const floatBalance =
+    bankRows.reduce((s, r) => s + bankIn(r), 0) - spendRows.reduce((s, r) => s + spendOf(r), 0);
   // The currency the box is kept in, taken from the entries themselves rather
   // than assumed — and never the base currency, which is a different question.
   const floatCurrency =
-    ((floatBankLedger ?? [])[0]?.currency_code as string | null) ??
-    ((floatSpentRows[0]?.currency_code as string | null) || "");
+    ((bankRows[0]?.currency_code as string | null) ?? (spendRows[0]?.currency_code as string | null)) || "";
+  const monthLabel = new Date().toLocaleDateString(undefined, { month: "short", year: "numeric" });
   // Named accounts can be renamed or deleted; when that happens the card names
   // the one it could not find rather than quietly reading zero.
   const floatMissing = [
@@ -742,12 +761,12 @@ export default async function DashboardPage({
             spent out of it, and what is therefore left. */}
         {canExpenseVouchers && (
         <SummaryCard
-          title={`Expense KHI (${new Date().getFullYear()})`}
+          title={`Expense KHI (${monthLabel})`}
           href={cardHref("expense-khi")}
           active={isExpense}
           footer={
             <div className="flex items-baseline justify-between gap-3">
-              <span className="text-xs font-medium text-muted-foreground">Balance left to spend</span>
+              <span className="text-xs font-medium text-muted-foreground">Balance in hand</span>
               <span
                 className={cn(
                   "shrink-0 text-sm font-bold tabular-nums",
@@ -790,7 +809,7 @@ export default async function DashboardPage({
         <Suspense fallback={<DetailSkeleton />}>
           <ExpenseReport
             companyId={companyId}
-            year={new Date().getFullYear()}
+            month={thisMonth}
             bankAccountId={floatBankId}
             expenseAccountIds={[...floatExpenseIds]}
             bankAccountName={EXPENSE_KHI_BANK_ACCOUNT}

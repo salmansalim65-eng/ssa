@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
 import { formatAccountCode, formatDate, formatMoney, formatVoucherNo } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { PostExpenseButton } from "./post-expense-button";
 
 type Line = {
@@ -440,7 +441,14 @@ export async function ExpenseReport({
                           <td>{monthShort(h.month)}</td>
                           <td className="text-right tabular-nums">{formatMoney(h.received)}</td>
                           <td className="text-right tabular-nums">{formatMoney(h.spent)}</td>
-                          <td className="text-right font-medium tabular-nums">{formatMoney(h.balance)}</td>
+                          <td
+                            className={cn(
+                              "text-right font-medium tabular-nums",
+                              h.balance < 0 && "text-destructive",
+                            )}
+                          >
+                            {formatMoney(h.balance)}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -455,7 +463,14 @@ export async function ExpenseReport({
   );
 }
 
-/** One headline figure with its label — the three the card summarises. */
+/**
+ * One headline figure with its label — the three the card summarises.
+ *
+ * A balance below zero reads red: more has been spent than was ever put in,
+ * which is either money owed back or a receipt nobody has recorded yet. The
+ * minus sign carries the same meaning, so the colour reinforces it rather than
+ * being the only thing saying it.
+ */
 function Figure({
   label,
   value,
@@ -467,11 +482,22 @@ function Figure({
   currency: string;
   strong?: boolean;
 }) {
+  const negative = value < 0;
   return (
     <div className="rounded-md border bg-muted/30 px-4 py-3">
       <div className="text-xs font-medium text-muted-foreground">{label}</div>
-      <div className={strong ? "text-xl font-bold tabular-nums" : "text-xl font-semibold tabular-nums"}>
-        {currency && <span className="mr-1 text-sm font-medium text-muted-foreground">{currency}</span>}
+      <div
+        className={cn(
+          "text-xl tabular-nums",
+          strong ? "font-bold" : "font-semibold",
+          negative && "text-destructive",
+        )}
+      >
+        {currency && (
+          <span className={cn("mr-1 text-sm font-medium", negative ? "text-destructive" : "text-muted-foreground")}>
+            {currency}
+          </span>
+        )}
         {formatMoney(value)}
       </div>
     </div>

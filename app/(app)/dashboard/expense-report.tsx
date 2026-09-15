@@ -5,12 +5,14 @@ import { createClient } from "@/lib/supabase/server";
 import { formatAccountCode, formatDate, formatMoney, formatVoucherNo } from "@/lib/format";
 
 type Line = {
+  key: string;
   amount: number;
   accountCode: string;
   accountName: string;
   tagName: string | null;
   remarks: string | null;
-  voucherId: string;
+  voucherType: string | null;
+  voucherId: string | null;
   voucherNo: string | null;
   date: string;
   currency: string;
@@ -19,132 +21,140 @@ type Line = {
 type Group = { key: string; label: string; sub?: string; total: number; count: number };
 
 /**
- * Where the Expense KHI money went: the same spend read two ways.
+ * Where the Expense KHI money came from and where it went.
  *
- * Account-wise answers "which head", tag-wise answers "which activity" — a
- * plumber's bill is an account (Repairs) and a tag (Maintenance) at once, and
- * the two questions are asked by different people. Both totals come off the
- * SAME lines, so they always add up to the same figure.
+ * Both halves read the same two accounts the card is built on — money INTO the
+ * float bank account, and the net of the KHI EXPENSE group — so the report can
+ * never disagree with the card above it. The spend is taken off the LEDGER
+ * rather than off expense vouchers alone, because money spent through a payment
+ * voucher is just as gone.
  *
- * Only POSTED vouchers count, because that is what the card's Spent figure
- * reads off the ledger. A draft is not money out yet.
+ * The spend is then read two ways. Account-wise answers "which head",
+ * tag-wise answers "which activity" — a plumber's bill is Repairs and
+ * Maintenance at once, and the two questions get asked by different people.
+ * Tags live on expense-voucher lines only, so anything else lands under
+ * Untagged and the two breakdowns still total the same.
  */
-export async function ExpenseReport({ companyId, year }: { companyId: string; year: number }) {
+export async function ExpenseReport({
+  companyId,
+  year,
+  bankAccountId,
+  expenseAccountIds,
+  bankAccountName,
+  expenseGroupName,
+}: {
+  companyId: string;
+  year: number;
+  bankAccountId: string | null;
+  expenseAccountIds: string[];
+  bankAccountName: string;
+  expenseGroupName: string;
+}) {
   const supabase = await createClient();
+  const from = `${year}-01-01`;
+  const to = `${year}-12-31`;
 
-  const { data: vouchers } = await supabase
-    .schema("accounting")
-    .from("expense_vouchers")
-    .select(
-      "id, voucher_no, expense_date, journal_entry_id, currency_id, lines:expense_voucher_lines(amount, remarks, account_id, tag_id)",
-    )
-    .eq("company_id", companyId)
-    .gte("expense_date", `${year}-01-01`)
-    .lte("expense_date", `${year}-12-31`)
-    .order("expense_date", { ascending: false });
-
-  const rows = vouchers ?? [];
-  const journalIds = rows.map((v) => v.journal_entry_id as string).filter(Boolean);
-  const { data: entries } = journalIds.length
-    ? await supabase
-        .schema("accounting")
-        .from("journal_entries")
-        .select("id, status")
-        .in("id", journalIds)
-    : { data: [] };
-  const postedJournals = new Set(
-    (entries ?? []).filter((e) => e.status === "posted").map((e) => e.id as string),
-  );
-  const posted = rows.filter((v) => postedJournals.has(v.journal_entry_id as string));
-
-  // Only the names actually referenced are looked up — a company can have a
-  // long chart of accounts and a long tag list, and this report needs neither
-  // in full.
-  const accountIds = [
-    ...new Set(posted.flatMap((v) => (v.lines ?? []).map((l) => l.account_id as string))),
-  ];
-  const tagIds = [
-    ...new Set(
-      posted.flatMap((v) => (v.lines ?? []).map((l) => l.tag_id as string | null).filter(Boolean)),
-    ),
-  ] as string[];
-  const currencyIds = [...new Set(posted.map((v) => v.currency_id as string))];
-
-  const [{ data: accounts }, { data: tags }, { data: currencies }] = await Promise.all([
-    accountIds.length
+  const [{ data: receiptRows }, { data: spendRows }] = await Promise.all([
+    bankAccountId
       ? supabase
-          .schema("accounting")
-          .from("chart_of_accounts")
-          .select("id, account_code, account_name")
-          .in("id", accountIds)
+          .schema("reporting")
+          .from("v_ledger_entries")
+          .select(
+            "journal_entry_id, line_no, entry_date, voucher_no, voucher_type, voucher_id, doc_debit_amount, currency_code",
+          )
+          .eq("company_id", companyId)
+          .eq("account_id", bankAccountId)
+          .gte("entry_date", from)
+          .lte("entry_date", to)
+          .order("entry_date", { ascending: false })
       : Promise.resolve({ data: [] }),
-    tagIds.length
-      ? supabase.schema("core").from("tags").select("id, name").in("id", tagIds)
-      : Promise.resolve({ data: [] }),
-    currencyIds.length
-      ? supabase.schema("core").from("currencies").select("id, code, symbol").in("id", currencyIds)
+    expenseAccountIds.length
+      ? supabase
+          .schema("reporting")
+          .from("v_ledger_entries")
+          .select(
+            "journal_entry_id, line_no, entry_date, voucher_no, voucher_type, voucher_id, account_id, account_code, account_name, doc_debit_amount, doc_credit_amount, currency_code",
+          )
+          .eq("company_id", companyId)
+          .in("account_id", expenseAccountIds)
+          .gte("entry_date", from)
+          .lte("entry_date", to)
+          .order("entry_date", { ascending: false })
       : Promise.resolve({ data: [] }),
   ]);
-  const accountById = new Map(
-    (accounts ?? []).map((a) => [
-      a.id as string,
-      { code: (a.account_code as string) ?? "", name: (a.account_name as string) ?? "" },
-    ]),
-  );
-  const tagById = new Map((tags ?? []).map((t) => [t.id as string, t.name as string]));
-  // The symbol if the currency has one, else its code — the card beside this
-  // report reads "Rs", so the report must not read "PKR" for the same money.
-  const currencyById = new Map(
-    (currencies ?? []).map((c) => [c.id as string, ((c.symbol as string | null) || (c.code as string)) ?? ""]),
-  );
 
-  const lines: Line[] = posted.flatMap((v) =>
-    (v.lines ?? []).map((l) => {
-      const account = accountById.get(l.account_id as string);
-      return {
-        amount: Number(l.amount) || 0,
-        accountCode: account?.code ?? "",
-        accountName: account?.name ?? "—",
-        tagName: l.tag_id ? (tagById.get(l.tag_id as string) ?? null) : null,
-        remarks: (l.remarks as string | null) ?? null,
-        voucherId: v.id as string,
-        voucherNo: (v.voucher_no as string | null) ?? null,
-        date: v.expense_date as string,
-        currency: currencyById.get(v.currency_id as string) ?? "",
-      };
-    }),
-  );
-
-  const total = lines.reduce((s, l) => s + l.amount, 0);
-
-  // The card's "Received" figure, itemised. It counts every posted receipt
-  // voucher that CREDITS an expense account — money handed over to be spent —
-  // and a bare total on a card is impossible to check, so the vouchers behind
-  // it are listed here. If a receipt in this list is not float money (an
-  // expense refund, say), it is the receipt's posting that needs looking at,
-  // not the card.
-  const { data: receiptRows } = await supabase
-    .schema("reporting")
-    .from("v_ledger_entries")
-    .select("journal_entry_id, line_no, entry_date, voucher_no, account_name, doc_credit_amount, currency_code")
-    .eq("company_id", companyId)
-    .eq("account_type", "expense")
-    .eq("voucher_type", "receipt_voucher")
-    .gte("entry_date", `${year}-01-01`)
-    .lte("entry_date", `${year}-12-31`)
-    .order("entry_date", { ascending: false });
   const receipts = (receiptRows ?? [])
     .map((r) => ({
       key: `${r.journal_entry_id}-${r.line_no}`,
       date: r.entry_date as string,
       voucherNo: (r.voucher_no as string | null) ?? null,
-      account: (r.account_name as string | null) ?? "—",
-      amount: Number(r.doc_credit_amount) || 0,
+      voucherType: (r.voucher_type as string | null) ?? null,
+      voucherId: (r.voucher_id as string | null) ?? null,
+      amount: Number(r.doc_debit_amount) || 0,
       currency: (r.currency_code as string | null) ?? "",
     }))
     .filter((r) => r.amount > 0);
   const receivedTotal = receipts.reduce((s, r) => s + r.amount, 0);
 
+  // Tags and remarks are written on expense-voucher lines, not on the ledger.
+  // A ledger line is matched back to one by its journal entry, account and
+  // amount — and only when that combination is unique inside the entry, so a
+  // voucher with two identical lines never has a tag guessed onto the wrong one.
+  const journalIds = [...new Set((spendRows ?? []).map((r) => r.journal_entry_id as string))];
+  const { data: voucherRows } = journalIds.length
+    ? await supabase
+        .schema("accounting")
+        .from("expense_vouchers")
+        .select("journal_entry_id, lines:expense_voucher_lines(account_id, amount, remarks, tag_id)")
+        .eq("company_id", companyId)
+        .in("journal_entry_id", journalIds)
+    : { data: [] };
+
+  const detailByKey = new Map<string, { tagId: string | null; remarks: string | null } | null>();
+  for (const v of voucherRows ?? []) {
+    for (const l of v.lines ?? []) {
+      const key = `${v.journal_entry_id}|${l.account_id}|${Number(l.amount)}`;
+      // A second line with the same key makes the match ambiguous: drop both.
+      if (detailByKey.has(key)) detailByKey.set(key, null);
+      else
+        detailByKey.set(key, {
+          tagId: (l.tag_id as string | null) ?? null,
+          remarks: (l.remarks as string | null) ?? null,
+        });
+    }
+  }
+
+  const tagIds = [
+    ...new Set(
+      [...detailByKey.values()].map((d) => d?.tagId).filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const { data: tags } = tagIds.length
+    ? await supabase.schema("core").from("tags").select("id, name").in("id", tagIds)
+    : { data: [] };
+  const tagById = new Map((tags ?? []).map((t) => [t.id as string, t.name as string]));
+
+  const lines: Line[] = (spendRows ?? [])
+    .map((r) => {
+      const amount = Number(r.doc_debit_amount) - Number(r.doc_credit_amount);
+      const detail = detailByKey.get(`${r.journal_entry_id}|${r.account_id}|${amount}`) ?? null;
+      return {
+        key: `${r.journal_entry_id}-${r.line_no}`,
+        amount,
+        accountCode: (r.account_code as string | null) ?? "",
+        accountName: (r.account_name as string | null) ?? "—",
+        tagName: detail?.tagId ? (tagById.get(detail.tagId) ?? null) : null,
+        remarks: detail?.remarks ?? null,
+        voucherType: (r.voucher_type as string | null) ?? null,
+        voucherId: (r.voucher_id as string | null) ?? null,
+        voucherNo: (r.voucher_no as string | null) ?? null,
+        date: r.entry_date as string,
+        currency: (r.currency_code as string | null) ?? "",
+      };
+    })
+    .filter((l) => l.amount !== 0);
+
+  const total = lines.reduce((s, l) => s + l.amount, 0);
   const currency = lines[0]?.currency ?? receipts[0]?.currency ?? "";
 
   function groupBy(pick: (l: Line) => { key: string; label: string; sub?: string }): Group[] {
@@ -167,122 +177,152 @@ export async function ExpenseReport({ companyId, year }: { companyId: string; ye
     label: l.accountName,
     sub: formatAccountCode(l.accountCode),
   }));
-  // Untagged spend gets its own row rather than being dropped: a tag-wise report
-  // that silently loses lines would not add up to the account-wise one.
   const byTag = groupBy((l) => ({ key: l.tagName ?? "~untagged", label: l.tagName ?? "Untagged" }));
+
+  const nothingToShow = receipts.length === 0 && lines.length === 0;
 
   return (
     <Card className="border-ledger-dark/40">
       <CardHeader className="border-b pb-4">
         <CardTitle>Expense KHI — {year}</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Received into {bankAccountName}, spent under {expenseGroupName}.
+        </p>
       </CardHeader>
       <CardContent className="space-y-6 pt-4">
-        {receipts.length > 0 && (
-          <div>
-            <h3 className="mb-2 text-sm font-semibold text-foreground">
-              Received — receipts into expense accounts
-            </h3>
-            <div className="overflow-x-auto rounded-md border">
-              <table className="w-full min-w-[520px] text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/50 text-left [&_th]:px-3 [&_th]:py-2 [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground">
-                    <th className="w-12">Sno</th>
-                    <th className="w-28">Date</th>
-                    <th className="w-28">Voucher</th>
-                    <th>Account</th>
-                    <th className="w-32 text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {receipts.map((r, i) => (
-                    <tr key={r.key} className="border-b last:border-0 [&_td]:px-3 [&_td]:py-2">
-                      <td className="text-muted-foreground tabular-nums">{i + 1}</td>
-                      <td className="whitespace-nowrap tabular-nums">{formatDate(r.date)}</td>
-                      <td className="whitespace-nowrap font-medium">{formatVoucherNo(r.voucherNo) || "—"}</td>
-                      <td>{r.account}</td>
-                      <td className="text-right font-medium tabular-nums">{formatMoney(r.amount)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 bg-muted/30 font-semibold [&_td]:px-3 [&_td]:py-2">
-                    <td colSpan={4}>Total received</td>
-                    <td className="text-right tabular-nums">
-                      {currency && <span className="mr-1 text-xs font-medium">{currency}</span>}
-                      {formatMoney(receivedTotal)}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {lines.length === 0 ? (
+        {nothingToShow ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            No posted expense vouchers this year.
+            Nothing received or spent this year.
           </p>
         ) : (
           <>
-            <div className="grid gap-6 lg:grid-cols-2">
-              <Breakdown title="Account-wise" groups={byAccount} total={total} currency={currency} />
-              <Breakdown title="Tag-wise" groups={byTag} total={total} currency={currency} />
-            </div>
-
-            <div>
-              <h3 className="mb-2 text-sm font-semibold text-foreground">Expense lines</h3>
-              <div className="overflow-x-auto rounded-md border">
-                <table className="w-full min-w-[720px] text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted/50 text-left [&_th]:px-3 [&_th]:py-2 [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground">
-                      <th className="w-12">Sno</th>
-                      <th className="w-28">Date</th>
-                      <th className="w-28">Voucher</th>
-                      <th>Account</th>
-                      <th className="w-40">Tag</th>
-                      <th className="w-40">Remarks</th>
-                      <th className="w-32 text-right">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lines.map((l, i) => (
-                      <tr
-                        key={`${l.voucherId}-${i}`}
-                        className="border-b last:border-0 [&_td]:px-3 [&_td]:py-2"
-                      >
-                        <td className="text-muted-foreground tabular-nums">{i + 1}</td>
-                        <td className="whitespace-nowrap tabular-nums">{formatDate(l.date)}</td>
-                        <td className="whitespace-nowrap">
-                          <Link
-                            href={`/accounting/vouchers/expense_voucher/${l.voucherId}`}
-                            className="font-medium text-primary hover:underline"
-                          >
-                            {formatVoucherNo(l.voucherNo) || "—"}
-                          </Link>
-                        </td>
-                        <td>{l.accountName}</td>
-                        <td className="text-muted-foreground">{l.tagName ?? "—"}</td>
-                        <td className="text-muted-foreground">{l.remarks ?? ""}</td>
-                        <td className="text-right font-medium tabular-nums">{formatMoney(l.amount)}</td>
+            {receipts.length > 0 && (
+              <div>
+                <h3 className="mb-2 text-sm font-semibold text-foreground">
+                  Received — money into {bankAccountName}
+                </h3>
+                <div className="overflow-x-auto rounded-md border">
+                  <table className="w-full min-w-[520px] text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/50 text-left [&_th]:px-3 [&_th]:py-2 [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground">
+                        <th className="w-12">Sno</th>
+                        <th className="w-28">Date</th>
+                        <th className="w-32">Voucher</th>
+                        <th className="w-32 text-right">Amount</th>
                       </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t-2 bg-muted/30 font-semibold [&_td]:px-3 [&_td]:py-2">
-                      <td colSpan={6}>Total</td>
-                      <td className="text-right tabular-nums">
-                        {currency && <span className="mr-1 text-xs font-medium">{currency}</span>}
-                        {formatMoney(total)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
+                    </thead>
+                    <tbody>
+                      {receipts.map((r, i) => (
+                        <tr key={r.key} className="border-b last:border-0 [&_td]:px-3 [&_td]:py-2">
+                          <td className="text-muted-foreground tabular-nums">{i + 1}</td>
+                          <td className="whitespace-nowrap tabular-nums">{formatDate(r.date)}</td>
+                          <td className="whitespace-nowrap">
+                            <VoucherLink
+                              type={r.voucherType}
+                              id={r.voucherId}
+                              no={r.voucherNo}
+                            />
+                          </td>
+                          <td className="text-right font-medium tabular-nums">{formatMoney(r.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 bg-muted/30 font-semibold [&_td]:px-3 [&_td]:py-2">
+                        <td colSpan={3}>Total received</td>
+                        <td className="text-right tabular-nums">
+                          {currency && <span className="mr-1 text-xs font-medium">{currency}</span>}
+                          {formatMoney(receivedTotal)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
               </div>
+            )}
+
+            {lines.length > 0 && (
+              <>
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <Breakdown title="Account-wise" groups={byAccount} total={total} currency={currency} />
+                  <Breakdown title="Tag-wise" groups={byTag} total={total} currency={currency} />
+                </div>
+
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold text-foreground">Expense lines</h3>
+                  <div className="overflow-x-auto rounded-md border">
+                    <table className="w-full min-w-[720px] text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/50 text-left [&_th]:px-3 [&_th]:py-2 [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground">
+                          <th className="w-12">Sno</th>
+                          <th className="w-28">Date</th>
+                          <th className="w-32">Voucher</th>
+                          <th>Account</th>
+                          <th className="w-40">Tag</th>
+                          <th className="w-40">Remarks</th>
+                          <th className="w-32 text-right">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {lines.map((l, i) => (
+                          <tr key={l.key} className="border-b last:border-0 [&_td]:px-3 [&_td]:py-2">
+                            <td className="text-muted-foreground tabular-nums">{i + 1}</td>
+                            <td className="whitespace-nowrap tabular-nums">{formatDate(l.date)}</td>
+                            <td className="whitespace-nowrap">
+                              <VoucherLink type={l.voucherType} id={l.voucherId} no={l.voucherNo} />
+                            </td>
+                            <td>{l.accountName}</td>
+                            <td className="text-muted-foreground">{l.tagName ?? "—"}</td>
+                            <td className="text-muted-foreground">{l.remarks ?? ""}</td>
+                            <td className="text-right font-medium tabular-nums">{formatMoney(l.amount)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 bg-muted/30 font-semibold [&_td]:px-3 [&_td]:py-2">
+                          <td colSpan={6}>Total spent</td>
+                          <td className="text-right tabular-nums">
+                            {currency && <span className="mr-1 text-xs font-medium">{currency}</span>}
+                            {formatMoney(total)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div className="flex items-baseline justify-between gap-3 rounded-md border bg-muted/30 px-4 py-3">
+              <span className="text-sm font-medium text-muted-foreground">Balance left to spend</span>
+              <span className="text-lg font-bold tabular-nums">
+                {currency && <span className="mr-1 text-sm font-medium">{currency}</span>}
+                {formatMoney(receivedTotal - total)}
+              </span>
             </div>
           </>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/** A voucher number that opens its own document, whatever type recorded it. */
+function VoucherLink({
+  type,
+  id,
+  no,
+}: {
+  type: string | null;
+  id: string | null;
+  no: string | null;
+}) {
+  const label = formatVoucherNo(no) || "—";
+  if (!type || !id) return <span className="font-medium">{label}</span>;
+  return (
+    <Link href={`/accounting/vouchers/${type}/${id}`} className="font-medium text-primary hover:underline">
+      {label}
+    </Link>
   );
 }
 

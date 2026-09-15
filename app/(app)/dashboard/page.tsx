@@ -77,6 +77,51 @@ function isExcludedFromBalances(r: {
   return Boolean(r.is_cash || r.is_bank || r.is_tenant_account || r.is_fixed_asset_account);
 }
 
+// The two accounts the Expense KHI card is built on. Names, not ids: the card
+// has to survive a database restore, and an id pasted into the source would be
+// silently wrong afterwards. Renaming an account here is how the card is
+// pointed somewhere else.
+const FLOAT_BANK_ACCOUNT_NAME = "UZMA MEEZAN BANK";
+const FLOAT_EXPENSE_GROUP_NAME = "KHI EXPENSE";
+
+/** Case- and spacing-insensitive, so "Khi  Expense" still matches. */
+function sameAccountName(name: string | null | undefined, wanted: string) {
+  return (name ?? "").trim().replace(/\s+/g, " ").toLowerCase() === wanted.toLowerCase();
+}
+
+/**
+ * The float bank account, and every account under the KHI EXPENSE group.
+ *
+ * The group is a heading, not a posting account — the spend sits on its
+ * children (and their children), so the whole subtree is walked. A missing
+ * name yields nothing rather than a wrong total, and the card says so.
+ */
+function resolveFloatAccounts(
+  rows: { id: string; parent_id: string | null; account_name: string | null }[],
+): { bankId: string | null; expenseIds: Set<string> } {
+  const bankId = rows.find((a) => sameAccountName(a.account_name, FLOAT_BANK_ACCOUNT_NAME))?.id ?? null;
+  const groupId = rows.find((a) => sameAccountName(a.account_name, FLOAT_EXPENSE_GROUP_NAME))?.id ?? null;
+
+  const expenseIds = new Set<string>();
+  if (!groupId) return { bankId, expenseIds };
+
+  const childrenOf = new Map<string, string[]>();
+  for (const a of rows) {
+    if (!a.parent_id) continue;
+    const kids = childrenOf.get(a.parent_id);
+    if (kids) kids.push(a.id);
+    else childrenOf.set(a.parent_id, [a.id]);
+  }
+  const stack = [groupId];
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (expenseIds.has(id)) continue;
+    expenseIds.add(id);
+    for (const child of childrenOf.get(id) ?? []) stack.push(child);
+  }
+  return { bankId, expenseIds };
+}
+
 // Ledger accounts that are fixed assets, so the "Balances" cards can leave them
 // out. Catches an account linked to a registered asset (linked_asset_id) AND any
 // account sitting under a "Fixed Asset(s)" group in the chart-of-accounts tree —
@@ -141,6 +186,12 @@ export default async function DashboardPage({
     .filter((a) => normCountry(a.country as string | null))
     .map((a) => a.id as string);
 
+  // The Expense KHI float is a named cash box: money lands in UZMA MEEZAN BANK
+  // and is spent under the KHI EXPENSE group. Resolved by name so the card
+  // follows those two wherever they sit in the chart, and so renaming either
+  // one is the only thing needed to point the card somewhere else.
+  const { bankId: floatBankId, expenseIds: floatExpenseIds } = resolveFloatAccounts(coaCountries ?? []);
+
   const [
     { data: ledgerRows },
     { data: rentRows },
@@ -150,6 +201,7 @@ export default async function DashboardPage({
     { count: rentalPropertyCount },
     { data: expenseLedger },
     { data: baseCurrencyRow },
+    { data: floatBankLedger },
   ] = await Promise.all([
     supabase
       .schema("reporting")
@@ -209,6 +261,16 @@ export default async function DashboardPage({
       .eq("company_id", companyId)
       .eq("is_base_currency", true)
       .maybeSingle(),
+    floatBankId
+      ? supabase
+          .schema("reporting")
+          .from("v_ledger_entries")
+          .select("doc_debit_amount, currency_code")
+          .eq("company_id", companyId)
+          .eq("account_id", floatBankId)
+          .gte("entry_date", `${new Date().getFullYear()}-01-01`)
+          .lte("entry_date", `${new Date().getFullYear()}-12-31`)
+      : Promise.resolve({ data: [] }),
   ]);
 
   // Total expenses (base currency) for the current calendar year — dashboard KPI.
@@ -217,34 +279,30 @@ export default async function DashboardPage({
     0,
   );
 
-  // The expense float: money taken in FOR expenses against an expense account,
-  // what the Expense Voucher has since spent, and what is therefore left. A
-  // receipt credited to an expense account is money held to spend — the float —
-  // so it is what "received" means here; anything else crediting an expense
-  // account is a refund or a correction and belongs in the head totals below,
-  // not in this card.
+  // The Expense KHI float, read off the two accounts it actually lives in:
+  // money INTO UZMA MEEZAN BANK is what was received to spend, and the net of
+  // the KHI EXPENSE group is what has been spent out of it. Every voucher type
+  // counts on both sides — the money is gone whether an Expense Voucher or a
+  // Payment Voucher recorded it.
   //
-  // Kept in the currency the money is actually held in, on the DOCUMENT amounts.
-  // A float is a cash box, not a valuation: rupees taken in to spend in Karachi
-  // stay rupees, and converting them to the base currency made the card read
-  // "SR 396" for what is really Rs 396 — a figure nobody could check against the
-  // box. A currency that saw no float activity never appears.
-  const floatByCurrency = new Map<string, { code: string; received: number; spent: number }>();
-  for (const r of expenseLedger ?? []) {
-    const type = r.voucher_type as string | null;
-    if (type !== "receipt_voucher" && type !== "expense_voucher") continue;
-    const code = (r.currency_code as string | null) ?? "";
-    const row = floatByCurrency.get(code) ?? { code, received: 0, spent: 0 };
-    if (type === "receipt_voucher") row.received += Number(r.doc_credit_amount);
-    else row.spent += Number(r.doc_debit_amount) - Number(r.doc_credit_amount);
-    floatByCurrency.set(code, row);
-  }
-  const expenseFloats = [...floatByCurrency.values()]
-    .map((f) => ({ ...f, balance: f.received - f.spent }))
-    .filter((f) => f.received || f.spent)
-    .sort((a, b) => b.received + b.spent - (a.received + a.spent));
-  // The busiest currency leads the card; anything else gets a balance line.
-  const mainFloat = expenseFloats[0] ?? { code: "", received: 0, spent: 0, balance: 0 };
+  // Document amounts throughout. A float is a cash box, not a valuation:
+  // rupees taken in to spend in Karachi stay rupees, and converting them to the
+  // base currency made the card read "SR 396" for what is really Rs 396.
+  const floatReceived = (floatBankLedger ?? []).reduce((sum, r) => sum + Number(r.doc_debit_amount), 0);
+  const floatSpentRows = (expenseLedger ?? []).filter((r) => floatExpenseIds.has(r.account_id as string));
+  const floatSpent = floatSpentRows.reduce(
+    (sum, r) => sum + Number(r.doc_debit_amount) - Number(r.doc_credit_amount),
+    0,
+  );
+  const floatBalance = floatReceived - floatSpent;
+  // The currency the box is kept in, taken from the entries themselves rather
+  // than assumed — and never the base currency, which is a different question.
+  const floatCurrency =
+    ((floatBankLedger ?? [])[0]?.currency_code as string | null) ??
+    ((floatSpentRows[0]?.currency_code as string | null) || "");
+  // Named accounts can be renamed or deleted; when that happens the card says
+  // so rather than quietly reading zero.
+  const floatAccountsMissing = !floatBankId || floatExpenseIds.size === 0;
 
   // The same year split by GROUP HEAD, each in the currency it was spent in. A
   // base-currency total alone hides that (say) SR 10,014 is really PKR 286,400
@@ -717,9 +775,8 @@ export default async function DashboardPage({
         </SummaryCard>
         )}
 
-        {/* What was taken in to spend, what the Expense Voucher spent, and what
-            is left — each currency on its own, because a float is money held,
-            not a valuation. */}
+        {/* What landed in the float bank account, what the KHI EXPENSE group has
+            spent out of it, and what is therefore left. */}
         {canExpenseVouchers && (
         <SummaryCard
           title={`Expense KHI (${new Date().getFullYear()})`}
@@ -731,28 +788,24 @@ export default async function DashboardPage({
               <span
                 className={cn(
                   "shrink-0 text-sm font-bold tabular-nums",
-                  mainFloat.balance < 0 && "text-destructive",
+                  floatBalance < 0 && "text-destructive",
                 )}
               >
-                {money(sym(mainFloat.code), mainFloat.balance)}
+                {money(sym(floatCurrency), floatBalance)}
               </span>
             </div>
           }
         >
-          <div className="space-y-1">
-            <div className="flex justify-between gap-2">
-              <StatCol value={money(sym(mainFloat.code), mainFloat.received)} label="Received" />
-              <StatCol value={money(sym(mainFloat.code), mainFloat.spent)} label="Spent" align="right" />
+          {floatAccountsMissing ? (
+            <div className="py-1 text-sm text-muted-foreground">
+              {FLOAT_BANK_ACCOUNT_NAME} or the {FLOAT_EXPENSE_GROUP_NAME} group was not found.
             </div>
-            {expenseFloats.slice(1).map((f) => (
-              <div key={f.code} className="flex items-baseline justify-between gap-3 text-sm">
-                <span className="truncate text-muted-foreground">{f.code} balance</span>
-                <span className="shrink-0 font-mono font-medium tabular-nums">
-                  {money(sym(f.code), f.balance)}
-                </span>
-              </div>
-            ))}
-          </div>
+          ) : (
+            <div className="flex justify-between gap-2">
+              <StatCol value={money(sym(floatCurrency), floatReceived)} label="Received" />
+              <StatCol value={money(sym(floatCurrency), floatSpent)} label="Spent" align="right" />
+            </div>
+          )}
         </SummaryCard>
         )}
 
@@ -772,7 +825,14 @@ export default async function DashboardPage({
           gets it without clicking — it is the only report they have. */}
       {canExpenseVouchers && (isExpense || expenseOnly) && (
         <Suspense fallback={<DetailSkeleton />}>
-          <ExpenseReport companyId={companyId} year={new Date().getFullYear()} />
+          <ExpenseReport
+            companyId={companyId}
+            year={new Date().getFullYear()}
+            bankAccountId={floatBankId}
+            expenseAccountIds={[...floatExpenseIds]}
+            bankAccountName={FLOAT_BANK_ACCOUNT_NAME}
+            expenseGroupName={FLOAT_EXPENSE_GROUP_NAME}
+          />
         </Suspense>
       )}
 

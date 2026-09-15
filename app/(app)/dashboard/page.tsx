@@ -1,11 +1,7 @@
 import { Suspense } from "react";
 
 import Link from "next/link";
-import {
-  AlertCircleIcon,
-  Building2Icon,
-  CalendarRangeIcon,
-} from "lucide-react";
+import { Building2Icon, CalendarRangeIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,7 +13,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { KpiCard } from "@/components/dashboard/kpi-card";
 import { SummaryCard, StatCol } from "@/components/dashboard/summary-card";
 import { DashboardLiveRefresh } from "@/components/dashboard/live-refresh";
 import { cn } from "@/lib/utils";
@@ -27,6 +22,7 @@ import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { hasPermission } from "@/lib/auth/permissions";
 import { isRentOverdue } from "@/lib/rental/overdue";
 import { billingMonthStarts, rentDueChunks } from "@/lib/rental/billing-months";
+import { ExpenseReport } from "./expense-report";
 import { LeaseRenewals } from "./lease-renewals";
 
 // Always render fresh — the dashboard reflects live invoices, rent balances and
@@ -150,7 +146,6 @@ export default async function DashboardPage({
     { data: rentRows },
     { data: cashBankAccounts },
     { data: cashBankLedger },
-    { count: pendingApprovals },
     { data: currencies },
     { count: rentalPropertyCount },
     { data: expenseLedger },
@@ -191,12 +186,6 @@ export default async function DashboardPage({
       .select("account_id, doc_debit_amount, doc_credit_amount, is_cash, is_bank")
       .eq("company_id", companyId)
       .or("is_cash.eq.true,is_bank.eq.true"),
-    supabase
-      .schema("accounting")
-      .from("voucher_approvals")
-      .select("id", { count: "exact", head: true })
-      .eq("company_id", companyId)
-      .eq("status", "pending"),
     supabase.schema("core").from("currencies").select("id, code, symbol"),
     supabase
       .schema("assets")
@@ -469,6 +458,7 @@ export default async function DashboardPage({
 
   const isBank = panel === "bank";
   const isCash = panel === "cash";
+  const isExpense = panel === "expense-khi";
   const selected = (panel in BALANCE_PANELS ? panel : "") as PanelKey | "";
   // A Rent Balance is cumulative, so its drill-down opens with NO start date —
   // every invoice from the beginning up to the end of the current month. It used
@@ -482,7 +472,7 @@ export default async function DashboardPage({
   const rangeFrom = dateFrom;
   const rangeTo = isRentPanel ? dateTo ?? monthEnd : dateTo;
 
-  function cardHref(key: PanelKey | "bank" | "cash") {
+  function cardHref(key: PanelKey | "bank" | "cash" | "expense-khi") {
     return panel === key ? "/dashboard" : `/dashboard?panel=${key}`;
   }
 
@@ -492,13 +482,18 @@ export default async function DashboardPage({
   // Each dashboard card is gated by the permission for what it reveals, so a
   // limited role (e.g. an Accountant with no rental access) doesn't see cards it
   // isn't allowed into. Admins have every permission.
-  const [canReports, canRentalUae, canRentalPk, canApprovals, canExpenseVouchers] = await Promise.all([
+  const [canReports, canRentalUae, canRentalPk, canExpenseVouchers] = await Promise.all([
     hasPermission("reports", "view"),
     hasPermission("uae_rent_invoice", "view"),
     hasPermission("pk_rent_invoice", "view"),
-    hasPermission("approval_workflows", "view"),
     hasPermission("expense_voucher", "view"),
   ]);
+
+  // An assistant's dashboard. Someone whose role only reaches expense vouchers
+  // has nothing to read on the country, rent, bank or cash cards, so the page
+  // becomes exactly what their job is: the Expense KHI card with its report
+  // already open beneath it — no card to hunt for and nothing to click.
+  const expenseOnly = canExpenseVouchers && !canReports && !canRentalUae && !canRentalPk;
 
   return (
     <div className="space-y-6">
@@ -715,8 +710,9 @@ export default async function DashboardPage({
             and go out on another, and only the base figures add up. */}
         {canExpenseVouchers && (
         <SummaryCard
-          title={`Expense Float (${new Date().getFullYear()})`}
-          href="/accounting/vouchers/expense_voucher"
+          title={`Expense KHI (${new Date().getFullYear()})`}
+          href={cardHref("expense-khi")}
+          active={isExpense}
           footer={
             <div className="flex items-baseline justify-between gap-3">
               <span className="text-xs font-medium text-muted-foreground">Balance left to spend</span>
@@ -738,26 +734,23 @@ export default async function DashboardPage({
         </SummaryCard>
         )}
 
-        {canApprovals && (
-        <KpiCard
-          label="Pending approvals"
-          value={(pendingApprovals ?? 0).toLocaleString()}
-          subtext="Awaiting a decision"
-          icon={AlertCircleIcon}
-          tone={(pendingApprovals ?? 0) > 0 ? "warning" : undefined}
-          href="/accounting/voucher-register?status=pending"
-        />
-        )}
-
       </div>
 
       {/* Which contracts are running out — the dashboard's default report, right
           after the cards. Clicking a card replaces it with that card's own
           drill-down, so only one report is ever on screen. It streams on its own
           so the cards are never held back by the lease queries. */}
-      {!selected && !isBank && !isCash && (canRentalUae || canRentalPk) && (
+      {!selected && !isBank && !isCash && !isExpense && !expenseOnly && (canRentalUae || canRentalPk) && (
         <Suspense fallback={<RenewalsSkeleton />}>
           <LeaseRenewals companyId={companyId} />
+        </Suspense>
+      )}
+
+      {/* Where the expense money went, account-wise and tag-wise. An assistant
+          gets it without clicking — it is the only report they have. */}
+      {canExpenseVouchers && (isExpense || expenseOnly) && (
+        <Suspense fallback={<DetailSkeleton />}>
+          <ExpenseReport companyId={companyId} year={new Date().getFullYear()} />
         </Suspense>
       )}
 
@@ -766,7 +759,7 @@ export default async function DashboardPage({
           the panel drops in when its report is ready, rather than the whole
           screen waiting on it. The key restarts the fallback whenever the
           filters change, so a re-filter shows the skeleton too. */}
-      {(selected || isBank || isCash) && (
+      {(selected || isBank || isCash) && !expenseOnly && (
         <Suspense
           key={`${selected}-${isBank}-${isCash}-${rangeFrom}-${rangeTo}-${tenantFilter}-${propertyFilter}-${showHistory}`}
           fallback={<DetailSkeleton />}

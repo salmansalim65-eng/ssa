@@ -555,7 +555,6 @@ export default async function EditVoucherPage({
         <ExpenseVoucherForm
           accounts={accountOptions}
           currencies={docCurrencies}
-          costCenters={docCostCenters}
           tags={tagOptions}
           voucherId={id}
           initialValues={{

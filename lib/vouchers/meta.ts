@@ -17,7 +17,7 @@ export const VOUCHER_TYPE_LABELS: Record<VoucherType, string> = {
   pk_rent_invoice: "Pakistan Rent Invoice",
   asset_sales: "Asset Sale Voucher",
   multi_currency_journal: "Multi-Currency Journal",
-  expense_voucher: "Expense Voucher",
+  expense_voucher: "Expense Voucher KHI",
 };
 
 // The 8 voucher types Phase 5 ships end-user screens for. The remaining

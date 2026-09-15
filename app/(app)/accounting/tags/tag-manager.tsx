@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { PencilIcon, PlusIcon, TagsIcon, Trash2Icon } from "lucide-react";
+import { ListPlusIcon, PencilIcon, PlusIcon, TagsIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -30,7 +30,7 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { createTag, deleteTag, updateTag } from "@/features/core/tags/actions";
+import { createTag, createTagsBulk, deleteTag, updateTag } from "@/features/core/tags/actions";
 import { tagSchema, type TagFormValues, type TagInput } from "@/features/core/tags/schemas";
 
 export interface TagRow {
@@ -57,6 +57,9 @@ export function TagManager({
   // null = closed; "new" = adding; a row = editing that one.
   const [editing, setEditing] = useState<TagRow | "new" | null>(null);
   const [isPending, startTransition] = useTransition();
+  // The paste-a-list dialog, kept apart from the one-at-a-time form above.
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkText, setBulkText] = useState("");
 
   const form = useForm<TagFormValues, unknown, TagInput>({
     resolver: zodResolver(tagSchema),
@@ -84,6 +87,22 @@ export function TagManager({
     });
   }
 
+  function addMany() {
+    startTransition(async () => {
+      const result = await createTagsBulk(bulkText);
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
+      const parts = [`${result.created} tag${result.created === 1 ? "" : "s"} added`];
+      if (result.skipped?.length) parts.push(`${result.skipped.length} already existed`);
+      if (result.invalid?.length) parts.push(`${result.invalid.length} skipped as invalid`);
+      toast.success(parts.join(" · "));
+      setBulkText("");
+      setBulkOpen(false);
+    });
+  }
+
   function remove(tag: TagRow) {
     startTransition(async () => {
       const result = await deleteTag(tag.id);
@@ -98,12 +117,44 @@ export function TagManager({
   return (
     <div className="space-y-4">
       {canCreate && (
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <Button size="sm" variant="outline" onClick={() => setBulkOpen(true)}>
+            <ListPlusIcon /> Add many
+          </Button>
           <Button size="sm" onClick={() => open("new")}>
             <PlusIcon /> Add tag
           </Button>
         </div>
       )}
+
+      <Dialog open={bulkOpen} onOpenChange={(o) => !isPending && setBulkOpen(o)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add many tags</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              One tag per line. Numbering is ignored, so a list can be pasted straight in; names
+              that already exist are left alone.
+            </p>
+            <textarea
+              value={bulkText}
+              onChange={(e) => setBulkText(e.target.value)}
+              rows={12}
+              placeholder={"Monthly Home Expense\nHome Grocery\nHome Maintenance"}
+              className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm shadow-xs outline-none transition-colors placeholder:text-muted-foreground/70 hover:border-ring/40 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25"
+            />
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setBulkOpen(false)} disabled={isPending}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={addMany} disabled={isPending || !bulkText.trim()}>
+                {isPending ? "Adding…" : "Add tags"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="rounded-lg border bg-card shadow-xs">
         {tags.length === 0 ? (

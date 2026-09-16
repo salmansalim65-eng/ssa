@@ -1094,6 +1094,10 @@ export interface Database {
         Args: { p_voucher_type: string; p_id: string };
         Returns: undefined;
       };
+      fn_delete_posted_expense_voucher: {
+        Args: { p_id: string };
+        Returns: undefined;
+      };
     };
   };
   assets: {

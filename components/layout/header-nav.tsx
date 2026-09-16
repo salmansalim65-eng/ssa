@@ -1,6 +1,6 @@
 "use client";
 
-import { type MouseEvent } from "react";
+import { useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { ChevronDownIcon } from "lucide-react";
 
@@ -32,6 +32,14 @@ export const HEADER_NAV_SECTIONS = ["Rental", "Vouchers", "Reports"];
  */
 export function HeaderNav({ allowedModules = null }: { allowedModules?: string[] | null }) {
   const { tabs, activeId } = useWorkspace();
+  // Which section is open, held here rather than left to each menu.
+  //
+  // Picking an item has to close its menu, and the menu closes itself only when
+  // the click reaches its own handler. This one calls preventDefault to open a
+  // workspace tab instead of navigating — and Radix skips its internal handler
+  // on an already-prevented event, so the menu stayed open over the page the
+  // item had just opened until something else was clicked.
+  const [openSection, setOpenSection] = useState<string | null>(null);
   const sections = filterNavSections(navSections, allowedModules).filter(
     (s) => s.label && HEADER_NAV_SECTIONS.includes(s.label),
   );
@@ -41,7 +49,9 @@ export function HeaderNav({ allowedModules = null }: { allowedModules?: string[]
   const activeHref = activeId ? tabs.find((t) => t.id === activeId)?.href ?? null : null;
 
   function handleClick(e: MouseEvent<HTMLAnchorElement>, href: string, label: string) {
-    // A modified click still opens a browser tab, as anywhere else.
+    // A modified click still opens a browser tab, as anywhere else — and closes
+    // the menu too, since the item has been chosen either way.
+    setOpenSection(null);
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
     e.preventDefault();
     openTab(href, label);
@@ -56,7 +66,11 @@ export function HeaderNav({ allowedModules = null }: { allowedModules?: string[]
           ? section.items.some((i) => activeHref === i.href || activeHref.startsWith(`${i.href}/`))
           : false;
         return (
-          <DropdownMenu key={section.label}>
+          <DropdownMenu
+            key={section.label}
+            open={openSection === section.label}
+            onOpenChange={(open) => setOpenSection(open ? section.label ?? null : null)}
+          >
             <DropdownMenuTrigger
               className={cn(
                 "flex items-center gap-1 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",

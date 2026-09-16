@@ -276,8 +276,11 @@ export const EDITABLE_STATUSES: readonly string[] = ["draft", "pending", "sent_b
  * way, as are their PDC counterparts — those only while the cheque is still
  * outstanding, since a cleared or returned cheque has vouchers behind it. A
  * cheque return is derived entirely from the cheque it reverses, so it is
- * corrected the same way, putting that cheque back to pending first. Every
- * other type is final once posted.
+ * corrected the same way, putting that cheque back to pending first. An expense
+ * voucher posts the moment it is created, so "editable while unposted" would
+ * mean never editable at all — and a wrong amount or a wrong tag on a
+ * household expense is found after the fact, not before. Every other type is
+ * final once posted.
  */
 export const EDITABLE_WHEN_POSTED: readonly string[] = [
   "opening_balance_voucher",
@@ -287,6 +290,7 @@ export const EDITABLE_WHEN_POSTED: readonly string[] = [
   "pdc_payment_voucher",
   "cheque_return_voucher",
   "multi_currency_journal",
+  "expense_voucher",
 ];
 
 /**

@@ -35,7 +35,14 @@ export default async function NewVoucherPage({
   const supabase = await createClient();
   const companyId = await getCurrentCompanyId();
 
-  const [{ data: accounts }, { data: companyCurrencies }, { data: costCenters }] = await Promise.all([
+  const isExpense = voucherType === "expense_voucher";
+  const [
+    { data: accounts },
+    { data: companyCurrencies },
+    { data: costCenters },
+    { data: tagRows },
+    { data: khiChart },
+  ] = await Promise.all([
     supabase
       .schema("accounting")
       .from("chart_of_accounts")
@@ -59,6 +66,31 @@ export default async function NewVoucherPage({
       .eq("is_active", true)
       .is("deleted_at", null)
       .order("name"),
+    // The tags an expense line can be filed under. Its own query: the master is
+    // small, and a voucher that is not an expense simply ignores it.
+    isExpense
+      ? supabase
+          .schema("core")
+          .from("tags")
+          .select("id, name")
+          .eq("company_id", companyId)
+          .eq("is_active", true)
+          .is("deleted_at", null)
+          .order("name")
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    // Which chart accounts the Expense Voucher is allowed to touch: the float
+    // bank on the header, the KHI EXPENSE group's children on the lines. Groups
+    // are not postable, so the group node itself is dropped — only accounts the
+    // picker already offers survive.
+    isExpense
+      ? supabase
+          .schema("accounting")
+          .from("chart_of_accounts")
+          .select("id, parent_id, account_name")
+          .eq("company_id", companyId)
+      : Promise.resolve({
+          data: [] as { id: string; parent_id: string | null; account_name: string | null }[],
+        }),
   ]);
 
   const accountOptions = toAccountOptions(accounts as RawAccountRow[] | null);
@@ -68,13 +100,22 @@ export default async function NewVoucherPage({
   const ccAssetIds = [
     ...new Set((costCenters ?? []).map((c) => c.asset_id as string | null).filter(Boolean)),
   ] as string[];
-  const { data: chargeAssets } = ccAssetIds.length
-    ? await supabase
-        .schema("assets")
-        .from("assets")
-        .select("id, country, service_charges_amount, property_tax")
-        .in("id", ccAssetIds)
-    : { data: [] };
+  const today = new Date().toISOString().slice(0, 10);
+  // Two second-round fetches that only look like they belong in sequence: the
+  // assets depend on the cost centres, the rates on the currencies, and neither
+  // on the other — so they wait together rather than one after the other.
+  const [{ data: chargeAssets }, currencyOptions] = await Promise.all([
+    ccAssetIds.length
+      ? supabase
+          .schema("assets")
+          .from("assets")
+          .select("id, country, service_charges_amount, property_tax")
+          .in("id", ccAssetIds)
+      : Promise.resolve({ data: [] }),
+    // Options are ordered base-currency-first so each voucher form defaults its
+    // currency to the system base currency (dynamic — see mapVoucherCurrencies).
+    mapVoucherCurrencies(companyId, today, companyCurrencies as unknown as RawCompanyCurrency[]),
+  ]);
   const chargeByAsset = new Map(
     (chargeAssets ?? []).map((a) => [
       a.id as string,
@@ -90,46 +131,11 @@ export default async function NewVoucherPage({
     name: c.name as string,
     chargeAmount: c.asset_id ? chargeByAsset.get(c.asset_id as string) ?? 0 : 0,
   }));
-  // The tags an expense line can be filed under. Its own query: the master is
-  // small, and a voucher that is not an expense simply ignores it.
-  const { data: tagRows } =
-    voucherType === "expense_voucher"
-      ? await supabase
-          .schema("core")
-          .from("tags")
-          .select("id, name")
-          .eq("company_id", companyId)
-          .eq("is_active", true)
-          .is("deleted_at", null)
-          .order("name")
-      : { data: [] as { id: string; name: string }[] };
   const tagOptions = (tagRows ?? []).map((t) => ({ id: t.id as string, name: t.name as string }));
-
-  // Which chart accounts the Expense Voucher is allowed to touch: the float
-  // bank on the header, the KHI EXPENSE group's children on the lines. Groups
-  // are not postable, so the group node itself is dropped — only accounts the
-  // picker already offers survive.
-  const { data: khiChart } =
-    voucherType === "expense_voucher"
-      ? await supabase
-          .schema("accounting")
-          .from("chart_of_accounts")
-          .select("id, parent_id, account_name")
-          .eq("company_id", companyId)
-      : { data: [] as { id: string; parent_id: string | null; account_name: string | null }[] };
   const khi = resolveExpenseKhiAccounts((khiChart ?? []) as ChartAccountRow[]);
   const khiExpenseAccountIds = accountOptions
     .map((a) => a.id)
     .filter((id) => khi.expenseIds.has(id));
-
-  const today = new Date().toISOString().slice(0, 10);
-  // Options are ordered base-currency-first so each voucher form defaults its
-  // currency to the system base currency (dynamic — see mapVoucherCurrencies).
-  const currencyOptions = await mapVoucherCurrencies(
-    companyId,
-    today,
-    companyCurrencies as unknown as RawCompanyCurrency[],
-  );
 
   // Outstanding rental bills a receipt/payment line can be adjusted against,
   // grouped by the party (tenant) account so the dialog shows only that account.

@@ -7,10 +7,8 @@ import { Building2Icon, CalendarDaysIcon, MenuIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { formatDate } from "@/lib/format";
-import { ApprovalsBell } from "./approvals-bell";
 import { Breadcrumbs } from "./breadcrumbs";
 import { HeaderNav } from "./header-nav";
-import { RenewalsBell } from "./renewals-bell";
 import { SidebarNav } from "./sidebar-nav";
 import { ThemeToggle } from "./theme-toggle";
 import { UserMenu } from "./user-menu";
@@ -24,18 +22,19 @@ export function Header({
   companyName,
   allowedModules = null,
   isAdmin = false,
-  pendingApprovals = null,
-  renewalsDue = null,
+  bells = null,
 }: {
   fullName: string;
   email: string;
   companyName: string;
   allowedModules?: string[] | null;
   isAdmin?: boolean;
-  /** Vouchers waiting for a decision; null hides the bell (no approvals access). */
-  pendingApprovals?: number | null;
-  /** Lease contracts at or past renewal; null hides the bell (no rental access). */
-  renewalsDue?: { count: number; overdue: number } | null;
+  /**
+   * The approvals and renewals bells, passed in as already-rendered server
+   * content so their counts stream in rather than holding up the page. Null
+   * where the reader may see neither.
+   */
+  bells?: React.ReactNode;
 }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   // Same calendar-day string on server and client; the span carries
@@ -75,8 +74,7 @@ export function Header({
       </div>
 
       <div className="ml-auto flex items-center gap-1.5">
-        {pendingApprovals !== null && <ApprovalsBell count={pendingApprovals} />}
-        {renewalsDue !== null && <RenewalsBell count={renewalsDue.count} overdue={renewalsDue.overdue} />}
+        {bells}
         {/* Vista Group branding links out to the parent ERP — shown to
             administrators only. */}
         {isAdmin && (

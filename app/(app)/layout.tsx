@@ -3,10 +3,9 @@ import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { AppShell } from "@/components/layout/app-shell";
-import { hasPermission } from "@/lib/auth/permissions";
+import { HeaderBells } from "@/components/layout/header-bells";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth/session";
-import { loadLeaseRenewals, renewalsNeedingAttention } from "@/lib/rental/renewals";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
@@ -43,44 +42,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect("/onboarding");
   }
 
-  // Modules this user may view — the sidebar shows only those sections. Admins
-  // get every module (null = no restriction).
-  const [
-    { data: company },
-    { data: isAdmin },
-    { data: permittedModules },
-    canSeeApprovals,
-    canSeeUaeRent,
-    canSeePkRent,
-    { count: pendingCount },
-    leaseRenewals,
-  ] = await Promise.all([
-      supabase.schema("core").from("companies").select("name").eq("id", companyId).single(),
-      supabase.schema("core").rpc("is_admin"),
-      supabase.schema("core").rpc("user_permitted_view_modules"),
-      hasPermission("approval_workflows", "view"),
-      hasPermission("uae_rent_invoice", "view"),
-      hasPermission("pk_rent_invoice", "view"),
-      // Counted for everyone and shown only to those allowed the approvals
-      // module — the same gate the dashboard's Pending approvals card uses.
-      supabase
-        .schema("accounting")
-        .from("voucher_approvals")
-        .select("id", { count: "exact", head: true })
-        .eq("company_id", companyId)
-        .eq("status", "pending"),
-      // Lease contracts at or past their renewal date, so the header's renewal
-      // alert is present on every screen and not only on the dashboard.
-      loadLeaseRenewals(supabase, companyId),
-    ]);
-  const renewalsDueNow = renewalsNeedingAttention(leaseRenewals);
-  const renewalsDue =
-    canSeeUaeRent || canSeePkRent
-      ? {
-          count: renewalsDueNow.length,
-          overdue: renewalsDueNow.filter((r) => r.status === "overdue").length,
-        }
-      : null;
+  // Only what the shell itself cannot be drawn without. The header's two bells
+  // are counts nobody navigated here for, and they used to be fetched right
+  // here — so every page on every screen waited on a scan of the leases before
+  // anything could be sent. They stream in on their own now.
+  const [{ data: company }, { data: isAdmin }, { data: permittedModules }] = await Promise.all([
+    supabase.schema("core").from("companies").select("name").eq("id", companyId).single(),
+    supabase.schema("core").rpc("is_admin"),
+    supabase.schema("core").rpc("user_permitted_view_modules"),
+  ]);
   // null = no restriction (admin, or the RPC isn't available yet — before its
   // migration runs — so we don't lock a non-admin out with an empty menu). Only
   // a real array from the function restricts the nav.
@@ -96,8 +66,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           companyName={company?.name ?? ""}
           allowedModules={allowedModules}
           isAdmin={isAdmin === true}
-          pendingApprovals={canSeeApprovals ? pendingCount ?? 0 : null}
-          renewalsDue={renewalsDue}
+          bells={<HeaderBells />}
         />
       }
     >

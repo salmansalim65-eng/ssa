@@ -309,10 +309,15 @@ async function removePostedVoucher(
     // here: the rule that stops this person is not the app's policy but a
     // database function that has not been installed yet, and someone reading
     // the first message would go looking for a permission that is already set.
+    //
+    // PostgREST's own words come along too. "Not found" and "found, but the
+    // schema cache has not caught up" are the same code with different text,
+    // and they need different fixes — running the migration versus reloading
+    // the cache — so the message has to carry enough to tell them apart.
+    const detail = [error.message, error.hint].filter(Boolean).join(" — ");
     return (
-      "Editing your own posted expense voucher needs a database update that has " +
-      "not been applied yet (migration 0140). Until it is, only an administrator " +
-      "can edit a posted expense voucher."
+      "Editing your own posted expense voucher needs migration 0140, which the " +
+      `database has not got yet. [${error.code}: ${detail}]`
     );
   }
   const { error: adminError } = await supabase

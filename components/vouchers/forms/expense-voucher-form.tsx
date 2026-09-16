@@ -177,7 +177,7 @@ export function ExpenseVoucherForm({
       // rather than left to be noticed as a "Draft" badge later.
       if (result?.warning) toast.warning(result.warning);
       else toast.success(isEdit ? "Expense voucher updated" : "Expense voucher created");
-      router.push(`/accounting/vouchers/expense_voucher/${isEdit ? voucherId : result.id}`);
+      router.push(`/accounting/vouchers/expense_voucher/${result.id ?? voucherId}`);
     });
   }
 

@@ -151,7 +151,7 @@ export function PdcReceiptVoucherForm({
         return;
       }
       toast.success(isEdit ? "PDC receipt voucher updated" : "PDC receipt voucher created");
-      router.push(`/accounting/vouchers/pdc_receipt_voucher/${isEdit ? voucherId : result.id}`);
+      router.push(`/accounting/vouchers/pdc_receipt_voucher/${result.id ?? voucherId}`);
     });
   }
 

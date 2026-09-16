@@ -21,7 +21,7 @@ import { PrintButton } from "@/components/vouchers/print-button";
 import { DeletePostedVoucherButton } from "@/components/vouchers/delete-posted-voucher-button";
 import { VoucherActions } from "@/components/vouchers/voucher-actions";
 import { VoucherDeleteButton } from "@/components/vouchers/voucher-delete-button";
-import { VoucherPager } from "@/components/vouchers/voucher-pager";
+import { VoucherPagerSlot } from "@/components/vouchers/voucher-pager";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { getModulePermissions, isCurrentUserAdmin } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
@@ -35,7 +35,6 @@ import {
 } from "@/lib/vouchers/engine";
 import { isPhase5VoucherType, VOUCHER_TYPE_LABELS } from "@/lib/vouchers/meta";
 import { getVoucherDetail } from "@/lib/vouchers/queries";
-import { getVoucherNeighbours } from "@/lib/vouchers/pager";
 import { postChequeReturnVoucher } from "@/features/accounting/vouchers/cheque-return/actions";
 import { postJournalVoucher } from "@/features/accounting/vouchers/journal/actions";
 import { postJvMaintenanceVoucher } from "@/features/accounting/vouchers/jv-maintenance/actions";
@@ -91,7 +90,7 @@ export default async function VoucherDetailPage({
   // Everything below is independent, so fetch it concurrently instead of in a
   // waterfall: the voucher detail, its approval row, the caller's permissions
   // (one batched lookup), and — for journal vouchers — the attachment rows.
-  const [detail, approval, perms, attachments, isAdmin, createdBy, neighbours] = await Promise.all([
+  const [detail, approval, perms, attachments, isAdmin, createdBy] = await Promise.all([
     getVoucherDetail(companyId, voucherType, id),
     getVoucherApproval(voucherType, id),
     getModulePermissions(voucherType),
@@ -117,9 +116,6 @@ export default async function VoucherDetailPage({
       .eq("voucher_id", id)
       .maybeSingle()
       .then((r) => (r.data?.created_by as string | null) ?? null),
-    // The vouchers either side of this one, so a run of them can be read
-    // straight through instead of going back to the list between each.
-    getVoucherNeighbours(companyId, voucherType, id),
   ]);
 
   if (!detail) notFound();
@@ -171,10 +167,14 @@ export default async function VoucherDetailPage({
         backHref={`/accounting/vouchers/${voucherType}`}
         actions={
           <>
-            <VoucherPager
+            {/* The vouchers either side of this one, so a run of them can be
+                read straight through. Streamed: three round trips the document
+                itself does not need. */}
+            <VoucherPagerSlot
               basePath={`/accounting/vouchers/${voucherType}`}
-              prev={neighbours.prev}
-              next={neighbours.next}
+              voucherType={voucherType}
+              companyId={companyId}
+              id={id}
             />
             <VoucherStatusBadge status={detail.status} />
             <PrintButton />

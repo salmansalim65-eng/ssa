@@ -1,8 +1,10 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import type { VoucherNeighbour } from "@/lib/vouchers/pager";
+import { getRecordNeighbours, VOUCHER_TABLES, type VoucherNeighbour } from "@/lib/vouchers/pager";
+import type { Phase5VoucherType } from "@/lib/vouchers/meta";
 
 /**
  * Step to the voucher before or after this one without going back to the list.
@@ -48,6 +50,63 @@ export function VoucherPager({
           <span className="hidden sm:inline">Next</span> <ChevronRightIcon />
         </Button>
       )}
+    </div>
+  );
+}
+
+/**
+ * The pager, fetched on its own rather than with the voucher.
+ *
+ * Finding the neighbours costs a lookup of this voucher's timestamp and then a
+ * row either side of it — three round trips that the document itself does not
+ * need. Awaited alongside the voucher they delayed every open by that much;
+ * behind a Suspense boundary the voucher paints first and the two buttons
+ * appear a moment later, in the space they already occupy.
+ */
+export function VoucherPagerSlot({
+  basePath,
+  voucherType,
+  companyId,
+  id,
+}: {
+  basePath: string;
+  voucherType: Phase5VoucherType;
+  companyId: string;
+  id: string;
+}) {
+  return (
+    <Suspense fallback={<PagerPlaceholder />}>
+      <LoadedPager basePath={basePath} voucherType={voucherType} companyId={companyId} id={id} />
+    </Suspense>
+  );
+}
+
+async function LoadedPager({
+  basePath,
+  voucherType,
+  companyId,
+  id,
+}: {
+  basePath: string;
+  voucherType: Phase5VoucherType;
+  companyId: string;
+  id: string;
+}) {
+  const { prev, next } = await getRecordNeighbours(
+    "accounting",
+    VOUCHER_TABLES[voucherType],
+    companyId,
+    id,
+  );
+  return <VoucherPager basePath={basePath} prev={prev} next={next} />;
+}
+
+/** Holds the pager's width while it loads, so nothing shifts when it lands. */
+function PagerPlaceholder() {
+  return (
+    <div className="flex items-center gap-1 print:hidden" aria-hidden>
+      <div className="h-8 w-[4.5rem] rounded-md border bg-muted/40" />
+      <div className="h-8 w-[4.5rem] rounded-md border bg-muted/40" />
     </div>
   );
 }

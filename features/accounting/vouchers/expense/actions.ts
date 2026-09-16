@@ -184,13 +184,8 @@ export async function updateExpenseVoucher(id: string, input: ExpenseVoucherInpu
   // edited values, re-posted with a new number — the route the receipt, payment,
   // PDC and cheque-return vouchers already take.
   if (je.status === "posted") {
-    if (!(await isCurrentUserAdmin())) {
-      return { error: "Only administrators can edit a posted expense voucher." };
-    }
-    const { error: delErr } = await supabase
-      .schema("accounting")
-      .rpc("fn_admin_delete_posted_voucher", { p_voucher_type: "expense_voucher", p_id: id });
-    if (delErr) return { error: delErr.message };
+    const removalError = await removePostedVoucher(supabase, id);
+    if (removalError) return { error: removalError };
 
     const created = await createExpenseVoucher(parsed.data);
     if ("error" in created) return { error: created.error };
@@ -282,6 +277,40 @@ export async function updateExpenseVoucher(id: string, input: ExpenseVoucherInpu
   revalidatePath(`${LIST_PATH}/${id}`);
   revalidatePath("/dashboard");
   return warning ? { success: true, id, warning } : { success: true, id };
+}
+
+/**
+ * Take a posted expense voucher out of the ledger so the edit can be
+ * re-created in its place.
+ *
+ * Prefers the expense voucher's OWN removal function, which lets the person who
+ * raised a voucher correct it — an expense voucher posts on creation and is
+ * raised by whoever spent the money, so needing an administrator for a Rs 500
+ * grocery bill is not a workable rule.
+ *
+ * Falls back to the admin-only function where that one has not been installed
+ * yet, so an administrator's edit keeps working either way and the only thing a
+ * missing migration costs is the assistant's own correction.
+ */
+async function removePostedVoucher(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  id: string,
+): Promise<string | null> {
+  const { error } = await supabase
+    .schema("accounting")
+    .rpc("fn_delete_posted_expense_voucher", { p_id: id });
+  if (!error) return null;
+  // PGRST202 is PostgREST's "no such function"; 42883 is Postgres's own.
+  const missing = error.code === "PGRST202" || error.code === "42883";
+  if (!missing) return error.message;
+
+  if (!(await isCurrentUserAdmin())) {
+    return "Only administrators can edit a posted expense voucher.";
+  }
+  const { error: adminError } = await supabase
+    .schema("accounting")
+    .rpc("fn_admin_delete_posted_voucher", { p_voucher_type: "expense_voucher", p_id: id });
+  return adminError ? adminError.message : null;
 }
 
 export async function postExpenseVoucher(id: string, journalEntryId: string) {

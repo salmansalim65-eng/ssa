@@ -305,7 +305,15 @@ async function removePostedVoucher(
   if (!missing) return error.message;
 
   if (!(await isCurrentUserAdmin())) {
-    return "Only administrators can edit a posted expense voucher.";
+    // Say which of the two it is. "Only administrators can" would be a lie
+    // here: the rule that stops this person is not the app's policy but a
+    // database function that has not been installed yet, and someone reading
+    // the first message would go looking for a permission that is already set.
+    return (
+      "Editing your own posted expense voucher needs a database update that has " +
+      "not been applied yet (migration 0140). Until it is, only an administrator " +
+      "can edit a posted expense voucher."
+    );
   }
   const { error: adminError } = await supabase
     .schema("accounting")

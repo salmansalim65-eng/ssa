@@ -138,7 +138,7 @@ export function PdcPaymentVoucherForm({
         return;
       }
       toast.success(isEdit ? "PDC payment voucher updated" : "PDC payment voucher created");
-      router.push(`/accounting/vouchers/pdc_payment_voucher/${isEdit ? voucherId : result.id}`);
+      router.push(`/accounting/vouchers/pdc_payment_voucher/${result.id ?? voucherId}`);
     });
   }
 

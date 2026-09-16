@@ -125,7 +125,7 @@ export function JournalVoucherForm({
         return;
       }
       toast.success(isEdit ? "Journal voucher updated" : "Journal voucher created");
-      router.push(`/accounting/vouchers/journal_voucher/${isEdit ? voucherId : result.id}`);
+      router.push(`/accounting/vouchers/journal_voucher/${result.id ?? voucherId}`);
     });
   }
 

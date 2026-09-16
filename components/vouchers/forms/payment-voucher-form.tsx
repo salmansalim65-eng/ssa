@@ -160,7 +160,7 @@ export function PaymentVoucherForm({
         return;
       }
       toast.success(isEdit ? "Payment voucher updated" : "Payment voucher created");
-      router.push(`/accounting/vouchers/payment_voucher/${isEdit ? voucherId : result.id}`);
+      router.push(`/accounting/vouchers/payment_voucher/${result.id ?? voucherId}`);
     });
   }
 

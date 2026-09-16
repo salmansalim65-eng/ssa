@@ -185,7 +185,7 @@ export function MultiCurrencyJournalForm({
         return;
       }
       toast.success(isEdit ? "Multi-currency journal updated" : "Multi-currency journal created");
-      router.push(`/accounting/vouchers/multi_currency_journal/${isEdit ? voucherId : result.id}`);
+      router.push(`/accounting/vouchers/multi_currency_journal/${result.id ?? voucherId}`);
     });
   }
 

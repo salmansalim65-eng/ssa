@@ -491,6 +491,14 @@ export async function createAccount(input: AccountInput) {
       is_cash: parsed.data.isCash,
       is_bank: parsed.data.isBank,
       is_tenant_group: parsed.data.isGroup ? parsed.data.isTenantGroup : false,
+      // Only a Cash/Bank account carries these; clearing the flag clears them
+      // too, so a former bank account does not keep an IBAN nobody can see.
+      bank_name: parsed.data.isBank ? parsed.data.bankName || null : null,
+      bank_account_title: parsed.data.isBank ? parsed.data.bankAccountTitle || null : null,
+      bank_account_no: parsed.data.isBank ? parsed.data.bankAccountNo || null : null,
+      bank_iban: parsed.data.isBank ? parsed.data.bankIban || null : null,
+      bank_branch: parsed.data.isBank ? parsed.data.bankBranch || null : null,
+      bank_swift: parsed.data.isBank ? parsed.data.bankSwift || null : null,
       id_number: parsed.data.idNumber || null,
       contact_person: parsed.data.contactPerson || null,
       phone: parsed.data.phone || null,
@@ -792,6 +800,14 @@ export async function updateAccount(accountId: string, input: AccountInput) {
       is_cash: parsed.data.isCash,
       is_bank: parsed.data.isBank,
       is_tenant_group: parsed.data.isGroup ? parsed.data.isTenantGroup : false,
+      // Only a Cash/Bank account carries these; clearing the flag clears them
+      // too, so a former bank account does not keep an IBAN nobody can see.
+      bank_name: parsed.data.isBank ? parsed.data.bankName || null : null,
+      bank_account_title: parsed.data.isBank ? parsed.data.bankAccountTitle || null : null,
+      bank_account_no: parsed.data.isBank ? parsed.data.bankAccountNo || null : null,
+      bank_iban: parsed.data.isBank ? parsed.data.bankIban || null : null,
+      bank_branch: parsed.data.isBank ? parsed.data.bankBranch || null : null,
+      bank_swift: parsed.data.isBank ? parsed.data.bankSwift || null : null,
       id_number: parsed.data.idNumber || null,
       contact_person: parsed.data.contactPerson || null,
       phone: parsed.data.phone || null,

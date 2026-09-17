@@ -93,6 +93,12 @@ export interface AccountRow {
   balance_currency: string;
   /** Counter account its existing opening balance was posted to, if any. */
   opening_balance_contra_id: string | null;
+  bank_name: string | null;
+  bank_account_title: string | null;
+  bank_account_no: string | null;
+  bank_iban: string | null;
+  bank_branch: string | null;
+  bank_swift: string | null;
   id_number: string | null;
   contact_person: string | null;
   phone: string | null;
@@ -157,6 +163,12 @@ const emptyValues: AccountInput = {
   isLongTerm: false,
   isTenantGroup: false,
   isRentalProperty: false,
+  bankName: "",
+  bankAccountTitle: "",
+  bankAccountNo: "",
+  bankIban: "",
+  bankBranch: "",
+  bankSwift: "",
   idNumber: "",
   contactPerson: "",
   phone: "",
@@ -853,6 +865,12 @@ export function AccountTree({
                         isLongTerm: dialog.account.is_long_term,
                         isTenantGroup: dialog.account.is_tenant_group,
                         isRentalProperty: linked?.is_rental ?? false,
+                        bankName: dialog.account.bank_name ?? "",
+                        bankAccountTitle: dialog.account.bank_account_title ?? "",
+                        bankAccountNo: dialog.account.bank_account_no ?? "",
+                        bankIban: dialog.account.bank_iban ?? "",
+                        bankBranch: dialog.account.bank_branch ?? "",
+                        bankSwift: dialog.account.bank_swift ?? "",
                         idNumber: dialog.account.id_number ?? "",
                         contactPerson: dialog.account.contact_person ?? "",
                         phone: dialog.account.phone ?? "",

@@ -109,6 +109,9 @@ export function AccountForm({
 
   const isGroup = useWatch({ control: form.control, name: "isGroup" });
   const accountType = useWatch({ control: form.control, name: "accountType" });
+  // Ticking Cash/Bank is what asks for the bank's own details, so the section
+  // follows the checkbox rather than waiting for a save.
+  const isBank = useWatch({ control: form.control, name: "isBank" });
   const selectedParentId = useWatch({ control: form.control, name: "parentId" });
   const scRate = useWatch({ control: form.control, name: "serviceChargesRate" });
   const scArea = useWatch({ control: form.control, name: "areaSqft" });
@@ -341,6 +344,95 @@ export function AccountForm({
             />
           )}
         </FormSection>
+
+        {/* What is needed to actually pay out of the account: which bank, whose
+            name it is in, the number to quote. Kept with the account instead of
+            in somebody's phone. */}
+        {!isGroup && isBank && (
+          <FormSection title="Bank details">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="bankName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Bank name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Meezan Bank" {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="bankAccountTitle"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Account title</FormLabel>
+                    <FormDescription>The name the account is held in.</FormDescription>
+                    <FormControl>
+                      <Input {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="bankAccountNo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Account no.</FormLabel>
+                    <FormControl>
+                      <Input className="font-mono" {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="bankIban"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>IBAN</FormLabel>
+                    <FormControl>
+                      <Input className="font-mono uppercase" placeholder="PK00MEZN0000000000000000" {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="bankBranch"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Branch</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="bankSwift"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>SWIFT / BIC</FormLabel>
+                    <FormControl>
+                      <Input className="font-mono uppercase" {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </FormSection>
+        )}
 
         {!isGroup && isDetailsParent && (
           <FormSection title="Details">

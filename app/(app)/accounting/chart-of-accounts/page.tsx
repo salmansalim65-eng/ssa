@@ -30,7 +30,7 @@ export default async function ChartOfAccountsPage() {
       supabase
         .schema("accounting")
         .from("chart_of_accounts")
-        .select("id, account_code, account_name, parent_id, account_type, currency_id, opening_balance, is_group, is_active, is_cash, is_bank, is_tenant_group, linked_asset_id, sort_order, id_number, contact_person, phone, email, country, default_cost_center_id, is_long_term")
+        .select("id, account_code, account_name, parent_id, account_type, currency_id, opening_balance, is_group, is_active, is_cash, is_bank, is_tenant_group, linked_asset_id, sort_order, id_number, contact_person, phone, email, country, default_cost_center_id, is_long_term, bank_name, bank_account_title, bank_account_no, bank_iban, bank_branch, bank_swift")
         .eq("company_id", companyId)
         .is("deleted_at", null),
       supabase
@@ -132,6 +132,12 @@ export default async function ChartOfAccountsPage() {
     is_tenant_group: boolean;
     linked_asset_id: string | null;
     sort_order: number;
+    bank_name: string | null;
+    bank_account_title: string | null;
+    bank_account_no: string | null;
+    bank_iban: string | null;
+    bank_branch: string | null;
+    bank_swift: string | null;
     id_number: string | null;
     contact_person: string | null;
     phone: string | null;
@@ -215,6 +221,12 @@ export default async function ChartOfAccountsPage() {
       if (n && n.codes.size === 1) return [...n.codes][0];
       return baseCurrencyCode;
     })(),
+    bank_name: a.bank_name,
+    bank_account_title: a.bank_account_title,
+    bank_account_no: a.bank_account_no,
+    bank_iban: a.bank_iban,
+    bank_branch: a.bank_branch,
+    bank_swift: a.bank_swift,
     id_number: a.id_number,
     contact_person: a.contact_person,
     phone: a.phone,

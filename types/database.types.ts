@@ -400,6 +400,12 @@ export interface Database {
           linked_asset_id: string | null;
           opening_balance_je_id: string | null;
           sort_order: number;
+          bank_name: string | null;
+          bank_account_title: string | null;
+          bank_account_no: string | null;
+          bank_iban: string | null;
+          bank_branch: string | null;
+          bank_swift: string | null;
           id_number: string | null;
           contact_person: string | null;
           phone: string | null;

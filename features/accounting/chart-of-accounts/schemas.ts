@@ -32,6 +32,14 @@ export const accountBaseSchema = z.object({
   phone: z.string().max(50).optional().or(z.literal("")),
   email: z.string().max(200).optional().or(z.literal("")),
   country: z.string().max(10).optional().or(z.literal("")),
+  // Bank details — shown on a Cash/Bank account, so what is needed to actually
+  // pay out of it lives with the account rather than in somebody's phone.
+  bankName: z.string().max(200).optional().or(z.literal("")),
+  bankAccountTitle: z.string().max(200).optional().or(z.literal("")),
+  bankAccountNo: z.string().max(60).optional().or(z.literal("")),
+  bankIban: z.string().max(60).optional().or(z.literal("")),
+  bankBranch: z.string().max(200).optional().or(z.literal("")),
+  bankSwift: z.string().max(30).optional().or(z.literal("")),
   // The cost centre this account's postings belong to. Optional: an account
   // that has no cost centre of its own simply leaves it unset.
   defaultCostCenterId: z.string().uuid().optional().or(z.literal("")),

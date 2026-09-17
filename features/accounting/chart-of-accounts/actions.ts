@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createJournalEntry, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { accountSchema, type AccountInput } from "./schemas";
+import { BANK_DETAIL_COLUMNS, isUnknownColumn, withoutKeys } from "@/lib/accounting/optional-columns";
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;
@@ -450,6 +451,24 @@ async function isGroupAccount(accountId: string) {
   return Boolean(data?.is_group);
 }
 
+/**
+ * The bank's own details, written only onto a Cash/Bank account.
+ *
+ * Clearing the flag clears them too, so an account that stops being a bank does
+ * not keep an IBAN nobody can see.
+ */
+function bankDetailsOf(input: AccountInput) {
+  const value = (v: string | undefined) => (input.isBank ? v || null : null);
+  return {
+    bank_name: value(input.bankName),
+    bank_account_title: value(input.bankAccountTitle),
+    bank_account_no: value(input.bankAccountNo),
+    bank_iban: value(input.bankIban),
+    bank_branch: value(input.bankBranch),
+    bank_swift: value(input.bankSwift),
+  };
+}
+
 export async function createAccount(input: AccountInput) {
   const parsed = accountSchema.safeParse(input);
   if (!parsed.success) {
@@ -475,10 +494,7 @@ export async function createAccount(input: AccountInput) {
   });
   if (codeError || !accountCode) return { error: codeError?.message ?? "Failed to generate account code" };
 
-  const { data: account, error } = await supabase
-    .schema("accounting")
-    .from("chart_of_accounts")
-    .insert({
+  const insertRow = {
       company_id: companyId,
       account_code: accountCode,
       account_name: parsed.data.accountName,
@@ -491,14 +507,7 @@ export async function createAccount(input: AccountInput) {
       is_cash: parsed.data.isCash,
       is_bank: parsed.data.isBank,
       is_tenant_group: parsed.data.isGroup ? parsed.data.isTenantGroup : false,
-      // Only a Cash/Bank account carries these; clearing the flag clears them
-      // too, so a former bank account does not keep an IBAN nobody can see.
-      bank_name: parsed.data.isBank ? parsed.data.bankName || null : null,
-      bank_account_title: parsed.data.isBank ? parsed.data.bankAccountTitle || null : null,
-      bank_account_no: parsed.data.isBank ? parsed.data.bankAccountNo || null : null,
-      bank_iban: parsed.data.isBank ? parsed.data.bankIban || null : null,
-      bank_branch: parsed.data.isBank ? parsed.data.bankBranch || null : null,
-      bank_swift: parsed.data.isBank ? parsed.data.bankSwift || null : null,
+      ...bankDetailsOf(parsed.data),
       id_number: parsed.data.idNumber || null,
       contact_person: parsed.data.contactPerson || null,
       phone: parsed.data.phone || null,
@@ -507,9 +516,21 @@ export async function createAccount(input: AccountInput) {
       default_cost_center_id: parsed.data.defaultCostCenterId || null,
       is_long_term: parsed.data.accountType === "liability" ? parsed.data.isLongTerm : false,
       created_by: user.user!.id,
-    })
-    .select("id")
-    .single();
+  };
+  const newAccount = () =>
+    supabase.schema("accounting").from("chart_of_accounts").insert(insertRow).select("id").single();
+  let { data: account, error } = await newAccount();
+  // The bank-detail columns arrived in migration 0141. Writing them to a
+  // database that has not run it would fail the whole insert, so an account
+  // that is not a bank could not be saved either; drop them and try once more.
+  if (isUnknownColumn(error)) {
+    ({ data: account, error } = await supabase
+      .schema("accounting")
+      .from("chart_of_accounts")
+      .insert(withoutKeys(insertRow, BANK_DETAIL_COLUMNS))
+      .select("id")
+      .single());
+  }
 
   if (error || !account) return { error: error?.message ?? "Failed to create account" };
 
@@ -785,10 +806,7 @@ export async function updateAccount(accountId: string, input: AccountInput) {
     existingAssetId = (linkedAsset?.id as string | null) ?? null;
   }
 
-  const { error } = await supabase
-    .schema("accounting")
-    .from("chart_of_accounts")
-    .update({
+  const updateRow = {
       // account_code is immutable once generated; not updated here.
       account_name: parsed.data.accountName,
       parent_id: parsed.data.parentId || null,
@@ -800,14 +818,7 @@ export async function updateAccount(accountId: string, input: AccountInput) {
       is_cash: parsed.data.isCash,
       is_bank: parsed.data.isBank,
       is_tenant_group: parsed.data.isGroup ? parsed.data.isTenantGroup : false,
-      // Only a Cash/Bank account carries these; clearing the flag clears them
-      // too, so a former bank account does not keep an IBAN nobody can see.
-      bank_name: parsed.data.isBank ? parsed.data.bankName || null : null,
-      bank_account_title: parsed.data.isBank ? parsed.data.bankAccountTitle || null : null,
-      bank_account_no: parsed.data.isBank ? parsed.data.bankAccountNo || null : null,
-      bank_iban: parsed.data.isBank ? parsed.data.bankIban || null : null,
-      bank_branch: parsed.data.isBank ? parsed.data.bankBranch || null : null,
-      bank_swift: parsed.data.isBank ? parsed.data.bankSwift || null : null,
+      ...bankDetailsOf(parsed.data),
       id_number: parsed.data.idNumber || null,
       contact_person: parsed.data.contactPerson || null,
       phone: parsed.data.phone || null,
@@ -815,8 +826,21 @@ export async function updateAccount(accountId: string, input: AccountInput) {
       country: parsed.data.country || null,
       default_cost_center_id: parsed.data.defaultCostCenterId || null,
       is_long_term: parsed.data.accountType === "liability" ? parsed.data.isLongTerm : false,
-    })
+  };
+  let { error } = await supabase
+    .schema("accounting")
+    .from("chart_of_accounts")
+    .update(updateRow)
     .eq("id", accountId);
+  // Same as on create: without migration 0141 these columns do not exist, and
+  // sending them would block every account edit, bank or not.
+  if (isUnknownColumn(error)) {
+    ({ error } = await supabase
+      .schema("accounting")
+      .from("chart_of_accounts")
+      .update(withoutKeys(updateRow, BANK_DETAIL_COLUMNS))
+      .eq("id", accountId));
+  }
 
   if (error) return { error: error.message };
 

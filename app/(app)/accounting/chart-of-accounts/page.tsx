@@ -3,8 +3,37 @@ import { createClient } from "@/lib/supabase/server";
 import { fetchRefs } from "@/lib/supabase/hydrate";
 import { loadReportCountries } from "@/lib/reports/countries";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
+import { BANK_DETAIL_COLUMNS, isUnknownColumn } from "@/lib/accounting/optional-columns";
 import { healStrayAssetAccounts } from "@/features/accounting/chart-of-accounts/actions";
 import { AccountTree, type AccountRow, type LinkedAssetFields } from "./account-tree";
+
+const ACCOUNT_COLUMNS =
+  "id, account_code, account_name, parent_id, account_type, currency_id, opening_balance, is_group, is_active, is_cash, is_bank, is_tenant_group, linked_asset_id, sort_order, id_number, contact_person, phone, email, country, default_cost_center_id, is_long_term";
+
+/**
+ * The chart, with the bank-detail columns when the database has them.
+ *
+ * Naming a column the table has not got fails the whole select, so asking for
+ * the bank fields before migration 0141 has run emptied the entire chart rather
+ * than leaving six fields blank. The second attempt drops them; once the
+ * migration lands the first attempt succeeds and nothing else changes.
+ */
+async function loadChartAccounts(supabase: Awaited<ReturnType<typeof createClient>>, companyId: string) {
+  const withBank = await supabase
+    .schema("accounting")
+    .from("chart_of_accounts")
+    .select(`${ACCOUNT_COLUMNS}, ${BANK_DETAIL_COLUMNS.join(", ")}`)
+    .eq("company_id", companyId)
+    .is("deleted_at", null);
+  if (!isUnknownColumn(withBank.error)) return withBank;
+
+  return supabase
+    .schema("accounting")
+    .from("chart_of_accounts")
+    .select(ACCOUNT_COLUMNS)
+    .eq("company_id", companyId)
+    .is("deleted_at", null);
+}
 
 export default async function ChartOfAccountsPage() {
   const supabase = await createClient();
@@ -27,12 +56,7 @@ export default async function ChartOfAccountsPage() {
     canEditGroup,
     canDeleteGroup,
   ] = await Promise.all([
-      supabase
-        .schema("accounting")
-        .from("chart_of_accounts")
-        .select("id, account_code, account_name, parent_id, account_type, currency_id, opening_balance, is_group, is_active, is_cash, is_bank, is_tenant_group, linked_asset_id, sort_order, id_number, contact_person, phone, email, country, default_cost_center_id, is_long_term, bank_name, bank_account_title, bank_account_no, bank_iban, bank_branch, bank_swift")
-        .eq("company_id", companyId)
-        .is("deleted_at", null),
+      loadChartAccounts(supabase, companyId),
       supabase
         .schema("core")
         .from("company_currencies")
@@ -132,12 +156,13 @@ export default async function ChartOfAccountsPage() {
     is_tenant_group: boolean;
     linked_asset_id: string | null;
     sort_order: number;
-    bank_name: string | null;
-    bank_account_title: string | null;
-    bank_account_no: string | null;
-    bank_iban: string | null;
-    bank_branch: string | null;
-    bank_swift: string | null;
+    // Absent, not merely null, on a database that has not run migration 0141.
+    bank_name?: string | null;
+    bank_account_title?: string | null;
+    bank_account_no?: string | null;
+    bank_iban?: string | null;
+    bank_branch?: string | null;
+    bank_swift?: string | null;
     id_number: string | null;
     contact_person: string | null;
     phone: string | null;
@@ -221,12 +246,12 @@ export default async function ChartOfAccountsPage() {
       if (n && n.codes.size === 1) return [...n.codes][0];
       return baseCurrencyCode;
     })(),
-    bank_name: a.bank_name,
-    bank_account_title: a.bank_account_title,
-    bank_account_no: a.bank_account_no,
-    bank_iban: a.bank_iban,
-    bank_branch: a.bank_branch,
-    bank_swift: a.bank_swift,
+    bank_name: a.bank_name ?? null,
+    bank_account_title: a.bank_account_title ?? null,
+    bank_account_no: a.bank_account_no ?? null,
+    bank_iban: a.bank_iban ?? null,
+    bank_branch: a.bank_branch ?? null,
+    bank_swift: a.bank_swift ?? null,
     id_number: a.id_number,
     contact_person: a.contact_person,
     phone: a.phone,

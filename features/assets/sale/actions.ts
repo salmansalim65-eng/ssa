@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
-import { createJournalEntry, getCurrentCompanyId, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
+import {balanceBaseAmounts, createJournalEntry, getCurrentCompanyId, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { assetSaleSchema, type AssetSaleInput } from "./schemas";
 
 function round2(n: number) {
@@ -203,7 +203,7 @@ export async function updateAssetSale(id: string, input: AssetSaleInput) {
       description: "Asset disposed",
     })),
   ];
-  const { error: insJe } = await supabase.schema("accounting").from("journal_entry_lines").insert(jeRows);
+  const { error: insJe } = await supabase.schema("accounting").from("journal_entry_lines").insert(balanceBaseAmounts(jeRows));
   if (insJe) return { error: insJe.message };
 
   // Rebuild the sold-property lines. asset_sale_lines has no row-level DELETE

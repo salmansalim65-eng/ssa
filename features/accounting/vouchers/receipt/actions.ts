@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
 import { formatMonth } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
-import { createJournalEntry, EDITABLE_STATUSES, ensureCanEditVoucher, getCurrentCompanyId, postVoucher, resubmitEditedVoucher, routeNewVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
+import {balanceBaseAmounts, createJournalEntry, EDITABLE_STATUSES, ensureCanEditVoucher, getCurrentCompanyId, postVoucher, resubmitEditedVoucher, routeNewVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { receiptVoucherSchema, type ReceiptVoucherInput } from "./schemas";
 
 function round2(n: number) {
@@ -279,7 +279,7 @@ export async function updateReceiptVoucher(id: string, input: ReceiptVoucherInpu
       description: lineDescription(l.rentMonth, l.remarks),
     })),
   ];
-  const { error: insJe } = await supabase.schema("accounting").from("journal_entry_lines").insert(jeRows);
+  const { error: insJe } = await supabase.schema("accounting").from("journal_entry_lines").insert(balanceBaseAmounts(jeRows));
   if (insJe) return { error: insJe.message };
 
   // Rebuild the voucher's own lines (the write policy allows delete + insert for

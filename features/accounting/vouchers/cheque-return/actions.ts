@@ -4,8 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
-import {
-  createJournalEntry,
+import {balanceBaseAmounts, createJournalEntry,
   EDITABLE_STATUSES,
   ensureCanEditVoucher,
   getCurrentCompanyId,
@@ -273,7 +272,7 @@ export async function updateChequeReturnVoucher(id: string, input: ChequeReturnV
   const { error: insLines } = await supabase
     .schema("accounting")
     .from("journal_entry_lines")
-    .insert(lineRows);
+    .insert(balanceBaseAmounts(lineRows));
   if (insLines) return { error: insLines.message };
 
   const { error: headerErr } = await supabase

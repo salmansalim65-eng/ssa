@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import {
+  balanceBaseAmounts,
   createJournalEntry,
   EDITABLE_STATUSES,
   ensureCanEditVoucher,
@@ -225,19 +226,21 @@ export async function updateExpenseVoucher(id: string, input: ExpenseVoucherInpu
     .schema("accounting")
     .from("journal_entry_lines")
     .insert(
-      entryLines.map((l, index) => ({
-        journal_entry_id: jeId,
-        line_no: index + 1,
-        account_id: l.accountId,
-        cost_center_id: l.costCenterId,
-        debit_amount: l.debit,
-        credit_amount: l.credit,
-        currency_id: parsed.data.currencyId,
-        exchange_rate: parsed.data.exchangeRate,
-        base_debit_amount: round2(l.debit * parsed.data.exchangeRate),
-        base_credit_amount: round2(l.credit * parsed.data.exchangeRate),
-        description: l.description,
-      })),
+      balanceBaseAmounts(
+        entryLines.map((l, index) => ({
+          journal_entry_id: jeId,
+          line_no: index + 1,
+          account_id: l.accountId,
+          cost_center_id: l.costCenterId,
+          debit_amount: l.debit,
+          credit_amount: l.credit,
+          currency_id: parsed.data.currencyId,
+          exchange_rate: parsed.data.exchangeRate,
+          base_debit_amount: round2(l.debit * parsed.data.exchangeRate),
+          base_credit_amount: round2(l.credit * parsed.data.exchangeRate),
+          description: l.description,
+        })),
+      ),
     );
   if (insLines) return { error: insLines.message };
 

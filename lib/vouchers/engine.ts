@@ -86,6 +86,47 @@ export async function resolveExchangeRate(companyId: string, currencyId: string,
  * currencies across lines is a future extension, not something callers
  * need to plan for today.
  */
+/** A row as the ledger stores it, in both the document currency and the base. */
+export type BaseAmountRow = {
+  debit_amount: number;
+  credit_amount: number;
+  base_debit_amount: number;
+  base_credit_amount: number;
+};
+
+/**
+ * Make the base-currency side of an entry balance.
+ *
+ * Every line is converted and rounded on its own, so a document that balances
+ * exactly can still land a hundredth apart once converted: PKR 6,934 entered as
+ * three debits came to SAR 92.46, while the one credit for the same 6,934 came
+ * to 92.45, and the ledger refused the entry as unbalanced. Nothing was wrong
+ * with it — the rate simply cannot divide cleanly on both sides at once.
+ *
+ * The residue goes on the LARGEST line of the lighter side, where a hundredth
+ * is the smallest proportional change it can be. Two things it deliberately
+ * does not do: it leaves an entry alone when the DOCUMENT amounts themselves do
+ * not balance, so a genuinely lopsided voucher is still refused rather than
+ * quietly patched; and it leaves a multi-currency journal alone for the same
+ * reason, since there the document amounts are never meant to agree and the
+ * base figures are the ones entered.
+ */
+export function balanceBaseAmounts<T extends BaseAmountRow>(rows: T[]): T[] {
+  const total = (pick: (r: T) => number) => round2(rows.reduce((sum, r) => sum + pick(r), 0));
+  if (total((r) => r.debit_amount) !== total((r) => r.credit_amount)) return rows;
+
+  const drift = round2(total((r) => r.base_debit_amount) - total((r) => r.base_credit_amount));
+  if (drift === 0) return rows;
+
+  // Debits heavy → the credit side is short, and the other way round.
+  const side = drift > 0 ? "base_credit_amount" : "base_debit_amount";
+  const candidates = rows.filter((r) => r[side] > 0);
+  if (candidates.length === 0) return rows;
+  const biggest = candidates.reduce((a, b) => (b[side] > a[side] ? b : a));
+  biggest[side] = round2(biggest[side] + Math.abs(drift));
+  return rows;
+}
+
 export async function createJournalEntry(params: {
   companyId: string;
   voucherType: VoucherType;
@@ -144,7 +185,7 @@ export async function createJournalEntry(params: {
   const { error: linesError } = await supabase
     .schema("accounting")
     .from("journal_entry_lines")
-    .insert(lineRows);
+    .insert(balanceBaseAmounts(lineRows));
 
   if (linesError) return { error: linesError.message };
 

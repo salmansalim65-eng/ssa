@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
-import { createJournalEntry, EDITABLE_STATUSES, ensureCanEditVoucher, type EntryLineInput, getCurrentCompanyId, postVoucher, resubmitEditedVoucher, routeNewVoucher } from "@/lib/vouchers/engine";
+import {balanceBaseAmounts, createJournalEntry, EDITABLE_STATUSES, ensureCanEditVoucher, type EntryLineInput, getCurrentCompanyId, postVoucher, resubmitEditedVoucher, routeNewVoucher } from "@/lib/vouchers/engine";
 import { jvMaintenanceVoucherSchema, type JvMaintenanceVoucherInput } from "./schemas";
 
 function round2(n: number) {
@@ -165,7 +165,7 @@ export async function updateJvMaintenanceVoucher(id: string, input: JvMaintenanc
     description: l.description ?? null,
     reference: l.reference ?? null,
   }));
-  const { error: insErr } = await supabase.schema("accounting").from("journal_entry_lines").insert(lineRows);
+  const { error: insErr } = await supabase.schema("accounting").from("journal_entry_lines").insert(balanceBaseAmounts(lineRows));
   if (insErr) return { error: insErr.message };
 
   const { error: vErr } = await supabase

@@ -413,6 +413,49 @@ export async function actOnApproval(params: {
 }
 
 /** Assigns the document number and flips the journal entry to 'posted'; the balance/permission trigger does the real validation. */
+/**
+ * Re-balance an unposted entry's base amounts in place.
+ *
+ * Only the converted figures move, by a hundredth, and only when the document
+ * amounts already agree — balanceBaseAmounts decides that, so this cannot turn
+ * a lopsided entry into a posted one. Returns whether anything changed, so the
+ * caller does not retry a post that would fail the same way.
+ */
+async function repairBaseRounding(journalEntryId: string): Promise<boolean> {
+  const supabase = await createClient();
+  const { data: lines } = await supabase
+    .schema("accounting")
+    .from("journal_entry_lines")
+    .select("id, debit_amount, credit_amount, base_debit_amount, base_credit_amount")
+    .eq("journal_entry_id", journalEntryId);
+  if (!lines?.length) return false;
+
+  const rows = lines.map((l) => ({
+    id: l.id as string,
+    debit_amount: Number(l.debit_amount),
+    credit_amount: Number(l.credit_amount),
+    base_debit_amount: Number(l.base_debit_amount),
+    base_credit_amount: Number(l.base_credit_amount),
+  }));
+  const before = rows.map((r) => `${r.base_debit_amount}|${r.base_credit_amount}`);
+  balanceBaseAmounts(rows);
+  const changed = rows.filter((r, i) => `${r.base_debit_amount}|${r.base_credit_amount}` !== before[i]);
+  if (changed.length === 0) return false;
+
+  for (const row of changed) {
+    const { error } = await supabase
+      .schema("accounting")
+      .from("journal_entry_lines")
+      .update({
+        base_debit_amount: row.base_debit_amount,
+        base_credit_amount: row.base_credit_amount,
+      })
+      .eq("id", row.id);
+    if (error) return false;
+  }
+  return true;
+}
+
 export async function postVoucher(params: {
   companyId: string;
   voucherType: VoucherType;
@@ -438,11 +481,26 @@ export async function postVoucher(params: {
     .schema("accounting")
     .rpc("fn_realise_exchange_difference", { p_journal_entry_id: params.journalEntryId });
 
-  const { error: postError } = await supabase
-    .schema("accounting")
-    .from("journal_entries")
-    .update({ status: "posted" })
-    .eq("id", params.journalEntryId);
+  const flipToPosted = () =>
+    supabase
+      .schema("accounting")
+      .from("journal_entries")
+      .update({ status: "posted" })
+      .eq("id", params.journalEntryId);
+
+  let { error: postError } = await flipToPosted();
+  // An entry raised before base amounts were balanced on the way in carries the
+  // rounding drift in the database, and no amount of pressing Post will move
+  // it. Lines are still mutable while the entry is unposted, so repair the
+  // stored figures and try once more — the document number already drawn is
+  // reused, not spent twice. A refusal for any other reason is returned as it
+  // came, and an entry whose document amounts genuinely disagree is left alone
+  // by the repair itself.
+  if (postError && /not balanced/i.test(postError.message)) {
+    if (await repairBaseRounding(params.journalEntryId)) {
+      ({ error: postError } = await flipToPosted());
+    }
+  }
 
   if (postError) return { error: postError.message };
 

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
 import { formatMonth } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
+import { unadjustedReceiptError } from "@/lib/rental/unadjusted-bills";
 import {balanceBaseAmounts, createJournalEntry, EDITABLE_STATUSES, ensureCanEditVoucher, getCurrentCompanyId, postVoucher, resubmitEditedVoucher, routeNewVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { receiptVoucherSchema, type ReceiptVoucherInput } from "./schemas";
 
@@ -346,6 +347,12 @@ export async function updateReceiptVoucher(id: string, input: ReceiptVoucherInpu
 export async function postReceiptVoucher(id: string, journalEntryId: string) {
   await requirePermission("receipt_voucher", "post");
   const companyId = await getCurrentCompanyId();
+
+  // The form's adjustment rule, enforced where it cannot be walked around: a
+  // copied receipt is built server-side with no adjustments and could be posted
+  // from the detail page without ever meeting the form.
+  const unadjusted = await unadjustedReceiptError(companyId, id);
+  if (unadjusted) return { error: unadjusted };
 
   const result = await postVoucher({ companyId, voucherType: "receipt_voucher", journalEntryId });
   if ("error" in result) return result;

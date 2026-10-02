@@ -66,7 +66,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           companyName={company?.name ?? ""}
           allowedModules={allowedModules}
           isAdmin={isAdmin === true}
-          bells={<HeaderBells />}
+          bells={<HeaderBells companyId={companyId} />}
         />
       }
     >

@@ -20,15 +20,15 @@ import { RenewalsBell } from "./renewals-bell";
  * approvals access no longer counts approvals, and one with no rental access no
  * longer loads a single lease.
  */
-export function HeaderBells() {
+export function HeaderBells({ companyId }: { companyId: string }) {
   return (
     <Suspense fallback={null}>
-      <Bells />
+      <Bells companyId={companyId} />
     </Suspense>
   );
 }
 
-async function Bells() {
+async function Bells({ companyId }: { companyId: string }) {
   const [canSeeApprovals, canSeeUaeRent, canSeePkRent] = await Promise.all([
     hasPermission("approval_workflows", "view"),
     hasPermission("uae_rent_invoice", "view"),
@@ -38,14 +38,6 @@ async function Bells() {
   if (!canSeeApprovals && !canSeeRent) return null;
 
   const supabase = await createClient();
-  const { data: profile } = await supabase
-    .schema("core")
-    .from("user_profiles")
-    .select("default_company_id")
-    .single();
-  const companyId = profile?.default_company_id as string | null | undefined;
-  if (!companyId) return null;
-
   const [approvals, renewals] = await Promise.all([
     canSeeApprovals
       ? supabase

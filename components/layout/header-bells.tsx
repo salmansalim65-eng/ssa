@@ -39,10 +39,17 @@ async function Bells({ companyId }: { companyId: string }) {
 
   const supabase = await createClient();
   const [approvals, renewals] = await Promise.all([
+    // Counted off the vouchers themselves, not off the approval records.
+    //
+    // Those are two different books, and they disagree: the register showed
+    // "Pending approval 1" while the bell, reading voucher_approvals, showed
+    // nothing — so the one person who had to act on it had no sign it existed.
+    // A voucher's own status is what the register filters on and what the bell
+    // links to, so it is what the bell now counts. One source, one answer.
     canSeeApprovals
       ? supabase
           .schema("accounting")
-          .from("voucher_approvals")
+          .from("journal_entries")
           .select("id", { count: "exact", head: true })
           .eq("company_id", companyId)
           .eq("status", "pending")

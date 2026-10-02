@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { MoreHorizontalIcon } from "lucide-react";
+import { EyeIcon, EyeOffIcon, MoreHorizontalIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -80,6 +80,11 @@ export function UserRowActions({
   const [pendingRoleId, setPendingRoleId] = useState(currentRoleId ?? "");
   const [editOpen, setEditOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
+  // Reveals what is being TYPED here, so a password set for someone else can be
+  // read back before it is handed over. Nothing stored is ever shown: the
+  // database keeps a one-way hash, so an existing password cannot be displayed
+  // by this screen or any other.
+  const [showPassword, setShowPassword] = useState(false);
 
   const editForm = useForm<UpdateUserInput>({
     resolver: zodResolver(updateUserSchema),
@@ -100,6 +105,7 @@ export function UserRowActions({
       }
       toast.success("Password updated");
       passwordForm.reset({ password: "", confirmPassword: "" });
+                setShowPassword(false);
       setPasswordOpen(false);
     });
   }
@@ -168,6 +174,7 @@ export function UserRowActions({
             <DropdownMenuItem
               onSelect={() => {
                 passwordForm.reset({ password: "", confirmPassword: "" });
+                setShowPassword(false);
                 setPasswordOpen(true);
               }}
             >
@@ -258,7 +265,22 @@ export function UserRowActions({
                   <FormItem>
                     <FormLabel>New password</FormLabel>
                     <FormControl>
-                      <Input type="password" autoComplete="new-password" {...field} />
+                      <div className="relative">
+                        <Input
+                          type={showPassword ? "text" : "password"}
+                          autoComplete="new-password"
+                          className="pr-10"
+                          {...field}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword((v) => !v)}
+                          className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
+                          aria-label={showPassword ? "Hide password" : "Show password"}
+                        >
+                          {showPassword ? <EyeOffIcon className="size-4" /> : <EyeIcon className="size-4" />}
+                        </button>
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -271,7 +293,11 @@ export function UserRowActions({
                   <FormItem>
                     <FormLabel>Confirm password</FormLabel>
                     <FormControl>
-                      <Input type="password" autoComplete="new-password" {...field} />
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        autoComplete="new-password"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

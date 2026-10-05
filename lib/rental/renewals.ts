@@ -66,6 +66,11 @@ export function renewalMonthLabel(end: string | null | undefined): string {
   return end ? monthLabel(addDays(end, 1)) : "";
 }
 
+/** "YYYY-MM" of the month a contract falls due for renewal. */
+function renewalMonthKey(end: string): string {
+  return addDays(end, 1).slice(0, 7);
+}
+
 /**
  * What a property's row means:
  * - `due` / `later` — under contract: let today, or signed to start shortly.
@@ -77,7 +82,11 @@ export function renewalMonthLabel(end: string | null | undefined): string {
  */
 export type RenewalStatus = "overdue" | "due" | "later" | "vacant";
 
-/** A renewal is "due" once it is this close, and the alert counts it from here. */
+/**
+ * A renewal is "due" once it is this close, and the alert counts it from here.
+ * It is an EARLY warning only: a renewal stays due through the whole of its
+ * renewal month however long ago the contract ended — see renewalStatusOf.
+ */
 export const DUE_SOON_DAYS = 30;
 
 /** The two countries the business lets in. HH is a UAE letting, not a country. */
@@ -302,7 +311,7 @@ export async function loadLeaseRenewals(
       // Declared empty wins the row. Otherwise a property under contract — let
       // today, or signed to start — reads by how long that contract runs, and
       // one whose contract has simply run out is an overdue renewal.
-      status: isVacant ? "vacant" : renewalStatusOf(daysLeft),
+      status: isVacant ? "vacant" : renewalStatusOf(daysLeft, end, asOf),
       contracts: lets.length,
       isVacant,
       vacantFrom,
@@ -325,12 +334,27 @@ export async function loadLeaseRenewals(
   return rows;
 }
 
-/** The band a still-running contract falls in. */
-function renewalStatusOf(daysLeft: number | null): RenewalStatus {
-  if (daysLeft === null) return "vacant";
-  if (daysLeft < 0) return "overdue";
-  if (daysLeft <= DUE_SOON_DAYS) return "due";
-  return "later";
+/**
+ * The band a contract falls in, measured in MONTHS rather than days.
+ *
+ * A tenancy that ran to 30 September is not late on the 1st of October — that
+ * is the day its renewal becomes due. It has the whole of October to be signed,
+ * and is only late once October has gone. Counting days made it overdue, in
+ * red, the morning after it ended, which pushed four properties into the red
+ * band that nobody was actually behind on.
+ *
+ * So the renewal MONTH decides: past it is overdue, inside it is due, and
+ * before it a contract still runs — with the thirty-day warning kept as an
+ * early nudge for one whose month has not come round yet.
+ */
+function renewalStatusOf(daysLeft: number | null, end: string | null, asOf: string): RenewalStatus {
+  if (daysLeft === null || !end) return "vacant";
+
+  const renewalMonth = renewalMonthKey(end);
+  const thisMonth = asOf.slice(0, 7);
+  if (thisMonth > renewalMonth) return "overdue";
+  if (thisMonth === renewalMonth) return "due";
+  return daysLeft <= DUE_SOON_DAYS ? "due" : "later";
 }
 
 /**

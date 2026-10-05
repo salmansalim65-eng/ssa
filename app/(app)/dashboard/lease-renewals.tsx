@@ -101,6 +101,10 @@ function statusText(r: LeaseRenewal): string {
   // Signed but not begun — not let today, and not claimed to be empty either.
   if (r.notStartedYet && r.start) return `Starts ${formatDate(r.start)}`;
   if (r.daysLeft === 0) return "Renewal due today";
+  // A contract that has already ended is still due for the rest of its renewal
+  // month, so it reaches here with days in the negative. Counting those out as
+  // "Due in -5 days" says nothing; the month it is due in does.
+  if ((r.daysLeft ?? 0) < 0) return `Due ${r.renewLabel}`;
   return `Due in ${r.daysLeft} ${r.daysLeft === 1 ? "day" : "days"}`;
 }
 

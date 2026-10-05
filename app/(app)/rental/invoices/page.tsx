@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import {
+  TABLE_TOTAL_ROW,
   Table,
   TableBody,
   TableCell,
@@ -215,8 +216,8 @@ export default async function RentInvoicesPage({
                 </TableRow>
               ))}
             </TableBody>
-            <tfoot className="border-t bg-muted/40">
-              <TableRow className="hover:bg-transparent">
+            <tfoot>
+              <TableRow className={TABLE_TOTAL_ROW}>
                 <TableCell colSpan={6} className="font-medium">
                   Total{totalLines.length > 1 ? " (per currency)" : ""}
                 </TableCell>

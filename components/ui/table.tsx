@@ -103,6 +103,18 @@ function TableCaption({ className, ...props }: React.ComponentProps<"caption">) 
   );
 }
 
+/**
+ * The total row of a report table: the same navy band as the column headers,
+ * closing the table the way the header opens it.
+ *
+ * It used to be a faint grey tint, barely a shade off the rows above it, so the
+ * one figure a reader scrolls to the bottom FOR was the hardest line to pick
+ * out. Only the trial balance had the strong treatment; this is that, named
+ * once so every report's total reads the same.
+ */
+export const TABLE_TOTAL_ROW =
+  "bg-header font-semibold text-header-foreground hover:bg-header [&>td]:border-header-border";
+
 export {
   Table,
   TableHeader,

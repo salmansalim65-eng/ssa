@@ -6,6 +6,7 @@ import { Building2Icon, CalendarRangeIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  TABLE_TOTAL_ROW,
   Table,
   TableBody,
   TableCell,
@@ -1228,8 +1229,8 @@ async function loadDetail(
             )}
           </TableBody>
           {rows.length > 0 && (
-            <tfoot className="border-t bg-muted/40">
-              <TableRow className="hover:bg-transparent">
+            <tfoot>
+              <TableRow className={TABLE_TOTAL_ROW}>
                 <TableCell className="font-medium">Total</TableCell>
                 <TableCell className="text-right font-mono font-semibold tabular-nums">{fmtOrBlank(totalDebit)}</TableCell>
                 <TableCell className="text-right font-mono font-semibold tabular-nums">{fmtOrBlank(totalCredit)}</TableCell>
@@ -1697,8 +1698,8 @@ async function loadDetail(
           )}
         </TableBody>
         {rows.length > 0 && (
-          <tfoot className="border-t bg-muted/40">
-            <TableRow className="hover:bg-transparent">
+          <tfoot>
+            <TableRow className={TABLE_TOTAL_ROW}>
               <TableCell colSpan={6} className="font-medium">
                 Total
               </TableCell>

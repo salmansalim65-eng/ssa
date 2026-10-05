@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 
 import {
+  TABLE_TOTAL_ROW,
   Table,
   TableBody,
   TableCell,
@@ -229,10 +230,8 @@ export default async function TrialBalancePage({
           </TableBody>
           {rows.length > 0 && (
             <tfoot>
-              {/* Dark navy treatment (same tokens as the column headers) so the
-                  totals stand out from the account rows. */}
-              <TableRow className="bg-header text-header-foreground hover:bg-header [&>td]:border-header-border">
-                <TableCell colSpan={3} className="font-semibold">
+              <TableRow className={TABLE_TOTAL_ROW}>
+                <TableCell colSpan={3}>
                   Total
                 </TableCell>
                 <TableCell

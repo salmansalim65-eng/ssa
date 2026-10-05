@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
 import { formatAccountCode, formatDate, formatMoney, formatVoucherNo } from "@/lib/format";
+import { TABLE_TOTAL_ROW } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { PostExpenseButton } from "./post-expense-button";
 
@@ -350,7 +351,7 @@ export async function ExpenseReport({
                       ))}
                     </tbody>
                     <tfoot>
-                      <tr className="border-t-2 bg-muted/30 font-semibold [&_td]:px-3 [&_td]:py-2">
+                      <tr className={cn(TABLE_TOTAL_ROW, "[&_td]:px-3 [&_td]:py-2")}>
                         <td colSpan={3}>Total received</td>
                         <td className="text-right tabular-nums">
                           {currency && <span className="mr-1 text-xs font-medium">{currency}</span>}
@@ -401,7 +402,7 @@ export async function ExpenseReport({
                         ))}
                       </tbody>
                       <tfoot>
-                        <tr className="border-t-2 bg-muted/30 font-semibold [&_td]:px-3 [&_td]:py-2">
+                        <tr className={cn(TABLE_TOTAL_ROW, "[&_td]:px-3 [&_td]:py-2")}>
                           <td colSpan={6}>Total spent</td>
                           <td className="text-right tabular-nums">
                             {currency && <span className="mr-1 text-xs font-medium">{currency}</span>}
@@ -556,7 +557,7 @@ function Breakdown({
             ))}
           </tbody>
           <tfoot>
-            <tr className="border-t-2 bg-muted/30 font-semibold [&_td]:px-3 [&_td]:py-2">
+            <tr className={cn(TABLE_TOTAL_ROW, "[&_td]:px-3 [&_td]:py-2")}>
               <td>Total</td>
               <td />
               <td className="text-right tabular-nums">

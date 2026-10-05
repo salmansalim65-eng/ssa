@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 
 import {
+  TABLE_TOTAL_ROW,
   Table,
   TableBody,
   TableCell,
@@ -36,7 +37,6 @@ export interface BsTotal {
   emphatic?: boolean;
 }
 
-const totalRowClass = "bg-header text-header-foreground hover:bg-header [&>td]:border-header-border";
 
 export function BalanceSheetTree({
   rows,
@@ -173,7 +173,7 @@ export function BalanceSheetTree({
           )}
 
           {totals.map((t) => (
-            <TableRow key={t.label} className={totalRowClass}>
+            <TableRow key={t.label} className={TABLE_TOTAL_ROW}>
               <TableCell />
               <TableCell className={t.emphatic ? "font-semibold" : "font-medium"}>{t.label}</TableCell>
               <TableCell className={cn("text-right font-mono tabular-nums", t.emphatic ? "font-semibold" : "font-medium")}>{t.debit}</TableCell>

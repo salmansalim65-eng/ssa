@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 
 import {
+  TABLE_TOTAL_ROW,
   Table,
   TableBody,
   TableCell,
@@ -32,7 +33,6 @@ interface SectionTotal {
   amount: string;
 }
 
-const totalRowClass = "bg-header text-header-foreground hover:bg-header [&>td]:border-header-border";
 
 export function ProfitLossTree({
   income,
@@ -123,7 +123,7 @@ export function ProfitLossTree({
             </TableCell>
           </TableRow>
           {income.map(renderRow)}
-          <TableRow className={totalRowClass}>
+          <TableRow className={TABLE_TOTAL_ROW}>
             <TableCell />
             <TableCell className="font-medium">Total income</TableCell>
             <TableCell className="text-right font-mono font-medium tabular-nums">{incomeTotal.debit}</TableCell>
@@ -137,7 +137,7 @@ export function ProfitLossTree({
             </TableCell>
           </TableRow>
           {expense.map(renderRow)}
-          <TableRow className={totalRowClass}>
+          <TableRow className={TABLE_TOTAL_ROW}>
             <TableCell />
             <TableCell className="font-medium">Total expense</TableCell>
             <TableCell className="text-right font-mono font-medium tabular-nums">{expenseTotal.debit}</TableCell>
@@ -145,7 +145,7 @@ export function ProfitLossTree({
             <TableCell className="text-right font-mono font-medium tabular-nums">{expenseTotal.amount}</TableCell>
           </TableRow>
 
-          <TableRow className={totalRowClass}>
+          <TableRow className={TABLE_TOTAL_ROW}>
             <TableCell colSpan={4} className="font-semibold">
               Net profit / (loss)
             </TableCell>

@@ -2,6 +2,7 @@ import { Fragment, Suspense } from "react";
 
 import { cn } from "@/lib/utils";
 import {
+  TABLE_TOTAL_ROW,
   Table,
   TableBody,
   TableCell,
@@ -469,8 +470,8 @@ function SummaryTable({
           ))}
         </TableBody>
         {rows.length > 0 && (
-          <tfoot className="border-t bg-muted/40">
-            <TableRow className="hover:bg-transparent">
+          <tfoot>
+            <TableRow className={TABLE_TOTAL_ROW}>
               <TableCell colSpan={2} className="font-medium">
                 Total
               </TableCell>

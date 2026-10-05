@@ -1,4 +1,5 @@
 import {
+  TABLE_TOTAL_ROW,
   Table,
   TableBody,
   TableCell,
@@ -219,8 +220,8 @@ export default async function AssetValuationReportPage({
             )}
           </TableBody>
           {rows.length > 0 && (
-            <tfoot className="border-t bg-muted/40">
-              <TableRow className="hover:bg-transparent">
+            <tfoot>
+              <TableRow className={TABLE_TOTAL_ROW}>
                 <TableCell colSpan={4} className="font-medium">
                   Total{!cur && " (mixed currencies)"}
                 </TableCell>

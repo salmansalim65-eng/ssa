@@ -1630,14 +1630,21 @@ async function loadDetail(
               outstanding: 0,
             };
             // The month band (green bar) also carries that month's column totals,
-            // so no separate subtotal row is needed.
-            const bandCell = "bg-ledger/15 py-1.5 text-right font-mono text-xs font-semibold tabular-nums text-ledger dark:bg-ledger/25";
+            // so no separate subtotal row is needed — which makes it a total row,
+            // and it is drawn like one: a solid band rather than the 15% tint it
+            // used to be, which sat so close to the rows around it that the
+            // month's figures read as just another line of the list.
+            //
+            // Green, where the grand total at the foot is navy: one says "this
+            // month adds up to", the other "the whole sheet adds up to", and a
+            // sheet of a dozen navy bands would say neither.
+            const bandCell = "bg-ledger py-1.5 text-right font-mono text-xs font-semibold tabular-nums text-white";
             const monthHeader =
               monthKey !== prevKey ? (
                 <TableRow key={`grp-${monthKey}`} className="hover:bg-transparent">
                   <TableCell
                     colSpan={7}
-                    className="bg-ledger/15 py-1.5 text-xs font-semibold uppercase tracking-wide text-ledger dark:bg-ledger/25"
+                    className="bg-ledger py-1.5 text-xs font-semibold uppercase tracking-wide text-white"
                   >
                     Due {dueMonth(r.due_date as string)}
                   </TableCell>

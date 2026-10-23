@@ -67,6 +67,8 @@ export async function GET(request: Request) {
       // One standing renewal notification per device: today's replaces
       // yesterday's rather than piling up.
       tag: "lease-renewals",
+      // The icon carries the same number the header's renewals bell does.
+      count: rows.length,
     });
 
     summary.push({

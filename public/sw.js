@@ -34,11 +34,30 @@ self.addEventListener("push", (event) => {
     data: { url: data.url || "/dashboard" },
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  // The count on the app's own icon, so a closed app still says how much is
+  // waiting. Guarded twice over: not every browser has the Badging API, and a
+  // push that carries no count must not wipe a badge somebody else set.
+  const badge =
+    typeof data.count === "number" && self.navigator && "setAppBadge" in self.navigator
+      ? data.count > 0
+        ? self.navigator.setAppBadge(data.count).catch(() => {})
+        : self.navigator.clearAppBadge().catch(() => {})
+      : null;
+
+  event.waitUntil(
+    badge
+      ? Promise.all([self.registration.showNotification(title, options), badge])
+      : self.registration.showNotification(title, options),
+  );
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  // Opening the app is the user dealing with it; the page sets the badge again
+  // from the live counts as soon as it loads.
+  if (self.navigator && "clearAppBadge" in self.navigator) {
+    self.navigator.clearAppBadge().catch(() => {});
+  }
   const url = (event.notification.data && event.notification.data.url) || "/dashboard";
 
   event.waitUntil(

@@ -34,6 +34,12 @@ export interface PushMessage {
   url: string;
   /** Notifications sharing a tag replace one another instead of stacking up. */
   tag?: string;
+  /**
+   * What to put on the installed app's icon. The service worker sets it as the
+   * push arrives, so a closed app still shows how much is waiting; omit it and
+   * the badge is left exactly as it was.
+   */
+  count?: number;
 }
 
 /**

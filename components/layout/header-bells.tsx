@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { loadLeaseRenewals, renewalsNeedingAttention } from "@/lib/rental/renewals";
+import { AppBadge } from "./app-badge";
 import { ApprovalsBell } from "./approvals-bell";
 import { RenewalsBell } from "./renewals-bell";
 
@@ -58,9 +59,13 @@ async function Bells({ companyId }: { companyId: string }) {
   ]);
 
   const due = canSeeRent ? renewalsNeedingAttention(renewals) : [];
+  const waiting = (canSeeApprovals ? approvals.count ?? 0 : 0) + due.length;
 
   return (
     <>
+      {/* The same total on the installed app's icon, so the dock or home screen
+          says what the header says without the app being open. */}
+      <AppBadge count={waiting} />
       {canSeeApprovals && <ApprovalsBell count={approvals.count ?? 0} />}
       {canSeeRent && (
         <RenewalsBell count={due.length} overdue={due.filter((r) => r.status === "overdue").length} />

@@ -21,8 +21,7 @@ export interface ProjectTile {
 
 export const PROJECT_TILES: ProjectTile[] = [
   { short: "MBL", label: "MBL", href: "https://mbl-erp.vercel.app", colour: "bg-blue-600" },
-  // RMI has no deployment of its own yet; put its URL here when it does.
-  { short: "RMI", label: "RMI", href: null, colour: "bg-emerald-600" },
+  { short: "RMI", label: "RMI", href: "https://erp.rolemodel.pk", colour: "bg-emerald-600" },
   // SSA is this app, so its tile stays inside it rather than reloading the site.
   { short: "SSA", label: "SSA", href: "/dashboard", colour: "bg-orange-600" },
   { short: "VI", label: "VISTA", href: "https://erp.vista-group.co", colour: "bg-purple-600" },

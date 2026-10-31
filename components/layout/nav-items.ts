@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboardIcon,
+  LayoutGridIcon,
   Building2Icon,
   BuildingIcon,
   UsersIcon,
@@ -51,6 +52,7 @@ export const navSections: NavSection[] = [
   {
     label: "",
     items: [
+      { label: "My Dashboard", href: "/my-dashboard", icon: LayoutGridIcon, module: "dashboard" },
       { label: "Dashboard", href: "/dashboard", icon: LayoutDashboardIcon, module: "dashboard" },
       { label: "Financial Dashboard", href: "/reports/financial-dashboard", icon: PieChartIcon, module: "reports" },
     ],

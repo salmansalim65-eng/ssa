@@ -7,6 +7,7 @@ import { PROJECT_TILES } from "@/lib/my-dashboard/projects";
 import { cn } from "@/lib/utils";
 import { isMissingTable, NOTES_MIGRATION } from "@/lib/my-dashboard/notes-availability";
 import type { NoteColour, NoteItem } from "@/features/core/notes/schemas";
+import { ExternalReports } from "./external-reports";
 import { Greeting, GreetingClock } from "./greeting-clock";
 import { NotesBoard, type NoteRow } from "./notes";
 import { MyDashboardReports } from "./reports";
@@ -72,6 +73,8 @@ export default async function MyDashboardPage() {
         <h2 className="text-sm font-semibold text-foreground">Reports</h2>
         <MyDashboardReports companyId={companyId} />
       </section>
+
+      <ExternalReports />
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-foreground">Notes</h2>

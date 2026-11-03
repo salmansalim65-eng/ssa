@@ -196,148 +196,6 @@ export async function OccupancyView({ companyId, year }: { companyId: string; ye
         />
       </div>
 
-      {/* The year as one bar per property: how much of it was let, how much
-          stood empty. Green and red alone are the hardest pair for a colour-blind
-          reader — deutan separation measures well under the safe floor — so every
-          segment carries its own day count and the legend names both. The colour
-          is the quick read; the numbers are the meaning. */}
-      {rows.length > 0 && (
-        <div className="shrink-0 rounded-xl border bg-card p-4 shadow-xs">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Days of {year} let, by property
-            </p>
-            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <span className="size-2.5 rounded-sm" style={{ backgroundColor: OCCUPIED }} aria-hidden />
-                Occupied
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="size-2.5 rounded-sm" style={{ backgroundColor: VACANT }} aria-hidden />
-                Vacant
-              </span>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            {[...rows]
-              .sort((a, b) => b.occupied - a.occupied)
-              .map((r) => {
-                const occupiedPct = (r.occupied / totalDays) * 100;
-                return (
-                  <div key={r.id} className="flex items-center gap-3">
-                    <span className="w-44 shrink-0 truncate text-xs text-muted-foreground" title={r.name}>
-                      {r.name}
-                    </span>
-                    <div className="flex h-5 flex-1 overflow-hidden rounded-sm">
-                      <div
-                        className="flex items-center justify-end pr-1.5 text-[0.65rem] font-semibold tabular-nums text-white"
-                        style={{
-                          width: `${occupiedPct}%`,
-                          backgroundColor: OCCUPIED,
-                          // A 2px gap so the two fills read as separate marks.
-                          marginRight: r.occupied > 0 && r.vacant > 0 ? 2 : 0,
-                        }}
-                        title={`${r.name} — occupied ${r.occupied} of ${totalDays} days`}
-                      >
-                        {occupiedPct >= 12 ? r.occupied : ""}
-                      </div>
-                      <div
-                        className="flex flex-1 items-center justify-end pr-1.5 text-[0.65rem] font-semibold tabular-nums text-white"
-                        style={{ backgroundColor: VACANT }}
-                        title={`${r.name} — vacant ${r.vacant} of ${totalDays} days`}
-                      >
-                        {r.vacant > 0 ? r.vacant : ""}
-                      </div>
-                    </div>
-                    <span className="w-28 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
-                      {r.occupied}/{totalDays} · {pct(r.occupied, totalDays)}
-                    </span>
-                  </div>
-                );
-              })}
-          </div>
-        </div>
-      )}
-
-      {/* The same year read the other way round: a column per month, so a bad
-          month shows up as a shape rather than as a number somebody has to
-          compare by eye across the total row. Each column's full height is that
-          month's CAPACITY — every property, every day of the month the window
-          covers — which is why a part month like the first or the current one
-          is a shorter column rather than a worse one.
-
-          Only the months the window reaches are drawn. Drawing January to July
-          as empty, in a year whose books open in August, would read as seven
-          months nobody let the properties for. */}
-      {rows.length > 0 && coveredMonths.length > 0 && (
-        <div className="shrink-0 rounded-xl border bg-card p-4 shadow-xs">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Days let, by month
-            </p>
-            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <span className="size-2.5 rounded-sm" style={{ backgroundColor: OCCUPIED }} aria-hidden />
-                Occupied
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="size-2.5 rounded-sm" style={{ backgroundColor: VACANT }} aria-hidden />
-                Vacant
-              </span>
-            </div>
-          </div>
-          <div className="flex items-end gap-2 sm:gap-3">
-            {coveredMonths.map((m) => {
-              const monthCapacity = rows.length * daysInWindowByMonth[m];
-              const occupied = monthTotals[m];
-              const vacant = monthCapacity - occupied;
-              // The tallest month sets the scale, so a part month is visibly
-              // shorter than a whole one instead of being stretched to match it.
-              const columnPct = (monthCapacity / maxMonthCapacity) * 100;
-              const occupiedPct = monthCapacity > 0 ? (occupied / monthCapacity) * 100 : 0;
-              return (
-                <div key={m} className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
-                  <span className="text-[0.65rem] font-semibold tabular-nums text-muted-foreground">
-                    {pct(occupied, monthCapacity)}
-                  </span>
-                  <div className="flex h-40 w-full items-end">
-                    <div
-                      className="flex w-full flex-col-reverse overflow-hidden rounded-sm"
-                      style={{ height: `${columnPct}%` }}
-                      title={`${MONTHS[m]} — ${occupied} of ${monthCapacity} days let (${rows.length} ${
-                        rows.length === 1 ? "property" : "properties"
-                      } × ${daysInWindowByMonth[m]} days)`}
-                    >
-                      <div
-                        className="flex items-start justify-center pt-0.5 text-[0.65rem] font-semibold tabular-nums text-white"
-                        style={{
-                          height: `${occupiedPct}%`,
-                          backgroundColor: OCCUPIED,
-                          // A 2px gap so the two fills read as separate marks.
-                          marginTop: occupied > 0 && vacant > 0 ? 2 : 0,
-                        }}
-                      >
-                        {occupiedPct >= 14 ? occupied : ""}
-                      </div>
-                      <div
-                        className="flex flex-1 items-start justify-center pt-0.5 text-[0.65rem] font-semibold tabular-nums text-white"
-                        style={{ backgroundColor: VACANT }}
-                      >
-                        {vacant > 0 && 100 - occupiedPct >= 14 ? vacant : ""}
-                      </div>
-                    </div>
-                  </div>
-                  <span className="text-xs font-medium text-foreground">{MONTHS[m]}</span>
-                  <span className="font-mono text-[0.65rem] tabular-nums text-muted-foreground">
-                    {occupied}/{monthCapacity}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       <div className="min-h-0 flex-1 overflow-auto rounded-xl border bg-card shadow-xs print:overflow-visible">
         <table className="w-full min-w-[1100px] border-collapse text-sm">
           <thead className="sticky top-0 z-20">
@@ -431,6 +289,146 @@ export async function OccupancyView({ companyId, year }: { companyId: string; ye
           </tbody>
         </table>
       </div>
+      {/* The year as one bar per property: how much of it was let, how much
+          stood empty. Green and red alone are the hardest pair for a colour-blind
+          reader — deutan separation measures well under the safe floor — so every
+          segment carries its own day count and the legend names both. The colour
+          is the quick read; the numbers are the meaning. */}
+      {rows.length > 0 && (
+        <div className="shrink-0 rounded-xl border bg-card p-4 shadow-xs">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Days of {year} let, by property
+            </p>
+            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <span className="size-2.5 rounded-sm" style={{ backgroundColor: OCCUPIED }} aria-hidden />
+                Occupied
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="size-2.5 rounded-sm" style={{ backgroundColor: VACANT }} aria-hidden />
+                Vacant
+              </span>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            {[...rows]
+              .sort((a, b) => b.occupied - a.occupied)
+              .map((r) => {
+                const occupiedPct = (r.occupied / totalDays) * 100;
+                return (
+                  <div key={r.id} className="flex items-center gap-3">
+                    <span className="w-44 shrink-0 truncate text-xs text-muted-foreground" title={r.name}>
+                      {r.name}
+                    </span>
+                    <div className="flex h-5 flex-1 overflow-hidden rounded-sm">
+                      <div
+                        className="flex items-center justify-end pr-1.5 text-[0.65rem] font-semibold tabular-nums text-white"
+                        style={{
+                          width: `${occupiedPct}%`,
+                          backgroundColor: OCCUPIED,
+                          // A 2px gap so the two fills read as separate marks.
+                          marginRight: r.occupied > 0 && r.vacant > 0 ? 2 : 0,
+                        }}
+                        title={`${r.name} — occupied ${r.occupied} of ${totalDays} days`}
+                      >
+                        {occupiedPct >= 12 ? r.occupied : ""}
+                      </div>
+                      <div
+                        className="flex flex-1 items-center justify-end pr-1.5 text-[0.65rem] font-semibold tabular-nums text-white"
+                        style={{ backgroundColor: VACANT }}
+                        title={`${r.name} — vacant ${r.vacant} of ${totalDays} days`}
+                      >
+                        {r.vacant > 0 ? r.vacant : ""}
+                      </div>
+                    </div>
+                    <span className="w-28 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
+                      {r.occupied}/{totalDays} · {pct(r.occupied, totalDays)}
+                    </span>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
+      {/* The same year read the other way round: a row per month, so a bad
+          month shows up as a shape rather than as a number somebody has to
+          compare by eye across the total row. Drawn like the chart above it —
+          one grammar for both, so the eye does not have to learn a second one
+          halfway down the page.
+
+          A month's bar is as WIDE as that month's capacity — every property,
+          every day of the month the window covers — measured against the
+          fullest month. So a part month like the first or the current one is a
+          short bar rather than a full-width one that reads as badly let.
+
+          Only the months the window reaches are drawn. Drawing January to July
+          as empty, in a year whose books open in August, would read as seven
+          months nobody let the properties for. */}
+      {rows.length > 0 && coveredMonths.length > 0 && (
+        <div className="shrink-0 rounded-xl border bg-card p-4 shadow-xs">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Days of {year} let, by month
+            </p>
+            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <span className="size-2.5 rounded-sm" style={{ backgroundColor: OCCUPIED }} aria-hidden />
+                Occupied
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="size-2.5 rounded-sm" style={{ backgroundColor: VACANT }} aria-hidden />
+                Vacant
+              </span>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            {coveredMonths.map((m) => {
+              const monthCapacity = rows.length * daysInWindowByMonth[m];
+              const occupied = monthTotals[m];
+              const vacant = monthCapacity - occupied;
+              const widthPct = (monthCapacity / maxMonthCapacity) * 100;
+              const occupiedPct = monthCapacity > 0 ? (occupied / monthCapacity) * 100 : 0;
+              const label = `${MONTHS[m]} — ${rows.length} ${
+                rows.length === 1 ? "property" : "properties"
+              } × ${daysInWindowByMonth[m]} days`;
+              return (
+                <div key={m} className="flex items-center gap-3">
+                  <span className="w-44 shrink-0 truncate text-xs text-muted-foreground">{MONTHS[m]}</span>
+                  <div className="flex-1">
+                    <div className="flex h-5 overflow-hidden rounded-sm" style={{ width: `${widthPct}%` }}>
+                      <div
+                        className="flex items-center justify-end pr-1.5 text-[0.65rem] font-semibold tabular-nums text-white"
+                        style={{
+                          width: `${occupiedPct}%`,
+                          backgroundColor: OCCUPIED,
+                          // A 2px gap so the two fills read as separate marks.
+                          marginRight: occupied > 0 && vacant > 0 ? 2 : 0,
+                        }}
+                        title={`${label} — occupied ${occupied} of ${monthCapacity} days`}
+                      >
+                        {occupiedPct >= 12 ? occupied : ""}
+                      </div>
+                      <div
+                        className="flex flex-1 items-center justify-end pr-1.5 text-[0.65rem] font-semibold tabular-nums text-white"
+                        style={{ backgroundColor: VACANT }}
+                        title={`${label} — vacant ${vacant} of ${monthCapacity} days`}
+                      >
+                        {vacant > 0 ? vacant : ""}
+                      </div>
+                    </div>
+                  </div>
+                  <span className="w-28 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
+                    {occupied}/{monthCapacity} · {pct(occupied, monthCapacity)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
     </>
   );
 }

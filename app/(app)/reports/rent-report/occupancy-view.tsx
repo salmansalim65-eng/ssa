@@ -1,3 +1,5 @@
+import { Fragment } from "react";
+
 import { CsvExportButton } from "@/components/reports/csv-export-button";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -156,6 +158,7 @@ export async function OccupancyView({ companyId, year }: { companyId: string; ye
     .map((d, m) => (d > 0 ? m : -1))
     .filter((m) => m >= 0);
   const maxMonthCapacity = Math.max(1, ...coveredMonths.map((m) => rows.length * daysInWindowByMonth[m]));
+  const maxMonthDays = Math.max(1, ...coveredMonths.map((m) => daysInWindowByMonth[m]));
   const pct = (occupied: number, of: number) => (of > 0 ? `${((occupied / of) * 100).toFixed(1)}%` : "—");
 
   const dash = "–";
@@ -289,13 +292,22 @@ export async function OccupancyView({ companyId, year }: { companyId: string; ye
           </tbody>
         </table>
       </div>
-      {/* The year as one bar per property: how much of it was let, how much
-          stood empty. Green and red alone are the hardest pair for a colour-blind
-          reader — deutan separation measures well under the safe floor — so every
-          segment carries its own day count and the legend names both. The colour
-          is the quick read; the numbers are the meaning. */}
-      {rows.length > 0 && (
-        <div className="shrink-0 rounded-xl border bg-card p-4 shadow-xs">
+      {/* The year as a grid: a row per property, a column per month, and the
+          whole window on the right.
+
+          One bar per property said WHICH property stood empty but never WHEN —
+          a property let solidly until October and one let in fits read the same
+          at 90 of 95 days. Broken into months, an empty stretch is a gap you can
+          point at, in the same month columns the table above uses.
+
+          A month's cell is as WIDE as that month is long, measured against the
+          longest, so November's three days are a sliver rather than a full cell
+          that reads as a month gone to waste. The cells carry no numbers — the
+          table directly above is nothing but those numbers, and repeating them
+          at this size would be unreadable; each cell names its own figures on
+          hover, and the Total column keeps its count in full. */}
+      {rows.length > 0 && coveredMonths.length > 0 && (
+        <div className="shrink-0 overflow-x-auto rounded-xl border bg-card p-4 shadow-xs">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Days of {year} let, by property
@@ -311,43 +323,84 @@ export async function OccupancyView({ companyId, year }: { companyId: string; ye
               </span>
             </div>
           </div>
-          <div className="space-y-1.5">
+          <div
+            className="grid min-w-[700px] items-center gap-x-2 gap-y-1.5"
+            style={{
+              gridTemplateColumns: `11rem repeat(${coveredMonths.length}, minmax(0, 1fr)) minmax(0, 1.6fr) 7rem`,
+            }}
+          >
+            <span aria-hidden />
+            {coveredMonths.map((m) => (
+              <span
+                key={`head-${m}`}
+                className="text-center text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground"
+              >
+                {MONTHS[m]}
+              </span>
+            ))}
+            <span className="text-center text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
+              Total
+            </span>
+            <span aria-hidden />
+
             {[...rows]
               .sort((a, b) => b.occupied - a.occupied)
-              .map((r) => {
-                const occupiedPct = (r.occupied / totalDays) * 100;
-                return (
-                  <div key={r.id} className="flex items-center gap-3">
-                    <span className="w-44 shrink-0 truncate text-xs text-muted-foreground" title={r.name}>
-                      {r.name}
-                    </span>
-                    <div className="flex h-5 flex-1 overflow-hidden rounded-sm">
-                      <div
-                        className="flex items-center justify-end pr-1.5 text-[0.65rem] font-semibold tabular-nums text-white"
-                        style={{
-                          width: `${occupiedPct}%`,
-                          backgroundColor: OCCUPIED,
-                          // A 2px gap so the two fills read as separate marks.
-                          marginRight: r.occupied > 0 && r.vacant > 0 ? 2 : 0,
-                        }}
-                        title={`${r.name} — occupied ${r.occupied} of ${totalDays} days`}
-                      >
-                        {occupiedPct >= 12 ? r.occupied : ""}
+              .map((r) => (
+                <Fragment key={r.id}>
+                  <span className="truncate text-xs text-muted-foreground" title={r.name}>
+                    {r.name}
+                  </span>
+                  {coveredMonths.map((m) => {
+                    const monthDays = daysInWindowByMonth[m];
+                    const occupied = r.months[m];
+                    const vacant = monthDays - occupied;
+                    return (
+                      <div key={m} className="flex h-5 items-center justify-center">
+                        <div
+                          className="flex h-full overflow-hidden rounded-sm"
+                          // As wide as the month is long, against the longest
+                          // month: three days of November is a sliver.
+                          style={{ width: `${(monthDays / maxMonthDays) * 100}%` }}
+                          title={`${r.name} — ${MONTHS[m]}: ${occupied} let, ${vacant} vacant of ${monthDays} days`}
+                        >
+                          <div
+                            style={{
+                              width: `${(occupied / monthDays) * 100}%`,
+                              backgroundColor: OCCUPIED,
+                              // 1px, not 2 — at this size 2 eats the shorter fill.
+                              marginRight: occupied > 0 && vacant > 0 ? 1 : 0,
+                            }}
+                          />
+                          <div className="flex-1" style={{ backgroundColor: VACANT }} />
+                        </div>
                       </div>
-                      <div
-                        className="flex flex-1 items-center justify-end pr-1.5 text-[0.65rem] font-semibold tabular-nums text-white"
-                        style={{ backgroundColor: VACANT }}
-                        title={`${r.name} — vacant ${r.vacant} of ${totalDays} days`}
-                      >
-                        {r.vacant > 0 ? r.vacant : ""}
-                      </div>
+                    );
+                  })}
+                  <div className="flex h-5 overflow-hidden rounded-sm">
+                    <div
+                      className="flex items-center justify-end pr-1.5 text-[0.65rem] font-semibold tabular-nums text-white"
+                      style={{
+                        width: `${(r.occupied / totalDays) * 100}%`,
+                        backgroundColor: OCCUPIED,
+                        marginRight: r.occupied > 0 && r.vacant > 0 ? 2 : 0,
+                      }}
+                      title={`${r.name} — occupied ${r.occupied} of ${totalDays} days`}
+                    >
+                      {(r.occupied / totalDays) * 100 >= 18 ? r.occupied : ""}
                     </div>
-                    <span className="w-28 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
-                      {r.occupied}/{totalDays} · {pct(r.occupied, totalDays)}
-                    </span>
+                    <div
+                      className="flex flex-1 items-center justify-end pr-1.5 text-[0.65rem] font-semibold tabular-nums text-white"
+                      style={{ backgroundColor: VACANT }}
+                      title={`${r.name} — vacant ${r.vacant} of ${totalDays} days`}
+                    >
+                      {r.vacant > 0 ? r.vacant : ""}
+                    </div>
                   </div>
-                );
-              })}
+                  <span className="text-right font-mono text-xs tabular-nums text-muted-foreground">
+                    {r.occupied}/{totalDays} · {pct(r.occupied, totalDays)}
+                  </span>
+                </Fragment>
+              ))}
           </div>
         </div>
       )}

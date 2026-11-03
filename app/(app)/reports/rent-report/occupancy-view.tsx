@@ -352,16 +352,19 @@ export async function OccupancyView({ companyId, year }: { companyId: string; ye
         </div>
       )}
 
-      {/* The same year read the other way round: a row per month, so a bad
+      {/* The same year read the other way round: a column per month, headed by
+          its month, so the chart's months line up with the table's and a bad
           month shows up as a shape rather than as a number somebody has to
-          compare by eye across the total row. Drawn like the chart above it —
-          one grammar for both, so the eye does not have to learn a second one
-          halfway down the page.
+          compare by eye across the total row.
 
-          A month's bar is as WIDE as that month's capacity — every property,
-          every day of the month the window covers — measured against the
-          fullest month. So a part month like the first or the current one is a
-          short bar rather than a full-width one that reads as badly let.
+          A column is as TALL as that month's capacity — every property, every
+          day of the month the window covers — measured against the fullest
+          month. So a part month like the first or the current one is a short
+          column rather than a full one that reads as badly let.
+
+          The columns are a fixed width rather than stretched to fill the row:
+          seven properties over four months would otherwise give squat blocks
+          the eye reads as bars of their own.
 
           Only the months the window reaches are drawn. Drawing January to July
           as empty, in a year whose books open in August, would read as seven
@@ -383,44 +386,49 @@ export async function OccupancyView({ companyId, year }: { companyId: string; ye
               </span>
             </div>
           </div>
-          <div className="space-y-1.5">
+          <div className="flex flex-wrap gap-3 sm:gap-4">
             {coveredMonths.map((m) => {
               const monthCapacity = rows.length * daysInWindowByMonth[m];
               const occupied = monthTotals[m];
               const vacant = monthCapacity - occupied;
-              const widthPct = (monthCapacity / maxMonthCapacity) * 100;
+              const columnPct = (monthCapacity / maxMonthCapacity) * 100;
               const occupiedPct = monthCapacity > 0 ? (occupied / monthCapacity) * 100 : 0;
               const label = `${MONTHS[m]} — ${rows.length} ${
                 rows.length === 1 ? "property" : "properties"
               } × ${daysInWindowByMonth[m]} days`;
               return (
-                <div key={m} className="flex items-center gap-3">
-                  <span className="w-44 shrink-0 truncate text-xs text-muted-foreground">{MONTHS[m]}</span>
-                  <div className="flex-1">
-                    <div className="flex h-5 overflow-hidden rounded-sm" style={{ width: `${widthPct}%` }}>
+                <div key={m} className="flex w-16 shrink-0 flex-col items-center gap-1">
+                  <span className="text-xs font-semibold text-foreground">{MONTHS[m]}</span>
+                  <span className="text-[0.65rem] tabular-nums text-muted-foreground">
+                    {pct(occupied, monthCapacity)}
+                  </span>
+                  <div className="flex h-44 w-full items-end">
+                    <div
+                      className="flex w-full flex-col-reverse overflow-hidden rounded-sm"
+                      style={{ height: `${columnPct}%` }}
+                      title={`${label} — ${occupied} of ${monthCapacity} days let`}
+                    >
                       <div
-                        className="flex items-center justify-end pr-1.5 text-[0.65rem] font-semibold tabular-nums text-white"
+                        className="flex items-start justify-center pt-0.5 text-[0.65rem] font-semibold tabular-nums text-white"
                         style={{
-                          width: `${occupiedPct}%`,
+                          height: `${occupiedPct}%`,
                           backgroundColor: OCCUPIED,
                           // A 2px gap so the two fills read as separate marks.
-                          marginRight: occupied > 0 && vacant > 0 ? 2 : 0,
+                          marginTop: occupied > 0 && vacant > 0 ? 2 : 0,
                         }}
-                        title={`${label} — occupied ${occupied} of ${monthCapacity} days`}
                       >
-                        {occupiedPct >= 12 ? occupied : ""}
+                        {occupiedPct >= 14 ? occupied : ""}
                       </div>
                       <div
-                        className="flex flex-1 items-center justify-end pr-1.5 text-[0.65rem] font-semibold tabular-nums text-white"
+                        className="flex flex-1 items-start justify-center pt-0.5 text-[0.65rem] font-semibold tabular-nums text-white"
                         style={{ backgroundColor: VACANT }}
-                        title={`${label} — vacant ${vacant} of ${monthCapacity} days`}
                       >
-                        {vacant > 0 ? vacant : ""}
+                        {vacant > 0 && 100 - occupiedPct >= 14 ? vacant : ""}
                       </div>
                     </div>
                   </div>
-                  <span className="w-28 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
-                    {occupied}/{monthCapacity} · {pct(occupied, monthCapacity)}
+                  <span className="font-mono text-[0.65rem] tabular-nums text-muted-foreground">
+                    {occupied}/{monthCapacity}
                   </span>
                 </div>
               );

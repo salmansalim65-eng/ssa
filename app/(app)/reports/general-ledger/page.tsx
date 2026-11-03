@@ -492,6 +492,22 @@ export default async function GeneralLedgerPage({
                 const sectionDebit = round2(s.rows.reduce((a, r) => a + r.debit_amount, 0));
                 const sectionCredit = round2(s.rows.reduce((a, r) => a + r.credit_amount, 0));
                 const closing = s.rows.length ? s.rows[s.rows.length - 1].balance : s.opening;
+                // What of that closing balance is actually owed by the report's
+                // end date, and what was simply billed ahead.
+                //
+                // A year of rent invoiced in one sitting is all in the period,
+                // so the closing balance reads as the whole year owed today.
+                // That is the figure somebody takes to a tenant, and it is
+                // wrong by every month not yet reached. A row with no due date
+                // is owed now — only a dated one can be in the future.
+                const notYetDue = round2(
+                  s.rows.reduce((a, r) => {
+                    const due = dueDateFor(r);
+                    if (!due || due <= to) return a;
+                    return a + (s.isDebitNormal ? r.debit_amount - r.credit_amount : r.credit_amount - r.debit_amount);
+                  }, 0),
+                );
+                const dueToDate = round2(closing - notYetDue);
                 // Rows sharing a due month are banded together; each successive
                 // due-month group alternates a light grey shade so periods read
                 // apart at a glance.
@@ -572,6 +588,19 @@ export default async function GeneralLedgerPage({
                       </TableCell>
                       <TableCell className="text-right font-mono font-semibold tabular-nums">
                         {bal(closing)}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {s.rows.length > 0 && Math.abs(notYetDue) >= 0.005 && (
+                    <TableRow className="bg-ledger/10 hover:bg-ledger/10 [&>td]:py-1.5">
+                      <TableCell colSpan={7} className="text-right text-xs text-muted-foreground">
+                        of which due by {formatDate(to)} · billed in advance
+                      </TableCell>
+                      <TableCell colSpan={2} className="text-right font-mono text-xs tabular-nums text-muted-foreground">
+                        {bal(dueToDate)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs tabular-nums text-muted-foreground">
+                        {money(Math.abs(notYetDue))}
                       </TableCell>
                     </TableRow>
                   )}

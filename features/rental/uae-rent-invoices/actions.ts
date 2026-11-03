@@ -156,9 +156,15 @@ export async function generateUaeRentInvoice(scheduleId: string) {
 
   const invoiceId = crypto.randomUUID();
   const today = new Date().toISOString().slice(0, 10);
-  // The invoice is dated by the lease's voucher date (mandatory on new leases);
-  // legacy leases without one fall back to today.
-  const invoiceDate = (lease.voucher_date as string | null) ?? today;
+  // Each invoice is dated by the month it bills, not by the day the lease was
+  // entered. A year's invoices raised in one sitting were all taking the
+  // lease's voucher date, so twelve months of rent landed on the ledger at
+  // once: the tenant's balance read as a year's rent owed on day one, and
+  // every month's income fell into the month somebody happened to type it.
+  // The schedule's own due date is that month, and it is what period_start is
+  // already set from, so the document date, the period and the ledger order
+  // all say the same thing.
+  const invoiceDate = (schedule.due_date as string | null) ?? (lease.voucher_date as string | null) ?? today;
   const periodEnd = addPeriod(schedule.due_date, lease.rent_cycle);
 
   const je = await createJournalEntry({

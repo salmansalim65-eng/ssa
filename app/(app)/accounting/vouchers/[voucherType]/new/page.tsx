@@ -20,6 +20,7 @@ import { resolveExpenseKhiAccounts, type ChartAccountRow } from "@/lib/accountin
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { isPhase5VoucherType, VOUCHER_TYPE_LABELS } from "@/lib/vouchers/meta";
 import { isJournalTabType, VoucherTypeTabs } from "@/components/vouchers/voucher-type-tabs";
+import { VoucherToolbar } from "@/components/vouchers/voucher-toolbar";
 
 export default async function NewVoucherPage({
   params,
@@ -231,8 +232,10 @@ export default async function NewVoucherPage({
         eyebrow="Vouchers"
         title={`New ${VOUCHER_TYPE_LABELS[voucherType]}`}
         description="Fill in the header details and entry lines, then save as a draft."
-        backHref={`/accounting/vouchers/${voucherType}`}
+        backHref="/dashboard"
       />
+
+      <VoucherToolbar voucherType={voucherType} companyId={companyId} canCreate={canCreate} />
 
       {isJournalTabType(voucherType) && <VoucherTypeTabs active={voucherType} mode="new" />}
 

@@ -544,7 +544,7 @@ export default async function EditVoucherPage({
             ? "Changes re-post to the ledger: the posted voucher is reversed and raised again."
             : "Update this voucher while it is unposted. A posted voucher of this type can't be edited."
         }
-        backHref={`/accounting/vouchers/${voucherType}`}
+        backHref={`/accounting/vouchers/${voucherType}/${id}`}
       />
 
       {voucherType === "receipt_voucher" && (

@@ -384,3 +384,37 @@ async function matchLongTermLines(
       .eq("id", l.id);
   }
 }
+
+/**
+ * Remember what the agent's sheet calls each unit.
+ *
+ * Asked once, on the first statement that names it; after that an import maps
+ * the row by itself. Matching unit names by eye on every import is how a
+ * letting quietly lands on the wrong property.
+ */
+export async function rememberUnitAliases(pairs: { alias: string; costCenterId: string }[]) {
+  const clean = pairs.filter((p) => p.alias?.trim() && p.costCenterId);
+  if (clean.length === 0) return { success: true };
+
+  await requirePermission("rent_statement", "create");
+  const companyId = await getCurrentCompanyId();
+  const supabase = await createClient();
+  const { data: user } = await supabase.auth.getUser();
+
+  // Unique on (company, lowercased alias), so re-importing the same sheet
+  // leaves one row rather than a pile of identical ones.
+  const { error } = await supabase
+    .schema("rental")
+    .from("unit_aliases")
+    .upsert(
+      clean.map((p) => ({
+        company_id: companyId,
+        alias: p.alias.trim(),
+        cost_center_id: p.costCenterId,
+        created_by: user.user!.id,
+      })),
+      { onConflict: "company_id,alias", ignoreDuplicates: true },
+    );
+  if (error) return { error: error.message };
+  return { success: true };
+}

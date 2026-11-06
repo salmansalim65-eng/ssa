@@ -25,7 +25,7 @@ import { MonthInput } from "@/components/vouchers/month-input";
 import { TABLE_TOTAL_ROW } from "@/components/ui/table";
 import { amountValue, blankAmount } from "@/lib/forms/amount";
 import { formatMoney } from "@/lib/format";
-import { monthStart, rentPeriod } from "@/lib/rental/rent-months";
+import { monthStart, rentMonthLabel, rentMonthsOf, rentPeriod } from "@/lib/rental/rent-months";
 import { cn } from "@/lib/utils";
 import { createRentStatement, rememberUnitAliases } from "@/features/rental/rent-statements/actions";
 import { parseStatementSheet } from "@/lib/rental/statement-sheet";
@@ -119,6 +119,10 @@ export function RentStatementForm({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
+  // Why a save was refused. Without this the form simply did nothing when a
+  // row was incomplete — the grid has no room for a message under each cell,
+  // so every reason is gathered here instead.
+  const [submitErrors, setSubmitErrors] = useState<string[]>([]);
 
   const form = useForm<RentStatementFormValues>({
     resolver: zodResolver(rentStatementSchema),
@@ -235,8 +239,31 @@ export function RentStatementForm({
   const tallyDiff =
     sheetTotal == null ? null : Math.round((totals.net - sheetTotal) * 100) / 100;
 
+  function onInvalid(errors: Record<string, unknown>) {
+    const messages: string[] = [];
+    const lineErrors = errors.lines as unknown;
+    if (Array.isArray(lineErrors)) {
+      lineErrors.forEach((row, i) => {
+        if (!row) return;
+        for (const issue of Object.values(row as Record<string, { message?: string }>)) {
+          if (issue?.message) messages.push(`Line ${i + 1}: ${issue.message}`);
+        }
+      });
+    }
+    for (const key of ["statementDate", "statementMonth", "agentAccountId", "currencyId", "exchangeRate", "sheetTotalNet"]) {
+      const issue = errors[key] as { message?: string } | undefined;
+      if (issue?.message) messages.push(issue.message);
+    }
+    if (!Array.isArray(lineErrors)) {
+      const issue = errors.lines as { message?: string } | undefined;
+      if (issue?.message) messages.push(issue.message);
+    }
+    setSubmitErrors(messages.length ? messages : ["Something on the form is not filled in yet."]);
+  }
+
   function onSubmit(values: RentStatementFormValues) {
     setFormError(null);
+    setSubmitErrors([]);
     startTransition(async () => {
       const result = await createRentStatement(values as unknown as RentStatementInput);
       if (result?.error) {
@@ -256,7 +283,7 @@ export function RentStatementForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+      <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-5">
         {/* The sheet itself, read in. It never saves and never posts: it fills
             the form in, and everything below still has to be looked at and
             agreed to. A file that cannot be read says so rather than filling
@@ -280,6 +307,17 @@ export function RentStatementForm({
             Reads the .xlsx into the lines below. Nothing is saved until you say so.
           </p>
         </div>
+
+        {submitErrors.length > 0 && (
+          <ul className="space-y-1 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm">
+            {submitErrors.map((e, i) => (
+              <li key={i} className="flex items-start gap-2 text-destructive">
+                <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
+                {e}
+              </li>
+            ))}
+          </ul>
+        )}
 
         {importNotes.length > 0 && (
           <ul className="space-y-1 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
@@ -548,6 +586,8 @@ function LineRow({
     form.setValue(`lines.${index}.months`, period.months, { shouldDirty: true });
   }, [period, from, to, statementMonth, form, index]);
 
+  const months = Math.max(1, Number(line?.months) || 1);
+  const rentMonth = (line?.rentMonth as string) || statementMonth;
   const rent = n(line?.rentAmount);
   const mgmt = n(line?.managementAmount);
   const deductions = n(line?.dewa) + n(line?.internet) + n(line?.accessCard) + n(line?.wifi) + n(line?.other);
@@ -593,6 +633,14 @@ function LineRow({
             </Select>
           )}
         />
+        {lineType === "long_term" && (
+          // Said on the row itself, not only in the documentation: this unit is
+          // invoiced monthly from its lease already, so the line is here to
+          // make the total agree with the sheet and posts nothing of its own.
+          <p className="mt-1 text-[0.7rem] leading-tight text-muted-foreground">
+            already invoiced — total only
+          </p>
+        )}
       </td>
       <td className="px-2 py-1">
         <FormField
@@ -639,6 +687,11 @@ function LineRow({
           name={`lines.${index}.rentMonth`}
           render={({ field }) => <MonthInput value={field.value} onChange={field.onChange} />}
         />
+        {months > 1 && (
+          <p className="mt-1 text-[0.7rem] leading-tight text-muted-foreground">
+            {rentMonthsOf(rentMonth, months).map(rentMonthLabel).join(" + ")}
+          </p>
+        )}
         {period?.isPartial && (
           <p className="mt-1 flex items-start gap-1 text-[0.7rem] leading-tight text-amber-700 dark:text-amber-500">
             <AlertTriangleIcon className="mt-px size-3 shrink-0" />

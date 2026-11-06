@@ -22,6 +22,7 @@ import { DeletePostedVoucherButton } from "@/components/vouchers/delete-posted-v
 import { VoucherActions } from "@/components/vouchers/voucher-actions";
 import { VoucherDeleteButton } from "@/components/vouchers/voucher-delete-button";
 import { VoucherPagerSlot } from "@/components/vouchers/voucher-pager";
+import { VoucherToolbar } from "@/components/vouchers/voucher-toolbar";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { getModulePermissions, isCurrentUserAdmin } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
@@ -164,7 +165,7 @@ export default async function VoucherDetailPage({
       <PageHeader
         eyebrow={VOUCHER_TYPE_LABELS[voucherType]}
         title={detail.voucherNo ?? "Draft"}
-        backHref={`/accounting/vouchers/${voucherType}`}
+        backHref="/dashboard"
         actions={
           <>
             {/* The vouchers either side of this one, so a run of them can be
@@ -176,6 +177,9 @@ export default async function VoucherDetailPage({
               companyId={companyId}
               id={id}
             />
+            {/* The pager steps one at a time; Browse jumps. Both are here so
+                neither needs a trip back to the register. */}
+            <VoucherToolbar voucherType={voucherType} companyId={companyId} canCreate={canCreate} />
             <VoucherStatusBadge status={detail.status} />
             <PrintButton />
             {/* Opening balances (corrections) and receipt vouchers (reversed &

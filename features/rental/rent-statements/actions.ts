@@ -293,6 +293,7 @@ export async function postRentStatement(id: string) {
   const lines = (lineRows ?? []) as {
     id: string;
     line_type: "short_term" | "long_term";
+    cost_center_id: string | null;
     period_from: string | null;
     period_to: string | null;
     rent_month: string;
@@ -361,9 +362,6 @@ export async function postRentStatement(id: string) {
         continue;
       }
 
-      const periodStart = months === 1 ? (l.period_from ?? monthList[i]) : monthList[i];
-      const periodEnd = months === 1 ? (l.period_to ?? monthEnd(monthList[i])) : monthEnd(monthList[i]);
-
       const invoiceId = crypto.randomUUID();
       const { error } = await supabase.schema("rental").from("uae_rent_invoices").insert({
         id: invoiceId,
@@ -376,8 +374,12 @@ export async function postRentStatement(id: string) {
         invoice_date: statement.statement_date,
         // Rent is owed for the month it belongs to, so that is when it falls due.
         due_date: monthList[i],
-        period_start: periodStart,
-        period_end: periodEnd,
+        // The MONTH, not the agent's own window. A letting running 28-07 to
+        // 27-08 is August's rent, and a period starting in July would have the
+        // month-wise tally call it July's. The real window stays on the
+        // statement line, which is where the sheet is read back.
+        period_start: monthList[i],
+        period_end: monthEnd(monthList[i]),
         amount: gross,
         management_amount: management,
         other_expenses: otherExpenses,
@@ -419,40 +421,84 @@ export async function postRentStatement(id: string) {
 }
 
 /**
- * Tie each long-term line to the invoice that already bills it.
+ * Tie each long-term line to the invoices that already bill it.
  *
  * Best-effort: a line that finds no invoice is left unmatched rather than
  * failing the posting. The statement is still right — the invoice simply has
  * not been raised from the lease yet, and the match can be made when it is.
  * Silently raising a second invoice instead is the one thing that must not
  * happen, which is why nothing is created here.
+ *
+ * Matched by PROPERTY and month, not by month alone: two units billed for the
+ * same month are indistinguishable otherwise, and the first one found wins.
+ * Every month the line covers is matched, so a two-month line claims both of
+ * its bills and the statement's tally can show what each month came to.
  */
 async function matchLongTermLines(
   companyId: string,
-  lines: { id: string; line_type: string; rent_month: string; months: number }[],
+  lines: { id: string; line_type: string; cost_center_id: string | null; rent_month: string; months: number }[],
 ) {
   const longTerm = lines.filter((l) => l.line_type === "long_term");
   if (longTerm.length === 0) return;
 
   const supabase = await createClient();
+
+  // The property behind each line, and the leases on that property.
+  const ccIds = [...new Set(longTerm.map((l) => l.cost_center_id).filter(Boolean))] as string[];
+  const { data: ccRows } = ccIds.length
+    ? await supabase.schema("accounting").from("cost_centers").select("id, asset_id").in("id", ccIds)
+    : { data: [] as { id: string; asset_id: string | null }[] };
+  const assetByCc = new Map(
+    ((ccRows as { id: string; asset_id: string | null }[]) ?? []).map((c) => [c.id, c.asset_id]),
+  );
+  const assetIds = [...new Set([...assetByCc.values()].filter(Boolean))] as string[];
+  const { data: leaseRows } = assetIds.length
+    ? await supabase
+        .schema("rental")
+        .from("uae_leases")
+        .select("id, asset_id")
+        .in("asset_id", assetIds)
+        .is("deleted_at", null)
+    : { data: [] as { id: string; asset_id: string }[] };
+  const leasesByAsset = new Map<string, string[]>();
+  for (const l of ((leaseRows as { id: string; asset_id: string }[]) ?? [])) {
+    leasesByAsset.set(l.asset_id, [...(leasesByAsset.get(l.asset_id) ?? []), l.id]);
+  }
+
   for (const l of longTerm) {
-    // The first month it covers is enough to find it: a two-month line matches
-    // the first of its two invoices, and the second is found by its own month.
-    const { data } = await supabase
-      .schema("rental")
-      .from("uae_rent_invoices")
-      .select("id")
-      .eq("company_id", companyId)
-      .eq("period_start", l.rent_month)
-      .is("rent_statement_line_id", null)
-      .limit(1);
-    const match = (data ?? [])[0] as { id: string } | undefined;
-    if (!match) continue;
-    await supabase
-      .schema("rental")
-      .from("rent_statement_lines")
-      .update({ matched_invoice_id: match.id })
-      .eq("id", l.id);
+    const assetId = l.cost_center_id ? assetByCc.get(l.cost_center_id) : null;
+    const leaseIds = assetId ? (leasesByAsset.get(assetId) ?? []) : [];
+    if (leaseIds.length === 0) continue;
+
+    let firstMatch: string | null = null;
+    for (const month of rentMonthsOf(l.rent_month, Math.max(1, Number(l.months) || 1))) {
+      const { data } = await supabase
+        .schema("rental")
+        .from("uae_rent_invoices")
+        .select("id")
+        .eq("company_id", companyId)
+        .in("lease_id", leaseIds)
+        .eq("period_start", month)
+        .is("rent_statement_line_id", null)
+        .limit(1);
+      const match = (data ?? [])[0] as { id: string } | undefined;
+      if (!match) continue;
+      // Stamping the line on the invoice is what lets the statement's tally
+      // find it again — and what stops a later statement claiming it twice.
+      await supabase
+        .schema("rental")
+        .from("uae_rent_invoices")
+        .update({ rent_statement_line_id: l.id })
+        .eq("id", match.id);
+      if (!firstMatch) firstMatch = match.id;
+    }
+    if (firstMatch) {
+      await supabase
+        .schema("rental")
+        .from("rent_statement_lines")
+        .update({ matched_invoice_id: firstMatch })
+        .eq("id", l.id);
+    }
   }
 }
 

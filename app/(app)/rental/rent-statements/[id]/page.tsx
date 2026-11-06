@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
 import { TABLE_TOTAL_ROW } from "@/components/ui/table";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
+import { PostStatementButton } from "./post-button";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, formatMoney, formatVoucherNo } from "@/lib/format";
@@ -21,7 +22,11 @@ import type { JournalEntryStatus } from "@/types/database.types";
  */
 export default async function RentStatementPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  if (!(await hasPermission("rent_statement", "view"))) notFound();
+  const [canView, canPost] = await Promise.all([
+    hasPermission("rent_statement", "view"),
+    hasPermission("rent_statement", "post"),
+  ]);
+  if (!canView) notFound();
 
   const companyId = await getCurrentCompanyId();
   const supabase = await createClient();
@@ -108,7 +113,12 @@ export default async function RentStatementPage({ params }: { params: Promise<{ 
         title={statement.voucher_no ? formatVoucherNo(statement.voucher_no as string) : "Draft"}
         description={`${(agent?.account_name as string) ?? "Agent"} · ${rentMonthLabel(statementMonth)} · dated ${formatDate(statement.statement_date as string)}`}
         backHref="/rental/rent-statements"
-        actions={<VoucherStatusBadge status={((entry?.status as JournalEntryStatus) ?? "draft")} />}
+        actions={
+          <>
+            <VoucherStatusBadge status={((entry?.status as JournalEntryStatus) ?? "draft")} />
+            {canPost && entry?.status !== "posted" && <PostStatementButton id={id} />}
+          </>
+        }
       />
 
       <div className="overflow-x-auto rounded-xl border bg-card shadow-xs">

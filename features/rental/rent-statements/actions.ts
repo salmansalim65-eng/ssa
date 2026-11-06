@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { requirePermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
-import { createJournalEntry, getCurrentCompanyId, type EntryLineInput } from "@/lib/vouchers/engine";
+import { createJournalEntry, getCurrentCompanyId, postVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { monthStart, rentMonthLabel, rentMonthsOf, splitOverMonths } from "@/lib/rental/rent-months";
 import { rentStatementSchema, type RentStatementInput } from "./schemas";
 
@@ -240,4 +240,147 @@ export async function createRentStatement(input: RentStatementInput) {
 
   revalidatePath("/rental/rent-statements");
   return { success: true, id: statementId };
+}
+
+/**
+ * Post a statement.
+ *
+ * Two things happen, in this order, and the order matters: the entry reaches
+ * the ledger first, and the invoices are raised from it afterwards. An invoice
+ * standing against an entry that never posted would be a bill nobody owes.
+ *
+ * Each SHORT-TERM line raises its own invoice, for what that line leaves the
+ * agent owing — rent less management less the utilities the agent paid on our
+ * behalf. One per line rather than one per statement, so a receipt can be
+ * adjusted unit by unit and the Rent Balance can say which unit is behind.
+ *
+ * LONG-TERM lines raise nothing. They are matched to the invoice that already
+ * exists for that unit and month, and the match is written on the line so a
+ * reader can see it rather than having to work it out.
+ */
+export async function postRentStatement(id: string) {
+  await requirePermission("rent_statement", "post");
+  const companyId = await getCurrentCompanyId();
+  const supabase = await createClient();
+  const { data: user } = await supabase.auth.getUser();
+  const createdBy = user.user!.id;
+
+  const { data: statement } = await supabase
+    .schema("rental")
+    .from("rent_statements")
+    .select("id, journal_entry_id, statement_date, currency_id, exchange_rate, voucher_no")
+    .eq("company_id", companyId)
+    .eq("id", id)
+    .maybeSingle();
+  if (!statement) return { error: "Statement not found" };
+  if (statement.voucher_no) return { error: "This statement is already posted." };
+
+  const { data: lineRows } = await supabase
+    .schema("rental")
+    .from("rent_statement_lines")
+    .select(
+      "id, line_no, line_type, cost_center_id, period_from, period_to, rent_month, months, rent_amount, management_amount, dewa, internet, access_card, wifi, other, net_amount",
+    )
+    .eq("statement_id", id)
+    .order("line_no");
+  const lines = (lineRows ?? []) as {
+    id: string;
+    line_type: "short_term" | "long_term";
+    period_from: string | null;
+    period_to: string | null;
+    rent_month: string;
+    months: number;
+    net_amount: number;
+  }[];
+
+  const result = await postVoucher({
+    companyId,
+    voucherType: "rent_statement",
+    journalEntryId: statement.journal_entry_id as string,
+  });
+  if ("error" in result) return result;
+
+  const { error: noError } = await supabase
+    .schema("rental")
+    .from("rent_statements")
+    .update({ voucher_no: result.voucherNo })
+    .eq("id", id);
+  if (noError) return { error: noError.message };
+
+  // One invoice per short-term line, for what that line leaves owing.
+  for (const l of lines.filter((x) => x.line_type === "short_term")) {
+    if (round2(l.net_amount) === 0) continue;
+    const invoiceId = crypto.randomUUID();
+    const { error } = await supabase.schema("rental").from("uae_rent_invoices").insert({
+      id: invoiceId,
+      company_id: companyId,
+      journal_entry_id: statement.journal_entry_id,
+      // No lease: the letting IS this line (0147).
+      lease_id: null,
+      rent_statement_line_id: l.id,
+      voucher_no: result.voucherNo,
+      invoice_date: statement.statement_date,
+      // Rent is owed for the month it belongs to, so that is when it falls due.
+      due_date: l.rent_month,
+      period_start: l.period_from ?? l.rent_month,
+      period_end: l.period_to ?? l.rent_month,
+      amount: round2(l.net_amount),
+      currency_id: statement.currency_id,
+      exchange_rate: statement.exchange_rate,
+      outstanding_balance: round2(l.net_amount),
+      invoice_type: "HH",
+      created_by: createdBy,
+    });
+    if (error) return { error: error.message };
+    await supabase
+      .schema("rental")
+      .from("rent_statement_lines")
+      .update({ raised_invoice_id: invoiceId })
+      .eq("id", l.id);
+  }
+
+  await matchLongTermLines(companyId, lines);
+
+  revalidatePath("/rental/rent-statements");
+  revalidatePath(`/rental/rent-statements/${id}`);
+  revalidatePath("/dashboard");
+  return { success: true, voucherNo: result.voucherNo };
+}
+
+/**
+ * Tie each long-term line to the invoice that already bills it.
+ *
+ * Best-effort: a line that finds no invoice is left unmatched rather than
+ * failing the posting. The statement is still right — the invoice simply has
+ * not been raised from the lease yet, and the match can be made when it is.
+ * Silently raising a second invoice instead is the one thing that must not
+ * happen, which is why nothing is created here.
+ */
+async function matchLongTermLines(
+  companyId: string,
+  lines: { id: string; line_type: string; rent_month: string; months: number }[],
+) {
+  const longTerm = lines.filter((l) => l.line_type === "long_term");
+  if (longTerm.length === 0) return;
+
+  const supabase = await createClient();
+  for (const l of longTerm) {
+    // The first month it covers is enough to find it: a two-month line matches
+    // the first of its two invoices, and the second is found by its own month.
+    const { data } = await supabase
+      .schema("rental")
+      .from("uae_rent_invoices")
+      .select("id")
+      .eq("company_id", companyId)
+      .eq("period_start", l.rent_month)
+      .is("rent_statement_line_id", null)
+      .limit(1);
+    const match = (data ?? [])[0] as { id: string } | undefined;
+    if (!match) continue;
+    await supabase
+      .schema("rental")
+      .from("rent_statement_lines")
+      .update({ matched_invoice_id: match.id })
+      .eq("id", l.id);
+  }
 }

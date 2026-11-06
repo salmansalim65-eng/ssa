@@ -271,6 +271,11 @@ async function journalEntryAmount(journalEntryId: string) {
  * Best-effort on purpose: a voucher that could not be routed is still saved as
  * a draft, and its detail screen still offers the manual button — which is why
  * that button now only appears when this did not get there first.
+ *
+ * It returns a `warning` when that happened, rather than failing: the save
+ * itself succeeded and must not be undone, but a voucher that quietly stayed a
+ * draft is one nobody is waiting on and nobody knows about. The caller passes
+ * the warning back to the screen that saved it.
  */
 export async function routeNewVoucher(params: {
   companyId: string;
@@ -278,11 +283,11 @@ export async function routeNewVoucher(params: {
   voucherId: string;
   journalEntryId: string;
   post: () => Promise<unknown>;
-}) {
+}): Promise<{ warning?: string }> {
   try {
     if (await isCurrentUserAdmin()) {
       await params.post();
-      return;
+      return {};
     }
     const result = await submitForApproval({
       companyId: params.companyId,
@@ -291,12 +296,19 @@ export async function routeNewVoucher(params: {
       journalEntryId: params.journalEntryId,
       amount: await journalEntryAmount(params.journalEntryId),
     });
+    if ("error" in result) return { warning: `Saved as a draft — ${result.error}` };
     // A voucher type with no active approval workflow comes straight back as
     // "approved" (fn_start_approval says so itself). Approved means posted, so
     // finish the job rather than leaving it parked with nobody to approve it.
-    if (!("error" in result) && result.approval?.status === "approved") await params.post();
-  } catch {
-    // The voucher is saved either way; the draft can be routed by hand.
+    if (result.approval?.status === "approved") await params.post();
+    return {};
+  } catch (error) {
+    // The voucher is saved either way and can be routed by hand — but SILENTLY
+    // leaving it a draft is how one goes unnoticed for a week. Whoever saved it
+    // is told, in the same breath, that it did not reach the approver.
+    return { warning: `Saved as a draft — it could not be sent for approval: ${
+      error instanceof Error ? error.message : String(error)
+    }` };
   }
 }
 

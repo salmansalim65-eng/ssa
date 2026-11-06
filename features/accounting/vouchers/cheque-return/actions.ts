@@ -142,8 +142,9 @@ export async function createChequeReturnVoucher(input: ChequeReturnVoucherInput,
   revalidatePath("/accounting/vouchers/cheque_return_voucher");
   // An admin's voucher posts on the spot; anyone else's goes straight to the
   // approver — no "Submit for approval" click in between.
+  let routed: { warning?: string } = {};
   if (options?.autoPostIfAdmin !== false) {
-    await routeNewVoucher({
+    routed = await routeNewVoucher({
       companyId,
       voucherType: "cheque_return_voucher",
       voucherId,
@@ -151,7 +152,7 @@ export async function createChequeReturnVoucher(input: ChequeReturnVoucherInput,
       post: () => postChequeReturnVoucher(voucherId, je.journalEntryId),
     });
   }
-  return { success: true, id: voucherId };
+  return { success: true, id: voucherId, warning: routed.warning };
 }
 
 /**

@@ -1,5 +1,7 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 
@@ -48,5 +50,37 @@ export async function removePushSubscription(endpoint: string) {
     .eq("endpoint", endpoint);
 
   if (error) return { error: error.message };
+  return { success: true };
+}
+
+/**
+ * Marks an alert read. Scoped to the signed-in reader by the row policy, so a
+ * stray id marks nothing rather than somebody else's.
+ */
+export async function markAlertRead(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .schema("core")
+    .from("alerts")
+    .update({ read_at: new Date().toISOString() })
+    .eq("id", id)
+    .is("read_at", null);
+  if (error) return { error: error.message };
+  revalidatePath("/notifications");
+  return { success: true };
+}
+
+/** Marks every unread alert of this reader, in this company, read. */
+export async function markAllAlertsRead() {
+  const companyId = await getCurrentCompanyId();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .schema("core")
+    .from("alerts")
+    .update({ read_at: new Date().toISOString() })
+    .eq("company_id", companyId)
+    .is("read_at", null);
+  if (error) return { error: error.message };
+  revalidatePath("/notifications");
   return { success: true };
 }

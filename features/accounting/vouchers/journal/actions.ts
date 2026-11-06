@@ -74,8 +74,9 @@ export async function createJournalVoucher(input: JournalVoucherInput, options?:
   revalidatePath("/accounting/vouchers/journal_voucher");
   // An admin's voucher posts on the spot; anyone else's goes straight to the
   // approver — no "Submit for approval" click in between.
+  let routed: { warning?: string } = {};
   if (options?.autoPostIfAdmin !== false) {
-    await routeNewVoucher({
+    routed = await routeNewVoucher({
       companyId,
       voucherType: "journal_voucher",
       voucherId,
@@ -83,7 +84,7 @@ export async function createJournalVoucher(input: JournalVoucherInput, options?:
       post: () => postJournalVoucher(voucherId, je.journalEntryId),
     });
   }
-  return { success: true, id: voucherId };
+  return { success: true, id: voucherId, warning: routed.warning };
 }
 
 export async function updateJournalVoucher(id: string, input: JournalVoucherInput) {

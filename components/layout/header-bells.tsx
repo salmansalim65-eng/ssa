@@ -3,15 +3,16 @@ import { Suspense } from "react";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { loadLeaseRenewals, renewalsNeedingAttention } from "@/lib/rental/renewals";
+import { AlertsBell } from "./alerts-bell";
 import { AppBadge } from "./app-badge";
 import { ApprovalsBell } from "./approvals-bell";
 import { RenewalsBell } from "./renewals-bell";
 
 /**
- * The two header bells, streamed rather than awaited.
+ * The header bells, streamed rather than awaited.
  *
- * Both are counts: vouchers waiting for a decision, and leases at or past
- * renewal. Neither is what anyone opened the page for, yet they used to be
+ * All three are counts: vouchers waiting for a decision, leases at or past
+ * renewal, and alerts — things that happened and were not read yet. Neither is what anyone opened the page for, yet they used to be
  * fetched in the layout — so every single navigation, on every screen, waited
  * on a scan of the leases and the assets before a byte of the page could be
  * sent. Behind a Suspense boundary the page renders immediately and the bells
@@ -36,10 +37,9 @@ async function Bells({ companyId }: { companyId: string }) {
     hasPermission("pk_rent_invoice", "view"),
   ]);
   const canSeeRent = canSeeUaeRent || canSeePkRent;
-  if (!canSeeApprovals && !canSeeRent) return null;
 
   const supabase = await createClient();
-  const [approvals, renewals] = await Promise.all([
+  const [approvals, renewals, alerts] = await Promise.all([
     // Counted off the vouchers themselves, not off the approval records.
     //
     // Those are two different books, and they disagree: the register showed
@@ -56,10 +56,23 @@ async function Bells({ companyId }: { companyId: string }) {
           .eq("status", "pending")
       : Promise.resolve({ count: null }),
     canSeeRent ? loadLeaseRenewals(supabase, companyId) : Promise.resolve([]),
+    // Everyone's own unread alerts. No permission gates it: the row policy
+    // already limits these to the reader's own, and an alert nobody may see is
+    // an alert that was never raised for them.
+    supabase
+      .schema("core")
+      .from("alerts")
+      .select("id", { count: "exact", head: true })
+      .eq("company_id", companyId)
+      .is("read_at", null),
   ]);
 
   const due = canSeeRent ? renewalsNeedingAttention(renewals) : [];
-  const waiting = (canSeeApprovals ? approvals.count ?? 0 : 0) + due.length;
+  // Alerts arrive with 0143; before that migration runs the table is not there
+  // and the count comes back null, which reads as "none" rather than taking
+  // the header down with it.
+  const unread = alerts.count ?? 0;
+  const waiting = (canSeeApprovals ? approvals.count ?? 0 : 0) + due.length + unread;
 
   return (
     <>
@@ -67,6 +80,7 @@ async function Bells({ companyId }: { companyId: string }) {
           says what the header says without the app being open. */}
       <AppBadge count={waiting} />
       {canSeeApprovals && <ApprovalsBell count={approvals.count ?? 0} />}
+      {unread > 0 && <AlertsBell count={unread} />}
       {canSeeRent && (
         <RenewalsBell count={due.length} overdue={due.filter((r) => r.status === "overdue").length} />
       )}

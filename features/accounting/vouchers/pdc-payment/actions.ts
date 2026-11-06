@@ -113,8 +113,9 @@ export async function createPdcPaymentVoucher(input: PdcPaymentVoucherInput, opt
   revalidatePath("/accounting/vouchers/pdc_payment_voucher");
   // An admin's voucher posts on the spot; anyone else's goes straight to the
   // approver — no "Submit for approval" click in between.
+  let routed: { warning?: string } = {};
   if (options?.autoPostIfAdmin !== false) {
-    await routeNewVoucher({
+    routed = await routeNewVoucher({
       companyId,
       voucherType: "pdc_payment_voucher",
       voucherId,
@@ -122,7 +123,7 @@ export async function createPdcPaymentVoucher(input: PdcPaymentVoucherInput, opt
       post: () => postPdcPaymentVoucher(voucherId, je.journalEntryId),
     });
   }
-  return { success: true, id: voucherId };
+  return { success: true, id: voucherId, warning: routed.warning };
 }
 
 export async function updatePdcPaymentVoucher(id: string, input: PdcPaymentVoucherInput) {

@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  FileSpreadsheetIcon,
   LayoutDashboardIcon,
   LayoutGridIcon,
   Building2Icon,
@@ -111,6 +112,7 @@ export const navSections: NavSection[] = [
   {
     label: "Vouchers",
     items: [
+      { label: "Rent Statements", href: "/rental/rent-statements/new", icon: FileSpreadsheetIcon, module: "rent_statement" },
       { label: "Receipt Vouchers", href: "/accounting/vouchers/receipt_voucher/new", icon: ArrowDownToLineIcon, module: "receipt_voucher" },
       { label: "Payment Vouchers", href: "/accounting/vouchers/payment_voucher/new", icon: ArrowUpFromLineIcon, module: "payment_voucher" },
       { label: "Expense Vouchers KHI", href: "/accounting/vouchers/expense_voucher/new", icon: WalletIcon, module: "expense_voucher" },

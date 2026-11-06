@@ -148,6 +148,8 @@ export function JvMaintenanceVoucherForm({
         return;
       }
       toast.success(isEdit ? "JV service charges updated" : "JV service charges created");
+      const warning = (result as { warning?: string } | undefined)?.warning;
+      if (warning) toast.warning(warning, { duration: 10_000 });
       router.push(`/accounting/vouchers/jv_maintenance_voucher/${result.id ?? voucherId}`);
     });
   }

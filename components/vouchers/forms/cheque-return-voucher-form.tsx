@@ -92,6 +92,8 @@ export function ChequeReturnVoucherForm({
         return;
       }
       toast.success(isEdit ? "Cheque return voucher updated" : "Cheque return voucher created");
+      const warning = (result as { warning?: string } | undefined)?.warning;
+      if (warning) toast.warning(warning, { duration: 10_000 });
       router.push(`/accounting/vouchers/cheque_return_voucher/${result.id ?? voucherId}`);
     });
   }

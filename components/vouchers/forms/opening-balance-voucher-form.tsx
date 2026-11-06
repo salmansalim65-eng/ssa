@@ -140,6 +140,8 @@ export function OpeningBalanceVoucherForm({
         return;
       }
       toast.success(isEdit ? "Opening balance voucher updated" : "Opening balance voucher created");
+      const warning = (result as { warning?: string } | undefined)?.warning;
+      if (warning) toast.warning(warning, { duration: 10_000 });
       router.push(`/accounting/vouchers/opening_balance_voucher/${result.id ?? voucherId}`);
     });
   }

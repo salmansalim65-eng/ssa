@@ -163,6 +163,8 @@ export function ReceiptVoucherForm({
         return;
       }
       toast.success(isEdit ? "Receipt voucher updated" : "Receipt voucher created");
+      const warning = (result as { warning?: string } | undefined)?.warning;
+      if (warning) toast.warning(warning, { duration: 10_000 });
       // Editing a POSTED receipt reverses it and re-posts a replacement with a
       // new id, so always navigate to the id the action returns (it equals the
       // original id for a plain draft edit).

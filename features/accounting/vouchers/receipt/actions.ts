@@ -6,6 +6,8 @@ import { isCurrentUserAdmin, requirePermission } from "@/lib/auth/permissions";
 import { formatMonth } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { unadjustedReceiptError } from "@/lib/rental/unadjusted-bills";
+import { adminUserIds, raiseAlert } from "@/lib/notifications/alerts";
+import { formatMoney } from "@/lib/format";
 import {balanceBaseAmounts, createJournalEntry, EDITABLE_STATUSES, ensureCanEditVoucher, getCurrentCompanyId, postVoucher, resubmitEditedVoucher, routeNewVoucher, type EntryLineInput } from "@/lib/vouchers/engine";
 import { receiptVoucherSchema, type ReceiptVoucherInput } from "./schemas";
 
@@ -159,18 +161,61 @@ export async function createReceiptVoucher(input: ReceiptVoucherInput, options?:
 
   revalidatePath("/accounting/vouchers/receipt_voucher");
   revalidatePath("/dashboard");
-  // An admin's voucher posts on the spot; anyone else's goes straight to the
-  // approver — no "Submit for approval" click in between.
+  // A receipt TELLS, it does not ask.
+  //
+  // Money arriving was going through the approval workflow: a receipt sat
+  // pending while the bank statement already said it had happened, and
+  // somebody had to say yes to a fact. The workflow is switched off (0143), so
+  // this routes straight to posted — and the administrators are told instead
+  // of asked.
+  let routed: { warning?: string } = {};
   if (options?.autoPostIfAdmin !== false) {
-    await routeNewVoucher({
+    routed = await routeNewVoucher({
       companyId,
       voucherType: "receipt_voucher",
       voucherId,
       journalEntryId: je.journalEntryId,
       post: () => postReceiptVoucher(voucherId, je.journalEntryId),
     });
+    await alertAdminsOfReceipt({
+      companyId,
+      voucherId,
+      createdBy,
+      amount: parsed.data.lines.reduce((sum, l) => sum + Number(l.amount ?? 0), 0),
+      narration: parsed.data.narration ?? "",
+    });
   }
-  return { success: true, id: voucherId };
+  return { success: true, id: voucherId, warning: routed.warning };
+}
+
+/**
+ * Tells the administrators a receipt was taken.
+ *
+ * Not an approval — there is nothing to decide, the money is in. It is the
+ * one thing an administrator wants to know the moment it happens and would
+ * otherwise only find out by opening the register.
+ *
+ * Only administrators: who took what from whom is not everybody's business,
+ * and a notification that goes to people it does not concern is one that
+ * everybody learns to ignore.
+ */
+async function alertAdminsOfReceipt(params: {
+  companyId: string;
+  voucherId: string;
+  createdBy: string;
+  amount: number;
+  narration: string;
+}) {
+  // Whoever made it does not need telling.
+  const recipients = await adminUserIds(params.companyId, params.createdBy);
+  await raiseAlert({
+    companyId: params.companyId,
+    userIds: recipients,
+    kind: "receipt_voucher",
+    title: "Receipt taken",
+    body: params.narration ? `${formatMoney(params.amount)} — ${params.narration}` : formatMoney(params.amount),
+    url: `/accounting/vouchers/receipt_voucher/${params.voucherId}`,
+  });
 }
 
 export async function updateReceiptVoucher(id: string, input: ReceiptVoucherInput) {

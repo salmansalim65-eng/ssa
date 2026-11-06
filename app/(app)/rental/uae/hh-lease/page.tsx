@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { KeyRoundIcon, PlusIcon } from "lucide-react";
+import { FileSpreadsheetIcon, KeyRoundIcon, PlusIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -127,6 +127,24 @@ export default async function HhLeasesPage() {
         description="Multi-asset UAE (HH) leases — one tenant, many properties under a shared document number."
         actions={newButton}
       />
+
+      {/* These were how a short-term letting got into SSA: a lease per stay,
+          with a schedule, to justify an invoice. The agent's own sheet already
+          says who was in which unit and for how much, so the sheet goes in as
+          one document instead — and this screen keeps the leases made before
+          that. */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-dashed bg-muted/20 px-4 py-3 text-sm">
+        <FileSpreadsheetIcon className="size-4 shrink-0 text-muted-foreground" />
+        <span className="text-muted-foreground">
+          Short-term lettings now go in as the agent&apos;s monthly sheet — no lease needed.
+        </span>
+        <Link
+          href="/rental/rent-statements/new"
+          className="font-medium text-primary underline-offset-4 hover:underline"
+        >
+          New rent statement
+        </Link>
+      </div>
 
       <div className="rounded-lg border bg-card shadow-xs">
         {rows.length === 0 ? (

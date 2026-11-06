@@ -77,6 +77,10 @@ export const navSections: NavSection[] = [
     label: "Rental",
     items: [
       { label: "Tenants", href: "/rental/tenants", icon: UsersIcon, module: "tenants" },
+      // Also under Vouchers, because it is both: the agent's monthly document,
+      // and the rental record of who was in which unit. Looked for in either
+      // place, found in either place.
+      { label: "Rent Statements", href: "/rental/rent-statements", icon: FileSpreadsheetIcon, module: "rent_statement" },
       { label: "UAE Rent Invoice", href: "/rental/uae/leases", icon: ReceiptIcon, module: "uae_rent_invoice" },
       { label: "HH Rent Invoice", href: "/rental/uae/hh-lease", icon: ReceiptIcon, module: "uae_rent_invoice" },
       { label: "PK Rent Invoice", href: "/rental/pk/leases", icon: ReceiptIcon, module: "pk_rent_invoice" },

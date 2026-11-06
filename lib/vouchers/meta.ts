@@ -18,6 +18,7 @@ export const VOUCHER_TYPE_LABELS: Record<VoucherType, string> = {
   asset_sales: "Asset Sale Voucher",
   multi_currency_journal: "Multi-Currency Journal",
   expense_voucher: "Expense Voucher KHI",
+  rent_statement: "Rent Statement",
 };
 
 // The 8 voucher types Phase 5 ships end-user screens for. The remaining
@@ -57,6 +58,8 @@ export function voucherHref(voucherType: VoucherType, voucherId: string): string
       return `/rental/pk/invoices/${voucherId}`;
     case "asset_sales":
       return `/sales/${voucherId}`;
+    case "rent_statement":
+      return `/rental/rent-statements/${voucherId}`;
     default:
       return `/accounting/vouchers/${voucherType}/${voucherId}`;
   }
@@ -77,4 +80,5 @@ export const VOUCHER_TYPE_DEFAULT_PREFIX: Record<VoucherType, string> = {
   asset_sales: "SV",
   multi_currency_journal: "MCJ",
   expense_voucher: "EXP",
+  rent_statement: "RS",
 };

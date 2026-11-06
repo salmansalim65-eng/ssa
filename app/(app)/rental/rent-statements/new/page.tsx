@@ -21,8 +21,14 @@ export default async function NewRentStatementPage() {
   const companyId = await getCurrentCompanyId();
   const supabase = await createClient();
 
-  const [{ data: accounts }, { data: companyCurrencies }, { data: costCenters }, { data: aliasRows }] =
-    await Promise.all([
+  const [
+    { data: accounts },
+    { data: companyCurrencies },
+    { data: costCenters },
+    { data: aliasRows },
+    { data: lastStatement },
+    { data: receivableRole },
+  ] = await Promise.all([
     supabase
       .schema("accounting")
       .from("chart_of_accounts")
@@ -48,6 +54,27 @@ export default async function NewRentStatementPage() {
     // What the agent's sheet has called each unit before, so an import maps
     // the row without asking again.
     supabase.schema("rental").from("unit_aliases").select("alias, cost_center_id").eq("company_id", companyId),
+    // Whose statement the last one was. One agent sends the sheet month after
+    // month, so the last answer is almost always this month's too.
+    supabase
+      .schema("rental")
+      .from("rent_statements")
+      .select("agent_account_id")
+      .eq("company_id", companyId)
+      .order("statement_date", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    // And before there is a last one: whoever the rent invoices are already
+    // billed to. Read from the posting template rather than named here, so the
+    // default follows the configuration instead of a guess baked into the code.
+    supabase
+      .schema("accounting")
+      .from("posting_templates")
+      .select("account_id")
+      .eq("company_id", companyId)
+      .eq("voucher_type", "uae_rent_invoice")
+      .eq("account_role", "tenant_receivable")
+      .maybeSingle(),
   ]);
 
   const accountOptions = toAccountOptions((accounts ?? []) as RawAccountRow[]);
@@ -67,6 +94,17 @@ export default async function NewRentStatementPage() {
     costCenterId: a.cost_center_id,
   }));
 
+  // The statement is written in the agent's own currency — TOP LINE DXB keeps
+  // its account in AED, and the company's base is SAR.
+  const defaultAgentAccountId =
+    (lastStatement?.agent_account_id as string | undefined) ??
+    (receivableRole?.account_id as string | undefined) ??
+    null;
+  const defaultCurrencyId =
+    ((accounts ?? []) as { id: string; currency_id: string | null }[]).find(
+      (a) => a.id === defaultAgentAccountId,
+    )?.currency_id ?? null;
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -80,6 +118,8 @@ export default async function NewRentStatementPage() {
         currencies={currencyOptions}
         units={units}
         aliases={aliases}
+        defaultAgentAccountId={defaultAgentAccountId}
+        defaultCurrencyId={defaultCurrencyId}
       />
     </div>
   );

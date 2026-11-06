@@ -109,13 +109,27 @@ export function RentStatementForm({
   units,
   aliases,
   defaultAgentAccountId,
+  defaultCurrencyId,
 }: {
   accounts: AccountOption[];
   currencies: CurrencyOption[];
   units: UnitOption[];
   aliases: UnitAlias[];
   defaultAgentAccountId?: string | null;
+  /** The agent's own currency — the statement is written in it. */
+  defaultCurrencyId?: string | null;
 }) {
+  // Each currency's conversion to base. The company's base is SAR and these
+  // statements are in AED, so a rate of 1 would put the ledger out by the
+  // whole difference — it follows the currency rather than being assumed.
+  const rateById = useMemo(
+    () => new Map(currencies.map((c) => [c.id, (c as { rate?: number }).rate ?? 1])),
+    [currencies],
+  );
+  const openingCurrency =
+    (defaultCurrencyId && currencies.some((c) => c.id === defaultCurrencyId)
+      ? defaultCurrencyId
+      : currencies[0]?.id) ?? "";
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
@@ -130,8 +144,8 @@ export function RentStatementForm({
       statementDate: today(),
       statementMonth: monthStart(today()),
       agentAccountId: defaultAgentAccountId ?? "",
-      currencyId: currencies[0]?.id ?? "",
-      exchangeRate: 1,
+      currencyId: openingCurrency,
+      exchangeRate: rateById.get(openingCurrency) ?? 1,
       narration: "",
       lines: [emptyLine("short_term", monthStart(today()))],
       sheetTotalNet: "",
@@ -378,7 +392,27 @@ export function RentStatementForm({
                 <FormItem>
                   <FormLabel>Currency</FormLabel>
                   <FormControl>
-                    <CurrencySelect currencies={currencies} value={field.value} onValueChange={field.onChange} />
+                    <CurrencySelect
+                      currencies={currencies}
+                      value={field.value}
+                      onValueChange={(v) => {
+                        field.onChange(v);
+                        form.setValue("exchangeRate", rateById.get(v) ?? 1, { shouldValidate: true });
+                      }}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="exchangeRate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Currency Conv.</FormLabel>
+                  <FormControl>
+                    <Input type="number" step="0.000001" min="0" {...field} value={field.value as number} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -388,7 +422,7 @@ export function RentStatementForm({
               control={form.control}
               name="narration"
               render={({ field }) => (
-                <FormItem className="sm:col-span-3">
+                <FormItem className="sm:col-span-2">
                   <FormLabel>Narration</FormLabel>
                   <FormControl>
                     <Input placeholder="Optional" {...field} />

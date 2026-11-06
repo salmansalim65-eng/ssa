@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertTriangleIcon, CheckCircle2Icon, PlusIcon, Trash2Icon } from "lucide-react";
+import { AlertTriangleIcon, CheckCircle2Icon, PlusIcon, Trash2Icon, UploadIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,9 @@ import { amountValue, blankAmount } from "@/lib/forms/amount";
 import { formatMoney } from "@/lib/format";
 import { monthStart, rentPeriod } from "@/lib/rental/rent-months";
 import { cn } from "@/lib/utils";
-import { createRentStatement } from "@/features/rental/rent-statements/actions";
+import { createRentStatement, rememberUnitAliases } from "@/features/rental/rent-statements/actions";
+import { parseStatementSheet } from "@/lib/rental/statement-sheet";
+import { readFirstSheet } from "@/lib/rental/xlsx";
 import {
   MANAGEMENT_RATE,
   rentStatementSchema,
@@ -39,6 +41,14 @@ export interface UnitOption {
   id: string;
   name: string;
 }
+
+/** What the agent's sheet has called a unit before, and which unit that is. */
+export interface UnitAlias {
+  alias: string;
+  costCenterId: string;
+}
+
+const normalise = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 const n = (v: unknown) => Number(v) || 0;
 
@@ -97,11 +107,13 @@ export function RentStatementForm({
   accounts,
   currencies,
   units,
+  aliases,
   defaultAgentAccountId,
 }: {
   accounts: AccountOption[];
   currencies: CurrencyOption[];
   units: UnitOption[];
+  aliases: UnitAlias[];
   defaultAgentAccountId?: string | null;
 }) {
   const router = useRouter();
@@ -122,7 +134,83 @@ export function RentStatementForm({
     },
   });
 
-  const { fields, append, remove } = useFieldArray({ control: form.control, name: "lines" });
+  const { fields, append, remove, replace } = useFieldArray({ control: form.control, name: "lines" });
+  // What the sheet called each row's unit, kept beside the lines so an
+  // unmatched row can say which name it is waiting to be told about — and so
+  // the mapping can be remembered once it has been.
+  const [sheetUnits, setSheetUnits] = useState<string[]>([]);
+  const [importNotes, setImportNotes] = useState<string[]>([]);
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  // alias -> unit, and the units' own names, both normalised: "218 X-17 IC"
+  // should find "218 X-17 IC" without anybody being asked.
+  const unitByName = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const u of units) map.set(normalise(u.name), u.id);
+    for (const a of aliases) map.set(normalise(a.alias), a.costCenterId);
+    return map;
+  }, [units, aliases]);
+
+  async function onFile(file: File) {
+    setImportNotes([]);
+    try {
+      const sheet = parseStatementSheet(await readFirstSheet(file));
+      if (sheet.lines.length === 0) {
+        setImportNotes(sheet.warnings.length ? sheet.warnings : ["Nothing could be read from that file."]);
+        return;
+      }
+
+      const unmatched: string[] = [];
+      const imported = sheet.lines.map((l) => {
+        const unitId = unitByName.get(normalise(l.sheetUnit)) ?? "";
+        if (!unitId) unmatched.push(l.sheetUnit);
+        const period = l.periodFrom && l.periodTo ? rentPeriod(l.periodFrom, l.periodTo) : null;
+        const startMonth = l.periodFrom ? monthStart(l.periodFrom) : monthStart(sheet.statementDate ?? today());
+        const sheetMonth = monthStart(sheet.statementDate ?? today());
+        return {
+          lineType: l.lineType,
+          costCenterId: unitId,
+          periodFrom: l.periodFrom,
+          periodTo: l.periodTo,
+          // Never earlier than the month the sheet is for — which is how a
+          // letting that began last month is counted on the sheet billing it.
+          rentMonth: startMonth < sheetMonth ? sheetMonth : startMonth,
+          months: period?.months ?? 1,
+          rentAmount: l.rentAmount,
+          managementAmount: l.managementAmount,
+          dewa: l.dewa,
+          internet: l.internet,
+          accessCard: l.accessCard,
+          wifi: l.wifi,
+          other: l.other,
+          remarks: "",
+        };
+      });
+
+      replace(imported);
+      setSheetUnits(sheet.lines.map((l) => l.sheetUnit));
+      if (sheet.statementDate) {
+        form.setValue("statementDate", sheet.statementDate);
+        form.setValue("statementMonth", monthStart(sheet.statementDate));
+      }
+      if (sheet.grandTotalNet != null) {
+        form.setValue("sheetTotalNet", sheet.grandTotalNet as never);
+      }
+
+      const notes = [...sheet.warnings, ...sheet.lines.flatMap((l) => l.warnings.map((w) => `${l.sheetUnit}: ${w}`))];
+      if (unmatched.length) {
+        notes.unshift(
+          `Pick the unit for: ${[...new Set(unmatched)].join(", ")} — it will be remembered next time.`,
+        );
+      }
+      setImportNotes(notes);
+      toast.success(`Read ${imported.length} ${imported.length === 1 ? "row" : "rows"} from the sheet`);
+    } catch (error) {
+      setImportNotes([
+        `That file could not be read: ${error instanceof Error ? error.message : String(error)}`,
+      ]);
+    }
+  }
   const watchedLines = useWatch({ control: form.control, name: "lines" });
   const statementMonth = useWatch({ control: form.control, name: "statementMonth" });
   const sheetTotalNet = useWatch({ control: form.control, name: "sheetTotalNet" });
@@ -155,6 +243,12 @@ export function RentStatementForm({
         setFormError(result.error);
         return;
       }
+      // Now that the units are chosen, remember what the sheet called them.
+      const pairs = values.lines
+        .map((l, i) => ({ alias: sheetUnits[i] ?? "", costCenterId: l.costCenterId }))
+        .filter((p) => p.alias && p.costCenterId);
+      if (pairs.length) await rememberUnitAliases(pairs);
+
       toast.success("Rent statement saved");
       router.push(`/rental/rent-statements/${result.id}`);
     });
@@ -163,6 +257,41 @@ export function RentStatementForm({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+        {/* The sheet itself, read in. It never saves and never posts: it fills
+            the form in, and everything below still has to be looked at and
+            agreed to. A file that cannot be read says so rather than filling
+            in half a form. */}
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed bg-muted/20 p-3">
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".xlsx"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void onFile(file);
+              e.target.value = "";
+            }}
+          />
+          <Button type="button" variant="outline" size="sm" onClick={() => fileInput.current?.click()}>
+            <UploadIcon /> Import the agent&apos;s sheet
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Reads the .xlsx into the lines below. Nothing is saved until you say so.
+          </p>
+        </div>
+
+        {importNotes.length > 0 && (
+          <ul className="space-y-1 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+            {importNotes.map((note, i) => (
+              <li key={i} className="flex items-start gap-2 text-amber-800 dark:text-amber-400">
+                <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
+                {note}
+              </li>
+            ))}
+          </ul>
+        )}
+
         <FormSection title="Statement" description="The sheet's own heading — date, month and whose statement it is.">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <FormField
@@ -287,6 +416,7 @@ export function RentStatementForm({
                     form={form}
                     units={units}
                     statementMonth={statementMonth}
+                    sheetUnit={sheetUnits[i]}
                     onRemove={() => remove(i)}
                     canRemove={fields.length > 1}
                   />
@@ -381,6 +511,7 @@ function LineRow({
   form,
   units,
   statementMonth,
+  sheetUnit,
   onRemove,
   canRemove,
 }: {
@@ -388,6 +519,8 @@ function LineRow({
   form: ReturnType<typeof useForm<RentStatementFormValues>>;
   units: UnitOption[];
   statementMonth: string;
+  /** What the imported sheet called this row's unit, when it came from one. */
+  sheetUnit?: string;
   onRemove: () => void;
   canRemove: boolean;
 }) {
@@ -467,8 +600,8 @@ function LineRow({
           name={`lines.${index}.costCenterId`}
           render={({ field }) => (
             <Select value={field.value} onValueChange={field.onChange}>
-              <SelectTrigger className="h-8 w-full">
-                <SelectValue placeholder="Unit" />
+              <SelectTrigger className={cn("h-8 w-full", sheetUnit && !field.value && "border-amber-500")}>
+                <SelectValue placeholder={sheetUnit ?? "Unit"} />
               </SelectTrigger>
               <SelectContent>
                 {units.map((u) => (
@@ -480,6 +613,11 @@ function LineRow({
             </Select>
           )}
         />
+        {sheetUnit && (
+          <p className="mt-1 truncate text-[0.7rem] text-muted-foreground" title={sheetUnit}>
+            sheet: {sheetUnit}
+          </p>
+        )}
       </td>
       <td className="px-2 py-1">
         <FormField

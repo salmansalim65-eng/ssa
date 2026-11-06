@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { PageHeader } from "@/components/ui/page-header";
-import { RentStatementForm, type UnitOption } from "@/components/rental/rent-statement-form";
+import { RentStatementForm, type UnitAlias, type UnitOption } from "@/components/rental/rent-statement-form";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { toAccountOptions, type RawAccountRow } from "@/lib/vouchers/account-currency";
@@ -21,7 +21,8 @@ export default async function NewRentStatementPage() {
   const companyId = await getCurrentCompanyId();
   const supabase = await createClient();
 
-  const [{ data: accounts }, { data: companyCurrencies }, { data: costCenters }] = await Promise.all([
+  const [{ data: accounts }, { data: companyCurrencies }, { data: costCenters }, { data: aliasRows }] =
+    await Promise.all([
     supabase
       .schema("accounting")
       .from("chart_of_accounts")
@@ -44,6 +45,9 @@ export default async function NewRentStatementPage() {
       .eq("is_active", true)
       .is("deleted_at", null)
       .order("code"),
+    // What the agent's sheet has called each unit before, so an import maps
+    // the row without asking again.
+    supabase.schema("rental").from("unit_aliases").select("alias, cost_center_id").eq("company_id", companyId),
   ]);
 
   const accountOptions = toAccountOptions((accounts ?? []) as RawAccountRow[]);
@@ -58,6 +62,11 @@ export default async function NewRentStatementPage() {
     name: c.name,
   }));
 
+  const aliases: UnitAlias[] = ((aliasRows ?? []) as { alias: string; cost_center_id: string }[]).map((a) => ({
+    alias: a.alias,
+    costCenterId: a.cost_center_id,
+  }));
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -66,7 +75,12 @@ export default async function NewRentStatementPage() {
         description="The letting agent's monthly sheet — short-term and long-term units together, as one document."
         backHref="/rental/rent-statements"
       />
-      <RentStatementForm accounts={accountOptions} currencies={currencyOptions} units={units} />
+      <RentStatementForm
+        accounts={accountOptions}
+        currencies={currencyOptions}
+        units={units}
+        aliases={aliases}
+      />
     </div>
   );
 }

@@ -1488,24 +1488,26 @@ export interface Database {
           company_id: string;
           journal_entry_id: string;
           voucher_no: string | null;
-          lease_id: string;
+          lease_id: string | null;
           schedule_id: string | null;
           invoice_date: string;
           due_date: string;
           period_start: string;
           period_end: string;
           amount: number;
+          management_amount: number | null;
+          other_expenses: number | null;
           currency_id: string;
           exchange_rate: number;
           outstanding_balance: number;
           invoice_type: "UAE" | "HH";
+          rent_statement_line_id: string | null;
           created_by: string;
           created_at: string;
         };
         Insert: Partial<Database["rental"]["Tables"]["uae_rent_invoices"]["Row"]> & {
           company_id: string;
           journal_entry_id: string;
-          lease_id: string;
           invoice_date: string;
           due_date: string;
           period_start: string;

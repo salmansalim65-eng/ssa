@@ -10,6 +10,12 @@ import { rentStatementSchema, type RentStatementInput } from "./schemas";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+/** Last day of the month a `YYYY-MM-01` date opens. */
+function monthEnd(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+}
+
 /**
  * The accounts a statement posts to, by the role each column plays.
  *
@@ -249,10 +255,11 @@ export async function createRentStatement(input: RentStatementInput) {
  * the ledger first, and the invoices are raised from it afterwards. An invoice
  * standing against an entry that never posted would be a bill nobody owes.
  *
- * Each SHORT-TERM line raises its own invoice, for what that line leaves the
- * agent owing — rent less management less the utilities the agent paid on our
- * behalf. One per line rather than one per statement, so a receipt can be
- * adjusted unit by unit and the Rent Balance can say which unit is behind.
+ * Each SHORT-TERM line raises an invoice for every month it covers — one bill
+ * per unit per month, carrying that month's gross rent with the management cut
+ * and the utilities the agent paid on our behalf beside it. Per unit and month
+ * rather than one per statement, so a receipt can be adjusted unit by unit and
+ * the Rent Balance can say which unit, and which month, is behind.
  *
  * LONG-TERM lines raise nothing. They are matched to the invoice that already
  * exists for that unit and month, and the match is written on the line so a
@@ -290,6 +297,13 @@ export async function postRentStatement(id: string) {
     period_to: string | null;
     rent_month: string;
     months: number;
+    rent_amount: number;
+    management_amount: number;
+    dewa: number;
+    internet: number;
+    access_card: number;
+    wifi: number;
+    other: number;
     net_amount: number;
   }[];
 
@@ -307,36 +321,86 @@ export async function postRentStatement(id: string) {
     .eq("id", id);
   if (noError) return { error: noError.message };
 
-  // One invoice per short-term line, for what that line leaves owing.
+  // One invoice per short-term line PER MONTH it covers.
+  //
+  // A line that runs two months (18-07 to 17-09) is two bills, not one: the
+  // Rent Balance asks what fell due in August and what fell due in September,
+  // and a single August bill for both answers neither. The split mirrors the
+  // journal entry exactly — August's share is earned, September's sits in
+  // Unearned Rent Income — so the report and the ledger say the same thing.
+  //
+  // Amounts are GROSS rent, with the agent's management cut and the utilities
+  // he paid carried alongside, because that is how the Rent Balance reads every
+  // other UAE invoice. The deductions sit on the FIRST month: the agent took
+  // them out of THIS statement, once.
+  const failures: string[] = [];
   for (const l of lines.filter((x) => x.line_type === "short_term")) {
-    if (round2(l.net_amount) === 0) continue;
-    const invoiceId = crypto.randomUUID();
-    const { error } = await supabase.schema("rental").from("uae_rent_invoices").insert({
-      id: invoiceId,
-      company_id: companyId,
-      journal_entry_id: statement.journal_entry_id,
-      // No lease: the letting IS this line (0147).
-      lease_id: null,
-      rent_statement_line_id: l.id,
-      voucher_no: result.voucherNo,
-      invoice_date: statement.statement_date,
-      // Rent is owed for the month it belongs to, so that is when it falls due.
-      due_date: l.rent_month,
-      period_start: l.period_from ?? l.rent_month,
-      period_end: l.period_to ?? l.rent_month,
-      amount: round2(l.net_amount),
-      currency_id: statement.currency_id,
-      exchange_rate: statement.exchange_rate,
-      outstanding_balance: round2(l.net_amount),
-      invoice_type: "HH",
-      created_by: createdBy,
-    });
-    if (error) return { error: error.message };
-    await supabase
-      .schema("rental")
-      .from("rent_statement_lines")
-      .update({ raised_invoice_id: invoiceId })
-      .eq("id", l.id);
+    const months = Math.max(1, Number(l.months) || 1);
+    const rentParts = splitOverMonths(round2(Number(l.rent_amount)), months);
+    const mgmtParts = splitOverMonths(round2(Number(l.management_amount)), months);
+    const deductions = round2(
+      Number(l.dewa) + Number(l.internet) + Number(l.access_card) + Number(l.wifi) + Number(l.other),
+    );
+    const monthList = rentMonthsOf(l.rent_month, months);
+
+    for (let i = 0; i < months; i += 1) {
+      const gross = rentParts[i] ?? 0;
+      const management = mgmtParts[i] ?? 0;
+      const otherExpenses = i === 0 ? deductions : 0;
+      if (gross === 0 && management === 0 && otherExpenses === 0) continue;
+
+      // Each bill is a document in its own right, so each draws its own number
+      // from the rent-invoice sequence. Stamping the statement's number on all
+      // of them collided on (company_id, voucher_no) and left the statement
+      // posted with one invoice out of seven behind it.
+      const { data: voucherNo, error: numberError } = await supabase
+        .schema("core")
+        .rpc("fn_next_document_number", { p_company_id: companyId, p_voucher_type: "uae_rent_invoice" });
+      if (numberError || !voucherNo) {
+        failures.push(`${rentMonthLabel(monthList[i])}: ${numberError?.message ?? "no document number"}`);
+        continue;
+      }
+
+      const periodStart = months === 1 ? (l.period_from ?? monthList[i]) : monthList[i];
+      const periodEnd = months === 1 ? (l.period_to ?? monthEnd(monthList[i])) : monthEnd(monthList[i]);
+
+      const invoiceId = crypto.randomUUID();
+      const { error } = await supabase.schema("rental").from("uae_rent_invoices").insert({
+        id: invoiceId,
+        company_id: companyId,
+        journal_entry_id: statement.journal_entry_id,
+        // No lease: the letting IS this line (0147).
+        lease_id: null,
+        rent_statement_line_id: l.id,
+        voucher_no: voucherNo as string,
+        invoice_date: statement.statement_date,
+        // Rent is owed for the month it belongs to, so that is when it falls due.
+        due_date: monthList[i],
+        period_start: periodStart,
+        period_end: periodEnd,
+        amount: gross,
+        management_amount: management,
+        other_expenses: otherExpenses,
+        currency_id: statement.currency_id,
+        exchange_rate: statement.exchange_rate,
+        outstanding_balance: gross,
+        invoice_type: "HH",
+        created_by: createdBy,
+      });
+      // A failure here must not abandon the rest: the statement is already
+      // posted, and the bills that CAN be raised are better raised than lost.
+      if (error) {
+        failures.push(`${rentMonthLabel(monthList[i])}: ${error.message}`);
+        continue;
+      }
+      if (i === 0) {
+        await supabase
+          .schema("rental")
+          .from("rent_statement_lines")
+          .update({ raised_invoice_id: invoiceId })
+          .eq("id", l.id);
+      }
+    }
   }
 
   await matchLongTermLines(companyId, lines);
@@ -344,6 +408,13 @@ export async function postRentStatement(id: string) {
   revalidatePath("/rental/rent-statements");
   revalidatePath(`/rental/rent-statements/${id}`);
   revalidatePath("/dashboard");
+  if (failures.length > 0) {
+    return {
+      success: true,
+      voucherNo: result.voucherNo,
+      warning: `Posted, but these bills were not raised — ${failures.join("; ")}`,
+    };
+  }
   return { success: true, voucherNo: result.voucherNo };
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { rentMonthsFor, rentPeriod, rentMonthsOf, splitOverMonths } from "../rent-months";
+import { rentMonthOn, rentMonthsFor, rentPeriod, rentMonthsOf, splitOverMonths } from "../rent-months";
 
 describe("rentPeriod", () => {
   it("counts a whole month as one, both ends inclusive", () => {
@@ -83,41 +83,44 @@ describe("splitOverMonths", () => {
 /**
  * The agent's real sheets, August and September 2026, line by line.
  *
- * These two together are the whole point of rounding to the nearest 1st: read
- * by start month, 213 SHAMAL and 607 CRECENT were billed for September on BOTH
- * sheets while October went unbilled. Every line below is a line off the paper.
+ * The rent month is the month the unit was LET. August's sheet is the one
+ * exception, and a deliberate one: SSA's books open in August, so July's
+ * lettings are counted there — which is what `rentMonthOn` does by never
+ * letting a line fall earlier than the month its sheet is for.
  */
 describe("rentMonthsFor — the agent's own sheets", () => {
-  const months = (from: string, to: string) => {
+  const on = (from: string, to: string, sheetMonth: string) => {
     const r = rentMonthsFor(from, to);
-    return `${r.firstMonth} x${r.months}`;
+    return `${rentMonthOn(r.firstMonth, sheetMonth)} x${r.months}`;
   };
+  const AUG = "2026-08-01";
+  const SEP = "2026-09-01";
 
   it("reads August's sheet exactly as it was posted", () => {
-    expect(months("2026-07-28", "2026-08-27")).toBe("2026-08-01 x1"); // 218 X-17 IC
-    expect(months("2026-07-18", "2026-09-17")).toBe("2026-08-01 x2"); // 213 SHAMAL
-    expect(months("2026-07-30", "2026-08-29")).toBe("2026-08-01 x1"); // 214 ROSE
-    expect(months("2026-08-03", "2026-09-02")).toBe("2026-08-01 x1"); // 305 EMIRATES
-    expect(months("2026-08-11", "2026-09-10")).toBe("2026-08-01 x1"); // 206 AYYAN
-    expect(months("2026-08-01", "2026-08-31")).toBe("2026-08-01 x1"); // G09
-    expect(months("2026-07-22", "2026-09-21")).toBe("2026-08-01 x2"); // 607 CRECENT
-    expect(months("2026-07-31", "2026-09-30")).toBe("2026-08-01 x2"); // 501 CRECENT
+    expect(on("2026-07-28", "2026-08-27", AUG)).toBe("2026-08-01 x1"); // 218 X-17 IC
+    expect(on("2026-07-18", "2026-09-17", AUG)).toBe("2026-08-01 x2"); // 213 SHAMAL
+    expect(on("2026-07-30", "2026-08-29", AUG)).toBe("2026-08-01 x1"); // 214 ROSE
+    expect(on("2026-08-03", "2026-09-02", AUG)).toBe("2026-08-01 x1"); // 305 EMIRATES
+    expect(on("2026-08-11", "2026-09-10", AUG)).toBe("2026-08-01 x1"); // 206 AYYAN
+    expect(on("2026-08-01", "2026-08-31", AUG)).toBe("2026-08-01 x1"); // G09
+    expect(on("2026-07-22", "2026-09-21", AUG)).toBe("2026-08-01 x2"); // 607 CRECENT
+    expect(on("2026-07-31", "2026-09-30", AUG)).toBe("2026-08-01 x2"); // 501 CRECENT
   });
 
-  it("carries September's sheet on from there, with no month billed twice", () => {
-    expect(months("2026-08-31", "2026-09-29")).toBe("2026-09-01 x1"); // 218 X-17 IC
-    expect(months("2026-09-18", "2026-10-17")).toBe("2026-10-01 x1"); // 213 SHAMAL — Oct, not Sep again
-    expect(months("2026-08-30", "2026-09-29")).toBe("2026-09-01 x1"); // 214 ROSE
-    expect(months("2026-09-03", "2026-10-02")).toBe("2026-09-01 x1"); // 305 EMIRATES
-    expect(months("2026-09-29", "2026-10-18")).toBe("2026-10-01 x1"); // 206 AYYAN
-    expect(months("2026-09-01", "2026-09-30")).toBe("2026-09-01 x1"); // G09
-    expect(months("2026-09-22", "2026-11-21")).toBe("2026-10-01 x2"); // 607 CRECENT — Oct + Nov
-    expect(months("2026-10-01", "2026-11-29")).toBe("2026-10-01 x2"); // 501 CRECENT — two months, not one
+  it("counts September's sheet by the month each unit was let", () => {
+    expect(on("2026-08-31", "2026-09-29", SEP)).toBe("2026-09-01 x1"); // 218 X-17 IC — a day early
+    expect(on("2026-09-18", "2026-10-17", SEP)).toBe("2026-09-01 x1"); // 213 SHAMAL — let in Sep
+    expect(on("2026-08-30", "2026-09-29", SEP)).toBe("2026-09-01 x1"); // 214 ROSE — two days early
+    expect(on("2026-09-03", "2026-10-02", SEP)).toBe("2026-09-01 x1"); // 305 EMIRATES
+    expect(on("2026-09-29", "2026-10-18", SEP)).toBe("2026-09-01 x1"); // 206 AYYAN — let on the 29th
+    expect(on("2026-09-01", "2026-09-30", SEP)).toBe("2026-09-01 x1"); // G09
+    expect(on("2026-09-22", "2026-11-21", SEP)).toBe("2026-09-01 x2"); // 607 CRECENT — Sep + Oct
+    expect(on("2026-10-01", "2026-11-29", SEP)).toBe("2026-10-01 x2"); // 501 CRECENT — two months
   });
 
   it("keeps the rule the books were written on: 15 Nov – 15 Dec is November", () => {
-    expect(months("2026-11-15", "2026-12-15")).toBe("2026-11-01 x1");
-    expect(months("2026-12-16", "2027-01-16")).toBe("2026-12-01 x1");
+    expect(on("2026-11-15", "2026-12-15", "2026-11-01")).toBe("2026-11-01 x1");
+    expect(on("2026-12-16", "2027-01-16", "2026-12-01")).toBe("2026-12-01 x1");
   });
 
   it("asks about a letting that is not really a month, and stays quiet otherwise", () => {

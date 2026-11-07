@@ -25,7 +25,7 @@ import { MonthInput } from "@/components/vouchers/month-input";
 import { TABLE_TOTAL_ROW } from "@/components/ui/table";
 import { amountValue, blankAmount } from "@/lib/forms/amount";
 import { formatMoney } from "@/lib/format";
-import { monthStart, rentMonthLabel, rentMonthsOf, rentPeriod } from "@/lib/rental/rent-months";
+import { monthStart, rentMonthLabel, rentMonthsFor, rentMonthsOf } from "@/lib/rental/rent-months";
 import { cn } from "@/lib/utils";
 import { createRentStatement, rememberUnitAliases } from "@/features/rental/rent-statements/actions";
 import { parseStatementSheet } from "@/lib/rental/statement-sheet";
@@ -209,17 +209,17 @@ export function RentStatementForm({
       const imported = sheet.lines.map((l) => {
         const unitId = unitByName.get(normalise(l.sheetUnit)) ?? "";
         if (!unitId) unmatched.push(l.sheetUnit);
-        const period = l.periodFrom && l.periodTo ? rentPeriod(l.periodFrom, l.periodTo) : null;
-        const startMonth = l.periodFrom ? monthStart(l.periodFrom) : monthStart(sheet.statementDate ?? today());
-        const sheetMonth = monthStart(sheet.statementDate ?? today());
+        const period = l.periodFrom && l.periodTo ? rentMonthsFor(l.periodFrom, l.periodTo) : null;
+        const fallbackMonth = monthStart(sheet.statementDate ?? today());
         return {
           lineType: l.lineType,
           costCenterId: unitId,
           periodFrom: l.periodFrom,
           periodTo: l.periodTo,
-          // Never earlier than the month the sheet is for — which is how a
-          // letting that began last month is counted on the sheet billing it.
-          rentMonth: startMonth < sheetMonth ? sheetMonth : startMonth,
+          // The month the letting mostly IS, rounded to the nearest 1st — so
+          // consecutive statements tile the calendar instead of both claiming
+          // the month they happen to be named after.
+          rentMonth: period?.firstMonth ?? fallbackMonth,
           months: period?.months ?? 1,
           rentAmount: l.rentAmount,
           managementAmount: l.managementAmount,
@@ -650,24 +650,19 @@ function LineRow({
   const to = line?.periodTo ?? "";
   const lineType = (line?.lineType ?? "short_term") as "short_term" | "long_term";
 
-  const period = useMemo(() => (from && to ? rentPeriod(from, to) : null), [from, to]);
+  const period = useMemo(() => (from && to ? rentMonthsFor(from, to) : null), [from, to]);
 
-  // Suggest the months and the rent month once the dates are both in. The month
-  // a letting starts in is its rent month — but never EARLIER than the month
-  // the sheet is for, which is how a letting that began last month is counted
-  // on the sheet that bills it.
+  // Suggest the months and the rent month once the dates are both in: the
+  // month the letting mostly IS, by its start rounded to the nearest 1st.
   const lastSuggested = useRef<string>("");
   useEffect(() => {
     if (!period || !from || !to) return;
-    const key = `${from}|${to}|${statementMonth}`;
+    const key = `${from}|${to}`;
     if (lastSuggested.current === key) return;
     lastSuggested.current = key;
-    const startMonth = monthStart(from);
-    form.setValue(`lines.${index}.rentMonth`, startMonth < statementMonth ? statementMonth : startMonth, {
-      shouldDirty: true,
-    });
+    form.setValue(`lines.${index}.rentMonth`, period.firstMonth, { shouldDirty: true });
     form.setValue(`lines.${index}.months`, period.months, { shouldDirty: true });
-  }, [period, from, to, statementMonth, form, index]);
+  }, [period, from, to, form, index]);
 
   const months = Math.max(1, Number(line?.months) || 1);
   const rentMonth = (line?.rentMonth as string) || statementMonth;
@@ -778,9 +773,9 @@ function LineRow({
         {period?.isPartial && (
           <p className="mt-1 flex items-start gap-1 text-[0.7rem] leading-tight text-amber-700 dark:text-amber-500">
             <AlertTriangleIcon className="mt-px size-3 shrink-0" />
-            {period.remainderDays > 0
-              ? `${period.months} month${period.months === 1 ? "" : "s"} and ${period.remainderDays} days — check the months`
-              : "Less than a month — check the months"}
+            {period.stretchDays > 0
+              ? `${period.stretchDays} days longer than ${period.months} month${period.months === 1 ? "" : "s"} — check the months`
+              : `${-period.stretchDays} days short of ${period.months} month${period.months === 1 ? "" : "s"} — check the months`}
           </p>
         )}
       </td>

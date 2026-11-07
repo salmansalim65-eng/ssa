@@ -25,7 +25,7 @@ import { MonthInput } from "@/components/vouchers/month-input";
 import { TABLE_TOTAL_ROW } from "@/components/ui/table";
 import { amountValue, blankAmount } from "@/lib/forms/amount";
 import { formatMoney } from "@/lib/format";
-import { monthStart, rentMonthLabel, rentMonthsFor, rentMonthsOf } from "@/lib/rental/rent-months";
+import { monthStart, rentMonthLabel, rentMonthOn, rentMonthsFor, rentMonthsOf } from "@/lib/rental/rent-months";
 import { cn } from "@/lib/utils";
 import { createRentStatement, rememberUnitAliases } from "@/features/rental/rent-statements/actions";
 import { parseStatementSheet } from "@/lib/rental/statement-sheet";
@@ -216,10 +216,10 @@ export function RentStatementForm({
           costCenterId: unitId,
           periodFrom: l.periodFrom,
           periodTo: l.periodTo,
-          // The month the letting mostly IS, rounded to the nearest 1st — so
-          // consecutive statements tile the calendar instead of both claiming
-          // the month they happen to be named after.
-          rentMonth: period?.firstMonth ?? fallbackMonth,
+          // The month the unit was LET, never earlier than the month the sheet
+          // is for — a letting that began on the 31st belongs to the month
+          // starting the next day, which is the month being billed.
+          rentMonth: rentMonthOn(period?.firstMonth ?? fallbackMonth, fallbackMonth),
           months: period?.months ?? 1,
           rentAmount: l.rentAmount,
           managementAmount: l.managementAmount,
@@ -653,16 +653,18 @@ function LineRow({
   const period = useMemo(() => (from && to ? rentMonthsFor(from, to) : null), [from, to]);
 
   // Suggest the months and the rent month once the dates are both in: the
-  // month the letting mostly IS, by its start rounded to the nearest 1st.
+  // month the unit was let, never earlier than the month the sheet is for.
   const lastSuggested = useRef<string>("");
   useEffect(() => {
     if (!period || !from || !to) return;
-    const key = `${from}|${to}`;
+    const key = `${from}|${to}|${statementMonth}`;
     if (lastSuggested.current === key) return;
     lastSuggested.current = key;
-    form.setValue(`lines.${index}.rentMonth`, period.firstMonth, { shouldDirty: true });
+    form.setValue(`lines.${index}.rentMonth`, rentMonthOn(period.firstMonth, statementMonth), {
+      shouldDirty: true,
+    });
     form.setValue(`lines.${index}.months`, period.months, { shouldDirty: true });
-  }, [period, from, to, form, index]);
+  }, [period, from, to, statementMonth, form, index]);
 
   const months = Math.max(1, Number(line?.months) || 1);
   const rentMonth = (line?.rentMonth as string) || statementMonth;
@@ -768,6 +770,11 @@ function LineRow({
         {months > 1 && (
           <p className="mt-1 text-[0.7rem] leading-tight text-muted-foreground">
             {rentMonthsOf(rentMonth, months).map(rentMonthLabel).join(" + ")}
+          </p>
+        )}
+        {period && rentMonth > period.firstMonth && (
+          <p className="mt-1 text-[0.7rem] leading-tight text-muted-foreground">
+            let in {rentMonthLabel(period.firstMonth)} — counted in {rentMonthLabel(rentMonth)}
           </p>
         )}
         {period?.isPartial && (

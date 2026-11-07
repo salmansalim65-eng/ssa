@@ -29,7 +29,7 @@ import { monthStart, rentMonthLabel, rentMonthsOf, rentPeriod } from "@/lib/rent
 import { cn } from "@/lib/utils";
 import { createRentStatement, rememberUnitAliases } from "@/features/rental/rent-statements/actions";
 import { parseStatementSheet } from "@/lib/rental/statement-sheet";
-import { readFirstSheet } from "@/lib/rental/xlsx";
+import { readWorkbook, type WorkbookSheet } from "@/lib/rental/xlsx";
 import {
   MANAGEMENT_RATE,
   rentStatementSchema,
@@ -158,6 +158,11 @@ export function RentStatementForm({
   // the mapping can be remembered once it has been.
   const [sheetUnits, setSheetUnits] = useState<string[]>([]);
   const [importNotes, setImportNotes] = useState<string[]>([]);
+  // The agent sends one workbook with a tab per month. Which tab is meant is
+  // his decision to state, not ours to guess — reading the first one silently
+  // imported August however many times September was asked for.
+  const [workbook, setWorkbook] = useState<WorkbookSheet[]>([]);
+  const [importedSheet, setImportedSheet] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
 
   // alias -> unit, and the units' own names, both normalised: "218 X-17 IC"
@@ -171,8 +176,30 @@ export function RentStatementForm({
 
   async function onFile(file: File) {
     setImportNotes([]);
+    setWorkbook([]);
+    setImportedSheet("");
     try {
-      const sheet = parseStatementSheet(await readFirstSheet(file));
+      const sheets = await readWorkbook(file);
+      if (sheets.length === 1) {
+        importSheet(sheets[0]);
+        return;
+      }
+      // Several tabs: show them and wait. Nothing is read until one is picked.
+      setWorkbook(sheets);
+      setImportNotes([
+        `This workbook has ${sheets.length} sheets — pick the one to read: ${sheets.map((x) => x.name).join(", ")}.`,
+      ]);
+    } catch (error) {
+      setImportNotes([
+        `That file could not be read: ${error instanceof Error ? error.message : String(error)}`,
+      ]);
+    }
+  }
+
+  function importSheet(from: WorkbookSheet) {
+    setImportNotes([]);
+    try {
+      const sheet = parseStatementSheet(from.grid);
       if (sheet.lines.length === 0) {
         setImportNotes(sheet.warnings.length ? sheet.warnings : ["Nothing could be read from that file."]);
         return;
@@ -222,10 +249,11 @@ export function RentStatementForm({
         );
       }
       setImportNotes(notes);
-      toast.success(`Read ${imported.length} ${imported.length === 1 ? "row" : "rows"} from the sheet`);
+      setImportedSheet(from.name);
+      toast.success(`Read ${imported.length} ${imported.length === 1 ? "row" : "rows"} from “${from.name}”`);
     } catch (error) {
       setImportNotes([
-        `That file could not be read: ${error instanceof Error ? error.message : String(error)}`,
+        `That sheet could not be read: ${error instanceof Error ? error.message : String(error)}`,
       ]);
     }
   }
@@ -320,6 +348,27 @@ export function RentStatementForm({
           <p className="text-xs text-muted-foreground">
             Reads the .xlsx into the lines below. Nothing is saved until you say so.
           </p>
+          {importedSheet && (
+            <span className="rounded bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+              Read from “{importedSheet}”
+            </span>
+          )}
+          {workbook.length > 1 && (
+            <div className="flex w-full flex-wrap items-center gap-2 border-t pt-3">
+              <span className="text-xs font-medium text-muted-foreground">Which sheet?</span>
+              {workbook.map((s) => (
+                <Button
+                  key={s.name}
+                  type="button"
+                  size="sm"
+                  variant={s.name === importedSheet ? "default" : "secondary"}
+                  onClick={() => importSheet(s)}
+                >
+                  {s.name}
+                </Button>
+              ))}
+            </div>
+          )}
         </div>
 
         {submitErrors.length > 0 && (

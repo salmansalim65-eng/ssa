@@ -86,50 +86,14 @@ function columnIndex(ref: string): number {
   return n - 1;
 }
 
-/**
- * The first worksheet of an xlsx, as a grid of strings.
- *
- * Shared strings are resolved, inline strings are read, and everything else is
- * left as the file wrote it. A sheet with holes comes back with "" in them, so
- * `rows[r][c]` is always safe to index.
- */
-export async function readFirstSheet(file: File): Promise<SheetGrid> {
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const buf = new DataView(bytes.buffer);
-  const entries = readDirectory(buf);
-  const byName = new Map(entries.map((e) => [e.name, e]));
+/** One worksheet of a workbook: the name on its tab, and its grid. */
+export interface WorkbookSheet {
+  name: string;
+  grid: SheetGrid;
+}
 
-  const parser = new DOMParser();
-
-  // Shared strings: most text in an xlsx lives here, not in the sheet.
-  const shared: string[] = [];
-  const sharedEntry = byName.get("xl/sharedStrings.xml");
-  if (sharedEntry) {
-    const doc = parser.parseFromString(await readEntry(bytes, buf, sharedEntry), "application/xml");
-    for (const si of Array.from(doc.getElementsByTagName("si"))) {
-      // A string may be split across runs; its text is all of them joined.
-      shared.push(Array.from(si.getElementsByTagName("t")).map((t) => t.textContent ?? "").join(""));
-    }
-  }
-
-  // The first sheet in the workbook's own order, not the first file on disk.
-  const wbEntry = byName.get("xl/workbook.xml");
-  const relsEntry = byName.get("xl/_rels/workbook.xml.rels");
-  let target = "xl/worksheets/sheet1.xml";
-  if (wbEntry && relsEntry) {
-    const wb = parser.parseFromString(await readEntry(bytes, buf, wbEntry), "application/xml");
-    const rels = parser.parseFromString(await readEntry(bytes, buf, relsEntry), "application/xml");
-    const firstSheet = wb.getElementsByTagName("sheet")[0];
-    const rid = firstSheet?.getAttribute("r:id") ?? firstSheet?.getAttribute("id");
-    const rel = Array.from(rels.getElementsByTagName("Relationship")).find((r) => r.getAttribute("Id") === rid);
-    const path = rel?.getAttribute("Target") ?? "";
-    if (path) target = path.startsWith("xl/") ? path : `xl/${path.replace(/^\/+/, "")}`;
-  }
-
-  const sheetEntry = byName.get(target) ?? byName.get("xl/worksheets/sheet1.xml");
-  if (!sheetEntry) throw new Error("No worksheet in this file");
-
-  const doc = parser.parseFromString(await readEntry(bytes, buf, sheetEntry), "application/xml");
+/** Turn one worksheet's XML into a grid of strings. */
+function gridOf(doc: Document, shared: string[]): SheetGrid {
   const grid: SheetGrid = [];
   for (const row of Array.from(doc.getElementsByTagName("row"))) {
     const r = Number(row.getAttribute("r") ?? 0) - 1;
@@ -152,4 +116,78 @@ export async function readFirstSheet(file: File): Promise<SheetGrid> {
     grid[r] = cells;
   }
   return grid;
+}
+
+/**
+ * Every worksheet of an xlsx, in the order of the tabs along the bottom.
+ *
+ * A workbook is not one sheet. The agent sends one file with a tab per month,
+ * and reading only the first silently imports August however many times
+ * September is asked for — the kind of wrong that looks right. The caller is
+ * handed all of them, with their tab names, and asks which one is meant.
+ *
+ * Shared strings are resolved, inline strings are read, and everything else is
+ * left as the file wrote it. A sheet with holes comes back with "" in them, so
+ * `rows[r][c]` is always safe to index.
+ */
+export async function readWorkbook(file: File): Promise<WorkbookSheet[]> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const buf = new DataView(bytes.buffer);
+  const entries = readDirectory(buf);
+  const byName = new Map(entries.map((e) => [e.name, e]));
+
+  const parser = new DOMParser();
+
+  // Shared strings: most text in an xlsx lives here, not in the sheet.
+  const shared: string[] = [];
+  const sharedEntry = byName.get("xl/sharedStrings.xml");
+  if (sharedEntry) {
+    const doc = parser.parseFromString(await readEntry(bytes, buf, sharedEntry), "application/xml");
+    for (const si of Array.from(doc.getElementsByTagName("si"))) {
+      // A string may be split across runs; its text is all of them joined.
+      shared.push(Array.from(si.getElementsByTagName("t")).map((t) => t.textContent ?? "").join(""));
+    }
+  }
+
+  // The workbook's own order, not the order the files sit in the zip.
+  const wbEntry = byName.get("xl/workbook.xml");
+  const relsEntry = byName.get("xl/_rels/workbook.xml.rels");
+  const wanted: { name: string; path: string }[] = [];
+  if (wbEntry && relsEntry) {
+    const wb = parser.parseFromString(await readEntry(bytes, buf, wbEntry), "application/xml");
+    const rels = parser.parseFromString(await readEntry(bytes, buf, relsEntry), "application/xml");
+    const targetById = new Map(
+      Array.from(rels.getElementsByTagName("Relationship")).map((r) => [
+        r.getAttribute("Id") ?? "",
+        r.getAttribute("Target") ?? "",
+      ]),
+    );
+    for (const sheet of Array.from(wb.getElementsByTagName("sheet"))) {
+      // A hidden tab is one the sender did not mean to send.
+      if ((sheet.getAttribute("state") ?? "visible") !== "visible") continue;
+      const rid = sheet.getAttribute("r:id") ?? sheet.getAttribute("id") ?? "";
+      const path = targetById.get(rid) ?? "";
+      if (!path) continue;
+      wanted.push({
+        name: sheet.getAttribute("name") ?? `Sheet ${wanted.length + 1}`,
+        path: path.startsWith("xl/") ? path : `xl/${path.replace(/^\/+/, "")}`,
+      });
+    }
+  }
+  if (wanted.length === 0) wanted.push({ name: "Sheet1", path: "xl/worksheets/sheet1.xml" });
+
+  const sheets: WorkbookSheet[] = [];
+  for (const w of wanted) {
+    const entry = byName.get(w.path);
+    if (!entry) continue;
+    const doc = parser.parseFromString(await readEntry(bytes, buf, entry), "application/xml");
+    sheets.push({ name: w.name, grid: gridOf(doc, shared) });
+  }
+  if (sheets.length === 0) throw new Error("No worksheet in this file");
+  return sheets;
+}
+
+/** The first worksheet of an xlsx, as a grid of strings. */
+export async function readFirstSheet(file: File): Promise<SheetGrid> {
+  return (await readWorkbook(file))[0].grid;
 }

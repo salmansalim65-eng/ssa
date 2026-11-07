@@ -190,10 +190,15 @@ const MONTH_NAMES = [
  * it as such pulled every line of September's sheet forward into October. The
  * tab he typed says which month he meant, so that is what is read.
  *
+ * A tab that names a month but no year — "OCT 2", the second sheet for the
+ * same month — takes `fallbackYear`, normally the year on the statement date.
+ * Without it such a tab reads as no month at all, and October's supplementary
+ * sheet, drawn up in November, would come in as November's.
+ *
  * Returns null for a tab that names no month ("Sales Tracker Copy 3"), leaving
  * the caller to fall back to the date.
  */
-export function monthFromLabel(label: string): string | null {
+export function monthFromLabel(label: string, fallbackYear?: number): string | null {
   const text = label.toLowerCase();
   const monthIndex = MONTH_NAMES.findIndex((name) => {
     // Three letters is enough to name a month, and no more is required: "sep",
@@ -203,9 +208,10 @@ export function monthFromLabel(label: string): string | null {
   });
   if (monthIndex < 0) return null;
 
-  const year = /(?:^|[^0-9])(\d{4}|\d{2})(?:[^0-9]|$)/.exec(text.replace(MONTH_NAMES[monthIndex].slice(0, 3), ""));
-  if (!year) return null;
-  const n = Number(year[1]);
+  const rest = text.replace(MONTH_NAMES[monthIndex].slice(0, 3), "");
+  const year = /(?:^|[^0-9])(\d{4}|\d{2})(?:[^0-9]|$)/.exec(rest);
+  const n = year ? Number(year[1]) : fallbackYear;
+  if (!n) return null;
   const full = n >= 100 ? n : 2000 + n;
   return `${full}-${String(monthIndex + 1).padStart(2, "0")}-01`;
 }

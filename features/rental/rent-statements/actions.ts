@@ -26,7 +26,6 @@ function monthEnd(month: string): string {
  */
 const ROLES = {
   income: "uae_rental_income",
-  unearned: "unearned_rent_income",
   dewa: "dewa",
   internet: "internet",
   accessCard: "access_card",
@@ -55,10 +54,11 @@ async function postingAccounts(companyId: string) {
 /**
  * Save a statement.
  *
- * Short-term lines are the company's own income, recognised in the month each
- * line's rent belongs to: anything for a month already reached is income now,
- * and anything for a month still ahead waits in Unearned rent income until
- * that month comes round. Never apportioned by day — a line belongs to a month.
+ * Short-term lines are the company's own income, recognised when the statement
+ * is entered — the agent has committed to the letting, so it is a receivable
+ * and it is income. The months a line covers decide which month each BILL falls
+ * due in, never how the income is split. Never apportioned by day either: a
+ * line belongs to a month.
  *
  * Long-term lines post NOTHING. Those units are invoiced monthly from their
  * lease already; the line is carried so the voucher's total is the sheet's
@@ -102,25 +102,19 @@ export async function createRentStatement(input: RentStatementInput) {
     { rent: 0, management: 0, deductions: 0, net: 0 },
   );
 
-  // Income, split by the month each line's rent belongs to. The month the
-  // statement is for divides "earned" from "not yet".
-  let earned = 0;
-  let unearned = 0;
-  for (const l of shortTerm) {
-    // Rent and management are split separately and then netted — the same way
-    // the bills are raised. Splitting the net instead puts the rounding fil in
-    // the other month, and the entry stops agreeing with the bills behind it.
-    const months = rentMonthsOf(l.rentMonth, l.months);
-    const rentParts = splitOverMonths(round2(l.rentAmount), l.months);
-    const mgmtParts = splitOverMonths(round2(l.managementAmount), l.months);
-    months.forEach((m, i) => {
-      const part = round2((rentParts[i] ?? 0) - (mgmtParts[i] ?? 0));
-      if (m <= data.statementMonth) earned += part;
-      else unearned += part;
-    });
-  }
-  earned = round2(earned);
-  unearned = round2(unearned);
+  // Income: the whole short-term side of the sheet, recognised when the
+  // statement is entered.
+  //
+  // A sheet that bills two months at once used to split here — this month's
+  // share to income, next month's to Unearned rent income until that month
+  // came round. SSA does not do that: the agent has committed to the letting,
+  // so it is a receivable and it is income. The months a line covers still
+  // decide which month each BILL falls due in, which is what the Rent Balance
+  // and the statement's own tally are built on; it is only the income that is
+  // taken in one piece.
+  const income = round2(
+    shortTerm.reduce((sum, l) => sum + round2(l.rentAmount) - round2(l.managementAmount), 0),
+  );
 
   const deductionTotals = shortTerm.reduce(
     (t, l) => {
@@ -162,20 +156,12 @@ export async function createRentStatement(input: RentStatementInput) {
   deduction(deductionTotals.wifi, ROLES.wifi, "WiFi");
   deduction(deductionTotals.other, ROLES.other, "Other");
 
-  if (earned !== 0) {
+  if (income !== 0) {
     lines.push({
       accountId: accountFor(ROLES.income, "Rental income"),
       debit: 0,
-      credit: earned,
-      description: `Rent — ${rentMonthLabel(data.statementMonth)} and earlier`,
-    });
-  }
-  if (unearned !== 0) {
-    lines.push({
-      accountId: accountFor(ROLES.unearned, "Unearned rent income"),
-      debit: 0,
-      credit: unearned,
-      description: "Rent for months not yet reached",
+      credit: income,
+      description: `Rent — ${rentMonthLabel(data.statementMonth)}`,
     });
   }
 
@@ -331,8 +317,7 @@ export async function postRentStatement(id: string) {
   // A line that runs two months (18-07 to 17-09) is two bills, not one: the
   // Rent Balance asks what fell due in August and what fell due in September,
   // and a single August bill for both answers neither. The split mirrors the
-  // journal entry exactly — August's share is earned, September's sits in
-  // Unearned Rent Income — so the report and the ledger say the same thing.
+  // journal entry's own total, so the report and the ledger say the same thing.
   //
   // Amounts are GROSS rent, with the agent's management cut and the utilities
   // he paid carried alongside, because that is how the Rent Balance reads every

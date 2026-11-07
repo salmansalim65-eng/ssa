@@ -92,6 +92,69 @@ export function rentPeriod(from: string, to: string): RentPeriod {
   return { months, remainderDays, isPartial: remainderDays > 0 };
 }
 
+/**
+ * The 1st a date is nearest to.
+ *
+ * The agent's lettings do not start on the 1st — they start on the 18th, the
+ * 22nd, the 31st — and the month a letting belongs to is the month it mostly
+ * IS. 18 Sep – 17 Oct is October's rent: thirteen days short of October and
+ * seventeen days into September, it is nearer October's 1st.
+ *
+ * Taking the month the period merely STARTS in instead is what made two
+ * consecutive statements both claim September: August's sheet billed
+ * 18 Jul – 17 Sep as August and September, and September's sheet billed
+ * 18 Sep – 17 Oct as September again, with nothing ever landing in October.
+ * Rounded to the nearest 1st the same two lines read August, September, then
+ * October — consecutive lettings tile the calendar with no month billed twice
+ * and none missed.
+ */
+export function nearestMonthStart(date: string): string {
+  const thisMonth = monthStart(date);
+  const nextMonth = addMonths(thisMonth, 1);
+  return daysBetween(date, nextMonth) < daysBetween(thisMonth, date) ? nextMonth : thisMonth;
+}
+
+export interface RentMonths {
+  /** The month the letting's rent is first counted in. */
+  firstMonth: string;
+  /** How many months it covers, at least one. */
+  months: number;
+  /** Days the letting is longer (+) or shorter (-) than those whole months. */
+  stretchDays: number;
+  /** True when that difference is big enough that somebody should look. */
+  isPartial: boolean;
+}
+
+/** The average length of a calendar month, 365.25 / 12. */
+const AVG_MONTH_DAYS = 30.4375;
+
+/**
+ * Which months a from–to letting's rent belongs to.
+ *
+ * WHICH month comes from rounding the start to the nearest 1st. HOW MANY comes
+ * from the length, rounded to the nearest whole month — not from rounding both
+ * ends, which stretches a letting by a month whenever the two ends happen to
+ * round opposite ways: 16 Dec – 16 Jan is one month, but its start rounds back
+ * to December and its end forward to February.
+ *
+ * `stretchDays` says how far the real letting is from those whole months, so a
+ * twenty-day letting billed as a month can be questioned rather than waved
+ * through. A day or two either way is the calendar, not a mistake.
+ */
+export function rentMonthsFor(from: string, to: string): RentMonths {
+  if (!from || !to || to < from) {
+    return { firstMonth: monthStart(from || to || "1970-01-01"), months: 1, stretchDays: 0, isPartial: false };
+  }
+  const firstMonth = nearestMonthStart(from);
+  // The letting ends the DAY AFTER `to`: 18 Sep – 17 Oct is thirty days.
+  const actual = daysBetween(from, addDays(to, 1));
+  const months = Math.max(1, Math.round(actual / AVG_MONTH_DAYS));
+
+  const nominal = daysBetween(firstMonth, addMonths(firstMonth, months));
+  const stretchDays = actual - nominal;
+  return { firstMonth, months, stretchDays, isPartial: Math.abs(stretchDays) > 5 };
+}
+
 /** The rent months a line covers: its first, then one per month after it. */
 export function rentMonthsOf(firstMonth: string, months: number): string[] {
   return Array.from({ length: Math.max(1, months) }, (_, i) => addMonths(monthStart(firstMonth), i));

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { loadStatementCurrent } from "@/lib/rental/statement-rent";
 import { renewalMonthLabel } from "@/lib/rental/renewals";
 import { fetchRefs } from "@/lib/supabase/hydrate";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
@@ -225,6 +226,29 @@ export default async function PropertyReportPage() {
         : 0,
     );
   }
+  // Short-term units have no lease: the agent's sheet is the letting, and the
+  // latest bill is what the unit is let at. "Active" then means let TODAY —
+  // a unit whose last stay ended three weeks ago is standing empty, and saying
+  // so is the whole point of the column.
+  const statementCurrent = await loadStatementCurrent(companyId);
+  for (const [centreId, cur] of statementCurrent) {
+    const cc = (costCenters ?? []).find((c) => c.id === centreId);
+    const assetId = (cc?.asset_id as string | null) ?? null;
+    if (!assetId) continue;
+    consider(
+      assetId,
+      cur.gross,
+      "monthly",
+      cur.from,
+      cur.to,
+      null,
+      // The agent's own cut, as a rate of this letting's rent — never a
+      // standard 10%, because the sheet rounds and the sheet is what is owed.
+      cur.gross > 0 ? cur.management / cur.gross : 0,
+      cur.other,
+    );
+  }
+
   for (const l of pkLeases ?? []) {
     consider(
       l.asset_id as string | null,

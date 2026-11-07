@@ -8,6 +8,7 @@ import { ReportSelectFilter } from "@/components/reports/report-select-filter";
 import { PrintButton } from "@/components/vouchers/print-button";
 import { getCurrentCompanyId } from "@/lib/vouchers/engine";
 import { createClient } from "@/lib/supabase/server";
+import { loadStatementRentByMonth } from "@/lib/rental/statement-rent";
 import { renewalMonthLabel } from "@/lib/rental/renewals";
 import { formatAccountCode, formatDate, formatMoney } from "@/lib/format";
 import { HH_AGENT_PCT, UAE_AGENT_PCT } from "@/lib/rental/lease-accounting";
@@ -217,7 +218,7 @@ export default async function RentReportPage({
   // monthly sheet, and the bill it raises is the record. Read only from leases,
   // this report called every one of them vacant for every month of the year
   // while the statements said otherwise.
-  const statement = await loadStatementRent(companyId, year);
+  const statement = await loadStatementRentByMonth(companyId, year);
 
   // Month end boundary for the selected year (used to blank pre-period months).
   const monthEnd = (m: number) => `${year}-${String(m + 1).padStart(2, "0")}-${String(new Date(year, m + 1, 0).getDate())}`;
@@ -695,70 +696,4 @@ function Kpi({ label, value, sub }: { label: string; value: string; sub?: string
       {sub && <p className="mt-0.5 truncate pl-1.5 text-xs text-muted-foreground">{sub}</p>}
     </div>
   );
-}
-
-/**
- * Net rent billed from the agent's statements, per cost centre, per month.
- *
- * A statement bill is one unit for one month: `period_start` is the month it is
- * for, and net is the gross rent less the agent's cut and the utilities he
- * deducted — the same "net rent" a lease row means. Only posted statements
- * count; a draft is not rent yet.
- *
- * Returns an array of twelve per cost centre, or nothing for a cost centre the
- * statements never named.
- */
-async function loadStatementRent(companyId: string, year: number): Promise<Map<string, number[]>> {
-  const supabase = await createClient();
-
-  const { data: billRows } = await supabase
-    .schema("rental")
-    .from("uae_rent_invoices")
-    .select("journal_entry_id, period_start, amount, management_amount, other_expenses, rent_statement_line_id")
-    .eq("company_id", companyId)
-    .is("lease_id", null)
-    .gte("period_start", `${year}-01-01`)
-    .lte("period_start", `${year}-12-31`);
-  const bills = ((billRows ?? []) as {
-    journal_entry_id: string;
-    period_start: string;
-    amount: number;
-    management_amount: number | null;
-    other_expenses: number | null;
-    rent_statement_line_id: string | null;
-  }[]).filter((b) => b.rent_statement_line_id);
-  if (bills.length === 0) return new Map();
-
-  const [{ data: lineRows }, { data: entryRows }] = await Promise.all([
-    supabase
-      .schema("rental")
-      .from("rent_statement_lines")
-      .select("id, cost_center_id")
-      .in("id", bills.map((b) => b.rent_statement_line_id as string)),
-    supabase
-      .schema("accounting")
-      .from("journal_entries")
-      .select("id, status")
-      .in("id", [...new Set(bills.map((b) => b.journal_entry_id))]),
-  ]);
-  const centreOfLine = new Map(
-    ((lineRows ?? []) as { id: string; cost_center_id: string | null }[]).map((l) => [l.id, l.cost_center_id]),
-  );
-  const posted = new Set(
-    ((entryRows ?? []) as { id: string; status: string }[]).filter((e) => e.status === "posted").map((e) => e.id),
-  );
-
-  const byCentre = new Map<string, number[]>();
-  for (const b of bills) {
-    if (!posted.has(b.journal_entry_id)) continue;
-    const centre = centreOfLine.get(b.rent_statement_line_id as string);
-    if (!centre) continue;
-    const month = Number(b.period_start.slice(5, 7)) - 1;
-    if (month < 0 || month > 11) continue;
-    const net = Number(b.amount) - Number(b.management_amount ?? 0) - Number(b.other_expenses ?? 0);
-    const row = byCentre.get(centre) ?? (Array(12).fill(0) as number[]);
-    row[month] = Math.round((row[month] + net) * 100) / 100;
-    byCentre.set(centre, row);
-  }
-  return byCentre;
 }

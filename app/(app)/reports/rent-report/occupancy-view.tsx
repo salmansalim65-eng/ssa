@@ -4,6 +4,7 @@ import { CsvExportButton } from "@/components/reports/csv-export-button";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
+import { loadStatementStays } from "@/lib/rental/statement-rent";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -43,8 +44,11 @@ interface OccupancyRow {
  * bury a well-let property under empty days it was never offered for. A past
  * year runs to its own year end.
  *
- * Only HH leases are read, so a property let on a standard UAE lease does not
- * appear here at all.
+ * The stays come from the agent's STATEMENTS, not from leases. A short-term
+ * unit has no lease; its letting is a line on the monthly sheet, and that line
+ * carries the two dates the unit was actually let between — better evidence
+ * than a lease ever was, because the lease was a monthly abstraction over them.
+ * Long-term lines are left out: they restate a letting invoiced from a lease.
  */
 export async function OccupancyView({ companyId, year }: { companyId: string; year: number }) {
   const supabase = await createClient();
@@ -63,17 +67,8 @@ export async function OccupancyView({ companyId, year }: { companyId: string; ye
   const totalDays =
     windowEnd < windowStart ? 0 : Math.round((utcDay(windowEnd) - utcDay(windowStart)) / DAY_MS) + 1;
 
-  const [{ data: leases }, { data: costCenters }] = await Promise.all([
-    supabase
-      .schema("rental")
-      .from("uae_leases")
-      .select("asset_id, lease_start, lease_end")
-      .eq("company_id", companyId)
-      .eq("lease_type", "hh")
-      // A vacant line is the record of an EMPTY period — counting it as a stay
-      // would turn the very months it documents into occupancy.
-      .eq("is_vacant", false)
-      .is("deleted_at", null),
+  const [stays, { data: costCenters }] = await Promise.all([
+    loadStatementStays(companyId),
     supabase
       .schema("accounting")
       .from("cost_centers")
@@ -84,29 +79,23 @@ export async function OccupancyView({ companyId, year }: { companyId: string; ye
       .order("code"),
   ]);
 
-  // Every property that has ever taken an HH letting belongs in the report — one
-  // that took none this year is simply vacant all year, which is the point.
-  const hhAssetIds = new Set((leases ?? []).map((l) => l.asset_id as string).filter(Boolean));
+  // Every property the statements have ever let belongs in the report — one let
+  // for none of this year is simply vacant all year, which is the point.
+  const letCentreIds = new Set(stays.map((s) => s.costCenterId));
   const properties =
-    totalDays === 0
-      ? []
-      : (costCenters ?? []).filter((c) => c.asset_id && hhAssetIds.has(c.asset_id as string));
+    totalDays === 0 ? [] : (costCenters ?? []).filter((c) => letCentreIds.has(c.id as string));
 
-  const calendarByAsset = new Map<string, boolean[]>();
-  for (const l of leases ?? []) {
-    const assetId = l.asset_id as string;
-    const start = (l.lease_start as string | null) ?? null;
-    const end = (l.lease_end as string | null) ?? null;
-    if (!assetId || !start || !end) continue;
+  const calendarByCentre = new Map<string, boolean[]>();
+  for (const stay of stays) {
     // Clip the stay to the window; one entirely outside it contributes nothing.
-    const from = Math.max(utcDay(start), utcDay(windowStart));
-    const to = Math.min(utcDay(end), utcDay(windowEnd));
+    const from = Math.max(utcDay(stay.from), utcDay(windowStart));
+    const to = Math.min(utcDay(stay.to), utcDay(windowEnd));
     if (to < from) continue;
 
-    let calendar = calendarByAsset.get(assetId);
+    let calendar = calendarByCentre.get(stay.costCenterId);
     if (!calendar) {
       calendar = Array(totalDays).fill(false) as boolean[];
-      calendarByAsset.set(assetId, calendar);
+      calendarByCentre.set(stay.costCenterId, calendar);
     }
     for (let t = from; t <= to; t += DAY_MS) {
       calendar[Math.round((t - utcDay(windowStart)) / DAY_MS)] = true;
@@ -124,7 +113,7 @@ export async function OccupancyView({ companyId, year }: { companyId: string; ye
   }
 
   const rows: OccupancyRow[] = properties.map((c) => {
-    const calendar = calendarByAsset.get(c.asset_id as string);
+    const calendar = calendarByCentre.get(c.id as string);
     const months = Array(12).fill(0) as number[];
     let occupied = 0;
     if (calendar) {

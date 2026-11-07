@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/types/database.types";
+import { loadStatementStays } from "@/lib/rental/statement-rent";
 
 /**
  * Which properties are let, which are standing empty, and when each contract
@@ -147,6 +148,12 @@ interface RawLease {
   source: "uae" | "pk";
   country: RenewalCountry;
   segment: LeaseRenewal["segment"];
+  /**
+   * A letting off the agent's statement rather than a lease. These do not
+   * renew: a short-term unit between lettings is EMPTY, not a contract
+   * somebody forgot to chase.
+   */
+  shortTerm?: boolean;
 }
 
 /**
@@ -185,7 +192,40 @@ export async function loadLeaseRenewals(
       .is("deleted_at", null),
   ]);
 
+  // The unit a statement line names is a cost centre; a lease names an asset.
+  const { data: centreRows } = await supabase
+    .schema("accounting")
+    .from("cost_centers")
+    .select("id, asset_id")
+    .eq("company_id", companyId)
+    .is("deleted_at", null);
+  const centreToAsset = new Map(
+    ((centreRows ?? []) as { id: string; asset_id: string | null }[])
+      .filter((c) => c.asset_id)
+      .map((c) => [c.id, c.asset_id as string]),
+  );
+
   const leases: RawLease[] = [];
+  // Short-term lettings have no lease: each is a line on the agent's monthly
+  // sheet, with the two dates the unit was let between. Read as leases here so
+  // a unit let today is not counted among the empty ones.
+  for (const stay of await loadStatementStays(companyId)) {
+    const assetId = centreToAsset.get(stay.costCenterId) ?? null;
+    if (!assetId) continue;
+    leases.push({
+      id: `${stay.costCenterId}:${stay.from}`,
+      assetId,
+      tenantId: null,
+      start: stay.from,
+      end: stay.to,
+      rentMonth: null,
+      isVacant: false,
+      source: "uae",
+      country: "AE",
+      segment: "HH",
+      shortTerm: true,
+    });
+  }
   for (const l of uaeLeases ?? []) {
     if (!l.lease_end) continue;
     leases.push({
@@ -285,10 +325,16 @@ export async function loadLeaseRenewals(
     const country: RenewalCountry = subject?.country ?? normCountry((asset?.country as string | null) ?? null);
     // Empty only when it has been said so, or when the property has never been
     // let at all — a lapsed contract is a renewal to chase, not a vacancy.
+    //
+    // A SHORT-TERM unit is the exception. Its lettings run a month at a time
+    // off the agent's sheet, so one that has ended is not a contract anybody
+    // forgot: the unit is standing empty, from the day after the last guest
+    // left, and that is what the owner needs told.
     const neverLet = lets.length === 0 && !next;
-    const isVacant = Boolean(vacantNow) || neverLet;
+    const betweenLettings = !current && !next && ended?.shortTerm === true;
+    const isVacant = Boolean(vacantNow) || neverLet || betweenLettings;
     // A declared vacancy carries its own dates; a property never let has none.
-    const vacantFrom = vacantNow?.start ?? null;
+    const vacantFrom = vacantNow?.start ?? (betweenLettings ? addDays(ended!.end, 1) : null);
     const vacantTo = vacantNow?.end ?? null;
     const vacantCountFrom = vacantFrom ?? (vacantTo ? asOf : null);
     const vacantDays = vacantCountFrom ? daysBetween(vacantCountFrom, vacantTo ?? asOf) + 1 : null;

@@ -509,6 +509,15 @@ export default async function DashboardPage({
   }
   const rentReceipts = (c: string) => rentByCountry[c].billed - rentByCountry[c].outstanding;
 
+  // Rent paid ahead of the bills — on the tenant's account, nowhere on the
+  // Rent Balance until there is a bill to set it against.
+  const tenantAccounts = new Map<string, string>();
+  for (const r of rentRows ?? []) {
+    const id = (r as { tenant_account_id?: string | null }).tenant_account_id;
+    if (id) tenantAccounts.set(id, String((r as { country?: string }).country ?? ""));
+  }
+  const onAccount = await loadOnAccountRent(companyId, tenantAccounts);
+
   const isBank = panel === "bank";
   const isCash = panel === "cash";
   const isExpense = panel === "expense-khi";
@@ -596,8 +605,15 @@ export default async function DashboardPage({
           footer={
             <div className="flex items-center justify-between">
               <StatCol value={money(aed, rentReceipts("UAE"))} label="Receipts" />
-              <div className="text-right text-sm font-bold tabular-nums">
-                Balance: {money(aed, rentByCountry.UAE.outstanding)}
+              <div className="text-right">
+                {onAccount.UAE > 0 && (
+                  <div className="text-xs tabular-nums text-muted-foreground">
+                    Paid ahead: {money(aed, onAccount.UAE)}
+                  </div>
+                )}
+                <div className="text-sm font-bold tabular-nums">
+                  Balance: {money(aed, rentByCountry.UAE.outstanding - onAccount.UAE)}
+                </div>
               </div>
             </div>
           }
@@ -622,8 +638,15 @@ export default async function DashboardPage({
           footer={
             <div className="flex items-center justify-between">
               <StatCol value={money(pkr, rentReceipts("PK"))} label="Receipts" />
-              <div className="text-right text-sm font-bold tabular-nums">
-                Balance: {money(pkr, rentByCountry.PK.outstanding)}
+              <div className="text-right">
+                {onAccount.PK > 0 && (
+                  <div className="text-xs tabular-nums text-muted-foreground">
+                    Paid ahead: {money(pkr, onAccount.PK)}
+                  </div>
+                )}
+                <div className="text-sm font-bold tabular-nums">
+                  Balance: {money(pkr, rentByCountry.PK.outstanding - onAccount.PK)}
+                </div>
               </div>
             </div>
           }
@@ -844,6 +867,7 @@ export default async function DashboardPage({
             tenantFilter={tenantFilter}
             propertyFilter={propertyFilter}
             showHistory={showHistory}
+            onAccount={onAccount}
             bankAccounts={bankOnly}
             cashAccounts={cashOnly}
             ledger={(ledgerRows ?? []) as unknown as BalanceLedgerRow[]}
@@ -911,6 +935,7 @@ async function DetailPanel({
   ledger,
   coaCountryById,
   fixedAssetAccountIds,
+  onAccount,
 }: {
   companyId: string;
   selected: PanelKey | "";
@@ -927,6 +952,8 @@ async function DetailPanel({
   propertyFilter: string | null;
   /** Show the settled past months instead of what is still owed. */
   showHistory: boolean;
+  /** Rent received but not yet set against a bill, by country. */
+  onAccount: Record<string, number>;
   bankAccounts: { id: string; code: string; name: string; symbol: string; balance: number }[];
   cashAccounts: { id: string; code: string; name: string; symbol: string; balance: number }[];
   ledger: BalanceLedgerRow[];
@@ -943,6 +970,7 @@ async function DetailPanel({
         tenantFilter,
         propertyFilter,
         showHistory,
+        onAccount,
         ledger,
         coaCountryById,
         fixedAssetAccountIds,
@@ -1144,6 +1172,7 @@ async function loadDetail(
   tenant: string | null,
   property: string | null,
   showHistory: boolean,
+  onAccount: Record<string, number>,
   ledger: BalanceLedgerRow[],
   coaCountryById: Map<string, string | null>,
   fixedAssetAccountIds: Set<string>,
@@ -1513,16 +1542,16 @@ async function loadDetail(
   if (property) rows = rows.filter((r) => String(r.asset_name ?? "") === property);
 
   const nowDate = today();
-  // A month that has gone by and owes nothing is history: it answers "what did
-  // we collect", not "what is still owed", and burying the few live rows under
-  // dozens of settled ones is what made the sheet hard to read. The current
-  // month and anything still owing always stay on the balance sheet, however
-  // old — an unpaid August row is exactly what the sheet is for.
-  const thisMonth = nowDate.slice(0, 7);
-  const isSettledPast = (r: RentRow) =>
-    Number(r.net_outstanding) <= 0.005 && String(r.due_date ?? "").slice(0, 7) < thisMonth;
-  const historyRows = rows.filter(isSettledPast);
-  const liveRows = rows.filter((r) => !isSettledPast(r));
+  // A month that owes nothing is history: it answers "what did we collect", not
+  // "what is still owed", and burying the few live rows under dozens of settled
+  // ones is what made the sheet hard to read. Anything still owing stays on the
+  // balance sheet however old — an unpaid August row is exactly what the sheet
+  // is for — but a settled one goes, including this month's. A row showing
+  // nothing outstanding is not a balance.
+  const paidAhead = onAccount[cfg.rentCountry] ?? 0;
+  const isSettled = (r: RentRow) => Number(r.net_outstanding) <= 0.005;
+  const historyRows = rows.filter(isSettled);
+  const liveRows = rows.filter((r) => !isSettled(r));
   rows = showHistory ? historyRows : liveRows;
   // PK Rent Balance omits the Management (agent share) and Other Expenses columns
   // — those only apply to UAE/HH leases.
@@ -1721,9 +1750,101 @@ async function loadDetail(
               <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.net - totals.outstanding)}</TableCell>
               <TableCell className="text-right font-mono font-semibold tabular-nums">{fmt(totals.outstanding)}</TableCell>
             </TableRow>
+            {/* Money already received that no bill has been set against yet.
+                Without it the sheet asks for rent that is in the bank. */}
+            {!showHistory && paidAhead > 0.005 && (
+              <>
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={colCount - 1} className="text-right text-muted-foreground">
+                    Paid ahead — received, no bill to set it against yet
+                  </TableCell>
+                  <TableCell className="text-right font-mono tabular-nums text-muted-foreground">
+                    −{fmt(paidAhead)}
+                  </TableCell>
+                </TableRow>
+                <TableRow className={TABLE_TOTAL_ROW}>
+                  <TableCell colSpan={colCount - 1} className="text-right font-medium">
+                    Net still owed
+                  </TableCell>
+                  <TableCell className="text-right font-mono font-semibold tabular-nums">
+                    {fmt(totals.outstanding - paidAhead)}
+                  </TableCell>
+                </TableRow>
+              </>
+            )}
           </tfoot>
         )}
       </Table>
     ),
   };
+}
+
+/**
+ * Rent money received but not yet set against a bill, by country.
+ *
+ * The agent settles his statement and adds next month's rent in the same
+ * transfer, before that month's sheet exists to bill it. That money is on the
+ * tenant's account and nowhere on the Rent Balance, which is built from
+ * invoices — so the sheet said 30,400 owing while 7,988.67 of it was already
+ * in the bank. It is shown now, and the balance is net of it.
+ *
+ * Counted per receipt LINE: the line's amount less whatever it was adjusted
+ * against. Only posted receipts, and only lines on an account the rent is
+ * billed to.
+ */
+async function loadOnAccountRent(
+  companyId: string,
+  tenantAccounts: Map<string, string>,
+): Promise<Record<string, number>> {
+  const empty = { UAE: 0, PK: 0 } as Record<string, number>;
+  if (tenantAccounts.size === 0) return empty;
+  const supabase = await createClient();
+
+  const { data: lineRows } = await supabase
+    .schema("accounting")
+    .from("receipt_voucher_lines")
+    .select("id, voucher_id, account_id, amount")
+    .in("account_id", [...tenantAccounts.keys()]);
+  const lines = ((lineRows ?? []) as { id: string; voucher_id: string; account_id: string; amount: number }[]);
+  if (lines.length === 0) return empty;
+
+  const { data: vouchers } = await supabase
+    .schema("accounting")
+    .from("receipt_vouchers")
+    .select("id, journal_entry_id")
+    .in("id", [...new Set(lines.map((l) => l.voucher_id))]);
+  const entryOf = new Map(
+    ((vouchers ?? []) as { id: string; journal_entry_id: string }[]).map((v) => [v.id, v.journal_entry_id]),
+  );
+  const { data: entries } = await supabase
+    .schema("accounting")
+    .from("journal_entries")
+    .select("id, status")
+    .in("id", [...new Set([...entryOf.values()])]);
+  const posted = new Set(
+    ((entries ?? []) as { id: string; status: string }[]).filter((e) => e.status === "posted").map((e) => e.id),
+  );
+
+  const { data: allocRows } = await supabase
+    .schema("rental")
+    .from("receipt_invoice_allocations")
+    .select("receipt_line_id, amount")
+    .in("receipt_line_id", lines.map((l) => l.id));
+  const allocated = new Map<string, number>();
+  for (const a of ((allocRows ?? []) as { receipt_line_id: string | null; amount: number }[])) {
+    if (!a.receipt_line_id) continue;
+    allocated.set(a.receipt_line_id, (allocated.get(a.receipt_line_id) ?? 0) + Number(a.amount));
+  }
+
+  const out = { ...empty };
+  for (const l of lines) {
+    const entry = entryOf.get(l.voucher_id);
+    if (!entry || !posted.has(entry)) continue;
+    const spare = Number(l.amount) - (allocated.get(l.id) ?? 0);
+    if (spare <= 0.005) continue;
+    const country = tenantAccounts.get(l.account_id);
+    if (!country) continue;
+    out[country] = Math.round((out[country] + spare) * 100) / 100;
+  }
+  return out;
 }

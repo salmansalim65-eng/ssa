@@ -107,12 +107,16 @@ export async function createRentStatement(input: RentStatementInput) {
   let earned = 0;
   let unearned = 0;
   for (const l of shortTerm) {
-    const netRent = round2(l.rentAmount - l.managementAmount);
+    // Rent and management are split separately and then netted — the same way
+    // the bills are raised. Splitting the net instead puts the rounding fil in
+    // the other month, and the entry stops agreeing with the bills behind it.
     const months = rentMonthsOf(l.rentMonth, l.months);
-    const parts = splitOverMonths(netRent, l.months);
+    const rentParts = splitOverMonths(round2(l.rentAmount), l.months);
+    const mgmtParts = splitOverMonths(round2(l.managementAmount), l.months);
     months.forEach((m, i) => {
-      if (m <= data.statementMonth) earned += parts[i];
-      else unearned += parts[i];
+      const part = round2((rentParts[i] ?? 0) - (mgmtParts[i] ?? 0));
+      if (m <= data.statementMonth) earned += part;
+      else unearned += part;
     });
   }
   earned = round2(earned);
@@ -335,6 +339,19 @@ export async function postRentStatement(id: string) {
   // other UAE invoice. The deductions sit on the FIRST month: the agent took
   // them out of THIS statement, once.
   const failures: string[] = [];
+  // Bills are numbered off the statement — RS-000002-1, -2, -3 — and not from
+  // the rent-invoice sequence.
+  //
+  // That sequence heals itself by never issuing past the highest number in the
+  // voucher register, and the register knows a journal entry by ITS voucher
+  // type. These bills hang off a rent_statement entry, so the register reads
+  // RS-000002 for all of them and the highest URI number never moves: the
+  // sequence handed out the same number to every bill after the first, and
+  // seven of eight collided on (company_id, voucher_no).
+  //
+  // Numbering them off the statement needs no sequence, cannot race, and says
+  // on every report which statement raised the bill.
+  let billNo = 0;
   for (const l of lines.filter((x) => x.line_type === "short_term")) {
     const months = Math.max(1, Number(l.months) || 1);
     const rentParts = splitOverMonths(round2(Number(l.rent_amount)), months);
@@ -350,17 +367,8 @@ export async function postRentStatement(id: string) {
       const otherExpenses = i === 0 ? deductions : 0;
       if (gross === 0 && management === 0 && otherExpenses === 0) continue;
 
-      // Each bill is a document in its own right, so each draws its own number
-      // from the rent-invoice sequence. Stamping the statement's number on all
-      // of them collided on (company_id, voucher_no) and left the statement
-      // posted with one invoice out of seven behind it.
-      const { data: voucherNo, error: numberError } = await supabase
-        .schema("core")
-        .rpc("fn_next_document_number", { p_company_id: companyId, p_voucher_type: "uae_rent_invoice" });
-      if (numberError || !voucherNo) {
-        failures.push(`${rentMonthLabel(monthList[i])}: ${numberError?.message ?? "no document number"}`);
-        continue;
-      }
+      billNo += 1;
+      const voucherNo = `${result.voucherNo}-${billNo}`;
 
       const invoiceId = crypto.randomUUID();
       const { error } = await supabase.schema("rental").from("uae_rent_invoices").insert({
@@ -370,7 +378,7 @@ export async function postRentStatement(id: string) {
         // No lease: the letting IS this line (0147).
         lease_id: null,
         rent_statement_line_id: l.id,
-        voucher_no: voucherNo as string,
+        voucher_no: voucherNo,
         invoice_date: statement.statement_date,
         // Rent is owed for the month it belongs to, so that is when it falls due.
         due_date: monthList[i],

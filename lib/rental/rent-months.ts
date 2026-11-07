@@ -177,6 +177,39 @@ export function rentMonthLabel(month: string): string {
   return m ? `${MONTH_ABBR[Number(m[2]) - 1]} ${m[1]}` : "";
 }
 
+const MONTH_NAMES = [
+  "january", "february", "march", "april", "may", "june",
+  "july", "august", "september", "october", "november", "december",
+];
+
+/**
+ * The month a sheet's own tab is named for: "SEP-26" is September 2026.
+ *
+ * The agent dates a statement whenever he draws it up — September's came out
+ * on 10 October — so the date on the paper is not the month it is FOR. Taking
+ * it as such pulled every line of September's sheet forward into October. The
+ * tab he typed says which month he meant, so that is what is read.
+ *
+ * Returns null for a tab that names no month ("Sales Tracker Copy 3"), leaving
+ * the caller to fall back to the date.
+ */
+export function monthFromLabel(label: string): string | null {
+  const text = label.toLowerCase();
+  const monthIndex = MONTH_NAMES.findIndex((name) => {
+    // Three letters is enough to name a month, and no more is required: "sep",
+    // "sept" and "september" are the same month, "may" is itself.
+    const at = text.indexOf(name.slice(0, 3));
+    return at >= 0 && !/[a-z]/.test(text[at - 1] ?? "");
+  });
+  if (monthIndex < 0) return null;
+
+  const year = /(?:^|[^0-9])(\d{4}|\d{2})(?:[^0-9]|$)/.exec(text.replace(MONTH_NAMES[monthIndex].slice(0, 3), ""));
+  if (!year) return null;
+  const n = Number(year[1]);
+  const full = n >= 100 ? n : 2000 + n;
+  return `${full}-${String(monthIndex + 1).padStart(2, "0")}-01`;
+}
+
 /* ------------------------------------------------------------------ dates */
 
 const DAY_MS = 86_400_000;

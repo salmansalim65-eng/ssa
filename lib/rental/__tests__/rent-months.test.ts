@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { rentMonthOn, rentMonthsFor, rentPeriod, rentMonthsOf, splitOverMonths } from "../rent-months";
+import { monthFromLabel, rentMonthOn, rentMonthsFor, rentPeriod, rentMonthsOf, splitOverMonths } from "../rent-months";
 
 describe("rentPeriod", () => {
   it("counts a whole month as one, both ends inclusive", () => {
@@ -129,5 +129,23 @@ describe("rentMonthsFor — the agent's own sheets", () => {
     // A day either way is the calendar, not a mistake.
     expect(rentMonthsFor("2026-08-31", "2026-09-29").isPartial).toBe(false);
     expect(rentMonthsFor("2026-10-01", "2026-11-29").isPartial).toBe(false);
+  });
+});
+
+describe("monthFromLabel", () => {
+  it("reads the month off the agent's own tab names", () => {
+    expect(monthFromLabel("AUG-26")).toBe("2026-08-01");
+    expect(monthFromLabel("SEP-26")).toBe("2026-09-01");
+    expect(monthFromLabel("OCT-26")).toBe("2026-10-01");
+    expect(monthFromLabel("September 2026")).toBe("2026-09-01");
+    expect(monthFromLabel("Sept-2027")).toBe("2027-09-01");
+    expect(monthFromLabel("jan 26")).toBe("2026-01-01");
+  });
+
+  it("says nothing about a tab that names no month", () => {
+    expect(monthFromLabel("Sales Tracker Copy 3")).toBeNull();
+    expect(monthFromLabel("Sheet1")).toBeNull();
+    // A month with no year cannot be placed.
+    expect(monthFromLabel("August")).toBeNull();
   });
 });

@@ -25,7 +25,14 @@ import { MonthInput } from "@/components/vouchers/month-input";
 import { TABLE_TOTAL_ROW } from "@/components/ui/table";
 import { amountValue, blankAmount } from "@/lib/forms/amount";
 import { formatMoney } from "@/lib/format";
-import { monthStart, rentMonthLabel, rentMonthOn, rentMonthsFor, rentMonthsOf } from "@/lib/rental/rent-months";
+import {
+  monthFromLabel,
+  monthStart,
+  rentMonthLabel,
+  rentMonthOn,
+  rentMonthsFor,
+  rentMonthsOf,
+} from "@/lib/rental/rent-months";
 import { cn } from "@/lib/utils";
 import { createRentStatement, rememberUnitAliases } from "@/features/rental/rent-statements/actions";
 import { parseStatementSheet } from "@/lib/rental/statement-sheet";
@@ -205,12 +212,16 @@ export function RentStatementForm({
         return;
       }
 
+      // The month this sheet is FOR, which is not the date on it: September's
+      // statement was drawn up on 10 October. The tab the agent typed —
+      // "SEP-26" — says which month he meant; the date is only a fallback.
+      const sheetMonth = monthFromLabel(from.name) ?? monthStart(sheet.statementDate ?? today());
+
       const unmatched: string[] = [];
       const imported = sheet.lines.map((l) => {
         const unitId = unitByName.get(normalise(l.sheetUnit)) ?? "";
         if (!unitId) unmatched.push(l.sheetUnit);
         const period = l.periodFrom && l.periodTo ? rentMonthsFor(l.periodFrom, l.periodTo) : null;
-        const fallbackMonth = monthStart(sheet.statementDate ?? today());
         return {
           lineType: l.lineType,
           costCenterId: unitId,
@@ -219,7 +230,7 @@ export function RentStatementForm({
           // The month the unit was LET, never earlier than the month the sheet
           // is for — a letting that began on the 31st belongs to the month
           // starting the next day, which is the month being billed.
-          rentMonth: rentMonthOn(period?.firstMonth ?? fallbackMonth, fallbackMonth),
+          rentMonth: rentMonthOn(period?.firstMonth ?? sheetMonth, sheetMonth),
           months: period?.months ?? 1,
           rentAmount: l.rentAmount,
           managementAmount: l.managementAmount,
@@ -234,10 +245,8 @@ export function RentStatementForm({
 
       replace(imported);
       setSheetUnits(sheet.lines.map((l) => l.sheetUnit));
-      if (sheet.statementDate) {
-        form.setValue("statementDate", sheet.statementDate);
-        form.setValue("statementMonth", monthStart(sheet.statementDate));
-      }
+      if (sheet.statementDate) form.setValue("statementDate", sheet.statementDate);
+      form.setValue("statementMonth", sheetMonth);
       if (sheet.grandTotalNet != null) {
         form.setValue("sheetTotalNet", sheet.grandTotalNet as never);
       }

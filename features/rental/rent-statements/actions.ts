@@ -350,6 +350,10 @@ export async function postRentStatement(id: string) {
       const gross = rentParts[i] ?? 0;
       const management = mgmtParts[i] ?? 0;
       const otherExpenses = i === 0 ? deductions : 0;
+      // A line worth nothing at all raises nothing. A line worth LESS than
+      // nothing still does: an empty unit whose utilities we paid is a credit
+      // the agent sets against what he owes, and it has to be billed to be
+      // settled.
       if (gross === 0 && management === 0 && otherExpenses === 0) continue;
 
       billNo += 1;

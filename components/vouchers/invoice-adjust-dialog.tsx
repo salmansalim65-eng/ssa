@@ -86,9 +86,19 @@ export function InvoiceAdjustDialog({
   const remaining = round2(lineAmount - adjusted);
 
   function autoFifo() {
-    let rem = lineAmount;
     const m: Record<string, string> = {};
+    // Credits come off FIRST and in full: the agent nets what he spent on an
+    // empty unit against what he owes, so the money that arrives is already
+    // short by that much. Filling the debts first would leave the credit
+    // stranded and the line over-adjusted.
+    let rem = lineAmount;
     for (const b of bills) {
+      if (b.billAmount >= 0) continue;
+      m[keyOf(b)] = String(round2(b.billAmount));
+      rem = round2(rem - b.billAmount);
+    }
+    for (const b of bills) {
+      if (b.billAmount <= 0) continue;
       if (rem <= 0) break;
       const take = Math.min(rem, b.billAmount);
       if (take > 0) m[keyOf(b)] = String(round2(take));
@@ -103,7 +113,8 @@ export function InvoiceAdjustDialog({
     const byInvoice = new Map<string, BillAllocation>();
     for (const b of bills) {
       const amount = Number(draft[keyOf(b)]);
-      if (!(amount > 0)) continue;
+      // Zero is nothing to record; a negative is a credit being applied.
+      if (!amount || !Number.isFinite(amount)) continue;
       const existing = byInvoice.get(b.id);
       if (existing) existing.amount = round2(existing.amount + amount);
       else

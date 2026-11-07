@@ -720,8 +720,12 @@ function LineRow({
   const net = rent - mgmt - deductions;
   const impliedRate = rent > 0 ? mgmt / rent : null;
   const expectedRate = MANAGEMENT_RATE[lineType];
+  // No management at all on a line that earned rent is the loudest version of
+  // this, not the quietest: October's sheet left 214 ROSE's 300 out of the
+  // management column and in DEWA, and a check that only looked at lines
+  // WITH a fee said nothing about it.
   const rateLooksOff =
-    impliedRate !== null && mgmt > 0 && Math.abs(impliedRate - expectedRate) > 0.005;
+    impliedRate !== null && rent > 0 && Math.abs(impliedRate - expectedRate) > 0.005;
 
   const amountCell = (name: "dewa" | "internet" | "accessCard" | "wifi" | "other") => (
     <td className="px-2 py-1">
@@ -902,14 +906,16 @@ function LineRow({
             />
           )}
         />
-        {impliedRate !== null && mgmt > 0 && (
+        {impliedRate !== null && rent > 0 && (
           <p
             className={cn(
               "mt-1 text-right text-[0.7rem] tabular-nums",
               rateLooksOff ? "font-medium text-amber-700 dark:text-amber-500" : "text-muted-foreground",
             )}
           >
-            {(impliedRate * 100).toFixed(2)}%
+            {mgmt > 0
+              ? `${(impliedRate * 100).toFixed(2)}%`
+              : `no management — ${(expectedRate * 100).toFixed(0)}% expected`}
           </p>
         )}
       </td>

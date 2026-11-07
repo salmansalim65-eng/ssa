@@ -46,7 +46,11 @@ export async function loadOutstandingRentBills(companyId: string): Promise<Outst
       "invoice_id, country, tenant_account_id, voucher_no, tenant_name, asset_name, due_date, net_amount, net_outstanding",
     )
     .eq("company_id", companyId)
-    .gt("net_outstanding", 0)
+    // A CREDIT is as outstanding as a debt. The agent's sheet lists a unit
+    // that earned no rent and still cost us its utilities, and he deducts
+    // them — so that bill is worth less than nothing, and leaving it out of
+    // the list would make his payment impossible to balance.
+    .neq("net_outstanding", 0)
     .order("due_date");
   const rows = inv ?? [];
   if (rows.length === 0) return [];

@@ -149,3 +149,20 @@ describe("monthFromLabel", () => {
     expect(monthFromLabel("August")).toBeNull();
   });
 });
+
+describe("monthFromLabel — a supplementary sheet for the same month", () => {
+  it("takes the year off the statement when the tab gives none", () => {
+    // "OCT 2" is October's second sheet, drawn up in November.
+    expect(monthFromLabel("OCT 2", 2026)).toBe("2026-10-01");
+    expect(monthFromLabel("OCT-26 (2)", 2026)).toBe("2026-10-01");
+    expect(monthFromLabel("October B", 2026)).toBe("2026-10-01");
+  });
+
+  it("still prefers the year the tab states", () => {
+    expect(monthFromLabel("OCT-25 (2)", 2026)).toBe("2025-10-01");
+  });
+
+  it("still says nothing about a tab that names no month", () => {
+    expect(monthFromLabel("Sales Tracker Copy 3", 2026)).toBeNull();
+  });
+});

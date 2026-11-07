@@ -221,7 +221,8 @@ export function RentStatementForm({
       // The month this sheet is FOR, which is not the date on it: September's
       // statement was drawn up on 10 October. The tab the agent typed —
       // "SEP-26" — says which month he meant; the date is only a fallback.
-      const sheetMonth = monthFromLabel(from.name) ?? monthStart(sheet.statementDate ?? today());
+      const dated = sheet.statementDate ?? today();
+      const sheetMonth = monthFromLabel(from.name, Number(dated.slice(0, 4))) ?? monthStart(dated);
 
       const unmatched: string[] = [];
       const imported = sheet.lines.map((l) => {

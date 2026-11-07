@@ -211,6 +211,14 @@ export default async function RentReportPage({
     });
   }
 
+  // Rent recorded from the agent's STATEMENT rather than from a lease.
+  //
+  // The short-term units have no lease at all: their letting is a line on the
+  // monthly sheet, and the bill it raises is the record. Read only from leases,
+  // this report called every one of them vacant for every month of the year
+  // while the statements said otherwise.
+  const statement = await loadStatementRent(companyId, year);
+
   // Month end boundary for the selected year (used to blank pre-period months).
   const monthEnd = (m: number) => `${year}-${String(m + 1).padStart(2, "0")}-${String(new Date(year, m + 1, 0).getDate())}`;
 
@@ -234,10 +242,11 @@ export default async function RentReportPage({
   for (const cc of costCenters ?? []) {
     if (!cc.asset_id || !rentalAssetIds.has(cc.asset_id as string)) continue;
     const leases = cc.asset_id ? leaseByAsset.get(cc.asset_id as string) ?? [] : [];
+    const fromStatement = statement.get(cc.id as string);
     const months = Array(12).fill(0) as number[];
     let total = 0;
     for (let m = 0; m < 12; m++) {
-      let monthSum = 0;
+      let monthSum = fromStatement?.[m] ?? 0;
       for (const lease of leases) {
         if (lease.monthly <= 0) continue;
         // A property bills in a calendar month only if a rental month STARTS in
@@ -248,13 +257,21 @@ export default async function RentReportPage({
       months[m] = monthSum;
       total += monthSum;
     }
-    // "Net Rent" column = combined monthly net rent across the property's leases.
-    const est = leases.reduce((s, l) => s + (l.monthly > 0 ? l.monthly : 0), 0);
+    // "Net Rent" column = what the property earns in a month. A lease states
+    // that figure; a statement does not, so the latest month it billed stands
+    // for it — the rent the unit is on now.
+    const leaseEst = leases.reduce((s, l) => s + (l.monthly > 0 ? l.monthly : 0), 0);
+    const latestStatement = fromStatement ? [...fromStatement].reverse().find((v) => v > 0) ?? 0 : 0;
+    const est = leaseEst + latestStatement;
     const ccCountry = (cc.country as string) ?? "";
-    // UAE properties split into HH vs UAE by their lease type; other countries
-    // are their own segment. A vacant UAE property lists under UAE.
+    // UAE properties split into HH vs UAE. A unit billed from the agent's sheet
+    // is HH by definition — that sheet is what HH letting IS.
     const segment =
-      ccCountry === "AE" ? (leases.some((l) => l.leaseType === "hh") ? "HH" : "UAE") : ccCountry;
+      ccCountry === "AE"
+        ? fromStatement || leases.some((l) => l.leaseType === "hh")
+          ? "HH"
+          : "UAE"
+        : ccCountry;
     rows.set(cc.id as string, {
       id: cc.id as string,
       code: cc.code as string,
@@ -313,17 +330,25 @@ export default async function RentReportPage({
     if (cc || optLabel) {
       const assetId = (cc?.asset_id as string | undefined) ?? undefined;
       const leases = assetId ? leaseByAsset.get(assetId) ?? [] : [];
+      // A short-term unit has no lease to state a term: the agent's sheet is
+      // the letting, so the header says so rather than calling it vacant.
+      const statementMonths = statement.get(assetParam);
       const starts = leases.map((l) => l.start).filter((d): d is string => Boolean(d));
       const ends = leases.map((l) => l.end).filter((d): d is string => Boolean(d));
       const start = starts.length ? starts.reduce((min, d) => (d < min ? d : min)) : null;
       const end = ends.length ? ends.reduce((max, d) => (d > max ? d : max)) : null;
       const renew = leases.map((l) => l.renew).find((v): v is string => Boolean(v)) || monthLabel(end);
-      const grossMonthly = leases.reduce((s, l) => s + (l.gross > 0 ? l.gross : 0), 0);
+      const latestStatement = statementMonths ? [...statementMonths].reverse().find((v) => v > 0) ?? 0 : 0;
+      const grossMonthly = leases.reduce((s, l) => s + (l.gross > 0 ? l.gross : 0), 0) + latestStatement;
       const cur = COUNTRY[(cc?.country as string) ?? ""]?.code ?? "";
       const symbol = symbolByCode.get(cur) ?? cur;
       // Resolve tenant name(s) for the property's active lease(s).
       const tenantIds = [...new Set(leases.map((l) => l.tenantId).filter((v): v is string => Boolean(v)))];
-      let tenant = leases.length ? "—" : "Vacant";
+      let tenant = leases.length
+        ? "—"
+        : statementMonths
+          ? "Short term — on the agent's statement"
+          : "Vacant";
       if (tenantIds.length) {
         const { data: tenantRows } = await supabase
           .schema("rental")
@@ -670,4 +695,70 @@ function Kpi({ label, value, sub }: { label: string; value: string; sub?: string
       {sub && <p className="mt-0.5 truncate pl-1.5 text-xs text-muted-foreground">{sub}</p>}
     </div>
   );
+}
+
+/**
+ * Net rent billed from the agent's statements, per cost centre, per month.
+ *
+ * A statement bill is one unit for one month: `period_start` is the month it is
+ * for, and net is the gross rent less the agent's cut and the utilities he
+ * deducted — the same "net rent" a lease row means. Only posted statements
+ * count; a draft is not rent yet.
+ *
+ * Returns an array of twelve per cost centre, or nothing for a cost centre the
+ * statements never named.
+ */
+async function loadStatementRent(companyId: string, year: number): Promise<Map<string, number[]>> {
+  const supabase = await createClient();
+
+  const { data: billRows } = await supabase
+    .schema("rental")
+    .from("uae_rent_invoices")
+    .select("journal_entry_id, period_start, amount, management_amount, other_expenses, rent_statement_line_id")
+    .eq("company_id", companyId)
+    .is("lease_id", null)
+    .gte("period_start", `${year}-01-01`)
+    .lte("period_start", `${year}-12-31`);
+  const bills = ((billRows ?? []) as {
+    journal_entry_id: string;
+    period_start: string;
+    amount: number;
+    management_amount: number | null;
+    other_expenses: number | null;
+    rent_statement_line_id: string | null;
+  }[]).filter((b) => b.rent_statement_line_id);
+  if (bills.length === 0) return new Map();
+
+  const [{ data: lineRows }, { data: entryRows }] = await Promise.all([
+    supabase
+      .schema("rental")
+      .from("rent_statement_lines")
+      .select("id, cost_center_id")
+      .in("id", bills.map((b) => b.rent_statement_line_id as string)),
+    supabase
+      .schema("accounting")
+      .from("journal_entries")
+      .select("id, status")
+      .in("id", [...new Set(bills.map((b) => b.journal_entry_id))]),
+  ]);
+  const centreOfLine = new Map(
+    ((lineRows ?? []) as { id: string; cost_center_id: string | null }[]).map((l) => [l.id, l.cost_center_id]),
+  );
+  const posted = new Set(
+    ((entryRows ?? []) as { id: string; status: string }[]).filter((e) => e.status === "posted").map((e) => e.id),
+  );
+
+  const byCentre = new Map<string, number[]>();
+  for (const b of bills) {
+    if (!posted.has(b.journal_entry_id)) continue;
+    const centre = centreOfLine.get(b.rent_statement_line_id as string);
+    if (!centre) continue;
+    const month = Number(b.period_start.slice(5, 7)) - 1;
+    if (month < 0 || month > 11) continue;
+    const net = Number(b.amount) - Number(b.management_amount ?? 0) - Number(b.other_expenses ?? 0);
+    const row = byCentre.get(centre) ?? (Array(12).fill(0) as number[]);
+    row[month] = Math.round((row[month] + net) * 100) / 100;
+    byCentre.set(centre, row);
+  }
+  return byCentre;
 }

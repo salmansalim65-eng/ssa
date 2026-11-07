@@ -140,19 +140,36 @@ export function ReceiptVoucherForm({
 
   function onSubmit(values: ReceiptVoucherInput) {
     setFormError(null);
-    // A line whose account has outstanding bills must be fully adjusted against
-    // them before the voucher can be saved.
+    // Everything already DUE must be adjusted before any of the money is left
+    // on account. Paying ahead is allowed — the agent settles his statement and
+    // adds next month's rent before that month's sheet exists, and a long lease
+    // is invoiced a year out — but rent that has fallen due must not stay
+    // outstanding with the money in the bank.
     const round2 = (n: number) => Math.round(n * 100) / 100;
+    const on: string = values.receiptDate || new Date().toISOString().slice(0, 10);
     for (let i = 0; i < values.lines.length; i++) {
       const line = values.lines[i];
       const amt = Number(line.amount) || 0;
-      if (amt <= 0 || billsFor(line.accountId).length === 0) continue;
+      const bills = billsFor(line.accountId);
+      if (amt <= 0 || bills.length === 0) continue;
       const adjusted = round2((line.allocations ?? []).reduce((s, a) => s + (Number(a.amount) || 0), 0));
-      if (adjusted !== round2(amt)) {
-        setFormError(`Line ${i + 1}: adjust the full amount against the outstanding bills before saving.`);
-        setAdjustLine(i);
-        return;
-      }
+      if (adjusted === round2(amt)) continue;
+
+      // What has fallen due by the receipt's own date, less what this line
+      // already covers. Money settles the oldest bill first, so the shortfall
+      // is what is left of the due side once the adjustment is applied.
+      const dueTotal = round2(
+        bills.filter((b) => !b.dueDate || b.dueDate <= on).reduce((sum, b) => sum + b.billAmount, 0),
+      );
+      const stillDue = round2(Math.max(0, dueTotal - adjusted));
+      if (stillDue <= 0) continue;
+
+      setFormError(
+        `Line ${i + 1}: ${stillDue} of rent is already due. Adjust at least that much ` +
+          `against the bills — anything over may be left as an advance.`,
+      );
+      setAdjustLine(i);
+      return;
     }
     startTransition(async () => {
       const result = isEdit

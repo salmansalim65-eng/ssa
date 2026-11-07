@@ -24,7 +24,7 @@ import { DateInput } from "@/components/vouchers/date-input";
 import { MonthInput } from "@/components/vouchers/month-input";
 import { TABLE_TOTAL_ROW } from "@/components/ui/table";
 import { amountValue, blankAmount } from "@/lib/forms/amount";
-import { formatMoney } from "@/lib/format";
+import { formatDate, formatMoney } from "@/lib/format";
 import {
   monthFromLabel,
   monthStart,
@@ -118,6 +118,7 @@ export function RentStatementForm({
   defaultAgentAccountId,
   defaultCurrencyId,
   billedUpTo = {},
+  letUntil = {},
 }: {
   accounts: AccountOption[];
   currencies: CurrencyOption[];
@@ -128,6 +129,8 @@ export function RentStatementForm({
   defaultCurrencyId?: string | null;
   /** The last rent month already billed for each unit, by cost centre id. */
   billedUpTo?: Record<string, string>;
+  /** How far a lease runs with nothing left to bill, by cost centre id. */
+  letUntil?: Record<string, string>;
 }) {
   // Each currency's conversion to base. The company's base is SAR and these
   // statements are in AED, so a rate of 1 would put the ledger out by the
@@ -551,6 +554,7 @@ export function RentStatementForm({
                     statementMonth={statementMonth}
                     sheetUnit={sheetUnits[i]}
                     billedUpTo={billedUpTo}
+                    letUntil={letUntil}
                     onRemove={() => remove(i)}
                     canRemove={fields.length > 1}
                   />
@@ -647,6 +651,7 @@ function LineRow({
   statementMonth,
   sheetUnit,
   billedUpTo,
+  letUntil,
   onRemove,
   canRemove,
 }: {
@@ -657,6 +662,7 @@ function LineRow({
   /** What the imported sheet called this row's unit, when it came from one. */
   sheetUnit?: string;
   billedUpTo: Record<string, string>;
+  letUntil: Record<string, string>;
   onRemove: () => void;
   canRemove: boolean;
 }) {
@@ -693,13 +699,20 @@ function LineRow({
     if (billed && billed >= rentMonth) {
       return { covered: true, text: `already billed to ${rentMonthLabel(billed)} — nothing due here` };
     }
+    // A lease can cover a unit with nothing to bill: the rent was taken in
+    // full before SSA opened, so the agent lists it month after month with
+    // nothing against it. "Never billed" would be true and useless.
+    const let_ = unitId ? letUntil[unitId] : undefined;
+    if (let_ && let_ >= rentMonth) {
+      return { covered: true, text: `let to ${formatDate(let_)} — no rent to bill here` };
+    }
     return {
       covered: false,
       text: billed
         ? `last billed ${rentMonthLabel(billed)} — ${rentMonthLabel(rentMonth)} not stated yet`
         : "never billed — no rent stated for this unit",
     };
-  }, [line?.costCenterId, line?.rentAmount, rentMonth, billedUpTo]);
+  }, [line?.costCenterId, line?.rentAmount, rentMonth, billedUpTo, letUntil]);
   const rent = n(line?.rentAmount);
   const mgmt = n(line?.managementAmount);
   const deductions = n(line?.dewa) + n(line?.internet) + n(line?.accessCard) + n(line?.wifi) + n(line?.other);

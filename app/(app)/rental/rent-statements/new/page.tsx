@@ -102,7 +102,7 @@ export default async function NewRentStatementPage() {
   // or he may simply not have filled it in yet. SSA knows which, because it
   // knows the last month it raised a bill for — so the row can say so instead
   // of leaving it to be worked out unit by unit.
-  const billedUpTo = await loadBilledUpTo(companyId);
+  const { billedUpTo, letUntil } = await loadUnitCover(companyId);
 
   // The statement is written in the agent's own currency — TOP LINE DXB keeps
   // its account in AED, and the company's base is SAR.
@@ -131,19 +131,28 @@ export default async function NewRentStatementPage() {
         defaultAgentAccountId={defaultAgentAccountId}
         defaultCurrencyId={defaultCurrencyId}
         billedUpTo={billedUpTo}
+        letUntil={letUntil}
       />
     </div>
   );
 }
 
 /**
- * The last rent month already billed for each unit, by cost centre.
+ * How far each unit is accounted for, by cost centre.
  *
- * Both routes to a bill count: the statements that raise their own (the unit
- * is on the statement line) and the leases that invoice monthly (the unit is
- * the lease's asset, which the cost centre names).
+ * `billedUpTo` is the last rent month a bill was actually raised for. Both
+ * routes count: the statements that raise their own (the unit is on the
+ * statement line) and the leases that invoice monthly (the unit is the lease's
+ * asset, which the cost centre names).
+ *
+ * `letUntil` is how far a lease runs with nothing to bill — 106 AYYAN is let
+ * to 14 April 2027 on rent taken in full before SSA opened, so the agent lists
+ * it every month with nothing against it. Without the lease, the row could
+ * only say "never billed", which is true and useless.
  */
-async function loadBilledUpTo(companyId: string): Promise<Record<string, string>> {
+async function loadUnitCover(
+  companyId: string,
+): Promise<{ billedUpTo: Record<string, string>; letUntil: Record<string, string> }> {
   const supabase = await createClient();
 
   const [{ data: invoices }, { data: lines }, { data: centres }, { data: leases }] = await Promise.all([
@@ -159,7 +168,11 @@ async function loadBilledUpTo(companyId: string): Promise<Record<string, string>
       .select("id, asset_id")
       .eq("company_id", companyId)
       .is("deleted_at", null),
-    supabase.schema("rental").from("uae_leases").select("id, asset_id").is("deleted_at", null),
+    supabase
+      .schema("rental")
+      .from("uae_leases")
+      .select("id, asset_id, lease_end, is_vacant")
+      .is("deleted_at", null),
   ]);
 
   const centreOfLine = new Map(
@@ -170,9 +183,21 @@ async function loadBilledUpTo(companyId: string): Promise<Record<string, string>
       .filter((c) => c.asset_id)
       .map((c) => [c.asset_id as string, c.id]),
   );
-  const assetOfLease = new Map(
-    ((leases ?? []) as { id: string; asset_id: string | null }[]).map((l) => [l.id, l.asset_id]),
-  );
+  const leaseRows = (leases ?? []) as {
+    id: string;
+    asset_id: string | null;
+    lease_end: string | null;
+    is_vacant: boolean | null;
+  }[];
+  const assetOfLease = new Map(leaseRows.map((l) => [l.id, l.asset_id]));
+
+  const letUntil: Record<string, string> = {};
+  for (const l of leaseRows) {
+    if (l.is_vacant || !l.asset_id || !l.lease_end) continue;
+    const centre = centreOfAsset.get(l.asset_id);
+    if (!centre) continue;
+    if (!letUntil[centre] || l.lease_end > letUntil[centre]) letUntil[centre] = l.lease_end;
+  }
 
   const latest: Record<string, string> = {};
   for (const inv of ((invoices ?? []) as {
@@ -189,5 +214,5 @@ async function loadBilledUpTo(companyId: string): Promise<Record<string, string>
     const month = monthStart(inv.period_start);
     if (!latest[centre] || month > latest[centre]) latest[centre] = month;
   }
-  return latest;
+  return { billedUpTo: latest, letUntil };
 }

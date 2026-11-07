@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { PageHeader } from "@/components/ui/page-header";
 import { RentStatementForm, type UnitAlias, type UnitOption } from "@/components/rental/rent-statement-form";
+import { monthStart } from "@/lib/rental/rent-months";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { toAccountOptions, type RawAccountRow } from "@/lib/vouchers/account-currency";
@@ -94,6 +95,15 @@ export default async function NewRentStatementPage() {
     costCenterId: a.cost_center_id,
   }));
 
+  // How far each unit is already billed.
+  //
+  // The agent sends a sheet with a unit on it and no rent against it, and the
+  // row says nothing about why: that unit may be billed months ahead already,
+  // or he may simply not have filled it in yet. SSA knows which, because it
+  // knows the last month it raised a bill for — so the row can say so instead
+  // of leaving it to be worked out unit by unit.
+  const billedUpTo = await loadBilledUpTo(companyId);
+
   // The statement is written in the agent's own currency — TOP LINE DXB keeps
   // its account in AED, and the company's base is SAR.
   const defaultAgentAccountId =
@@ -120,7 +130,64 @@ export default async function NewRentStatementPage() {
         aliases={aliases}
         defaultAgentAccountId={defaultAgentAccountId}
         defaultCurrencyId={defaultCurrencyId}
+        billedUpTo={billedUpTo}
       />
     </div>
   );
+}
+
+/**
+ * The last rent month already billed for each unit, by cost centre.
+ *
+ * Both routes to a bill count: the statements that raise their own (the unit
+ * is on the statement line) and the leases that invoice monthly (the unit is
+ * the lease's asset, which the cost centre names).
+ */
+async function loadBilledUpTo(companyId: string): Promise<Record<string, string>> {
+  const supabase = await createClient();
+
+  const [{ data: invoices }, { data: lines }, { data: centres }, { data: leases }] = await Promise.all([
+    supabase
+      .schema("rental")
+      .from("uae_rent_invoices")
+      .select("period_start, rent_statement_line_id, lease_id")
+      .eq("company_id", companyId),
+    supabase.schema("rental").from("rent_statement_lines").select("id, cost_center_id"),
+    supabase
+      .schema("accounting")
+      .from("cost_centers")
+      .select("id, asset_id")
+      .eq("company_id", companyId)
+      .is("deleted_at", null),
+    supabase.schema("rental").from("uae_leases").select("id, asset_id").is("deleted_at", null),
+  ]);
+
+  const centreOfLine = new Map(
+    ((lines ?? []) as { id: string; cost_center_id: string | null }[]).map((l) => [l.id, l.cost_center_id]),
+  );
+  const centreOfAsset = new Map(
+    ((centres ?? []) as { id: string; asset_id: string | null }[])
+      .filter((c) => c.asset_id)
+      .map((c) => [c.asset_id as string, c.id]),
+  );
+  const assetOfLease = new Map(
+    ((leases ?? []) as { id: string; asset_id: string | null }[]).map((l) => [l.id, l.asset_id]),
+  );
+
+  const latest: Record<string, string> = {};
+  for (const inv of ((invoices ?? []) as {
+    period_start: string;
+    rent_statement_line_id: string | null;
+    lease_id: string | null;
+  }[])) {
+    const centre = inv.rent_statement_line_id
+      ? centreOfLine.get(inv.rent_statement_line_id)
+      : inv.lease_id
+        ? centreOfAsset.get(assetOfLease.get(inv.lease_id) ?? "")
+        : null;
+    if (!centre) continue;
+    const month = monthStart(inv.period_start);
+    if (!latest[centre] || month > latest[centre]) latest[centre] = month;
+  }
+  return latest;
 }

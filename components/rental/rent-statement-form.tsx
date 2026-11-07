@@ -117,6 +117,7 @@ export function RentStatementForm({
   aliases,
   defaultAgentAccountId,
   defaultCurrencyId,
+  billedUpTo = {},
 }: {
   accounts: AccountOption[];
   currencies: CurrencyOption[];
@@ -125,6 +126,8 @@ export function RentStatementForm({
   defaultAgentAccountId?: string | null;
   /** The agent's own currency — the statement is written in it. */
   defaultCurrencyId?: string | null;
+  /** The last rent month already billed for each unit, by cost centre id. */
+  billedUpTo?: Record<string, string>;
 }) {
   // Each currency's conversion to base. The company's base is SAR and these
   // statements are in AED, so a rate of 1 would put the ledger out by the
@@ -547,6 +550,7 @@ export function RentStatementForm({
                     units={units}
                     statementMonth={statementMonth}
                     sheetUnit={sheetUnits[i]}
+                    billedUpTo={billedUpTo}
                     onRemove={() => remove(i)}
                     canRemove={fields.length > 1}
                   />
@@ -642,6 +646,7 @@ function LineRow({
   units,
   statementMonth,
   sheetUnit,
+  billedUpTo,
   onRemove,
   canRemove,
 }: {
@@ -651,6 +656,7 @@ function LineRow({
   statementMonth: string;
   /** What the imported sheet called this row's unit, when it came from one. */
   sheetUnit?: string;
+  billedUpTo: Record<string, string>;
   onRemove: () => void;
   canRemove: boolean;
 }) {
@@ -677,6 +683,23 @@ function LineRow({
 
   const months = Math.max(1, Number(line?.months) || 1);
   const rentMonth = (line?.rentMonth as string) || statementMonth;
+
+  // Only worth saying on a row with no rent on it: a row that HAS rent is
+  // about to be billed, and how far the unit was billed before is not news.
+  const billedAnswer = useMemo(() => {
+    const unitId = (line?.costCenterId as string) || "";
+    const billed = unitId ? billedUpTo[unitId] : undefined;
+    if (!unitId || n(line?.rentAmount) !== 0) return null;
+    if (billed && billed >= rentMonth) {
+      return { covered: true, text: `already billed to ${rentMonthLabel(billed)} — nothing due here` };
+    }
+    return {
+      covered: false,
+      text: billed
+        ? `last billed ${rentMonthLabel(billed)} — ${rentMonthLabel(rentMonth)} not stated yet`
+        : "never billed — no rent stated for this unit",
+    };
+  }, [line?.costCenterId, line?.rentAmount, rentMonth, billedUpTo]);
   const rent = n(line?.rentAmount);
   const mgmt = n(line?.managementAmount);
   const deductions = n(line?.dewa) + n(line?.internet) + n(line?.accessCard) + n(line?.wifi) + n(line?.other);
@@ -753,6 +776,20 @@ function LineRow({
         {sheetUnit && (
           <p className="mt-1 truncate text-[0.7rem] text-muted-foreground" title={sheetUnit}>
             sheet: {sheetUnit}
+          </p>
+        )}
+        {/* A unit with no rent against it says nothing about why. SSA knows
+            how far it is already billed, so the row can say whether this is
+            rent already taken or rent the agent has not stated yet. */}
+        {billedAnswer && (
+          <p
+            className={cn(
+              "mt-1 flex items-start gap-1 text-[0.7rem] leading-tight",
+              billedAnswer.covered ? "text-muted-foreground" : "text-amber-700 dark:text-amber-500",
+            )}
+          >
+            {!billedAnswer.covered && <AlertTriangleIcon className="mt-px size-3 shrink-0" />}
+            {billedAnswer.text}
           </p>
         )}
       </td>

@@ -11,6 +11,14 @@
 export function formatMoney(value: number | null | undefined): string {
   const n = Number(value ?? 0);
   if (!Number.isFinite(n)) return "0";
+  // A figure that is not zero must never READ as zero. A balance sheet carries
+  // a row because something is still owed on it, and rounding 33 fils away
+  // printed a row whose every column said it was settled — the one question
+  // the sheet exists to answer, answered wrongly. Small residues keep their
+  // decimals; everything else rounds as before.
+  if (n !== 0 && Math.abs(n) < 0.5) {
+    return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
   return Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
 

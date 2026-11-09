@@ -22,11 +22,18 @@ export function VoucherDeleteButton({
   onDelete,
   listHref,
   label = "voucher",
+  description,
 }: {
   id: string;
   onDelete: (id: string) => Promise<{ error?: string; success?: boolean } | undefined>;
   listHref: string;
   label?: string;
+  /**
+   * What this delete actually takes with it. The default speaks for a draft
+   * voucher; a document that can be deleted after posting has more to say, and
+   * the dialog is the last place to say it.
+   */
+  description?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -36,7 +43,9 @@ export function VoucherDeleteButton({
     startTransition(async () => {
       const result = await onDelete(id);
       if (result?.error) {
-        toast.error(result.error);
+        // A refusal explains itself — money adjusted against a bill, a period
+        // closed — so it is left up long enough to read.
+        toast.error(result.error, { duration: 15000 });
         return;
       }
       toast.success("Voucher deleted");
@@ -57,7 +66,8 @@ export function VoucherDeleteButton({
         <DialogHeader>
           <DialogTitle>Delete this {label}?</DialogTitle>
           <DialogDescription>
-            This permanently removes the draft {label} and its journal entry. Only unposted drafts can be deleted.
+            {description ??
+              `This permanently removes the draft ${label} and its journal entry. Only unposted drafts can be deleted.`}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

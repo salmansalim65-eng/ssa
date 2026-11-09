@@ -52,32 +52,12 @@ async function postingAccounts(companyId: string) {
 }
 
 /**
- * Save a statement.
+ * The entry a sheet produces, and the totals it must agree with.
  *
- * Short-term lines are the company's own income, recognised when the statement
- * is entered — the agent has committed to the letting, so it is a receivable
- * and it is income. The months a line covers decide which month each BILL falls
- * due in, never how the income is split. Never apportioned by day either: a
- * line belongs to a month.
- *
- * Long-term lines post NOTHING. Those units are invoiced monthly from their
- * lease already; the line is carried so the voucher's total is the sheet's
- * total, and so the two can be seen to agree.
- *
- * The entry is left as a draft. Posting is a separate step, so a statement can
- * be entered, read back against the paper, and only then committed.
+ * Shared by saving a new statement and editing one, so an edit can never post
+ * a different shape of entry from the one a create would have made.
  */
-export async function createRentStatement(input: RentStatementInput) {
-  const parsed = rentStatementSchema.safeParse(input);
-  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
-  const data = parsed.data;
-
-  await requirePermission("rent_statement", "create");
-  const companyId = await getCurrentCompanyId();
-  const supabase = await createClient();
-  const { data: user } = await supabase.auth.getUser();
-  const createdBy = user.user!.id;
-
+async function composeStatement(companyId: string, data: RentStatementInput) {
   const roles = await postingAccounts(companyId);
   const missing: string[] = [];
   const accountFor = (role: string, label: string) => {
@@ -167,12 +147,52 @@ export async function createRentStatement(input: RentStatementInput) {
 
   if (missing.length) {
     return {
+      lines: [] as EntryLineInput[],
+      totals,
       error: `No account is set for: ${[...new Set(missing)].join(", ")}. Set them in Configuration → Posting templates for the Rent statement voucher.`,
     };
   }
   if (lines.length === 0) {
-    return { error: "Nothing to post — every line is long term, which is already invoiced." };
+    return {
+      lines: [] as EntryLineInput[],
+      totals,
+      error: "Nothing to post — every line is long term, which is already invoiced.",
+    };
   }
+
+  return { lines, totals, error: null as string | null };
+}
+
+/**
+ * Save a statement.
+ *
+ * Short-term lines are the company's own income, recognised when the statement
+ * is entered — the agent has committed to the letting, so it is a receivable
+ * and it is income. The months a line covers decide which month each BILL falls
+ * due in, never how the income is split. Never apportioned by day either: a
+ * line belongs to a month.
+ *
+ * Long-term lines post NOTHING. Those units are invoiced monthly from their
+ * lease already; the line is carried so the voucher's total is the sheet's
+ * total, and so the two can be seen to agree.
+ *
+ * The entry is left as a draft. Posting is a separate step, so a statement can
+ * be entered, read back against the paper, and only then committed.
+ */
+export async function createRentStatement(input: RentStatementInput) {
+  const parsed = rentStatementSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  const data = parsed.data;
+
+  await requirePermission("rent_statement", "create");
+  const companyId = await getCurrentCompanyId();
+  const supabase = await createClient();
+  const { data: user } = await supabase.auth.getUser();
+  const createdBy = user.user!.id;
+
+  const composed = await composeStatement(companyId, data);
+  if (composed.error) return { error: composed.error };
+  const { lines, totals } = composed;
 
   const statementId = crypto.randomUUID();
   const je = await createJournalEntry({
@@ -236,6 +256,161 @@ export async function createRentStatement(input: RentStatementInput) {
 
   revalidatePath("/rental/rent-statements");
   return { success: true, id: statementId };
+}
+
+/**
+ * Change a statement that has not been posted.
+ *
+ * Rewritten in place: the header, the lines and the draft entry's own lines.
+ * The statement keeps its id, so a link to it still works and the voucher
+ * number it has not drawn yet is still unspent.
+ *
+ * A POSTED statement cannot be edited — its entry is immutable, its bills may
+ * already be settled, and its number is on reports. Delete it and enter it
+ * again, which refuses outright if anything has been adjusted against it.
+ */
+export async function updateRentStatement(id: string, input: RentStatementInput) {
+  const parsed = rentStatementSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  const data = parsed.data;
+
+  await requirePermission("rent_statement", "edit");
+  const companyId = await getCurrentCompanyId();
+  const supabase = await createClient();
+
+  const { data: statement } = await supabase
+    .schema("rental")
+    .from("rent_statements")
+    .select("id, journal_entry_id, voucher_no")
+    .eq("company_id", companyId)
+    .eq("id", id)
+    .maybeSingle();
+  if (!statement) return { error: "Statement not found" };
+  if (statement.voucher_no) {
+    return { error: "This statement is posted and can no longer be edited. Delete it and enter it again." };
+  }
+
+  const composed = await composeStatement(companyId, data);
+  if (composed.error) return { error: composed.error };
+  const { lines, totals } = composed;
+
+  const jeId = statement.journal_entry_id as string;
+  const { error: jeError } = await supabase
+    .schema("accounting")
+    .from("journal_entries")
+    .update({
+      entry_date: data.statementDate,
+      currency_id: data.currencyId,
+      exchange_rate: data.exchangeRate,
+      narration: data.narration || `Rent statement — ${rentMonthLabel(data.statementMonth)}`,
+    })
+    .eq("id", jeId);
+  if (jeError) return { error: jeError.message };
+
+  const { error: wipeError } = await supabase
+    .schema("accounting")
+    .from("journal_entry_lines")
+    .delete()
+    .eq("journal_entry_id", jeId);
+  if (wipeError) return { error: wipeError.message };
+
+  const { error: writeError } = await supabase
+    .schema("accounting")
+    .from("journal_entry_lines")
+    .insert(
+      lines.map((l, i) => ({
+        journal_entry_id: jeId,
+        line_no: i + 1,
+        account_id: l.accountId,
+        cost_center_id: l.costCenterId ?? null,
+        debit_amount: round2(l.debit),
+        credit_amount: round2(l.credit),
+        currency_id: data.currencyId,
+        exchange_rate: data.exchangeRate,
+        base_debit_amount: round2(l.debit * data.exchangeRate),
+        base_credit_amount: round2(l.credit * data.exchangeRate),
+        description: l.description ?? null,
+      })),
+    );
+  if (writeError) return { error: writeError.message };
+
+  const { error: headerError } = await supabase
+    .schema("rental")
+    .from("rent_statements")
+    .update({
+      statement_date: data.statementDate,
+      statement_month: monthStart(data.statementMonth),
+      agent_account_id: data.agentAccountId,
+      currency_id: data.currencyId,
+      exchange_rate: data.exchangeRate,
+      total_rent: round2(totals.rent),
+      total_management: round2(totals.management),
+      total_deductions: round2(totals.deductions),
+      total_net: round2(totals.net),
+      narration: data.narration || null,
+    })
+    .eq("id", id);
+  if (headerError) return { error: headerError.message };
+
+  const { error: clearLines } = await supabase
+    .schema("rental")
+    .from("rent_statement_lines")
+    .delete()
+    .eq("statement_id", id);
+  if (clearLines) return { error: clearLines.message };
+
+  const { error: lineError } = await supabase
+    .schema("rental")
+    .from("rent_statement_lines")
+    .insert(
+      data.lines.map((l, i) => ({
+        statement_id: id,
+        line_no: i + 1,
+        line_type: l.lineType,
+        cost_center_id: l.costCenterId,
+        period_from: l.periodFrom || null,
+        period_to: l.periodTo || null,
+        rent_month: monthStart(l.rentMonth),
+        months: l.months,
+        rent_amount: l.rentAmount,
+        management_amount: l.managementAmount,
+        dewa: l.dewa,
+        internet: l.internet,
+        access_card: l.accessCard,
+        wifi: l.wifi,
+        other: l.other,
+        net_amount: round2(
+          l.rentAmount - l.managementAmount - (l.dewa + l.internet + l.accessCard + l.wifi + l.other),
+        ),
+        remarks: l.remarks || null,
+      })),
+    );
+  if (lineError) return { error: lineError.message };
+
+  revalidatePath("/rental/rent-statements");
+  revalidatePath(`/rental/rent-statements/${id}`);
+  return { success: true, id };
+}
+
+/**
+ * Remove a statement entirely — the sheet, its lines, its entry and the bills
+ * that entry raised, with the lease invoices its long-term lines claimed handed
+ * back unclaimed.
+ *
+ * The database does the work, because the refusal matters more than the
+ * deletion: once a receipt has been adjusted against one of these bills,
+ * deleting it would quietly unallocate the money — the cash stays in the bank,
+ * the rent goes back to outstanding, and nothing says why.
+ */
+export async function deleteRentStatement(id: string) {
+  await requirePermission("rent_statement", "delete");
+  const supabase = await createClient();
+  const { error } = await supabase.schema("rental").rpc("fn_delete_rent_statement", { p_id: id });
+  if (error) return { error: error.message };
+
+  revalidatePath("/rental/rent-statements");
+  revalidatePath("/dashboard");
+  return { success: true };
 }
 
 /**

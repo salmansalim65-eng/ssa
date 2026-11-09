@@ -81,8 +81,10 @@ export const navSections: NavSection[] = [
       // and the rental record of who was in which unit. Looked for in either
       // place, found in either place.
       { label: "Rent Statements", href: "/rental/rent-statements", icon: FileSpreadsheetIcon, module: "rent_statement" },
+      // HH has no lease screen of its own any more. A short-term letting is a
+      // line on the agent's monthly sheet, so Rent Statements above IS the HH
+      // rent invoice; a second way in only asked which one was the real record.
       { label: "UAE Rent Invoice", href: "/rental/uae/leases", icon: ReceiptIcon, module: "uae_rent_invoice" },
-      { label: "HH Rent Invoice", href: "/rental/uae/hh-lease", icon: ReceiptIcon, module: "uae_rent_invoice" },
       { label: "PK Rent Invoice", href: "/rental/pk/leases", icon: ReceiptIcon, module: "pk_rent_invoice" },
     ],
   },

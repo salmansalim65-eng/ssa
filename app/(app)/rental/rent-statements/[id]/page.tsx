@@ -4,6 +4,11 @@ import { PageHeader } from "@/components/ui/page-header";
 import { TABLE_TOTAL_ROW } from "@/components/ui/table";
 import { VoucherStatusBadge } from "@/components/vouchers/voucher-status-badge";
 import { PostStatementButton } from "./post-button";
+import { VoucherDeleteButton } from "@/components/vouchers/voucher-delete-button";
+import { Button } from "@/components/ui/button";
+import { PencilIcon } from "lucide-react";
+import Link from "next/link";
+import { deleteRentStatement } from "@/features/rental/rent-statements/actions";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, formatMoney, formatVoucherNo } from "@/lib/format";
@@ -22,9 +27,11 @@ import type { JournalEntryStatus } from "@/types/database.types";
  */
 export default async function RentStatementPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [canView, canPost] = await Promise.all([
+  const [canView, canPost, canEdit, canDelete] = await Promise.all([
     hasPermission("rent_statement", "view"),
     hasPermission("rent_statement", "post"),
+    hasPermission("rent_statement", "edit"),
+    hasPermission("rent_statement", "delete"),
   ]);
   if (!canView) notFound();
 
@@ -185,6 +192,26 @@ export default async function RentStatementPage({ params }: { params: Promise<{ 
         actions={
           <>
             <VoucherStatusBadge status={((entry?.status as JournalEntryStatus) ?? "draft")} />
+            {canEdit && entry?.status !== "posted" && (
+              <Button asChild size="sm" variant="outline">
+                <Link href={`/rental/rent-statements/${id}/edit`}>
+                  <PencilIcon /> Edit
+                </Link>
+              </Button>
+            )}
+            {canDelete && (
+              <VoucherDeleteButton
+                id={id}
+                onDelete={deleteRentStatement}
+                listHref="/rental/rent-statements"
+                label="rent statement"
+                description={
+                  entry?.status === "posted"
+                    ? `This removes the statement, its ${bills.length} ${bills.length === 1 ? "bill" : "bills"} and its journal entry, and hands back any long-term unit it matched. It is refused outright if a receipt has been adjusted against any of those bills.`
+                    : "This removes the draft and its journal entry. Nothing has reached the ledger, so nothing else changes."
+                }
+              />
+            )}
             {canPost && entry?.status !== "posted" && <PostStatementButton id={id} />}
           </>
         }

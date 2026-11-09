@@ -34,7 +34,11 @@ import {
   rentMonthsOf,
 } from "@/lib/rental/rent-months";
 import { cn } from "@/lib/utils";
-import { createRentStatement, rememberUnitAliases } from "@/features/rental/rent-statements/actions";
+import {
+  createRentStatement,
+  rememberUnitAliases,
+  updateRentStatement,
+} from "@/features/rental/rent-statements/actions";
 import { parseStatementSheet } from "@/lib/rental/statement-sheet";
 import { readWorkbook, type WorkbookSheet } from "@/lib/rental/xlsx";
 import {
@@ -119,6 +123,8 @@ export function RentStatementForm({
   defaultCurrencyId,
   billedUpTo = {},
   letUntil = {},
+  statementId,
+  initial,
 }: {
   accounts: AccountOption[];
   currencies: CurrencyOption[];
@@ -131,6 +137,9 @@ export function RentStatementForm({
   billedUpTo?: Record<string, string>;
   /** How far a lease runs with nothing left to bill, by cost centre id. */
   letUntil?: Record<string, string>;
+  /** Set when editing: the draft being rewritten, which keeps its id. */
+  statementId?: string;
+  initial?: RentStatementFormValues;
 }) {
   // Each currency's conversion to base. The company's base is SAR and these
   // statements are in AED, so a rate of 1 would put the ledger out by the
@@ -153,7 +162,7 @@ export function RentStatementForm({
 
   const form = useForm<RentStatementFormValues>({
     resolver: zodResolver(rentStatementSchema),
-    defaultValues: {
+    defaultValues: initial ?? {
       statementDate: today(),
       statementMonth: monthStart(today()),
       agentAccountId: defaultAgentAccountId ?? "",
@@ -323,7 +332,9 @@ export function RentStatementForm({
     setFormError(null);
     setSubmitErrors([]);
     startTransition(async () => {
-      const result = await createRentStatement(values as unknown as RentStatementInput);
+      const result = statementId
+        ? await updateRentStatement(statementId, values as unknown as RentStatementInput)
+        : await createRentStatement(values as unknown as RentStatementInput);
       if (result?.error) {
         setFormError(result.error);
         return;
@@ -334,7 +345,7 @@ export function RentStatementForm({
         .filter((p) => p.alias && p.costCenterId);
       if (pairs.length) await rememberUnitAliases(pairs);
 
-      toast.success("Rent statement saved");
+      toast.success(statementId ? "Rent statement updated" : "Rent statement saved");
       router.push(`/rental/rent-statements/${result.id}`);
     });
   }

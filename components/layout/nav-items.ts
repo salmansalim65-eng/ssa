@@ -80,7 +80,12 @@ export const navSections: NavSection[] = [
       // Also under Vouchers, because it is both: the agent's monthly document,
       // and the rental record of who was in which unit. Looked for in either
       // place, found in either place.
-      { label: "Rent Statements", href: "/rental/rent-statements", icon: FileSpreadsheetIcon, module: "rent_statement" },
+      //
+      // The menu carries the old name in brackets. The document is a STATEMENT
+      // — the agent's sheet, long-term units and deductions included, not an
+      // invoice we issue — but it replaced the HH Rent Invoice screen, and the
+      // people who used that screen look for that name.
+      { label: "Rent Statements (HH Invoice)", href: "/rental/rent-statements", icon: FileSpreadsheetIcon, module: "rent_statement" },
       // HH has no lease screen of its own any more. A short-term letting is a
       // line on the agent's monthly sheet, so Rent Statements above IS the HH
       // rent invoice; a second way in only asked which one was the real record.
@@ -118,7 +123,7 @@ export const navSections: NavSection[] = [
   {
     label: "Vouchers",
     items: [
-      { label: "Rent Statements", href: "/rental/rent-statements/new", icon: FileSpreadsheetIcon, module: "rent_statement" },
+      { label: "Rent Statements (HH Invoice)", href: "/rental/rent-statements/new", icon: FileSpreadsheetIcon, module: "rent_statement" },
       { label: "Receipt Vouchers", href: "/accounting/vouchers/receipt_voucher/new", icon: ArrowDownToLineIcon, module: "receipt_voucher" },
       { label: "Payment Vouchers", href: "/accounting/vouchers/payment_voucher/new", icon: ArrowUpFromLineIcon, module: "payment_voucher" },
       { label: "Expense Vouchers KHI", href: "/accounting/vouchers/expense_voucher/new", icon: WalletIcon, module: "expense_voucher" },

@@ -118,6 +118,9 @@ export const navSections: NavSection[] = [
       { label: "Document Sequences", href: "/admin/document-sequences", icon: HashIcon, module: "document_sequences" },
       { label: "Approval Workflows", href: "/admin/approval-workflows", icon: GitBranchIcon, module: "approval_workflows" },
       { label: "Posting Templates", href: "/admin/posting-templates", icon: SlidersHorizontalIcon, module: "posting_templates" },
+      // Under Accounting rather than Reports: it is not a report, it is where
+      // the entries nobody made get made.
+      { label: "Bank Reconciliation", href: "/accounting/bank-reconciliation", icon: ScaleIcon, module: "reports" },
     ],
   },
   {

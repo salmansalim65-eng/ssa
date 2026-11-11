@@ -5,7 +5,9 @@ import { AlertTriangleIcon, CheckCircle2Icon, ClockIcon, UploadIcon } from "luci
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AccountCombobox } from "@/components/vouchers/account-combobox";
 import { cn } from "@/lib/utils";
 import { formatDate, formatMoney } from "@/lib/format";
 import { gridFromText, parseBankStatement, type BankStatementLine } from "@/lib/accounting/bank-statement";
@@ -45,6 +47,10 @@ export function BankReconciliation({
   const [result, setResult] = useState<ReconcileResult | null>(null);
   const [entered, setEntered] = useState<Record<number, string>>({});
   const [pickFor, setPickFor] = useState<Record<number, string>>({});
+  // What the entry will say. Seeded from the bank's own description, because
+  // that is the only account of the payment anybody has — but editable, since
+  // "TRF 0098812" is not what it was for.
+  const [remarkFor, setRemarkFor] = useState<Record<number, string>>({});
   const [isPending, startTransition] = useTransition();
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -65,6 +71,12 @@ export function BankReconciliation({
         return;
       }
       setEntered({});
+      setPickFor({});
+      setRemarkFor(
+        Object.fromEntries(
+          answer.missing.map((line, i) => [i, [line.description, line.reference].filter(Boolean).join(" · ")]),
+        ),
+      );
       setResult(answer);
     });
   }
@@ -96,52 +108,107 @@ export function BankReconciliation({
     }
   }
 
-  /** Enter one missing line as a payment (money out) or a receipt (money in). */
-  function enter(line: BankStatementLine, index: number) {
+  /**
+   * Enter one missing line as a payment (money out) or a receipt (money in).
+   *
+   * Returns why it could not be entered, or null when it was — so the button
+   * that does one and the button that does all can share the same rules.
+   */
+  async function enterOne(line: BankStatementLine, index: number): Promise<string | null> {
     const otherAccountId = pickFor[index];
-    if (!otherAccountId) {
-      toast.error("Pick the account this belongs to.");
-      return;
-    }
-    if (!currency) {
-      toast.error("No currency is configured for this account.");
-      return;
-    }
-    const narration = [line.description, line.reference].filter(Boolean).join(" · ").slice(0, 500) || "From the bank statement";
+    if (!otherAccountId) return "no account picked";
+    const narration = (remarkFor[index] ?? "").trim();
+    if (!narration) return "no remarks";
+    if (!currency) return "no currency is configured for this account";
 
+    const outcome =
+      line.debit > 0
+        ? await createPaymentVoucher({
+            paymentDate: line.date,
+            creditAccountId: accountId,
+            costCenterId: "",
+            currencyId: currency.id,
+            exchangeRate: currency.rate,
+            narration: narration.slice(0, 500),
+            lines: [{ accountId: otherAccountId, amount: line.debit, remarks: narration.slice(0, 200) }],
+          } as never)
+        : await createReceiptVoucher({
+            receiptDate: line.date,
+            debitAccountId: accountId,
+            costCenterId: "",
+            currencyId: currency.id,
+            exchangeRate: currency.rate,
+            narration: narration.slice(0, 500),
+            lines: [{ accountId: otherAccountId, amount: line.credit, remarks: narration.slice(0, 200) }],
+          } as never);
+
+    if (outcome && "error" in outcome && outcome.error) return outcome.error;
+    setEntered((e) => ({ ...e, [index]: line.debit > 0 ? "Payment entered" : "Receipt entered" }));
+    return null;
+  }
+
+  function enter(line: BankStatementLine, index: number) {
     startTransition(async () => {
-      const outcome =
-        line.debit > 0
-          ? await createPaymentVoucher({
-              paymentDate: line.date,
-              creditAccountId: accountId,
-              costCenterId: "",
-              currencyId: currency.id,
-              exchangeRate: currency.rate,
-              narration,
-              lines: [{ accountId: otherAccountId, amount: line.debit, remarks: "" }],
-            } as never)
-          : await createReceiptVoucher({
-              receiptDate: line.date,
-              debitAccountId: accountId,
-              costCenterId: "",
-              currencyId: currency.id,
-              exchangeRate: currency.rate,
-              narration,
-              lines: [{ accountId: otherAccountId, amount: line.credit, remarks: "" }],
-            } as never);
-
-      if (outcome && "error" in outcome && outcome.error) {
-        toast.error(outcome.error, { duration: 15000 });
+      const problem = await enterOne(line, index);
+      if (problem === "no account picked") {
+        toast.error("Pick the account this belongs to.");
         return;
       }
-      setEntered((e) => ({ ...e, [index]: line.debit > 0 ? "Payment entered" : "Receipt entered" }));
+      if (problem === "no remarks") {
+        toast.error("Say what this payment was for.");
+        return;
+      }
+      if (problem) {
+        toast.error(problem, { duration: 15000 });
+        return;
+      }
       toast.success(line.debit > 0 ? "Payment voucher created" : "Receipt voucher created");
     });
   }
 
+  /**
+   * Enter every row that is ready.
+   *
+   * One after another, never at once: each voucher draws its own document
+   * number, and a dozen drawing it together is how two end up with the same
+   * one. A row that fails stops nothing — the rest go in, and the failures are
+   * named at the end rather than lost behind eleven toasts.
+   */
+  function enterAll() {
+    const ready = (result?.missing ?? [])
+      .map((line, index) => ({ line, index }))
+      .filter(({ index }) => !entered[index] && pickFor[index] && (remarkFor[index] ?? "").trim());
+    if (ready.length === 0) {
+      toast.error("Pick an account and write the remarks on at least one row first.");
+      return;
+    }
+
+    startTransition(async () => {
+      const failures: string[] = [];
+      let done = 0;
+      for (const { line, index } of ready) {
+        const problem = await enterOne(line, index);
+        if (problem) failures.push(`${formatDate(line.date)} ${formatMoney(line.debit || line.credit)} — ${problem}`);
+        else done += 1;
+      }
+      if (done > 0) toast.success(`${done} ${done === 1 ? "voucher" : "vouchers"} created`);
+      if (failures.length > 0) {
+        toast.error(`${failures.length} could not be entered — ${failures.join("; ")}`, { duration: 20000 });
+      }
+    });
+  }
+
   const money = (n: number) => formatMoney(n);
+  // The picker searches by NAME; a code nobody remembers only gets in the way.
+  const pickable = allAccounts
+    .filter((a) => a.id !== accountId)
+    .map((a) => ({ id: a.id, account_name: a.label, currencyId: a.currencyId }));
   const stillMissing = (result?.missing ?? []).filter((_, i) => !entered[i]).length;
+  // Ready = an account picked and something said about it. The button counts
+  // what it will actually do, so pressing it is never a surprise.
+  const readyCount = (result?.missing ?? []).filter(
+    (_, i) => !entered[i] && pickFor[i] && (remarkFor[i] ?? "").trim(),
+  ).length;
 
   return (
     <div className="space-y-5">
@@ -225,12 +292,19 @@ export function BankReconciliation({
             tone="destructive"
             icon={<AlertTriangleIcon className="size-4" />}
             title={`On the statement, not in SSA (${stillMissing})`}
-            note="The bank has these and the books do not. Pick the account each belongs to and enter it — the date and the amount are the bank's."
+            note="The bank has these and the books do not. Pick the account each belongs to, say what it was for, and enter it — the date and the amount are the bank's."
             empty="Nothing on the statement is missing from the books."
             count={result.missing.length}
+            action={
+              readyCount > 0 ? (
+                <Button size="sm" disabled={isPending} onClick={enterAll}>
+                  {isPending ? "Entering…" : `Add all ${readyCount}`}
+                </Button>
+              ) : null
+            }
           >
-            <table className="w-full min-w-[800px] text-sm">
-              <Head cols={["Date", "Description", "Out", "In", "Account it belongs to", ""]} />
+            <table className="w-full min-w-[1000px] text-sm">
+              <Head cols={["Date", "Description", "Out", "In", "Account it belongs to", "Remarks", ""]} />
               <tbody>
                 {result.missing.map((line, i) => (
                   <tr key={`${line.rowNo}-${i}`} className="border-b [&>td]:px-3 [&>td]:py-2">
@@ -241,24 +315,29 @@ export function BankReconciliation({
                     </td>
                     <td className="text-right font-mono tabular-nums">{line.debit ? money(line.debit) : "—"}</td>
                     <td className="text-right font-mono tabular-nums">{line.credit ? money(line.credit) : "—"}</td>
-                    <td>
+                    <td className="min-w-56">
                       {entered[i] ? (
-                        <span className="text-xs text-muted-foreground">from the bank statement</span>
+                        <span className="text-xs text-muted-foreground">
+                          {allAccounts.find((a) => a.id === pickFor[i])?.label ?? "—"}
+                        </span>
                       ) : (
-                        <Select value={pickFor[i] ?? ""} onValueChange={(v) => setPickFor((p) => ({ ...p, [i]: v }))}>
-                          <SelectTrigger className="h-8 w-full">
-                            <SelectValue placeholder="Pick the account" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {allAccounts
-                              .filter((a) => a.id !== accountId)
-                              .map((a) => (
-                                <SelectItem key={a.id} value={a.id}>
-                                  {a.label}
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
+                        <AccountCombobox
+                          accounts={pickable}
+                          value={pickFor[i] ?? ""}
+                          onValueChange={(v) => setPickFor((p) => ({ ...p, [i]: v }))}
+                        />
+                      )}
+                    </td>
+                    <td className="min-w-56">
+                      {entered[i] ? (
+                        <span className="text-xs text-muted-foreground">{remarkFor[i]}</span>
+                      ) : (
+                        <Input
+                          className={cn("h-8", !(remarkFor[i] ?? "").trim() && "border-amber-500")}
+                          value={remarkFor[i] ?? ""}
+                          placeholder="What was it for?"
+                          onChange={(e) => setRemarkFor((r) => ({ ...r, [i]: e.target.value }))}
+                        />
                       )}
                     </td>
                     <td className="text-right">
@@ -362,6 +441,7 @@ function Section({
   note,
   empty,
   count,
+  action,
   children,
 }: {
   tone: "destructive" | "muted";
@@ -370,11 +450,13 @@ function Section({
   note: string;
   empty: string;
   count: number;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <div className="overflow-hidden rounded-xl border bg-card shadow-xs">
-      <div className="border-b px-3 py-2.5">
+      <div className="flex items-start justify-between gap-3 border-b px-3 py-2.5">
+        <div>
         <p
           className={cn(
             "flex items-center gap-2 text-xs font-semibold uppercase tracking-wide",
@@ -385,6 +467,8 @@ function Section({
           {title}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">{note}</p>
+        </div>
+        {action}
       </div>
       {count === 0 ? (
         <p className="px-3 py-6 text-center text-sm text-muted-foreground">{empty}</p>

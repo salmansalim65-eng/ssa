@@ -48,7 +48,10 @@ export default async function BankReconciliationPage() {
     is_bank: boolean;
   }[]).map((a) => ({
     id: a.id,
-    label: `${a.account_code} · ${a.account_name}`,
+    // The NAME, and nothing else. A code is how the database tells two
+    // accounts apart; nobody reconciling a bank statement knows one by heart,
+    // and it only crowds out the name they are actually looking for.
+    label: a.account_name,
     currencyId: a.currency_id,
     isMoney: Boolean(a.is_cash || a.is_bank),
   }));
